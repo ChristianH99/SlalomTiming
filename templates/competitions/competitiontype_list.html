@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Competition Types – Slalom Timing{% endblock %}
+{% block content %}
+  <h1>Competition Types</h1>
+  <div class="actions">
+    <a class="button" href="{% url 'competitions:type-add' %}">+ New type</a>
+    <a href="{% url 'competitions:list' %}">Back to Competition Setup</a>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Name</th></tr>
+    </thead>
+    <tbody>
+      {% for competition_type in competition_types %}
+        <tr><td>{{ competition_type.name }}</td></tr>
+      {% empty %}
+        <tr><td>No competition types yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

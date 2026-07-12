@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}New competition type – Slalom Timing{% endblock %}
+{% block content %}
+  <h1>New competition type</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="button" type="submit">Save</button>
+    <a href="{% url 'competitions:type-list' %}">Cancel</a>
+  </form>
+{% endblock %}

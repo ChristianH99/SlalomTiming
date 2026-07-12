@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Dashboard – Slalom Timing{% endblock %}
+{% block content %}
+  <h1><span id="live-dot" class="live-dot"></span>Live timing feed</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Received</th>
+        <th>Channel</th>
+        <th>Bib</th>
+        <th>Participant</th>
+      </tr>
+    </thead>
+    <tbody id="events-body">
+      {% for event in events %}
+        <tr>
+          <td>{{ event.received_at|date:"H:i:s" }}</td>
+          <td>{{ event.get_channel_display }}</td>
+          <td>{{ event.bib_number|default:"–" }}</td>
+          <td>{{ event.participant|default:"–" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4">No timing events yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <script src="{% static 'js/dashboard.js' %}"></script>
+{% endblock %}

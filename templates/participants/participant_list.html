@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load competitions_tags %}
+{% block title %}Participants – Slalom Timing{% endblock %}
+{% block content %}
+  <div class="actions">
+    <a class="button" href="{% url 'participants:add' %}">+ Add participant</a>
+  </div>
+
+  <form method="get" class="search-form">
+    <input type="text" name="q" value="{{ query }}" placeholder="Search by name, club or bib…">
+    {% if show_all %}<input type="hidden" name="all" value="1">{% endif %}
+    <button class="button button--secondary" type="submit">Search</button>
+  </form>
+
+  {% if not competition %}
+    <p class="hint">No competition selected — showing every participant. <a href="{% url 'competitions:list' %}">Pick a competition</a> to see who's active.</p>
+  {% else %}
+    <p class="hint">
+      {{ competition.competition_type.name }} · {{ competition.name }} —
+      {% if show_all %}
+        showing all registered participants. <a href="?q={{ query }}">Show active only</a>
+      {% else %}
+        showing active participants only. <a href="?all=1&q={{ query }}">Show all</a>
+      {% endif %}
+    </p>
+  {% endif %}
+
+  <table>
+    <thead>
+      <tr>
+        <th>Bib</th>
+        <th>Name</th>
+        <th>Date of birth</th>
+        <th>Class</th>
+        <th>Category</th>
+        <th>Club</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for participant in participants %}
+        <tr>
+          <td>{{ participant.current_entry.bib_number|default:"–" }}</td>
+          <td>{{ participant.first_name }} {{ participant.last_name }}</td>
+          <td>{{ participant.date_of_birth|default:"–" }}</td>
+          <td>{{ participant.date_of_birth.year|default_if_none:""|class_for_birth_year:competition|default:"–" }}</td>
+          <td>{{ participant.category }}</td>
+          <td>{{ participant.club }}</td>
+          <td>
+            {% if participant.current_entry %}
+              <span class="status-pill">{{ participant.current_entry.get_status_display }}</span>
+            {% else %}
+              &mdash;
+            {% endif %}
+          </td>
+          <td>
+            <a href="{% url 'participants:edit' participant.pk %}">Edit</a>
+            {% if competition and participant.competition_type_id == competition.competition_type_id %}
+              &middot;
+              <a href="{% url 'participants:assign-bib' participant.pk %}">
+                {% if participant.current_entry %}Edit bib{% else %}Assign bib{% endif %}
+              </a>
+            {% endif %}
+            &middot;
+            <a href="{% url 'participants:delete' participant.pk %}">Delete</a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8">No participants found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Competition Setup – Slalom Timing{% endblock %}
+{% block content %}
+  <h1>Competition Setup</h1>
+  <div class="actions">
+    <a class="button" href="{% url 'competitions:add' %}">+ New competition</a>
+    <a href="{% url 'competitions:type-list' %}">Manage competition types</a>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Date</th>
+        <th>Classes running</th>
+        <th>Current</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for competition in competitions %}
+        <tr>
+          <td>{{ competition.name }}</td>
+          <td>{{ competition.competition_type.name }}</td>
+          <td>{{ competition.date }}</td>
+          <td>
+            {% for label in competition.active_classes %}
+              <span class="status-pill">{{ label }}</span>
+            {% empty %}
+              &mdash;
+            {% endfor %}
+          </td>
+          <td>
+            {% if competition.is_active %}
+              <span class="status-pill status-pill--active">Current</span>
+            {% else %}
+              <form method="post" action="{% url 'competitions:select' competition.pk %}">
+                {% csrf_token %}
+                <button class="button button--secondary" type="submit">Set as current</button>
+              </form>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{% url 'competitions:edit' competition.pk %}">Edit</a>
+            &middot;
+            <form method="post" action="{% url 'competitions:duplicate' competition.pk %}" style="display:inline">
+              {% csrf_token %}
+              <button type="submit" class="link-button">Duplicate</button>
+            </form>
+            &middot;
+            <a href="{% url 'competitions:delete' competition.pk %}">Delete</a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">No competitions yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

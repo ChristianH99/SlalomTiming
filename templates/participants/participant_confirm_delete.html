@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Delete participant – Slalom Timing{% endblock %}
+{% block content %}
+  <h1>Delete {{ object }}?</h1>
+  <p>{{ object.first_name }} {{ object.last_name }} ({{ object.club }}) and all of their event entries will be permanently removed.</p>
+  <form method="post">
+    {% csrf_token %}
+    <button class="button" type="submit">Confirm delete</button>
+    <a href="{% url 'participants:list' %}">Cancel</a>
+  </form>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Assign bib – Slalom Timing{% endblock %}
+{% block content %}
+  <h1>Assign bib — {{ participant }}</h1>
+  <p class="hint">{{ competition.name }} ({{ competition.date }})</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {{ form.as_p }}
+    <button class="button" type="submit">Save</button>
+    <a href="{% url 'participants:list' %}">Cancel</a>
+  </form>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{% if object %}Edit{% else %}Add{% endif %} participant – Slalom Timing{% endblock %}
+{% block content %}
+  <h1>{% if object %}Edit {{ object }}{% else %}Add participant{% endif %}</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+
+    <p class="hint">
+      {% if active_competition %}
+        Class for {{ active_competition.name }}: <strong id="class-preview-value">–</strong>
+      {% else %}
+        No competition selected — class can't be computed.
+      {% endif %}
+    </p>
+
+    <button class="button" type="submit">Save</button>
+    <a href="{% url 'participants:list' %}">Cancel</a>
+  </form>
+
+  {% if active_competition %}
+    <script>
+      (function () {
+        const ranges = {{ class_ranges_json|safe }};
+        const year = {{ competition_year }};
+        const dobInput = document.getElementById("id_date_of_birth");
+        const output = document.getElementById("class-preview-value");
+        if (!dobInput || !output) return;
+
+        function update() {
+          const val = dobInput.value;
+          if (!val) { output.textContent = "–"; return; }
+          const birthYear = parseInt(val.split("-")[0], 10);
+          if (Number.isNaN(birthYear)) { output.textContent = "–"; return; }
+          const age = year - birthYear;
+          const match = ranges.find((r) => age >= r.age_from && age <= r.age_to);
+          output.textContent = match ? match.label : "–";
+        }
+
+        dobInput.addEventListener("input", update);
+        update();
+      })();
+    </script>
+  {% endif %}
+{% endblock %}
