@@ -4,42 +4,116 @@
   <h1>{% if object %}Edit {{ object }}{% else %}Add participant{% endif %}</h1>
   <form method="post">
     {% csrf_token %}
-    {{ form.as_p }}
-
-    <p class="hint">
-      {% if active_competition %}
-        Class for {{ active_competition.name }}: <strong id="class-preview-value">–</strong>
-      {% else %}
-        No competition selected — class can't be computed.
-      {% endif %}
+    {{ form.non_field_errors }}
+    <p>
+      {{ form.competition_type.label_tag }}
+      {{ form.competition_type }}
+      {{ form.competition_type.errors }}
     </p>
+    <p>
+      {{ form.first_name.label_tag }}
+      {{ form.first_name }}
+      {{ form.first_name.errors }}
+    </p>
+    <p>
+      {{ form.last_name.label_tag }}
+      {{ form.last_name }}
+      {{ form.last_name.errors }}
+    </p>
+    <p>
+      {{ form.date_of_birth.label_tag }}
+      {{ form.date_of_birth }}
+      {{ form.date_of_birth.errors }}
+      <span id="dob-error" class="field-error"></span>
+      <span class="hint">
+        {% if active_competition %}
+          Class for {{ active_competition.name }}: <strong id="class-preview-value">–</strong>
+        {% else %}
+          No competition selected — class can't be computed.
+        {% endif %}
+      </span>
+    </p>
+    <p>
+      {{ form.address_street.label_tag }}
+      {{ form.address_street }}
+      {{ form.address_street.errors }}
+    </p>
+    <p>
+      {{ form.address_zip_code.label_tag }}
+      {{ form.address_zip_code }}
+      {{ form.address_zip_code.errors }}
+    </p>
+    <p>
+      {{ form.address_city.label_tag }}
+      {{ form.address_city }}
+      {{ form.address_city.errors }}
+    </p>
+    <p>
+      {{ form.club.label_tag }}
+      {{ form.club }}
+      {{ form.club.errors }}
+    </p>
+    <p>
+      {{ form.license_number.label_tag }}
+      {{ form.license_number }}
+      {{ form.license_number.errors }}
+    </p>
+    <p>
+      {{ form.email.label_tag }}
+      {{ form.email }}
+      {{ form.email.errors }}
+    </p>
+    <p>
+      {{ form.phone_number.label_tag }}
+      {{ form.phone_number }}
+      {{ form.phone_number.errors }}
+    </p>
+    {% if form.bib_number %}
+      <p>
+        {{ form.bib_number.label_tag }}
+        {{ form.bib_number }}
+        {{ form.bib_number.errors }}
+        <span class="hint">{{ form.bib_number.help_text }}</span>
+      </p>
+    {% endif %}
 
-    <button class="button" type="submit">Save</button>
-    <a href="{% url 'participants:list' %}">Cancel</a>
+    <div class="actions">
+      <button class="button" type="submit">Save</button>
+      <a href="{% url 'participants:list' %}">Cancel</a>
+    </div>
   </form>
 
-  {% if active_competition %}
-    <script>
-      (function () {
-        const ranges = {{ class_ranges_json|safe }};
-        const year = {{ competition_year }};
-        const dobInput = document.getElementById("id_date_of_birth");
-        const output = document.getElementById("class-preview-value");
-        if (!dobInput || !output) return;
+  <script>
+    (function () {
+      const dobInput = document.getElementById("id_date_of_birth");
+      if (!dobInput) return;
 
-        function update() {
-          const val = dobInput.value;
-          if (!val) { output.textContent = "–"; return; }
-          const birthYear = parseInt(val.split("-")[0], 10);
-          if (Number.isNaN(birthYear)) { output.textContent = "–"; return; }
-          const age = year - birthYear;
-          const match = ranges.find((r) => age >= r.age_from && age <= r.age_to);
-          output.textContent = match ? match.label : "–";
-        }
+      const dobError = document.getElementById("dob-error");
+      const classOutput = document.getElementById("class-preview-value");
+      const ranges = {{ class_ranges_json|safe }};
+      const year = {{ competition_year|default_if_none:"null" }};
 
-        dobInput.addEventListener("input", update);
-        update();
-      })();
-    </script>
-  {% endif %}
+      function checkValidity() {
+        if (!dobError) return;
+        dobError.textContent = dobInput.validity.badInput
+          ? "That's not a valid date — please check the day exists in that month/year."
+          : "";
+      }
+
+      function updateClass() {
+        if (!classOutput) return;
+        const val = dobInput.value;
+        if (!val || !year) { classOutput.textContent = "–"; return; }
+        const birthYear = parseInt(val.split("-")[0], 10);
+        if (Number.isNaN(birthYear)) { classOutput.textContent = "–"; return; }
+        const age = year - birthYear;
+        const match = ranges.find((r) => age >= r.age_from && age <= r.age_to);
+        classOutput.textContent = match ? match.label : "–";
+      }
+
+      dobInput.addEventListener("input", () => { checkValidity(); updateClass(); });
+      checkValidity();
+      updateClass();
+    })();
+  </script>
 {% endblock %}

@@ -13,11 +13,12 @@ class ParticipantAdmin(admin.ModelAdmin):
         "competition_type",
         "date_of_birth",
         "current_class",
-        "category",
         "club",
+        "license_number",
+        "email",
     )
-    list_filter = ("competition_type", "category", "gender")
-    search_fields = ("first_name", "last_name", "club")
+    list_filter = ("competition_type",)
+    search_fields = ("first_name", "last_name", "club", "license_number", "email")
     ordering = ("last_name", "first_name")
 
     @admin.display(description="Class")

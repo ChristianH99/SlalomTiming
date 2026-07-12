@@ -32,8 +32,8 @@
         <th>Name</th>
         <th>Date of birth</th>
         <th>Class</th>
-        <th>Category</th>
         <th>Club</th>
+        <th>Licence No.</th>
         <th>Status</th>
         <th></th>
       </tr>
@@ -45,8 +45,8 @@
           <td>{{ participant.first_name }} {{ participant.last_name }}</td>
           <td>{{ participant.date_of_birth|default:"–" }}</td>
           <td>{{ participant.date_of_birth.year|default_if_none:""|class_for_birth_year:competition|default:"–" }}</td>
-          <td>{{ participant.category }}</td>
           <td>{{ participant.club }}</td>
+          <td>{{ participant.license_number }}</td>
           <td>
             {% if participant.current_entry %}
               <span class="status-pill">{{ participant.current_entry.get_status_display }}</span>

@@ -7,7 +7,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.competitions.models import Competition
 
-from .forms import EventEntryForm, ParticipantForm
+from .forms import EventEntryForm, ParticipantCreateForm, ParticipantForm
 from .models import EventEntry, Participant
 
 
@@ -77,7 +77,7 @@ class ParticipantListView(ListView):
 
 class ParticipantCreateView(ClassRangeContextMixin, CreateView):
     model = Participant
-    form_class = ParticipantForm
+    form_class = ParticipantCreateForm
     template_name = "participants/participant_form.html"
     success_url = reverse_lazy("participants:list")
 
@@ -87,6 +87,17 @@ class ParticipantCreateView(ClassRangeContextMixin, CreateView):
         if competition:
             initial["competition_type"] = competition.competition_type_id
         return initial
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        bib_number = form.cleaned_data.get("bib_number")
+        if bib_number is not None:
+            EventEntry.objects.create(
+                participant=self.object,
+                competition=Competition.get_current(),
+                bib_number=bib_number,
+            )
+        return response
 
 
 class ParticipantUpdateView(ClassRangeContextMixin, UpdateView):

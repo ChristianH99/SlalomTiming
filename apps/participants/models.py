@@ -4,11 +4,6 @@ from apps.competitions.models import Competition, CompetitionType
 
 
 class Participant(models.Model):
-    class Gender(models.TextChoices):
-        MALE = "M", "Male"
-        FEMALE = "F", "Female"
-        OTHER = "X", "Other"
-
     competition_type = models.ForeignKey(
         CompetitionType,
         on_delete=models.PROTECT,
@@ -18,12 +13,14 @@ class Participant(models.Model):
     )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    gender = models.CharField(max_length=1, choices=Gender.choices, blank=True)
-    date_of_birth = models.DateField(null=True, blank=True)
-    category = models.CharField(max_length=100, blank=True)
-    club = models.CharField(max_length=150, blank=True)
-    nationality = models.CharField(max_length=3, blank=True, help_text="IOC country code, e.g. GER")
-    notes = models.TextField(blank=True)
+    date_of_birth = models.DateField()
+    address_street = models.CharField(max_length=200)
+    address_zip_code = models.CharField(max_length=20)
+    address_city = models.CharField(max_length=100)
+    club = models.CharField(max_length=150)
+    license_number = models.CharField(max_length=50)
+    email = models.EmailField()
+    phone_number = models.CharField(max_length=30, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

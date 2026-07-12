@@ -1,5 +1,7 @@
 from django import forms
 
+from apps.competitions.models import Competition
+
 from .models import EventEntry, Participant
 
 
@@ -10,14 +12,35 @@ class ParticipantForm(forms.ModelForm):
             "competition_type",
             "first_name",
             "last_name",
-            "gender",
             "date_of_birth",
-            "category",
+            "address_street",
+            "address_zip_code",
+            "address_city",
             "club",
-            "nationality",
-            "notes",
+            "license_number",
+            "email",
+            "phone_number",
         ]
         widgets = {"date_of_birth": forms.DateInput(attrs={"type": "date"})}
+
+
+class ParticipantCreateForm(ParticipantForm):
+    bib_number = forms.IntegerField(
+        required=False, min_value=1, label="Bib number",
+        help_text="Optional — assigns this participant a bib for the current competition right away.",
+    )
+
+    def clean_bib_number(self):
+        bib_number = self.cleaned_data.get("bib_number")
+        if bib_number is not None:
+            competition = Competition.get_current()
+            if competition is None:
+                raise forms.ValidationError(
+                    "No competition is currently selected, so a bib can't be assigned yet."
+                )
+            if EventEntry.objects.filter(competition=competition, bib_number=bib_number).exists():
+                raise forms.ValidationError("This bib number is already taken in the current competition.")
+        return bib_number
 
 
 class EventEntryForm(forms.ModelForm):
