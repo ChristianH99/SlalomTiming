@@ -22,6 +22,11 @@ class ParticipantForm(forms.ModelForm):
             "phone_number",
         ]
         widgets = {"date_of_birth": forms.DateInput(attrs={"type": "date"})}
+        labels = {
+            "address_street": "Street address",
+            "address_zip_code": "ZIP code",
+            "address_city": "City",
+        }
 
 
 class ParticipantCreateForm(ParticipantForm):
@@ -30,42 +35,68 @@ class ParticipantCreateForm(ParticipantForm):
         help_text="Optional — assigns this participant a bib for the current competition right away.",
     )
 
-    def clean_bib_number(self):
-        bib_number = self.cleaned_data.get("bib_number")
-        if bib_number is not None:
-            competition = Competition.get_current()
-            if competition is None:
-                raise forms.ValidationError(
-                    "No competition is currently selected, so a bib can't be assigned yet."
-                )
-            if EventEntry.objects.filter(competition=competition, bib_number=bib_number).exists():
-                raise forms.ValidationError("This bib number is already taken in the current competition.")
-        return bib_number
-
-
-class EventEntryForm(forms.ModelForm):
-    class Meta:
-        model = EventEntry
-        fields = ["bib_number", "status"]
-
-    def __init__(self, *args, participant, competition, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.participant = participant
-        self.competition = competition
-        self.instance.participant = participant
-        self.instance.competition = competition
+        self.competition = Competition.get_current()
+        if self.competition is None:
+            self.fields["bib_number"].disabled = True
+            self.fields["bib_number"].help_text = (
+                "No competition is currently selected, so a bib can't be assigned yet."
+            )
 
     def clean(self):
         cleaned_data = super().clean()
-        if self.participant.competition_type_id != self.competition.competition_type_id:
-            raise forms.ValidationError(
-                "This participant belongs to a different competition type than this event."
-            )
         bib_number = cleaned_data.get("bib_number")
-        if bib_number is not None:
-            conflict = EventEntry.objects.filter(
-                competition=self.competition, bib_number=bib_number
-            ).exclude(pk=self.instance.pk)
+        if bib_number is None or self.competition is None:
+            return cleaned_data
+        competition_type = cleaned_data.get("competition_type")
+        if competition_type and competition_type != self.competition.competition_type:
+            self.add_error(
+                "bib_number",
+                "This participant's type doesn't match the current competition, so a bib can't be assigned.",
+            )
+        elif EventEntry.objects.filter(competition=self.competition, bib_number=bib_number).exists():
+            self.add_error("bib_number", "This bib number is already taken in the current competition.")
+        return cleaned_data
+
+
+class ParticipantUpdateForm(ParticipantForm):
+    bib_number = forms.IntegerField(required=False, min_value=1, label="Bib number")
+    status = forms.ChoiceField(required=False, choices=EventEntry.Status.choices, label="Status")
+
+    def __init__(self, *args, competition=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.competition = competition
+        self.entry = None
+
+        if competition is None:
+            self._disable_bib_fields("No competition is currently selected, so a bib can't be assigned.")
+            return
+
+        if self.instance.pk and self.instance.competition_type_id == competition.competition_type_id:
+            self.entry = EventEntry.objects.filter(
+                participant=self.instance, competition=competition
+            ).first()
+            if self.entry:
+                self.fields["bib_number"].initial = self.entry.bib_number
+                self.fields["status"].initial = self.entry.status
+        else:
+            self._disable_bib_fields(
+                "This participant's type doesn't match the current competition, so a bib can't be assigned."
+            )
+
+    def _disable_bib_fields(self, reason):
+        self.fields["bib_number"].disabled = True
+        self.fields["bib_number"].help_text = reason
+        self.fields["status"].disabled = True
+
+    def clean(self):
+        cleaned_data = super().clean()
+        bib_number = cleaned_data.get("bib_number")
+        if bib_number is not None and self.competition is not None:
+            conflict = EventEntry.objects.filter(competition=self.competition, bib_number=bib_number)
+            if self.entry:
+                conflict = conflict.exclude(pk=self.entry.pk)
             if conflict.exists():
-                self.add_error("bib_number", "This bib number is already taken in this competition.")
+                self.add_error("bib_number", "This bib number is already taken in the current competition.")
         return cleaned_data

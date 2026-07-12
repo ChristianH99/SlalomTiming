@@ -1,13 +1,12 @@
 import json
 
 from django.db.models import Q
-from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.competitions.models import Competition
 
-from .forms import EventEntryForm, ParticipantCreateForm, ParticipantForm
+from .forms import ParticipantCreateForm, ParticipantUpdateForm
 from .models import EventEntry, Participant
 
 
@@ -102,34 +101,34 @@ class ParticipantCreateView(ClassRangeContextMixin, CreateView):
 
 class ParticipantUpdateView(ClassRangeContextMixin, UpdateView):
     model = Participant
-    form_class = ParticipantForm
+    form_class = ParticipantUpdateForm
     template_name = "participants/participant_form.html"
     success_url = reverse_lazy("participants:list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["competition"] = Competition.get_current()
+        return kwargs
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        if form.competition is not None and self.object.competition_type_id == form.competition.competition_type_id:
+            bib_number = form.cleaned_data.get("bib_number")
+            if bib_number is not None:
+                EventEntry.objects.update_or_create(
+                    participant=self.object,
+                    competition=form.competition,
+                    defaults={
+                        "bib_number": bib_number,
+                        "status": form.cleaned_data.get("status") or EventEntry.Status.REGISTERED,
+                    },
+                )
+            elif form.entry is not None:
+                form.entry.delete()
+        return response
 
 
 class ParticipantDeleteView(DeleteView):
     model = Participant
     template_name = "participants/participant_confirm_delete.html"
     success_url = reverse_lazy("participants:list")
-
-
-def assign_bib(request, pk):
-    participant = get_object_or_404(Participant, pk=pk)
-    competition = Competition.get_current()
-    if competition is None:
-        return redirect("participants:list")
-
-    entry = EventEntry.objects.filter(participant=participant, competition=competition).first()
-    if request.method == "POST":
-        form = EventEntryForm(
-            request.POST, instance=entry, participant=participant, competition=competition
-        )
-        if form.is_valid():
-            form.save()
-            return redirect("participants:list")
-    else:
-        form = EventEntryForm(instance=entry, participant=participant, competition=competition)
-
-    return render(request, "participants/assign_bib.html", {
-        "participant": participant, "competition": competition, "form": form,
-    })

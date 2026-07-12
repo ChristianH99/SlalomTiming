@@ -1,0 +1,8 @@
+<p>
+  <label for="{{ field.id_for_label }}">
+    {{ field.label }}{% if field.field.required %} <span class="required-marker" title="Required">*</span>{% endif %}
+  </label>
+  {{ field }}
+  {{ field.errors }}
+  {% if field.help_text %}<span class="hint">{{ field.help_text }}</span>{% endif %}
+</p>

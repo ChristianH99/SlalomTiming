@@ -56,12 +56,6 @@
           </td>
           <td>
             <a href="{% url 'participants:edit' participant.pk %}">Edit</a>
-            {% if competition and participant.competition_type_id == competition.competition_type_id %}
-              &middot;
-              <a href="{% url 'participants:assign-bib' participant.pk %}">
-                {% if participant.current_entry %}Edit bib{% else %}Assign bib{% endif %}
-              </a>
-            {% endif %}
             &middot;
             <a href="{% url 'participants:delete' participant.pk %}">Delete</a>
           </td>

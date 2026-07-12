@@ -5,23 +5,23 @@
   <form method="post">
     {% csrf_token %}
     {{ form.non_field_errors }}
+
+    <div class="bib-box">
+      <h2>Bib</h2>
+      {% include "participants/_form_field.html" with field=form.bib_number %}
+      {% if form.status %}
+        {% include "participants/_form_field.html" with field=form.status %}
+      {% endif %}
+    </div>
+
+    {% include "participants/_form_field.html" with field=form.competition_type %}
+    {% include "participants/_form_field.html" with field=form.first_name %}
+    {% include "participants/_form_field.html" with field=form.last_name %}
+
     <p>
-      {{ form.competition_type.label_tag }}
-      {{ form.competition_type }}
-      {{ form.competition_type.errors }}
-    </p>
-    <p>
-      {{ form.first_name.label_tag }}
-      {{ form.first_name }}
-      {{ form.first_name.errors }}
-    </p>
-    <p>
-      {{ form.last_name.label_tag }}
-      {{ form.last_name }}
-      {{ form.last_name.errors }}
-    </p>
-    <p>
-      {{ form.date_of_birth.label_tag }}
+      <label for="{{ form.date_of_birth.id_for_label }}">
+        {{ form.date_of_birth.label }} <span class="required-marker" title="Required">*</span>
+      </label>
       {{ form.date_of_birth }}
       {{ form.date_of_birth.errors }}
       <span id="dob-error" class="field-error"></span>
@@ -33,49 +33,16 @@
         {% endif %}
       </span>
     </p>
-    <p>
-      {{ form.address_street.label_tag }}
-      {{ form.address_street }}
-      {{ form.address_street.errors }}
-    </p>
-    <p>
-      {{ form.address_zip_code.label_tag }}
-      {{ form.address_zip_code }}
-      {{ form.address_zip_code.errors }}
-    </p>
-    <p>
-      {{ form.address_city.label_tag }}
-      {{ form.address_city }}
-      {{ form.address_city.errors }}
-    </p>
-    <p>
-      {{ form.club.label_tag }}
-      {{ form.club }}
-      {{ form.club.errors }}
-    </p>
-    <p>
-      {{ form.license_number.label_tag }}
-      {{ form.license_number }}
-      {{ form.license_number.errors }}
-    </p>
-    <p>
-      {{ form.email.label_tag }}
-      {{ form.email }}
-      {{ form.email.errors }}
-    </p>
-    <p>
-      {{ form.phone_number.label_tag }}
-      {{ form.phone_number }}
-      {{ form.phone_number.errors }}
-    </p>
-    {% if form.bib_number %}
-      <p>
-        {{ form.bib_number.label_tag }}
-        {{ form.bib_number }}
-        {{ form.bib_number.errors }}
-        <span class="hint">{{ form.bib_number.help_text }}</span>
-      </p>
-    {% endif %}
+
+    <h2 class="form-section">Address</h2>
+    {% include "participants/_form_field.html" with field=form.address_street %}
+    {% include "participants/_form_field.html" with field=form.address_zip_code %}
+    {% include "participants/_form_field.html" with field=form.address_city %}
+
+    {% include "participants/_form_field.html" with field=form.club %}
+    {% include "participants/_form_field.html" with field=form.license_number %}
+    {% include "participants/_form_field.html" with field=form.email %}
+    {% include "participants/_form_field.html" with field=form.phone_number %}
 
     <div class="actions">
       <button class="button" type="submit">Save</button>
@@ -93,9 +60,22 @@
       const ranges = {{ class_ranges_json|safe }};
       const year = {{ competition_year|default_if_none:"null" }};
 
+      // A native date input can report badInput=false yet still leave a
+      // malformed value (e.g. typing a stray extra digit into the month
+      // segment can spill into the year, producing "92022-09-15"). Only
+      // trust a value that's exactly YYYY-MM-DD with a 4-digit year.
+      function isMalformed() {
+        return dobInput.value !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(dobInput.value);
+      }
+
       function checkValidity() {
+        const malformed = isMalformed();
+        // badInput already blocks native submission on its own; setCustomValidity
+        // makes the malformed-but-not-badInput case (see isMalformed above) block
+        // submission the same way, instead of only failing once it reaches the server.
+        dobInput.setCustomValidity(malformed ? "Invalid date" : "");
         if (!dobError) return;
-        dobError.textContent = dobInput.validity.badInput
+        dobError.textContent = dobInput.validity.badInput || malformed
           ? "That's not a valid date — please check the day exists in that month/year."
           : "";
       }
@@ -103,7 +83,7 @@
       function updateClass() {
         if (!classOutput) return;
         const val = dobInput.value;
-        if (!val || !year) { classOutput.textContent = "–"; return; }
+        if (!val || !year || isMalformed()) { classOutput.textContent = "–"; return; }
         const birthYear = parseInt(val.split("-")[0], 10);
         if (Number.isNaN(birthYear)) { classOutput.textContent = "–"; return; }
         const age = year - birthYear;

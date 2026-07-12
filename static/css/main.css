@@ -58,6 +58,33 @@ th { color: var(--muted); font-weight: 600; font-size: 0.85rem; text-transform: 
 }
 .field-error:empty { display: none; }
 
+.required-marker {
+  color: #dc2626;
+}
+
+.form-section {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.25rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.bib-box {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  border-radius: 8px;
+  padding: 0.25rem 1rem 0.75rem;
+  margin-bottom: 1rem;
+}
+.bib-box h2 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  margin-bottom: 0;
+}
+
 .search-form {
   display: flex;
   gap: 0.5rem;
