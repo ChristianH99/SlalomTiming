@@ -68,6 +68,21 @@
         return dobInput.value !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(dobInput.value);
       }
 
+      // Chrome's year segment doesn't cap itself at 4 digits once it's
+      // fully selected before typing (e.g. click the year, then keep
+      // typing) — it happily grows to "202019-02-20" and still reports
+      // badInput=false, since an oversized year is technically valid per
+      // the HTML date microsyntax. Rewriting the value mid-keystroke
+      // fights the browser's own segment-typing state and corrupts it
+      // (produces garbled results), so this only runs on blur — once the
+      // user is done typing — clamping back to the first 4 digits typed.
+      function clampYearOverflow() {
+        const match = dobInput.value.match(/^(\d{4})(\d+)-(\d{2})-(\d{2})$/);
+        if (match) {
+          dobInput.value = `${match[1]}-${match[3]}-${match[4]}`;
+        }
+      }
+
       function checkValidity() {
         const malformed = isMalformed();
         // badInput already blocks native submission on its own; setCustomValidity
@@ -92,6 +107,7 @@
       }
 
       dobInput.addEventListener("input", () => { checkValidity(); updateClass(); });
+      dobInput.addEventListener("blur", () => { clampYearOverflow(); checkValidity(); updateClass(); });
       checkValidity();
       updateClass();
     })();
