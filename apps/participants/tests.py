@@ -1,3 +1,284 @@
-from django.test import TestCase
+import datetime
 
-# Create your tests here.
+import pytest
+from django.urls import reverse
+
+from apps.competitions.models import Competition, CompetitionType
+
+from .forms import ParticipantCreateForm, ParticipantUpdateForm
+from .models import EventEntry, Participant
+
+pytestmark = pytest.mark.django_db
+
+
+def make_type(name="Motorcycle"):
+    return CompetitionType.objects.create(name=name)
+
+
+def make_competition(ctype=None, name="Spring Slalom", year=2026, active=True):
+    ctype = ctype or make_type()
+    return Competition.objects.create(
+        competition_type=ctype,
+        name=name,
+        date=datetime.date(year, 5, 1),
+        is_active=active,
+    )
+
+
+def participant_data(ctype, **overrides):
+    data = {
+        "competition_type": ctype.pk,
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "date_of_birth": "2010-06-15",
+        "address_street": "1 Main St",
+        "address_zip_code": "12345",
+        "address_city": "Springfield",
+        "club": "Speed Club",
+        "license_number": "LIC-001",
+        "email": "jane@example.com",
+        "phone_number": "",
+    }
+    data.update(overrides)
+    return data
+
+
+# ----- create form -----
+
+def test_create_form_valid_without_bib():
+    ctype = make_type()
+    make_competition(ctype)
+    form = ParticipantCreateForm(data=participant_data(ctype))
+    assert form.is_valid(), form.errors
+
+
+def test_create_form_assigns_bib_and_view_creates_entry(client):
+    ctype = make_type()
+    competition = make_competition(ctype)
+    response = client.post(
+        reverse("participants:add"), participant_data(ctype, bib_number="7")
+    )
+    assert response.status_code == 302
+    participant = Participant.objects.get(last_name="Doe")
+    entry = EventEntry.objects.get(participant=participant, competition=competition)
+    assert entry.bib_number == 7
+    assert entry.status == EventEntry.Status.REGISTERED
+
+
+def test_create_form_rejects_duplicate_bib():
+    ctype = make_type()
+    competition = make_competition(ctype)
+    existing = Participant.objects.create(
+        **{k: v for k, v in participant_data(ctype).items() if k != "competition_type"},
+        competition_type=ctype,
+    )
+    EventEntry.objects.create(participant=existing, competition=competition, bib_number=5)
+
+    form = ParticipantCreateForm(data=participant_data(ctype, bib_number="5", email="x@y.com"))
+    assert not form.is_valid()
+    assert "bib_number" in form.errors
+
+
+def test_create_form_rejects_bib_when_type_mismatches_competition():
+    running_type = make_type("Motorcycle")
+    other_type = make_type("Go-Cart")
+    make_competition(running_type)
+    form = ParticipantCreateForm(
+        data=participant_data(other_type, bib_number="3")
+    )
+    assert not form.is_valid()
+    assert "bib_number" in form.errors
+
+
+def test_create_form_disables_bib_without_active_competition():
+    ctype = make_type()
+    # no active competition
+    form = ParticipantCreateForm(data=participant_data(ctype, bib_number="3"))
+    assert form.fields["bib_number"].disabled is True
+    assert form.is_valid(), form.errors
+    # disabled field is ignored, so no bib comes through
+    assert form.cleaned_data.get("bib_number") is None
+
+
+@pytest.mark.parametrize("bad_bib", ["0", "-1", "abc"])
+def test_create_form_rejects_invalid_bib_values(bad_bib):
+    ctype = make_type()
+    make_competition(ctype)
+    form = ParticipantCreateForm(data=participant_data(ctype, bib_number=bad_bib))
+    assert not form.is_valid()
+    assert "bib_number" in form.errors
+
+
+# ----- edge cases: special characters / empty / abuse -----
+
+def test_create_form_accepts_unicode_and_special_characters(client):
+    ctype = make_type()
+    make_competition(ctype)
+    data = participant_data(
+        ctype,
+        first_name="Renée-Élodie",
+        last_name="O'Brien-Müller",
+        club="Ski & Board «Zürich»",
+        email="renee@example.com",
+    )
+    response = client.post(reverse("participants:add"), data)
+    assert response.status_code == 302
+    assert Participant.objects.filter(last_name="O'Brien-Müller").exists()
+
+
+def test_create_form_does_not_execute_html_in_names():
+    ctype = make_type()
+    make_competition(ctype)
+    payload = '<script>alert(1)</script>'
+    form = ParticipantCreateForm(data=participant_data(ctype, first_name=payload))
+    assert form.is_valid(), form.errors
+    participant = form.save()
+    # stored verbatim; escaping is the template layer's job (Django autoescape)
+    assert participant.first_name == payload
+
+
+@pytest.mark.parametrize("missing", [
+    "first_name", "last_name", "date_of_birth", "address_street",
+    "address_zip_code", "address_city", "club", "license_number", "email",
+])
+def test_create_form_requires_core_fields(missing):
+    ctype = make_type()
+    make_competition(ctype)
+    form = ParticipantCreateForm(data=participant_data(ctype, **{missing: ""}))
+    assert not form.is_valid()
+    assert missing in form.errors
+
+
+def test_phone_number_is_optional():
+    ctype = make_type()
+    make_competition(ctype)
+    form = ParticipantCreateForm(data=participant_data(ctype, phone_number=""))
+    assert form.is_valid(), form.errors
+
+
+def test_create_form_rejects_invalid_email():
+    ctype = make_type()
+    make_competition(ctype)
+    form = ParticipantCreateForm(data=participant_data(ctype, email="not-an-email"))
+    assert not form.is_valid()
+    assert "email" in form.errors
+
+
+def test_create_form_rejects_overlong_first_name():
+    ctype = make_type()
+    make_competition(ctype)
+    form = ParticipantCreateForm(data=participant_data(ctype, first_name="x" * 101))
+    assert not form.is_valid()
+    assert "first_name" in form.errors
+
+
+# ----- update form -----
+
+def _update_form(participant, competition, **data):
+    base = participant_data(participant.competition_type)
+    base.update(data)
+    return ParticipantUpdateForm(data=base, instance=participant, competition=competition)
+
+
+def test_update_form_can_add_and_remove_bib():
+    ctype = make_type()
+    competition = make_competition(ctype)
+    participant = Participant.objects.create(
+        **{k: v for k, v in participant_data(ctype).items() if k != "competition_type"},
+        competition_type=ctype,
+    )
+    # add a bib
+    form = _update_form(participant, competition, bib_number="9", status="registered")
+    assert form.is_valid(), form.errors
+    form.save()
+    EventEntry.objects.update_or_create(
+        participant=participant, competition=competition,
+        defaults={"bib_number": 9, "status": "registered"},
+    )
+    assert EventEntry.objects.filter(participant=participant, bib_number=9).exists()
+
+
+def test_update_form_detects_bib_conflict():
+    ctype = make_type()
+    competition = make_competition(ctype)
+    p1 = Participant.objects.create(
+        competition_type=ctype, first_name="A", last_name="A",
+        date_of_birth=datetime.date(2010, 1, 1), address_street="s",
+        address_zip_code="1", address_city="c", club="c",
+        license_number="1", email="a@a.com",
+    )
+    p2 = Participant.objects.create(
+        competition_type=ctype, first_name="B", last_name="B",
+        date_of_birth=datetime.date(2010, 1, 1), address_street="s",
+        address_zip_code="1", address_city="c", club="c",
+        license_number="2", email="b@b.com",
+    )
+    EventEntry.objects.create(participant=p1, competition=competition, bib_number=4)
+    form = ParticipantUpdateForm(
+        data=participant_data(ctype, first_name="B", last_name="B",
+                              license_number="2", email="b@b.com", bib_number="4"),
+        instance=p2, competition=competition,
+    )
+    assert not form.is_valid()
+    assert "bib_number" in form.errors
+
+
+# ----- list view -----
+
+def test_list_view_shows_active_participants_for_current_competition(client):
+    ctype = make_type()
+    competition = make_competition(ctype)
+    active = Participant.objects.create(
+        competition_type=ctype, first_name="Active", last_name="Racer",
+        date_of_birth=datetime.date(2010, 1, 1), address_street="s",
+        address_zip_code="1", address_city="c", club="c",
+        license_number="1", email="a@a.com",
+    )
+    Participant.objects.create(
+        competition_type=ctype, first_name="Idle", last_name="Bystander",
+        date_of_birth=datetime.date(2010, 1, 1), address_street="s",
+        address_zip_code="1", address_city="c", club="c",
+        license_number="2", email="b@b.com",
+    )
+    EventEntry.objects.create(participant=active, competition=competition, bib_number=1)
+
+    response = client.get(reverse("participants:list"))
+    names = [p.last_name for p in response.context["participants"]]
+    assert "Racer" in names
+    assert "Bystander" not in names
+
+    # show all reveals the unregistered participant too
+    response = client.get(reverse("participants:list"), {"all": "1"})
+    names = [p.last_name for p in response.context["participants"]]
+    assert {"Racer", "Bystander"} <= set(names)
+
+
+def test_list_view_search_by_name(client):
+    ctype = make_type()
+    make_competition(ctype)
+    Participant.objects.create(
+        competition_type=ctype, first_name="Findme", last_name="Unique",
+        date_of_birth=datetime.date(2010, 1, 1), address_street="s",
+        address_zip_code="1", address_city="c", club="c",
+        license_number="1", email="a@a.com",
+    )
+    response = client.get(reverse("participants:list"), {"all": "1", "q": "Findme"})
+    assert len(response.context["participants"]) == 1
+
+    response = client.get(reverse("participants:list"), {"all": "1", "q": "nomatch"})
+    assert len(response.context["participants"]) == 0
+
+
+def test_delete_view_removes_participant_and_entries(client):
+    ctype = make_type()
+    competition = make_competition(ctype)
+    participant = Participant.objects.create(
+        competition_type=ctype, first_name="Gone", last_name="Soon",
+        date_of_birth=datetime.date(2010, 1, 1), address_street="s",
+        address_zip_code="1", address_city="c", club="c",
+        license_number="1", email="a@a.com",
+    )
+    EventEntry.objects.create(participant=participant, competition=competition, bib_number=2)
+    client.post(reverse("participants:delete", kwargs={"pk": participant.pk}))
+    assert not Participant.objects.filter(pk=participant.pk).exists()
+    assert not EventEntry.objects.filter(participant=participant).exists()

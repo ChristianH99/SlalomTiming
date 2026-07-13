@@ -15,12 +15,19 @@
     const row = document.createElement("tr");
     row.id = "new-row";
     const receivedAt = new Date(event.received_at).toLocaleTimeString();
-    row.innerHTML = `
-      <td>${receivedAt}</td>
-      <td>${event.channel}</td>
-      <td>${event.bib_number ?? "–"}</td>
-      <td>${event.participant_name ?? "–"}</td>
-    `;
+    // Build cells with textContent (not innerHTML): participant names are
+    // user-entered, so interpolating them into markup would be an XSS vector.
+    const cells = [
+      receivedAt,
+      event.channel_display ?? event.channel,
+      event.bib_number ?? "–",
+      event.participant_name ?? "–",
+    ];
+    for (const value of cells) {
+      const td = document.createElement("td");
+      td.textContent = value;
+      row.appendChild(td);
+    }
     body.prepend(row);
     setTimeout(() => row.removeAttribute("id"), 1200);
   });

@@ -38,6 +38,7 @@ def _persist_pulse(pulse: TimingPulse, connector_name: str) -> dict:
     return {
         "id": event.id,
         "channel": event.channel,
+        "channel_display": event.get_channel_display(),
         "bib_number": event.bib_number,
         "participant_name": str(participant) if participant else None,
         "device_time": event.device_time.isoformat() if event.device_time else None,

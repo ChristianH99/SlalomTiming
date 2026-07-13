@@ -1,7 +1,7 @@
 [project]
 name = "slalomtiming"
 version = "0.1.0"
-description = "Add your description here"
+description = "Local timekeeping and admin software for slalom races (Django + Channels)."
 requires-python = ">=3.14"
 dependencies = [
     "channels>=4.0",
@@ -14,3 +14,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-django>=4.12.0",
 ]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
