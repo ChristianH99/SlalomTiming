@@ -3,6 +3,7 @@
 {% block title %}Dashboard – Slalom Timing{% endblock %}
 {% block content %}
   <h1><span id="live-dot" class="live-dot"></span>Live timing feed</h1>
+  <div class="table-card">
   <table>
     <thead>
       <tr>
@@ -25,6 +26,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 
   <script src="{% static 'js/dashboard.js' %}"></script>
 {% endblock %}

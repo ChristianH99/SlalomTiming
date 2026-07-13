@@ -6,6 +6,7 @@
     <a class="button" href="{% url 'competitions:add' %}">+ New competition</a>
     <a href="{% url 'competitions:type-list' %}">Manage competition types</a>
   </div>
+  <div class="table-card">
   <table>
     <thead>
       <tr>
@@ -56,4 +57,5 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 {% endblock %}
