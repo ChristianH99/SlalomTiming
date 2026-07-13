@@ -13,4 +13,5 @@ urlpatterns = [
     path("<int:pk>/duplicate/", views.duplicate_competition, name="duplicate"),
     path("types/", views.CompetitionTypeListView.as_view(), name="type-list"),
     path("types/add/", views.CompetitionTypeCreateView.as_view(), name="type-add"),
+    path("types/<int:pk>/delete/", views.delete_competition_type, name="type-delete"),
 ]

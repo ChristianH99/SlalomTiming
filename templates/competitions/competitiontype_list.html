@@ -1,23 +1,82 @@
 {% extends "base.html" %}
 {% block title %}Competition Types – Slalom Timing{% endblock %}
+{% block topbar_title %}Competition Types{% endblock %}
 {% block content %}
-  <h1>Competition Types</h1>
-  <div class="actions">
+  <a class="back-link" href="{% url 'competitions:list' %}">&larr; Back to Competition Setup</a>
+
+  <div class="list-toolbar">
+    <span></span>
     <a class="button" href="{% url 'competitions:type-add' %}">+ New type</a>
-    <a href="{% url 'competitions:list' %}">Back to Competition Setup</a>
   </div>
+
   <div class="table-card">
-  <table>
+  <table class="types-table">
     <thead>
-      <tr><th>Name</th></tr>
+      <tr>
+        <th class="col-expand"></th>
+        <th>Name</th>
+        <th>Used in</th>
+        <th class="col-actions"></th>
+      </tr>
     </thead>
     <tbody>
       {% for competition_type in competition_types %}
-        <tr><td>{{ competition_type.name }}</td></tr>
+        <tr data-type-row>
+          <td class="col-expand">
+            {% if competition_type.competition_count %}
+              <button type="button" class="expander" data-expander aria-expanded="false"
+                      aria-label="Show competitions of this type">&#9654;</button>
+            {% endif %}
+          </td>
+          <td>{{ competition_type.name }}</td>
+          <td class="hint">
+            {{ competition_type.competition_count }} competition{{ competition_type.competition_count|pluralize }},
+            {{ competition_type.participant_count }} participant{{ competition_type.participant_count|pluralize }}
+          </td>
+          <td class="col-actions">
+            {% if competition_type.competition_count or competition_type.participant_count %}
+              <button type="button" class="link-button link-button--danger" disabled
+                      title="This type is in use and can't be deleted">Delete</button>
+            {% else %}
+              <form method="post" action="{% url 'competitions:type-delete' competition_type.pk %}" style="display:inline">
+                {% csrf_token %}
+                <button type="submit" class="link-button link-button--danger">Delete</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% if competition_type.competition_count %}
+          <tr class="type-competitions" data-type-competitions hidden>
+            <td></td>
+            <td colspan="3">
+              <ul class="type-competition-list">
+                {% for competition in competition_type.competitions.all %}
+                  <li><a href="{% url 'competitions:edit' competition.pk %}">{{ competition.name }} ({{ competition.date|date:"d.m.Y" }})</a></li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+        {% endif %}
       {% empty %}
-        <tr><td>No competition types yet.</td></tr>
+        <tr><td colspan="4">No competition types yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>
   </div>
+
+  <script>
+    (function () {
+      document.querySelectorAll("[data-expander]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const row = button.closest("tr");
+          const panel = row.nextElementSibling;
+          if (!panel || !panel.matches("[data-type-competitions]")) return;
+          const opening = panel.hasAttribute("hidden");
+          panel.toggleAttribute("hidden", !opening);
+          button.setAttribute("aria-expanded", String(opening));
+          button.innerHTML = opening ? "&#9660;" : "&#9654;";
+        });
+      });
+    })();
+  </script>
 {% endblock %}

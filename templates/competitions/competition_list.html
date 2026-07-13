@@ -1,47 +1,55 @@
 {% extends "base.html" %}
 {% block title %}Competition Setup – Slalom Timing{% endblock %}
+{% block topbar_title %}Competition Setup{% endblock %}
 {% block content %}
-  <h1>Competition Setup</h1>
-  <div class="actions">
+  <div class="list-toolbar">
+    <form class="search-form" role="search" id="competition-search" onsubmit="return false;">
+      <input type="text" id="competition-search-input"
+             placeholder="Search by name or type…" autocomplete="off">
+      <button class="button button--secondary" type="submit">Search</button>
+    </form>
     <a class="button" href="{% url 'competitions:add' %}">+ New competition</a>
-    <a href="{% url 'competitions:type-list' %}">Manage competition types</a>
   </div>
+  <div class="toolbar-sub">
+    <a class="button button--secondary button--small" href="{% url 'competitions:type-list' %}">Manage competition types</a>
+  </div>
+
   <div class="table-card">
-  <table>
+  <table class="competitions-table">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Type</th>
-        <th>Date</th>
-        <th>Classes running</th>
-        <th>Current</th>
-        <th></th>
+        <th class="col-name">Name</th>
+        <th class="col-type">Type</th>
+        <th class="col-date">Date</th>
+        <th class="col-classes">Classes running</th>
+        <th class="col-current">Current</th>
+        <th class="col-actions"></th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="competitions-body">
       {% for competition in competitions %}
-        <tr>
-          <td>{{ competition.name }}</td>
-          <td>{{ competition.competition_type.name }}</td>
-          <td>{{ competition.date }}</td>
-          <td>
+        <tr data-search="{{ competition.name|lower }} {{ competition.competition_type.name|lower }}">
+          <td class="col-name" title="{{ competition.name }}">{{ competition.name }}</td>
+          <td class="col-type" title="{{ competition.competition_type.name }}">{{ competition.competition_type.name }}</td>
+          <td class="col-date">{{ competition.date|date:"d.m.Y" }}</td>
+          <td class="col-classes">
             {% for label in competition.active_classes %}
               <span class="status-pill">{{ label }}</span>
             {% empty %}
               &mdash;
             {% endfor %}
           </td>
-          <td>
+          <td class="col-current">
             {% if competition.is_active %}
               <span class="status-pill status-pill--active">Current</span>
             {% else %}
               <form method="post" action="{% url 'competitions:select' competition.pk %}">
                 {% csrf_token %}
-                <button class="button button--secondary" type="submit">Set as current</button>
+                <button class="button button--secondary button--small" type="submit">Set as current</button>
               </form>
             {% endif %}
           </td>
-          <td>
+          <td class="col-actions">
             <a href="{% url 'competitions:edit' competition.pk %}">Edit</a>
             &middot;
             <form method="post" action="{% url 'competitions:duplicate' competition.pk %}" style="display:inline">
@@ -53,9 +61,34 @@
           </td>
         </tr>
       {% empty %}
-        <tr><td colspan="6">No competitions yet.</td></tr>
+        <tr class="empty-row"><td colspan="6">No competitions yet.</td></tr>
       {% endfor %}
+      <tr class="empty-row no-results-row" hidden><td colspan="6">No competitions match your search.</td></tr>
     </tbody>
   </table>
   </div>
+
+  <script>
+    (function () {
+      const input = document.getElementById("competition-search-input");
+      const body = document.getElementById("competitions-body");
+      if (!input || !body) return;
+      const noResults = body.querySelector(".no-results-row");
+      const rows = Array.from(body.querySelectorAll("tr[data-search]"));
+
+      function apply() {
+        const term = input.value.trim().toLowerCase();
+        let visible = 0;
+        for (const row of rows) {
+          const match = term === "" || row.dataset.search.includes(term);
+          row.hidden = !match;
+          if (match) visible += 1;
+        }
+        if (noResults) noResults.hidden = !(rows.length > 0 && visible === 0);
+      }
+
+      input.addEventListener("input", apply);
+      apply();
+    })();
+  </script>
 {% endblock %}

@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{% if object %}Edit{% else %}New{% endif %} competition – Slalom Timing{% endblock %}
+{% block topbar_title %}{% if object %}Edit {{ object.name }}{% else %}New competition{% endif %}{% endblock %}
 {% block content %}
-  <h1>{% if object %}Edit {{ object.name }}{% else %}New competition{% endif %}</h1>
+  <a class="back-link" href="{% url 'competitions:list' %}">&larr; Back to Competition Setup</a>
   <form method="post">
     {% csrf_token %}
     {{ form.non_field_errors }}

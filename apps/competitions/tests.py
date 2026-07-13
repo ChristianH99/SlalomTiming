@@ -159,3 +159,35 @@ def test_create_competition_type_via_view(client):
     response = client.post(reverse("competitions:type-add"), {"name": "Skiing"})
     assert response.status_code == 302
     assert CompetitionType.objects.filter(name="Skiing").exists()
+
+
+def test_delete_unused_competition_type(client):
+    ctype = CompetitionType.objects.create(name="Unused")
+    response = client.post(reverse("competitions:type-delete", kwargs={"pk": ctype.pk}))
+    assert response.status_code == 302
+    assert not CompetitionType.objects.filter(pk=ctype.pk).exists()
+
+
+def test_cannot_delete_competition_type_in_use(client):
+    competition = make_competition(type_name="InUse")
+    ctype = competition.competition_type
+    response = client.post(reverse("competitions:type-delete", kwargs={"pk": ctype.pk}))
+    assert response.status_code == 302
+    # still there — it's referenced by a competition
+    assert CompetitionType.objects.filter(pk=ctype.pk).exists()
+
+
+def test_delete_competition_type_rejects_get(client):
+    ctype = CompetitionType.objects.create(name="ViaGet")
+    response = client.get(reverse("competitions:type-delete", kwargs={"pk": ctype.pk}))
+    assert response.status_code == 405
+    assert CompetitionType.objects.filter(pk=ctype.pk).exists()
+
+
+def test_type_list_annotates_usage_counts(client):
+    competition = make_competition(type_name="Counted")
+    ctype = competition.competition_type
+    response = client.get(reverse("competitions:type-list"))
+    types = {t.pk: t for t in response.context["competition_types"]}
+    assert types[ctype.pk].competition_count == 1
+    assert types[ctype.pk].participant_count == 0

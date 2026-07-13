@@ -1,4 +1,6 @@
+from django.contrib import messages
 from django.db import transaction
+from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
@@ -87,9 +89,32 @@ class CompetitionTypeListView(ListView):
     context_object_name = "competition_types"
     template_name = "competitions/competitiontype_list.html"
 
+    def get_queryset(self):
+        # Usage counts drive whether a type can be deleted; competitions are
+        # prefetched for the expandable per-type list.
+        return (
+            CompetitionType.objects.annotate(
+                competition_count=Count("competitions", distinct=True),
+                participant_count=Count("participants", distinct=True),
+            )
+            .prefetch_related("competitions")
+        )
+
 
 class CompetitionTypeCreateView(CreateView):
     model = CompetitionType
     form_class = CompetitionTypeForm
     template_name = "competitions/competitiontype_form.html"
     success_url = reverse_lazy("competitions:type-list")
+
+
+@require_POST
+def delete_competition_type(request, pk):
+    competition_type = get_object_or_404(CompetitionType, pk=pk)
+    # A type in use (by competitions or participants) can't be removed — the
+    # FKs are PROTECT, and the UI disables the button, but guard here too.
+    if competition_type.competitions.exists() or competition_type.participants.exists():
+        messages.error(request, "That type is still in use and can't be deleted.")
+    else:
+        competition_type.delete()
+    return redirect("competitions:type-list")
