@@ -14,7 +14,7 @@
   <div class="shell">
     <aside class="shell-sidebar" id="shell-sidebar">
       <div class="shell-brand">
-        <span class="brand">Slalom<span class="brand-slash">/</span>Timing</span>
+        <a class="brand" href="{% url 'timing:dashboard' %}">Slalom<span class="brand-slash">/</span>Timing</a>
       </div>
       <nav class="shell-nav">
         <a class="shell-nav-item{% if request.resolver_match.app_name == 'timing' %} active{% endif %}" href="{% url 'timing:dashboard' %}">Dashboard</a>
@@ -28,21 +28,28 @@
     <div class="shell-overlay" id="shell-overlay"></div>
     <div class="shell-main">
       <header class="shell-topbar">
-        <button class="shell-hamburger" id="shell-hamburger" aria-expanded="false" aria-controls="shell-sidebar" aria-label="Toggle navigation">
+        <button class="shell-hamburger" id="shell-hamburger" aria-expanded="true" aria-controls="shell-sidebar" aria-label="Toggle navigation">
           <span class="shell-hamburger-icon"><span></span><span></span><span></span></span>
         </button>
-        <div class="topbar-event">
-          <span class="topbar-event-label">Event</span>
-          {% if active_competition %}
-            <span class="topbar-event-name">{{ active_competition.name }}</span>
-            <span class="topbar-event-meta">{{ active_competition.competition_type.name }} · {{ active_competition.date }}</span>
-          {% else %}
-            <span class="topbar-event-name topbar-event-name--none">No event selected</span>
-            <a class="topbar-event-pick" href="{% url 'competitions:list' %}">Choose event</a>
-          {% endif %}
+        <div class="topbar-titles">
+          <span class="topbar-page">{% block topbar_title %}Slalom Timing{% endblock %}</span>
+          <span class="topbar-sub">
+            {% if active_competition %}
+              {{ active_competition.name }} · {{ active_competition.date|date:"d.m.Y" }}
+            {% else %}
+              <span class="topbar-sub--none">No event selected</span> · <a href="{% url 'competitions:list' %}">choose one</a>
+            {% endif %}
+          </span>
         </div>
       </header>
       <main class="content" id="main-content">
+        {% if messages %}
+          <ul class="messages">
+            {% for message in messages %}
+              <li class="notice notice--{{ message.tags|default:'info' }}">{{ message }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
         {% block content %}{% endblock %}
       </main>
     </div>
@@ -50,21 +57,33 @@
 
   <script>
     (function () {
-      const sidebar = document.getElementById("shell-sidebar");
+      const shell = document.querySelector(".shell");
       const overlay = document.getElementById("shell-overlay");
       const toggle = document.getElementById("shell-hamburger");
-      if (!sidebar || !overlay || !toggle) return;
+      if (!shell || !overlay || !toggle) return;
 
-      function close() {
-        sidebar.classList.remove("open");
-        toggle.setAttribute("aria-expanded", "false");
+      const isMobile = () => window.matchMedia("(max-width: 900px)").matches;
+
+      // The sidebar is shown by default on desktop and hidden (off-canvas) on
+      // mobile, so "expanded" is derived differently per viewport.
+      function syncAria() {
+        const shown = isMobile()
+          ? shell.classList.contains("sidebar-open")
+          : !shell.classList.contains("sidebar-collapsed");
+        toggle.setAttribute("aria-expanded", String(shown));
       }
 
       toggle.addEventListener("click", () => {
-        const isOpen = sidebar.classList.toggle("open");
-        toggle.setAttribute("aria-expanded", String(isOpen));
+        // Mobile slides the sidebar in; desktop collapses it out of the way.
+        shell.classList.toggle(isMobile() ? "sidebar-open" : "sidebar-collapsed");
+        syncAria();
       });
-      overlay.addEventListener("click", close);
+      overlay.addEventListener("click", () => {
+        shell.classList.remove("sidebar-open");
+        syncAria();
+      });
+      window.addEventListener("resize", syncAria);
+      syncAria();
     })();
   </script>
 </body>
