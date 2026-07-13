@@ -1,18 +1,17 @@
 {% extends "base.html" %}
 {% load competitions_tags %}
 {% block title %}Participants – Slalom Timing{% endblock %}
+{% block topbar_title %}Participants{% endblock %}
 {% block content %}
-  <h1>Participants</h1>
-  <div class="actions">
+  <div class="list-toolbar">
+    <form method="get" class="search-form" role="search" id="participant-search">
+      <input type="text" name="q" value="{{ query }}" id="participant-search-input"
+             placeholder="Search by name, club or bib…" autocomplete="off">
+      {% if active_only %}<input type="hidden" name="active" value="1">{% endif %}
+      <button class="button button--secondary" type="submit">Search</button>
+    </form>
     <a class="button" href="{% url 'participants:add' %}">+ Add participant</a>
   </div>
-
-  <form method="get" class="search-form" role="search" id="participant-search">
-    <input type="text" name="q" value="{{ query }}" id="participant-search-input"
-           placeholder="Search by name, club or bib…" autocomplete="off">
-    {% if active_only %}<input type="hidden" name="active" value="1">{% endif %}
-    <button class="button button--secondary" type="submit">Search</button>
-  </form>
 
   {% if not competition %}
     <p class="hint">No competition selected — showing every participant. <a href="{% url 'competitions:list' %}">Pick a competition</a> to see who's active.</p>
@@ -45,7 +44,7 @@
         <tr data-search="{{ participant.first_name|lower }} {{ participant.last_name|lower }} {{ participant.club|lower }} {{ participant.current_bib|default:'' }}">
           <td class="col-bib">{{ participant.current_bib|default:"–" }}</td>
           <td class="col-name" title="{{ participant.first_name }} {{ participant.last_name }}">{{ participant.first_name }} {{ participant.last_name }}</td>
-          <td class="col-dob">{{ participant.date_of_birth|date:"Y-m-d"|default:"–" }}</td>
+          <td class="col-dob">{{ participant.date_of_birth|date:"d.m.Y"|default:"–" }}</td>
           <td class="col-class">{{ participant.date_of_birth.year|default_if_none:""|class_for_birth_year:competition|default:"–" }}</td>
           <td class="col-club" title="{{ participant.club }}">{{ participant.club }}</td>
           <td class="col-licence" title="{{ participant.license_number }}">{{ participant.license_number }}</td>

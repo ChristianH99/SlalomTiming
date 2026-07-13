@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}{% if object %}Edit{% else %}Add{% endif %} participant – Slalom Timing{% endblock %}
+{% block topbar_title %}{% if object %}Edit {{ object }}{% else %}Add participant{% endif %}{% endblock %}
 {% block content %}
   <a class="back-link" href="{% url 'participants:list' %}">&larr; Back to participants</a>
-  <h1>{% if object %}Edit {{ object }}{% else %}Add participant{% endif %}</h1>
 
   <div id="duplicate-warning" class="notice notice--warning" hidden></div>
 
@@ -15,7 +15,9 @@
 
     <div class="bib-box">
       <h2>Bib</h2>
-      {% include "participants/_form_field.html" with field=form.bib_number %}
+      {{ form.bib_number }}
+      {{ form.bib_number.errors }}
+      {% if form.bib_number.help_text %}<span class="hint">{{ form.bib_number.help_text }}</span>{% endif %}
     </div>
 
     {% include "participants/_form_field.html" with field=form.competition_type %}

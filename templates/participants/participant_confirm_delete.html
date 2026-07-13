@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Delete participant – Slalom Timing{% endblock %}
+{% block topbar_title %}Delete participant{% endblock %}
 {% block content %}
   <h1>Delete {{ object }}?</h1>
   <p>{{ object.first_name }} {{ object.last_name }} ({{ object.club }}) and all of their event entries will be permanently removed.</p>
