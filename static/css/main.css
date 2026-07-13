@@ -151,22 +151,6 @@ a:hover { color: var(--flame-hover); }
 }
 .shell-admin-link:hover { color: var(--flame-light); }
 
-.shell-competition-pill {
-  display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--flame-light);
-  background: rgba(232,73,29,0.15);
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
-}
-.shell-competition-pill--none {
-  color: rgba(255,255,255,0.5);
-  background: rgba(255,255,255,0.06);
-  font-style: italic;
-  font-weight: 500;
-}
-
 .shell-overlay {
   display: none;
   position: fixed;
@@ -185,16 +169,63 @@ a:hover { color: var(--flame-hover); }
 }
 
 .shell-topbar {
-  display: none;
-  padding: 0.75rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 1.25rem;
   background: var(--white);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 10;
+  min-height: 56px;
+}
+
+/* ===== TOPBAR EVENT (the "topper") ===== */
+.topbar-event {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.topbar-event-label {
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+.topbar-event-name {
+  font-family: 'Manrope', sans-serif;
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar-event-name--none {
+  color: var(--text-light);
+  font-weight: 700;
+  font-style: italic;
+}
+.topbar-event-meta {
+  font-size: 0.82rem;
+  color: var(--text-light);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.topbar-event-pick {
+  font-size: 0.82rem;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
 .shell-hamburger {
+  display: none;
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -388,7 +419,7 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
 }
 
 /* ===== FORMS ===== */
-form p { margin: 0.7rem 0; display: flex; flex-direction: column; gap: 0.3rem; }
+form p, form .combobox { margin: 0.7rem 0; display: flex; flex-direction: column; gap: 0.3rem; }
 form label {
   font-family: 'Manrope', sans-serif;
   font-size: 0.8rem;
@@ -411,6 +442,96 @@ form input:focus, form select:focus, form textarea:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(22,35,63,0.08);
 }
+
+/* ===== BACK LINK ===== */
+.back-link {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-mid);
+  margin-bottom: 0.5rem;
+}
+.back-link:hover { color: var(--flame); }
+
+/* ===== NOTICE / WARNING ===== */
+.notice {
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.notice--warning {
+  background: var(--flame-bg);
+  border: 1px solid rgba(232,73,29,0.35);
+  border-left: 4px solid var(--flame);
+  color: var(--text-dark);
+}
+.notice-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+.notice-list li { margin: 0.25rem 0; }
+
+/* ===== COMBOBOX (club / email autocomplete) ===== */
+.combobox-control {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.combobox-control input { width: 100%; }
+.combobox-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.combobox-list[hidden] { display: none; }
+.combobox-option {
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.combobox-option:hover,
+.combobox-option.active {
+  background: var(--frost-bg);
+  color: var(--ink);
+}
+
+/* ===== PARTICIPANTS TABLE (fixed rows, truncated overflow) ===== */
+.participants-table { table-layout: fixed; }
+.participants-table td,
+.participants-table th {
+  height: 48px;
+  padding-left: 0.7rem;
+  padding-right: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+}
+.participants-table .col-bib { width: 54px; }
+.participants-table .col-dob { width: 150px; }
+.participants-table .col-class { width: 78px; }
+.participants-table .col-licence { width: 120px; }
+.participants-table .col-actions { width: 140px; overflow: visible; }
+.participants-table .col-name { width: 22%; }
+.participants-table .col-club { width: 18%; }
 
 /* ===== LIVE INDICATOR ===== */
 .live-dot {
@@ -462,7 +583,7 @@ textarea:focus-visible,
   .shell-sidebar.open { transform: translateX(0); }
   .shell-sidebar.open ~ .shell-overlay { display: block; }
   .shell-main { margin-left: 0; }
-  .shell-topbar { display: flex; }
+  .shell-hamburger { display: inline-flex; }
 }
 
 @media (max-width: 700px) {

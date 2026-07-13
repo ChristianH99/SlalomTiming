@@ -2,13 +2,15 @@
 {% load competitions_tags %}
 {% block title %}Participants – Slalom Timing{% endblock %}
 {% block content %}
+  <h1>Participants</h1>
   <div class="actions">
     <a class="button" href="{% url 'participants:add' %}">+ Add participant</a>
   </div>
 
-  <form method="get" class="search-form">
-    <input type="text" name="q" value="{{ query }}" placeholder="Search by name, club or bib…">
-    {% if show_all %}<input type="hidden" name="all" value="1">{% endif %}
+  <form method="get" class="search-form" role="search" id="participant-search">
+    <input type="text" name="q" value="{{ query }}" id="participant-search-input"
+           placeholder="Search by name, club or bib…" autocomplete="off">
+    {% if active_only %}<input type="hidden" name="active" value="1">{% endif %}
     <button class="button button--secondary" type="submit">Search</button>
   </form>
 
@@ -17,54 +19,77 @@
   {% else %}
     <p class="hint">
       {{ competition.competition_type.name }} · {{ competition.name }} —
-      {% if show_all %}
-        showing all registered participants. <a href="?q={{ query }}">Show active only</a>
+      {% if active_only %}
+        showing active participants only. <a href="?q={{ query }}">Show all</a>
       {% else %}
-        showing active participants only. <a href="?all=1&q={{ query }}">Show all</a>
+        showing all registered participants. <a href="?active=1&q={{ query }}">Show active only</a>
       {% endif %}
     </p>
   {% endif %}
 
   <div class="table-card">
-  <table>
+  <table class="participants-table">
     <thead>
       <tr>
-        <th>Bib</th>
-        <th>Name</th>
-        <th>Date of birth</th>
-        <th>Class</th>
-        <th>Club</th>
-        <th>Licence No.</th>
-        <th>Status</th>
-        <th></th>
+        <th class="col-bib">Bib</th>
+        <th class="col-name">Name</th>
+        <th class="col-dob">Date of birth</th>
+        <th class="col-class">Class</th>
+        <th class="col-club">Club</th>
+        <th class="col-licence">Licence</th>
+        <th class="col-actions"></th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="participants-body">
       {% for participant in participants %}
-        <tr>
-          <td>{{ participant.current_entry.bib_number|default:"–" }}</td>
-          <td>{{ participant.first_name }} {{ participant.last_name }}</td>
-          <td>{{ participant.date_of_birth|default:"–" }}</td>
-          <td>{{ participant.date_of_birth.year|default_if_none:""|class_for_birth_year:competition|default:"–" }}</td>
-          <td>{{ participant.club }}</td>
-          <td>{{ participant.license_number }}</td>
-          <td>
-            {% if participant.current_entry %}
-              <span class="status-pill">{{ participant.current_entry.get_status_display }}</span>
-            {% else %}
-              &mdash;
-            {% endif %}
-          </td>
-          <td>
+        <tr data-search="{{ participant.first_name|lower }} {{ participant.last_name|lower }} {{ participant.club|lower }} {{ participant.current_bib|default:'' }}">
+          <td class="col-bib">{{ participant.current_bib|default:"–" }}</td>
+          <td class="col-name" title="{{ participant.first_name }} {{ participant.last_name }}">{{ participant.first_name }} {{ participant.last_name }}</td>
+          <td class="col-dob">{{ participant.date_of_birth|date:"Y-m-d"|default:"–" }}</td>
+          <td class="col-class">{{ participant.date_of_birth.year|default_if_none:""|class_for_birth_year:competition|default:"–" }}</td>
+          <td class="col-club" title="{{ participant.club }}">{{ participant.club }}</td>
+          <td class="col-licence" title="{{ participant.license_number }}">{{ participant.license_number }}</td>
+          <td class="col-actions">
             <a href="{% url 'participants:edit' participant.pk %}">Edit</a>
             &middot;
             <a href="{% url 'participants:delete' participant.pk %}">Delete</a>
           </td>
         </tr>
       {% empty %}
-        <tr><td colspan="8">No participants found.</td></tr>
+        <tr class="empty-row"><td colspan="7">No participants found.</td></tr>
       {% endfor %}
+      <tr class="empty-row no-results-row" hidden><td colspan="7">No participants match your search.</td></tr>
     </tbody>
   </table>
   </div>
+
+  <script>
+    (function () {
+      const input = document.getElementById("participant-search-input");
+      const body = document.getElementById("participants-body");
+      if (!input || !body) return;
+
+      const noResults = body.querySelector(".no-results-row");
+      const rows = Array.from(body.querySelectorAll("tr[data-search]"));
+
+      function apply() {
+        const term = input.value.trim().toLowerCase();
+        let visible = 0;
+        for (const row of rows) {
+          const match = term === "" || row.dataset.search.includes(term);
+          row.hidden = !match;
+          if (match) visible += 1;
+        }
+        if (noResults) noResults.hidden = !(rows.length > 0 && visible === 0);
+      }
+
+      // Live filtering: no need to submit the form to search.
+      input.addEventListener("input", apply);
+      document.getElementById("participant-search").addEventListener("submit", (e) => {
+        e.preventDefault();
+        apply();
+      });
+      apply();
+    })();
+  </script>
 {% endblock %}

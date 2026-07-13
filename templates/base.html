@@ -23,20 +23,25 @@
       </nav>
       <div class="shell-sidebar-footer">
         <a class="shell-admin-link" href="/admin/">Django Admin</a>
-        {% if active_competition %}
-          <div class="shell-competition-pill">{{ active_competition.name }}</div>
-        {% else %}
-          <div class="shell-competition-pill shell-competition-pill--none">No competition selected</div>
-        {% endif %}
       </div>
     </aside>
     <div class="shell-overlay" id="shell-overlay"></div>
     <div class="shell-main">
-      <div class="shell-topbar">
+      <header class="shell-topbar">
         <button class="shell-hamburger" id="shell-hamburger" aria-expanded="false" aria-controls="shell-sidebar" aria-label="Toggle navigation">
           <span class="shell-hamburger-icon"><span></span><span></span><span></span></span>
         </button>
-      </div>
+        <div class="topbar-event">
+          <span class="topbar-event-label">Event</span>
+          {% if active_competition %}
+            <span class="topbar-event-name">{{ active_competition.name }}</span>
+            <span class="topbar-event-meta">{{ active_competition.competition_type.name }} · {{ active_competition.date }}</span>
+          {% else %}
+            <span class="topbar-event-name topbar-event-name--none">No event selected</span>
+            <a class="topbar-event-pick" href="{% url 'competitions:list' %}">Choose event</a>
+          {% endif %}
+        </div>
+      </header>
       <main class="content" id="main-content">
         {% block content %}{% endblock %}
       </main>

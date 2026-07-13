@@ -21,7 +21,14 @@ class ParticipantForm(forms.ModelForm):
             "email",
             "phone_number",
         ]
-        widgets = {"date_of_birth": forms.DateInput(attrs={"type": "date"})}
+        widgets = {
+            "date_of_birth": forms.DateInput(attrs={"type": "date"}),
+            # autocomplete off: these fields get custom dropdowns (club memory
+            # base, email-domain completion) that the browser's native autofill
+            # would otherwise overlap.
+            "club": forms.TextInput(attrs={"autocomplete": "off"}),
+            "email": forms.EmailInput(attrs={"autocomplete": "off"}),
+        }
         labels = {
             "address_street": "Street address",
             "address_zip_code": "ZIP code",
@@ -62,7 +69,6 @@ class ParticipantCreateForm(ParticipantForm):
 
 class ParticipantUpdateForm(ParticipantForm):
     bib_number = forms.IntegerField(required=False, min_value=1, label="Bib number")
-    status = forms.ChoiceField(required=False, choices=EventEntry.Status.choices, label="Status")
 
     def __init__(self, *args, competition=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -70,7 +76,7 @@ class ParticipantUpdateForm(ParticipantForm):
         self.entry = None
 
         if competition is None:
-            self._disable_bib_fields("No competition is currently selected, so a bib can't be assigned.")
+            self._disable_bib_field("No competition is currently selected, so a bib can't be assigned.")
             return
 
         if self.instance.pk and self.instance.competition_type_id == competition.competition_type_id:
@@ -79,16 +85,14 @@ class ParticipantUpdateForm(ParticipantForm):
             ).first()
             if self.entry:
                 self.fields["bib_number"].initial = self.entry.bib_number
-                self.fields["status"].initial = self.entry.status
         else:
-            self._disable_bib_fields(
+            self._disable_bib_field(
                 "This participant's type doesn't match the current competition, so a bib can't be assigned."
             )
 
-    def _disable_bib_fields(self, reason):
+    def _disable_bib_field(self, reason):
         self.fields["bib_number"].disabled = True
         self.fields["bib_number"].help_text = reason
-        self.fields["status"].disabled = True
 
     def clean(self):
         cleaned_data = super().clean()

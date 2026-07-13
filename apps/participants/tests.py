@@ -225,7 +225,7 @@ def test_update_form_detects_bib_conflict():
 
 # ----- list view -----
 
-def test_list_view_shows_active_participants_for_current_competition(client):
+def test_list_view_defaults_to_showing_all_and_active_only_filters(client):
     ctype = make_type()
     competition = make_competition(ctype)
     active = Participant.objects.create(
@@ -242,15 +242,41 @@ def test_list_view_shows_active_participants_for_current_competition(client):
     )
     EventEntry.objects.create(participant=active, competition=competition, bib_number=1)
 
+    # default now shows everyone
     response = client.get(reverse("participants:list"))
-    names = [p.last_name for p in response.context["participants"]]
+    names = {p.last_name for p in response.context["participants"]}
+    assert {"Racer", "Bystander"} <= names
+
+    # active-only is the opt-in
+    response = client.get(reverse("participants:list"), {"active": "1"})
+    names = {p.last_name for p in response.context["participants"]}
     assert "Racer" in names
     assert "Bystander" not in names
 
-    # show all reveals the unregistered participant too
-    response = client.get(reverse("participants:list"), {"all": "1"})
-    names = [p.last_name for p in response.context["participants"]]
-    assert {"Racer", "Bystander"} <= set(names)
+
+def test_list_view_sorts_by_bib_then_last_name(client):
+    ctype = make_type()
+    competition = make_competition(ctype)
+
+    def mk(first, last, licence):
+        return Participant.objects.create(
+            competition_type=ctype, first_name=first, last_name=last,
+            date_of_birth=datetime.date(2010, 1, 1), address_street="s",
+            address_zip_code="1", address_city="c", club="c",
+            license_number=licence, email=f"{licence}@x.com",
+        )
+
+    unassigned_z = mk("Zoe", "Zulu", "1")
+    unassigned_a = mk("Al", "Alpha", "2")
+    bib5 = mk("Bee", "Five", "3")
+    bib2 = mk("Cee", "Two", "4")
+    EventEntry.objects.create(participant=bib5, competition=competition, bib_number=5)
+    EventEntry.objects.create(participant=bib2, competition=competition, bib_number=2)
+
+    response = client.get(reverse("participants:list"))
+    order = [p.last_name for p in response.context["participants"]]
+    # bibs first (2 then 5), then the unassigned by last name (Alpha, Zulu)
+    assert order == ["Two", "Five", "Alpha", "Zulu"]
 
 
 def test_list_view_search_by_name(client):
@@ -262,11 +288,68 @@ def test_list_view_search_by_name(client):
         address_zip_code="1", address_city="c", club="c",
         license_number="1", email="a@a.com",
     )
-    response = client.get(reverse("participants:list"), {"all": "1", "q": "Findme"})
+    response = client.get(reverse("participants:list"), {"q": "Findme"})
     assert len(response.context["participants"]) == 1
 
-    response = client.get(reverse("participants:list"), {"all": "1", "q": "nomatch"})
+    response = client.get(reverse("participants:list"), {"q": "nomatch"})
     assert len(response.context["participants"]) == 0
+
+
+# ----- duplicate check endpoint -----
+
+def test_participant_check_flags_matching_license_and_name(client):
+    ctype = make_type()
+    existing = Participant.objects.create(
+        competition_type=ctype, first_name="John", last_name="Smith",
+        date_of_birth=datetime.date(2010, 1, 1), address_street="s",
+        address_zip_code="1", address_city="c", club="Speed",
+        license_number="LIC-9", email="j@x.com",
+    )
+    # licence match (case-insensitive)
+    response = client.get(reverse("participants:check"), {"license_number": "lic-9"})
+    data = response.json()
+    assert len(data["matches"]) == 1
+    assert data["matches"][0]["id"] == existing.pk
+    assert "licence" in data["matches"][0]["reason"]
+
+    # name match
+    response = client.get(reverse("participants:check"), {"first_name": "john", "last_name": "SMITH"})
+    assert response.json()["matches"][0]["id"] == existing.pk
+
+    # excludes self when editing
+    response = client.get(
+        reverse("participants:check"), {"license_number": "LIC-9", "exclude": str(existing.pk)}
+    )
+    assert response.json()["matches"] == []
+
+    # no criteria -> no matches
+    response = client.get(reverse("participants:check"))
+    assert response.json()["matches"] == []
+
+
+# ----- update view preserves run status -----
+
+def test_update_view_preserves_existing_entry_status(client):
+    ctype = make_type()
+    competition = make_competition(ctype)
+    participant = Participant.objects.create(
+        competition_type=ctype, first_name="Keep", last_name="Status",
+        date_of_birth=datetime.date(2010, 1, 1), address_street="s",
+        address_zip_code="1", address_city="c", club="c",
+        license_number="1", email="k@x.com",
+    )
+    EventEntry.objects.create(
+        participant=participant, competition=competition,
+        bib_number=3, status=EventEntry.Status.DNF,
+    )
+    data = participant_data(ctype, first_name="Keep", last_name="Status",
+                            license_number="1", email="k@x.com", bib_number="8")
+    response = client.post(reverse("participants:edit", kwargs={"pk": participant.pk}), data)
+    assert response.status_code == 302
+    entry = EventEntry.objects.get(participant=participant, competition=competition)
+    assert entry.bib_number == 8
+    # status must not be reset by the participant form
+    assert entry.status == EventEntry.Status.DNF
 
 
 def test_delete_view_removes_participant_and_entries(client):

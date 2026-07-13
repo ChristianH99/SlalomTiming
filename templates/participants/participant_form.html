@@ -1,17 +1,21 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{% if object %}Edit{% else %}Add{% endif %} participant – Slalom Timing{% endblock %}
 {% block content %}
+  <a class="back-link" href="{% url 'participants:list' %}">&larr; Back to participants</a>
   <h1>{% if object %}Edit {{ object }}{% else %}Add participant{% endif %}</h1>
-  <form method="post">
+
+  <div id="duplicate-warning" class="notice notice--warning" hidden></div>
+
+  <form method="post" id="participant-form"
+        data-check-url="{{ check_url }}"
+        data-exclude-pk="{{ object.pk|default:'' }}">
     {% csrf_token %}
     {{ form.non_field_errors }}
 
     <div class="bib-box">
       <h2>Bib</h2>
       {% include "participants/_form_field.html" with field=form.bib_number %}
-      {% if form.status %}
-        {% include "participants/_form_field.html" with field=form.status %}
-      {% endif %}
     </div>
 
     {% include "participants/_form_field.html" with field=form.competition_type %}
@@ -39,9 +43,32 @@
     {% include "participants/_form_field.html" with field=form.address_zip_code %}
     {% include "participants/_form_field.html" with field=form.address_city %}
 
-    {% include "participants/_form_field.html" with field=form.club %}
+    <div class="combobox" data-combobox="club">
+      <label for="{{ form.club.id_for_label }}">
+        {{ form.club.label }}{% if form.club.field.required %} <span class="required-marker" title="Required">*</span>{% endif %}
+      </label>
+      <span class="combobox-control">
+        {{ form.club }}
+        <ul class="combobox-list" data-combobox-list role="listbox" hidden></ul>
+      </span>
+      {{ form.club.errors }}
+      {% if form.club.help_text %}<span class="hint">{{ form.club.help_text }}</span>{% endif %}
+    </div>
+
     {% include "participants/_form_field.html" with field=form.license_number %}
-    {% include "participants/_form_field.html" with field=form.email %}
+
+    <div class="combobox" data-combobox="email">
+      <label for="{{ form.email.id_for_label }}">
+        {{ form.email.label }}{% if form.email.field.required %} <span class="required-marker" title="Required">*</span>{% endif %}
+      </label>
+      <span class="combobox-control">
+        {{ form.email }}
+        <ul class="combobox-list" data-combobox-list role="listbox" hidden></ul>
+      </span>
+      {{ form.email.errors }}
+      <span class="hint" data-email-hint hidden></span>
+    </div>
+
     {% include "participants/_form_field.html" with field=form.phone_number %}
 
     <div class="actions">
@@ -50,6 +77,11 @@
     </div>
   </form>
 
+  {{ class_ranges|json_script:"class-ranges-data" }}
+  {{ club_options|json_script:"club-options-data" }}
+  {{ email_domains|json_script:"email-domains-data" }}
+  <script>window.SLALOM_COMPETITION_YEAR = {{ competition_year|default_if_none:"null" }};</script>
+
   <script>
     (function () {
       const dobInput = document.getElementById("id_date_of_birth");
@@ -57,8 +89,8 @@
 
       const dobError = document.getElementById("dob-error");
       const classOutput = document.getElementById("class-preview-value");
-      const ranges = {{ class_ranges_json|safe }};
-      const year = {{ competition_year|default_if_none:"null" }};
+      const ranges = JSON.parse(document.getElementById("class-ranges-data").textContent);
+      const year = window.SLALOM_COMPETITION_YEAR;
 
       // A native date input can report badInput=false yet still leave a
       // malformed value (e.g. typing a stray extra digit into the month
@@ -69,13 +101,7 @@
       }
 
       // Chrome's year segment doesn't cap itself at 4 digits once it's
-      // fully selected before typing (e.g. click the year, then keep
-      // typing) — it happily grows to "202019-02-20" and still reports
-      // badInput=false, since an oversized year is technically valid per
-      // the HTML date microsyntax. Rewriting the value mid-keystroke
-      // fights the browser's own segment-typing state and corrupts it
-      // (produces garbled results), so this only runs on blur — once the
-      // user is done typing — clamping back to the first 4 digits typed.
+      // fully selected before typing — clamp back to the first 4 digits on blur.
       function clampYearOverflow() {
         const match = dobInput.value.match(/^(\d{4})(\d+)-(\d{2})-(\d{2})$/);
         if (match) {
@@ -85,9 +111,6 @@
 
       function checkValidity() {
         const malformed = isMalformed();
-        // badInput already blocks native submission on its own; setCustomValidity
-        // makes the malformed-but-not-badInput case (see isMalformed above) block
-        // submission the same way, instead of only failing once it reaches the server.
         dobInput.setCustomValidity(malformed ? "Invalid date" : "");
         if (!dobError) return;
         dobError.textContent = dobInput.validity.badInput || malformed
@@ -112,4 +135,6 @@
       updateClass();
     })();
   </script>
+
+  <script src="{% static 'js/participant_form.js' %}"></script>
 {% endblock %}
