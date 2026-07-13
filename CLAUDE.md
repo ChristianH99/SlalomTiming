@@ -25,7 +25,13 @@ participants / entering penalties) — no rewrite planned, just wider access + a
 
 ```
 config/                  Django project (settings, urls, asgi/wsgi)
-apps/participants/       Participant model, admin, CRUD views
+apps/competitions/       Competition, CompetitionType, CompetitionClass; setup UI,
+                         per-class age ranges, active-competition selection
+apps/participants/
+  models.py              Participant (personal/contact data) + EventEntry (bib +
+                         run status, unique per competition)
+  forms.py               add/edit forms (club autocomplete, email-domain completion)
+  views.py               CRUD views + participant_check duplicate-detection endpoint
 apps/timing/
   models.py              TimingEvent
   connectors/
@@ -66,5 +72,6 @@ live data (the app itself works with just `runserver`, it just won't receive dev
   `channels_redis` only if this ever needs to run multi-process/multi-host.
 - Every timing pulse is written to the DB (`TimingEvent`) before/as it's broadcast, so a dropped
   WebSocket or crashed dashboard never loses data.
-- `TimingEvent.bib_number` is matched against `Participant.bib_number` at ingestion time to resolve a
-  display name; the FK is nullable since a pulse may arrive before the participant is registered.
+- `TimingEvent.bib_number` is matched against the current competition's `EventEntry.bib_number` at
+  ingestion time to resolve a display name (bibs live on `EventEntry`, scoped per competition, not on
+  `Participant`); the participant FK is nullable since a pulse may arrive before a bib is registered.

@@ -45,13 +45,15 @@ the pipeline and dashboard work without any hardware. The app itself runs fine w
 ## Typical workflow
 
 1. **Competition Setup → Manage competition types** — add a discipline (e.g. Motorcycle,
-   Go-Cart).
+   Go-Cart). Types can be expanded to list their competitions, and deleted while unused.
 2. **Competition Setup → New competition** — pick a type, name and date, then set which
    classes run and their age ranges. Birth-year ranges update live as you type.
 3. **Set as current** on a competition — this drives which participants are "active",
    the class computed on the participant form, and bib matching for timing events.
 4. **Participants → Add participant** — register a competitor and optionally assign a bib
-   for the current competition right away.
+   for the current competition right away. The form autocompletes known clubs and common
+   email domains, computes the class live from the date of birth, and warns about likely
+   duplicates (matching name or licence) before you save.
 5. **Dashboard** — watch live timing events resolve to participant names by bib.
 
 ## Common commands
