@@ -32,12 +32,40 @@ class Competition(models.Model):
         super().save(*args, **kwargs)
         if is_new:
             CompetitionClass.objects.bulk_create(
-                CompetitionClass(competition=self, code=code)
-                for code, _ in CompetitionClass.Code.choices
+                CompetitionClass(competition=self, name=name, position=position)
+                for position, name in enumerate(CompetitionClass.DEFAULT_NAMES)
             )
 
     def active_classes(self):
-        return [cc.code for cc in self.classes.filter(is_running=True).order_by("code")]
+        return [cc.name for cc in self._running_classes_ordered()]
+
+    def _running_classes_ordered(self):
+        """Running classes in run order: by run_position (unplaced last), then
+        by list position."""
+        return sorted(
+            self.classes.filter(is_running=True),
+            key=lambda cc: (
+                cc.run_position is None,
+                cc.run_position if cc.run_position is not None else 0,
+                cc.position,
+            ),
+        )
+
+    def run_groups(self):
+        """Ordered runs as a list of lists of running CompetitionClass.
+        Classes sharing a run_position start together; runs execute in ascending
+        run_position. A running class with run_position=None becomes its own
+        single-class run, appended in list order after the placed runs."""
+        placed = {}
+        unplaced = []
+        for cc in self._running_classes_ordered():
+            if cc.run_position is None:
+                unplaced.append([cc])
+            else:
+                placed.setdefault(cc.run_position, []).append(cc)
+        groups = [placed[key] for key in sorted(placed)]
+        groups.extend(unplaced)
+        return groups
 
     def class_for_birth_year(self, birth_year):
         if birth_year is None:
@@ -58,27 +86,30 @@ class Competition(models.Model):
 
 
 class CompetitionClass(models.Model):
-    class Code(models.TextChoices):
-        ONE = "1", "Class 1"
-        TWO = "2", "Class 2"
-        THREE = "3", "Class 3"
-        FOUR = "4", "Class 4"
-        FIVE = "5", "Class 5"
-        SIX = "6", "Class 6"
-        E = "E", "Class E"
+    # Starter classes seeded on a brand-new competition; fully editable afterwards.
+    DEFAULT_NAMES = ["1", "2", "3", "4", "5", "6", "E"]
 
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name="classes")
-    code = models.CharField(max_length=1, choices=Code.choices)
+    name = models.CharField(max_length=50)
+    position = models.PositiveIntegerField(default=0, help_text="Display order in the classes list.")
     is_running = models.BooleanField(default=False)
     age_from = models.PositiveIntegerField(null=True, blank=True, help_text="Starting age, e.g. 6")
     age_to = models.PositiveIntegerField(null=True, blank=True, help_text="Ending age, e.g. 7")
+    practice_runs = models.PositiveIntegerField(default=1)
+    counted_runs = models.PositiveIntegerField(default=2)
+    run_position = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="The run this class belongs to. Classes sharing a run_position start "
+        "together; runs execute in ascending order. Null when not placed.",
+    )
 
     class Meta:
-        ordering = ["code"]
-        unique_together = ("competition", "code")
+        ordering = ["position", "name"]
+        unique_together = ("competition", "name")
 
     def __str__(self):
-        return f"{self.competition} – {self.get_code_display()}"
+        return f"{self.competition} – {self.name}"
 
     def birth_year_range(self):
         """Birth years spanned by this class's age range, oldest (from age_to)

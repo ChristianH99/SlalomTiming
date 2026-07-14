@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}New competition – Slalom Timing{% endblock %}
+{% block topbar_title %}New competition{% endblock %}
+{% block content %}
+  <a class="back-link" href="{% url 'competitions:list' %}">&larr; Back to Competition Setup</a>
+  <p class="hint">Create a competition, then configure its classes and run order. The new
+    competition becomes the current one.</p>
+  <form method="post" data-unsaved-guard>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="">
+    {{ form.non_field_errors }}
+    <p>
+      {{ form.competition_type.label_tag }}
+      {{ form.competition_type }}
+      <a href="{% url 'competitions:type-add' %}">+ add new type</a>
+      {{ form.competition_type.errors }}
+    </p>
+    <p>
+      {{ form.name.label_tag }}
+      {{ form.name }}
+      {{ form.name.errors }}
+    </p>
+    <p>
+      {{ form.date.label_tag }}
+      {{ form.date }}
+      {{ form.date.errors }}
+    </p>
+    <div class="actions">
+      <button class="button" type="submit">Create</button>
+      <a href="{% url 'competitions:list' %}">Cancel</a>
+    </div>
+  </form>
+{% endblock %}

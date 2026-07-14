@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Classes – Slalom Timing{% endblock %}
+{% block topbar_title %}Classes{% endblock %}
+{% block content %}
+  <h1 class="page-heading">Classes</h1>
+  <p class="hint">Classes for <strong>{{ object.name }}</strong>. Rename, add or remove classes,
+    set age ranges and how many practice / counted runs each does. Group them into runs on the
+    <a href="{% url 'competitions:runorder' %}">Run order</a> page.</p>
+  <form method="post" data-unsaved-guard>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="">
+    {{ formset.management_form }}
+    {{ formset.non_form_errors }}
+    <div class="table-card">
+    <table id="classes-table">
+      <thead>
+        <tr>
+          <th>Class</th>
+          <th>Running</th>
+          <th>Age from</th>
+          <th>Age to</th>
+          <th>Birth years</th>
+          <th class="col-runs">
+            Practice runs
+            <span class="set-all">
+              <input type="number" min="0" class="set-all-input" data-set-all="practice_runs" aria-label="Set practice runs for all classes">
+              <button type="button" class="link-button" data-set-all-apply="practice_runs">Set all</button>
+            </span>
+          </th>
+          <th class="col-runs">
+            Counted runs
+            <span class="set-all">
+              <input type="number" min="0" class="set-all-input" data-set-all="counted_runs" aria-label="Set counted runs for all classes">
+              <button type="button" class="link-button" data-set-all-apply="counted_runs">Set all</button>
+            </span>
+          </th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for class_form in formset %}
+          {{ class_form.id }}
+          <tr data-class-row>
+            <td>{{ class_form.name }}{{ class_form.name.errors }}</td>
+            <td class="col-center">{{ class_form.is_running }}</td>
+            <td>{{ class_form.age_from }}</td>
+            <td>{{ class_form.age_to }}</td>
+            <td>
+              <span class="birth-years">
+                {% with range=class_form.instance.birth_year_range %}
+                  {% if range %}{{ range.0 }}–{{ range.1 }}{% else %}&mdash;{% endif %}
+                {% endwith %}
+              </span>
+            </td>
+            <td>{{ class_form.practice_runs }}</td>
+            <td>{{ class_form.counted_runs }}</td>
+            <td class="col-center">
+              <span class="delete-holder" hidden>{{ class_form.DELETE }}</span>
+              <button type="button" class="row-remove" data-remove-class title="Remove class">&times;</button>
+            </td>
+          </tr>
+          {% if class_form.errors %}
+            <tr><td colspan="8">{{ class_form.non_field_errors }}</td></tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="actions">
+      <button type="button" class="button button--secondary button--small" id="add-class">+ Add class</button>
+    </div>
+
+    <template id="class-empty-form">
+      <tr data-class-row>
+        <td>{{ formset.empty_form.name }}</td>
+        <td class="col-center">{{ formset.empty_form.is_running }}</td>
+        <td>{{ formset.empty_form.age_from }}</td>
+        <td>{{ formset.empty_form.age_to }}</td>
+        <td><span class="birth-years">&mdash;</span></td>
+        <td>{{ formset.empty_form.practice_runs }}</td>
+        <td>{{ formset.empty_form.counted_runs }}</td>
+        <td class="col-center">
+          <span class="delete-holder" hidden>{{ formset.empty_form.DELETE }}</span>
+          <button type="button" class="row-remove" data-remove-class title="Remove class">&times;</button>
+        </td>
+      </tr>
+    </template>
+
+    <div class="actions">
+      <button class="button" type="submit">Save</button>
+    </div>
+  </form>
+
+  <script>
+    (function () {
+      const table = document.getElementById("classes-table");
+      const tbody = table ? table.querySelector("tbody") : null;
+      const dateInput = document.getElementById("id_date");  // not on this page; guarded
+      const emptyTemplate = document.getElementById("class-empty-form");
+      const totalForms = document.getElementById("id_form-TOTAL_FORMS");
+      if (!table || !tbody) return;
+
+      const markUnsaved = () => document.dispatchEvent(new Event("unsaved-change"));
+
+      // ---- birth-years live preview (uses the active competition's year) ----
+      const competitionYear = {{ object.date.year }};
+      function updateRow(row) {
+        const ageFrom = row.querySelector('input[name$="-age_from"]');
+        const ageTo = row.querySelector('input[name$="-age_to"]');
+        const output = row.querySelector(".birth-years");
+        if (!ageFrom || !ageTo || !output) return;
+        const from = parseInt(ageFrom.value, 10);
+        const to = parseInt(ageTo.value, 10);
+        if (Number.isNaN(from) || Number.isNaN(to)) { output.textContent = "—"; return; }
+        const lo = competitionYear - to;
+        const hi = competitionYear - from;
+        output.textContent = lo === hi ? String(lo) : `${lo}–${hi}`;
+      }
+      table.addEventListener("input", (event) => {
+        const row = event.target.closest("tr[data-class-row]");
+        if (row && (event.target.name || "").match(/-age_(from|to)$/)) updateRow(row);
+      });
+
+      // ---- add / remove class rows ----
+      document.getElementById("add-class").addEventListener("click", () => {
+        const index = parseInt(totalForms.value, 10);
+        const html = emptyTemplate.innerHTML.replace(/__prefix__/g, index);
+        const temp = document.createElement("tbody");
+        temp.innerHTML = html.trim();
+        const row = temp.firstElementChild;
+        tbody.appendChild(row);
+        totalForms.value = index + 1;
+        markUnsaved();
+        const nameInput = row.querySelector('input[name$="-name"]');
+        if (nameInput) nameInput.focus();
+      });
+
+      table.addEventListener("click", (event) => {
+        const btn = event.target.closest("[data-remove-class]");
+        if (!btn) return;
+        const row = btn.closest("tr[data-class-row]");
+        const idInput = row.querySelector('input[name$="-id"]');
+        if (idInput && idInput.value) {
+          // Existing record: flag for deletion, hide the row.
+          const del = row.querySelector('input[name$="-DELETE"]');
+          if (del) del.checked = true;
+          row.hidden = true;
+        } else {
+          row.remove();  // unsaved row: drop it entirely
+        }
+        markUnsaved();
+      });
+
+      // ---- set-all controls ----
+      document.querySelectorAll("[data-set-all-apply]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const field = btn.getAttribute("data-set-all-apply");
+          const input = document.querySelector(`.set-all-input[data-set-all="${field}"]`);
+          if (!input || input.value === "") return;
+          tbody.querySelectorAll("tr[data-class-row]").forEach((row) => {
+            if (row.hidden) return;
+            const target = row.querySelector(`input[name$="-${field}"]`);
+            if (target) target.value = input.value;
+          });
+          markUnsaved();
+        });
+      });
+    })();
+  </script>
+{% endblock %}

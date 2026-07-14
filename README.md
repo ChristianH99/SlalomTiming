@@ -3,7 +3,9 @@
 Local timekeeping and admin software for slalom races. A Django 6 app (Python 3.14,
 managed with [uv](https://docs.astral.sh/uv/)) that runs locally in the browser and:
 
-- manages race **competitions**, their **types** (disciplines) and per-class age ranges
+- manages race **competitions**, their **types** (disciplines), their **classes**
+  (age ranges, per-class practice/counted run counts) and the **run order** (which classes
+  start together and in what order)
 - manages race **participants** (CRUD + Django admin) and their bib/entry per competition
 - ingests **live timing events** from a timing device through a pluggable connector
   interface, persists every event, and pushes it to a live dashboard over WebSockets
@@ -44,17 +46,31 @@ the pipeline and dashboard work without any hardware. The app itself runs fine w
 
 ## Typical workflow
 
+Competition Setup is a section with a landing page plus three sub-pages (in the sidebar).
+The sub-pages always act on the **current** competition:
+
 1. **Competition Setup → Manage competition types** — add a discipline (e.g. Motorcycle,
    Go-Cart). Types can be expanded to list their competitions, and deleted while unused.
-2. **Competition Setup → New competition** — pick a type, name and date, then set which
-   classes run and their age ranges. Birth-year ranges update live as you type.
-3. **Set as current** on a competition — this drives which participants are "active",
-   the class computed on the participant form, and bib matching for timing events.
-4. **Participants → Add participant** — register a competitor and optionally assign a bib
+2. **Competition Setup → New competition** — pick a type, name and date. The new
+   competition becomes the current one so you can configure it right away.
+3. **Manage competitions** — the tile list of all competitions by date. **Set as current**
+   picks the one the sub-pages edit; this also drives which participants are "active", the
+   class computed on the participant form, and bib matching for timing events.
+4. **General** — the current competition's name, type and date.
+5. **Classes** — rename, add or remove classes, set age ranges (birth years update live)
+   and how many practice / counted runs each class does. "Set all" fills a run-count column
+   for every class at once.
+6. **Run order** — drag classes into runs to start them together, drop a class in the gap
+   between runs to split it out, and drag a run's handle to reorder. Only classes marked
+   *Running* on the Classes page appear here.
+7. **Participants → Add participant** — register a competitor and optionally assign a bib
    for the current competition right away. The form autocompletes known clubs and common
    email domains, computes the class live from the date of birth, and warns about likely
    duplicates (matching name or licence) before you save.
-5. **Dashboard** — watch live timing events resolve to participant names by bib.
+8. **Dashboard** — watch live timing events resolve to participant names by bib.
+
+Leaving General, Classes or Run order with unsaved edits pops a styled confirmation
+(Save / Discard / Cancel) rather than losing the changes.
 
 ## Common commands
 
@@ -80,6 +96,7 @@ interface only.
 ```
 config/                  Django project (settings, urls, asgi/wsgi)
 apps/competitions/       Competition, CompetitionType, CompetitionClass + setup UI
+                         (tile list + General / Classes / Run order sub-pages)
 apps/participants/       Participant + EventEntry models, CRUD views, admin
 apps/timing/             TimingEvent, connectors, ingestion service, WebSocket consumer
 templates/, static/      shared base template + per-app templates, plain CSS/JS

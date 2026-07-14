@@ -12,11 +12,12 @@ class CompetitionTypeAdmin(admin.ModelAdmin):
 class CompetitionClassInline(admin.TabularInline):
     model = CompetitionClass
     extra = 0
-    max_num = 7
-    can_delete = False
-    fields = ("code", "is_running", "age_from", "age_to")
-    readonly_fields = ("code",)
-    ordering = ("code",)
+    can_delete = True
+    fields = (
+        "name", "position", "is_running", "age_from", "age_to",
+        "practice_runs", "counted_runs", "run_position",
+    )
+    ordering = ("position",)
 
 
 @admin.register(Competition)

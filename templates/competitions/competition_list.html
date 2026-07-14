@@ -14,58 +14,50 @@
     <a class="button button--secondary button--small" href="{% url 'competitions:type-list' %}">Manage competition types</a>
   </div>
 
-  <div class="table-card">
-  <table class="competitions-table">
-    <thead>
-      <tr>
-        <th class="col-name">Name</th>
-        <th class="col-type">Type</th>
-        <th class="col-date">Date</th>
-        <th class="col-classes">Classes running</th>
-        <th class="col-current">Current</th>
-        <th class="col-actions"></th>
-      </tr>
-    </thead>
-    <tbody id="competitions-body">
-      {% for competition in competitions %}
-        <tr data-search="{{ competition.name|lower }} {{ competition.competition_type.name|lower }}">
-          <td class="col-name" title="{{ competition.name }}">{{ competition.name }}</td>
-          <td class="col-type" title="{{ competition.competition_type.name }}">{{ competition.competition_type.name }}</td>
-          <td class="col-date">{{ competition.date|date:"d.m.Y" }}</td>
-          <td class="col-classes">
+  <div class="competition-tiles" id="competitions-body">
+    {% for competition in competitions %}
+      <div class="competition-tile{% if competition.is_active %} competition-tile--active{% endif %}"
+           data-search="{{ competition.name|lower }} {{ competition.competition_type.name|lower }}">
+        <div class="tile-body">
+          <div class="tile-head">
+            <h2 class="tile-name">{{ competition.name }}</h2>
+            {% if competition.is_active %}
+              <span class="status-pill status-pill--active">Current</span>
+            {% endif %}
+          </div>
+          <div class="tile-meta">
+            <span>{{ competition.competition_type.name }}</span>
+            <span class="tile-dot">·</span>
+            <span>{{ competition.date|date:"d.m.Y" }}</span>
+          </div>
+          <div class="tile-classes">
             {% for label in competition.active_classes %}
               <span class="status-pill">{{ label }}</span>
             {% empty %}
-              &mdash;
+              <span class="tile-muted">No classes running</span>
             {% endfor %}
-          </td>
-          <td class="col-current">
-            {% if competition.is_active %}
-              <span class="status-pill status-pill--active">Current</span>
-            {% else %}
-              <form method="post" action="{% url 'competitions:select' competition.pk %}">
-                {% csrf_token %}
-                <button class="button button--secondary button--small" type="submit">Set as current</button>
-              </form>
-            {% endif %}
-          </td>
-          <td class="col-actions">
-            <a href="{% url 'competitions:edit' competition.pk %}">Edit</a>
-            &middot;
-            <form method="post" action="{% url 'competitions:duplicate' competition.pk %}" style="display:inline">
+          </div>
+        </div>
+        <div class="tile-actions">
+          {% if competition.is_active %}
+            <a class="button button--secondary button--small" href="{% url 'competitions:general' %}">Configure</a>
+          {% else %}
+            <form method="post" action="{% url 'competitions:select' competition.pk %}">
               {% csrf_token %}
-              <button type="submit" class="link-button">Duplicate</button>
+              <button class="button button--secondary button--small" type="submit">Set as current</button>
             </form>
-            &middot;
-            <a href="{% url 'competitions:delete' competition.pk %}">Delete</a>
-          </td>
-        </tr>
-      {% empty %}
-        <tr class="empty-row"><td colspan="6">No competitions yet.</td></tr>
-      {% endfor %}
-      <tr class="empty-row no-results-row" hidden><td colspan="6">No competitions match your search.</td></tr>
-    </tbody>
-  </table>
+          {% endif %}
+          <form method="post" action="{% url 'competitions:duplicate' competition.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="link-button">Duplicate</button>
+          </form>
+          <a class="link-button link-button--danger" href="{% url 'competitions:delete' competition.pk %}">Delete</a>
+        </div>
+      </div>
+    {% empty %}
+      <p class="empty-state">No competitions yet. <a href="{% url 'competitions:add' %}">Create your first one.</a></p>
+    {% endfor %}
+    <p class="empty-state no-results-row" hidden>No competitions match your search.</p>
   </div>
 
   <script>
@@ -74,17 +66,17 @@
       const body = document.getElementById("competitions-body");
       if (!input || !body) return;
       const noResults = body.querySelector(".no-results-row");
-      const rows = Array.from(body.querySelectorAll("tr[data-search]"));
+      const tiles = Array.from(body.querySelectorAll("[data-search]"));
 
       function apply() {
         const term = input.value.trim().toLowerCase();
         let visible = 0;
-        for (const row of rows) {
-          const match = term === "" || row.dataset.search.includes(term);
-          row.hidden = !match;
+        for (const tile of tiles) {
+          const match = term === "" || tile.dataset.search.includes(term);
+          tile.hidden = !match;
           if (match) visible += 1;
         }
-        if (noResults) noResults.hidden = !(rows.length > 0 && visible === 0);
+        if (noResults) noResults.hidden = !(tiles.length > 0 && visible === 0);
       }
 
       input.addEventListener("input", apply);

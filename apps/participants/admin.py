@@ -27,7 +27,7 @@ class ParticipantAdmin(admin.ModelAdmin):
         if not competition or not obj.date_of_birth:
             return "—"
         competition_class = competition.class_for_birth_year(obj.date_of_birth.year)
-        return competition_class.get_code_display() if competition_class else "—"
+        return competition_class.name if competition_class else "—"
 
 
 @admin.register(EventEntry)

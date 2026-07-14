@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Competition Setup – Slalom Timing{% endblock %}
+{% block topbar_title %}Competition Setup{% endblock %}
+{% block content %}
+  <div class="empty-state">
+    No competition is selected yet.
+    <a href="{% url 'competitions:list' %}">Go to Manage competitions</a> to pick or create one.
+  </div>
+{% endblock %}

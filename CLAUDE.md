@@ -25,8 +25,14 @@ participants / entering penalties) — no rewrite planned, just wider access + a
 
 ```
 config/                  Django project (settings, urls, asgi/wsgi)
-apps/competitions/       Competition, CompetitionType, CompetitionClass; setup UI,
-                         per-class age ranges, active-competition selection
+apps/competitions/       Competition, CompetitionType, CompetitionClass; active-competition
+                         selection. CompetitionClass is fully dynamic (editable name, not a
+                         fixed enum): is_running, age range, practice_runs, counted_runs,
+                         plus position (list order) and run_position (which run it starts in;
+                         classes sharing a run_position start together). Competition.run_groups()
+                         returns the ordered runs. Setup UI is a section: a tile list
+                         ("Manage competitions") + General / Classes / Run order sub-pages that
+                         all edit the *active* competition (no pk in the URL).
 apps/participants/
   models.py              Participant (personal/contact data) + EventEntry (bib +
                          run status, unique per competition)

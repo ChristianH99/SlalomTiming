@@ -140,6 +140,30 @@ a:hover { color: var(--flame-hover); }
   background: rgba(255,255,255,0.08);
   border-left-color: var(--flame);
 }
+.shell-nav-parent { font-weight: 700; }
+
+.shell-nav-sub {
+  display: flex;
+  flex-direction: column;
+  padding: 0.15rem 0 0.35rem;
+}
+.shell-nav-subitem {
+  display: block;
+  padding: 0.45rem 1.25rem 0.45rem 2.1rem;
+  color: rgba(255,255,255,0.6);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: all 0.2s;
+}
+.shell-nav-subitem:hover { color: white; background: rgba(255,255,255,0.05); }
+.shell-nav-subitem.active {
+  color: white;
+  font-weight: 600;
+  background: rgba(255,255,255,0.08);
+  border-left-color: var(--flame);
+}
 
 .shell-sidebar-footer {
   padding: 1.1rem 1.25rem;
@@ -433,6 +457,73 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   color: #15803d;
 }
 
+/* ===== COMPETITION TILES ===== */
+.competition-tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.competition-tile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.05s;
+}
+.competition-tile:hover { box-shadow: 0 4px 14px rgba(22,35,63,0.08); }
+.competition-tile--active { border-left-color: var(--flame); }
+.tile-body { min-width: 0; }
+.tile-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.25rem;
+}
+.tile-name {
+  font-family: 'Manrope', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+.tile-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-light);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+.tile-dot { color: var(--border); }
+.tile-classes { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.tile-muted { color: var(--text-light); font-size: 0.82rem; font-style: italic; }
+.tile-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-shrink: 0;
+}
+.tile-actions form { margin: 0; }
+.link-button--danger { color: var(--text-light); }
+.link-button--danger:hover { color: var(--flame-hover); }
+
+.empty-state {
+  padding: 2rem 1.25rem;
+  text-align: center;
+  color: var(--text-light);
+  background: var(--white);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
 /* ===== FORMS ===== */
 form p, form .combobox { margin: 0.7rem 0; display: flex; flex-direction: column; gap: 0.3rem; }
 form label {
@@ -467,6 +558,46 @@ form input:focus, form select:focus, form textarea:focus {
   margin-bottom: 0.5rem;
 }
 .back-link:hover { color: var(--flame); }
+
+.page-heading {
+  font-family: 'Manrope', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  letter-spacing: -0.3px;
+  margin: 0 0 0.35rem;
+}
+
+/* ===== MODAL ===== */
+body.modal-open { overflow: hidden; }
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(22,35,63,0.45);
+}
+.modal-overlay[hidden] { display: none; }
+.modal {
+  background: var(--white);
+  border-radius: var(--radius-md);
+  box-shadow: 0 20px 50px rgba(22,35,63,0.28);
+  padding: 1.5rem 1.6rem 1.3rem;
+  max-width: 420px;
+  width: 100%;
+}
+.modal-title {
+  font-family: 'Manrope', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0 0 0.5rem;
+}
+.modal-body { color: var(--text-mid); font-size: 0.92rem; margin: 0 0 1.25rem; }
+.modal-actions { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; }
 
 /* ===== NOTICE / WARNING ===== */
 .notice {
@@ -661,3 +792,134 @@ textarea:focus-visible,
   table { font-size: 0.85rem; }
   th, td { padding: 0.6rem 0.7rem; }
 }
+
+/* ===== CLASSES TABLE (dynamic rows) ===== */
+#classes-table td { vertical-align: middle; }
+#classes-table .col-center { text-align: center; }
+#classes-table input[type="text"],
+#classes-table input[type="number"] {
+  padding: 0.4rem 0.55rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  width: 100%;
+  max-width: 6.5rem;
+}
+#classes-table td:first-child input[type="text"] { max-width: 100%; }
+.col-runs .set-all {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.col-runs .set-all-input {
+  width: 3.5rem;
+  padding: 0.2rem 0.35rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.row-remove {
+  border: none;
+  background: none;
+  color: var(--text-light);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+}
+.row-remove:hover { color: var(--flame-hover); background: var(--flame-bg); }
+
+/* ===== RUN ORDER (drag & drop) ===== */
+#run-order {
+  display: flex;
+  flex-direction: column;
+  gap: 0;                 /* spacing comes from the .run-gap drop targets */
+  margin: 0.75rem 0 1rem;
+}
+/* Drop zone between runs — collapsed until a class drag is in progress, then it
+   grows into an easy target that spawns a new run when dropped into. */
+.run-gap {
+  height: 0.5rem;
+  border: 1.5px dashed transparent;
+  border-radius: var(--radius-sm);
+  transition: height 0.12s, background 0.12s, border-color 0.12s;
+}
+#run-order.chip-dragging .run-gap { height: 1.6rem; }
+#run-order.chip-dragging .run-gap.gap-active {
+  border-color: var(--glacier);
+  background: var(--frost-bg);
+}
+.run-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.6rem 0.5rem 0.5rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.run-row.run-dragging { opacity: 0.55; }
+.run-handle {
+  cursor: grab;
+  color: var(--border);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  user-select: none;
+}
+.run-handle:hover { color: var(--text-light); }
+.run-handle:active { cursor: grabbing; }
+.run-label {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-light);
+  min-width: 3.25rem;
+  flex-shrink: 0;
+}
+/* The drop area is the whole rest of the row: clean by default, only reveals a
+   dashed outline when you drag a class over it. */
+.run-zone {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0.15rem 0.35rem;
+  border: 1.5px dashed transparent;
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s, background 0.15s;
+}
+.run-zone.zone-over { border-color: var(--glacier); background: var(--frost-bg); }
+.run-zone:empty::after {
+  content: "Drag a class here";
+  color: var(--border);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+.class-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.8rem;
+  border-radius: 999px;
+  background: var(--frost-bg);
+  border: 1px solid rgba(62,142,222,0.35);
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: grab;
+  transition: box-shadow 0.15s, transform 0.05s;
+}
+.class-chip:hover { box-shadow: 0 2px 6px rgba(62,142,222,0.25); }
+.class-chip.dragging { opacity: 0.5; }
+.class-chip:active { cursor: grabbing; transform: scale(0.97); }

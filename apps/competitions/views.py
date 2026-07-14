@@ -1,14 +1,27 @@
+import json
+
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Max
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView
 
 from .forms import CompetitionClassFormSet, CompetitionForm, CompetitionTypeForm
 from .models import Competition, CompetitionClass, CompetitionType
+
+
+def safe_next(request, fallback):
+    """Return the POSTed ?next URL if it's a safe in-app path, else fallback.
+    Lets the unsaved-changes modal's "Save changes" land on the page the user
+    was navigating to."""
+    nxt = request.POST.get("next")
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return nxt
+    return fallback
 
 
 class CompetitionListView(ListView):
@@ -20,34 +33,152 @@ class CompetitionListView(ListView):
 class CompetitionCreateView(CreateView):
     model = Competition
     form_class = CompetitionForm
-    template_name = "competitions/competition_form.html"
+    template_name = "competitions/competition_add.html"
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # A freshly created competition becomes the active one so the setup
+        # sub-pages (General/Classes/Run order) target it right away.
+        with transaction.atomic():
+            Competition.objects.exclude(pk=self.object.pk).update(is_active=False)
+            Competition.objects.filter(pk=self.object.pk).update(is_active=True)
+        return response
 
     def get_success_url(self):
-        return reverse_lazy("competitions:edit", kwargs={"pk": self.object.pk})
+        return safe_next(self.request, reverse("competitions:general"))
 
 
-class CompetitionEditView(View):
-    template_name = "competitions/competition_form.html"
+class ActiveCompetitionMixin:
+    """Sub-pages that edit whichever competition is currently active. When none
+    is selected they render an empty state prompting the user to pick one."""
 
-    def get(self, request, pk):
-        competition = get_object_or_404(Competition, pk=pk)
+    template_name = None
+    empty_template_name = "competitions/no_active_competition.html"
+
+    def get_active(self):
+        return Competition.get_current()
+
+    def render_empty(self, request):
+        return render(request, self.empty_template_name, {})
+
+
+class GeneralView(ActiveCompetitionMixin, View):
+    template_name = "competitions/competition_general.html"
+
+    def get(self, request):
+        competition = self.get_active()
+        if competition is None:
+            return self.render_empty(request)
         form = CompetitionForm(instance=competition)
-        formset = CompetitionClassFormSet(queryset=competition.classes.order_by("code"))
+        return render(request, self.template_name, {"object": competition, "form": form})
+
+    def post(self, request):
+        competition = self.get_active()
+        if competition is None:
+            return self.render_empty(request)
+        form = CompetitionForm(request.POST, instance=competition)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "General settings saved.")
+            return redirect(safe_next(request, reverse("competitions:general")))
+        return render(request, self.template_name, {"object": competition, "form": form})
+
+
+class ClassesView(ActiveCompetitionMixin, View):
+    template_name = "competitions/competition_classes.html"
+
+    def get(self, request):
+        competition = self.get_active()
+        if competition is None:
+            return self.render_empty(request)
+        formset = CompetitionClassFormSet(queryset=competition.classes.all())
+        return render(request, self.template_name, {"object": competition, "formset": formset})
+
+    def post(self, request):
+        competition = self.get_active()
+        if competition is None:
+            return self.render_empty(request)
+        formset = CompetitionClassFormSet(request.POST, queryset=competition.classes.all())
+        if formset.is_valid():
+            with transaction.atomic():
+                # commit=False so we can attach the competition FK and give any
+                # brand-new class a list position after the existing ones. Run
+                # grouping (run_position) is owned by the Run order page, so it
+                # is deliberately left untouched here.
+                next_position = (
+                    competition.classes.aggregate(m=Max("position"))["m"] or 0
+                ) + 1
+                instances = formset.save(commit=False)
+                for obj in instances:
+                    obj.competition = competition
+                    if obj.pk is None and not obj.position:
+                        obj.position = next_position
+                        next_position += 1
+                    obj.save()
+                for obj in formset.deleted_objects:
+                    obj.delete()
+            messages.success(request, "Classes saved.")
+            return redirect(safe_next(request, reverse("competitions:classes")))
+        return render(request, self.template_name, {"object": competition, "formset": formset})
+
+
+class RunOrderView(ActiveCompetitionMixin, View):
+    template_name = "competitions/competition_runorder.html"
+
+    def get(self, request):
+        competition = self.get_active()
+        if competition is None:
+            return self.render_empty(request)
+        run_groups_data = [
+            [{"pk": cc.pk, "name": cc.name} for cc in run]
+            for run in competition.run_groups()
+        ]
         return render(request, self.template_name, {
-            "object": competition, "form": form, "formset": formset,
+            "object": competition, "run_groups_data": run_groups_data,
         })
 
-    def post(self, request, pk):
-        competition = get_object_or_404(Competition, pk=pk)
-        form = CompetitionForm(request.POST, instance=competition)
-        formset = CompetitionClassFormSet(request.POST, queryset=competition.classes.order_by("code"))
-        if form.is_valid() and formset.is_valid():
-            form.save()
-            formset.save()
-            return redirect("competitions:list")
-        return render(request, self.template_name, {
-            "object": competition, "form": form, "formset": formset,
-        })
+    def post(self, request):
+        competition = self.get_active()
+        if competition is None:
+            return self.render_empty(request)
+        self._apply_run_order(request, competition)
+        messages.success(request, "Run order saved.")
+        return redirect(safe_next(request, reverse("competitions:runorder")))
+
+    @staticmethod
+    def _apply_run_order(request, competition):
+        """Persist run grouping and order from the run_order hidden field: JSON
+        list of runs, each a list of class pks. Classes sharing a run get the
+        same run_position; `position` captures the overall sequence (and so the
+        order within a run). Classes not listed sort after with run_position
+        cleared."""
+        try:
+            runs = json.loads(request.POST.get("run_order") or "[]")
+        except (ValueError, TypeError):
+            runs = []
+        classes = {cc.pk: cc for cc in competition.classes.all()}
+        position = 0
+        seen = set()
+        with transaction.atomic():
+            for run_index, run in enumerate(runs):
+                if not isinstance(run, list):
+                    continue
+                for pk in run:
+                    cc = classes.get(pk)
+                    if cc is None or cc.pk in seen:
+                        continue
+                    cc.run_position = run_index
+                    cc.position = position
+                    cc.save(update_fields=["run_position", "position"])
+                    seen.add(cc.pk)
+                    position += 1
+            for cc in sorted(classes.values(), key=lambda c: c.position):
+                if cc.pk in seen:
+                    continue
+                cc.run_position = None
+                cc.position = position
+                cc.save(update_fields=["run_position", "position"])
+                position += 1
 
 
 class CompetitionDeleteView(DeleteView):
@@ -75,13 +206,23 @@ def duplicate_competition(request, pk):
             name=f"{original.name} (Copy)",
             date=original.date,
         )
-        for original_class in original.classes.all():
-            CompetitionClass.objects.filter(competition=copy, code=original_class.code).update(
-                is_running=original_class.is_running,
-                age_from=original_class.age_from,
-                age_to=original_class.age_to,
+        # Drop the default classes seeded on create and mirror the original's.
+        copy.classes.all().delete()
+        CompetitionClass.objects.bulk_create(
+            CompetitionClass(
+                competition=copy,
+                name=oc.name,
+                position=oc.position,
+                is_running=oc.is_running,
+                age_from=oc.age_from,
+                age_to=oc.age_to,
+                practice_runs=oc.practice_runs,
+                counted_runs=oc.counted_runs,
+                run_position=oc.run_position,
             )
-    return redirect("competitions:edit", pk=copy.pk)
+            for oc in original.classes.all()
+        )
+    return redirect("competitions:list")
 
 
 class CompetitionTypeListView(ListView):

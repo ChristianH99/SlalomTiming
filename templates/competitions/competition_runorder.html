@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}Run order – Slalom Timing{% endblock %}
+{% block topbar_title %}Run order{% endblock %}
+{% block content %}
+  <h1 class="page-heading">Run order</h1>
+  <p class="hint">The order runs start for <strong>{{ object.name }}</strong>. Drag classes between
+    runs to start them together, drop a class in the gap between runs to split it into its own run,
+    and drag a run's handle to reorder. Only classes marked <em>Running</em> on the
+    <a href="{% url 'competitions:classes' %}">Classes</a> page appear here.</p>
+
+  {% if run_groups_data %}
+    <form method="post" data-unsaved-guard>
+      {% csrf_token %}
+      <input type="hidden" name="next" value="">
+      <div id="run-order" data-run-order></div>
+      <input type="hidden" name="run_order" id="run-order-data" value="[]">
+      <div class="actions">
+        <button class="button" type="submit">Save</button>
+      </div>
+    </form>
+    {{ run_groups_data|json_script:"run-groups-data" }}
+
+    <script>
+      (function () {
+        const runOrderEl = document.getElementById("run-order");
+        const runOrderData = document.getElementById("run-order-data");
+        if (!runOrderEl) return;
+        const groups = JSON.parse(document.getElementById("run-groups-data").textContent);
+
+        let dragChip = null;
+        let dragRun = null;
+        let ready = false;  // suppress dirty-marking during the initial build
+
+        function makeChip(pk, label) {
+          const chip = document.createElement("span");
+          chip.className = "class-chip";
+          chip.draggable = true;
+          chip.setAttribute("data-pk", pk);
+          chip.textContent = label || "?";
+          chip.addEventListener("dragstart", (e) => {
+            dragChip = chip; chip.classList.add("dragging");
+            runOrderEl.classList.add("chip-dragging");  // fattens gaps as drop targets
+            e.dataTransfer.effectAllowed = "move";
+          });
+          chip.addEventListener("dragend", () => {
+            chip.classList.remove("dragging");
+            runOrderEl.classList.remove("chip-dragging");
+            runOrderEl.querySelectorAll(".gap-active, .zone-over")
+              .forEach((el) => el.classList.remove("gap-active", "zone-over"));
+            dragChip = null;
+            pruneEmptyRuns();  // a run left with no classes disappears
+            syncGaps(); serialize();
+          });
+          return chip;
+        }
+
+        function makeRun() {
+          const run = document.createElement("div");
+          run.className = "run-row";
+          run.setAttribute("data-run", "");
+
+          const handle = document.createElement("span");
+          handle.className = "run-handle";
+          handle.textContent = "⠿";
+          handle.title = "Drag to reorder run";
+          handle.addEventListener("mousedown", () => { run.draggable = true; });
+          run.addEventListener("dragstart", (e) => {
+            // Let chip drags through — only react to a handle-initiated row drag.
+            if (e.target.closest(".class-chip")) return;
+            if (!run.draggable) { e.preventDefault(); return; }
+            dragRun = run; run.classList.add("run-dragging");
+            e.dataTransfer.effectAllowed = "move";
+          });
+          run.addEventListener("dragend", () => {
+            run.classList.remove("run-dragging"); run.draggable = false; dragRun = null;
+            syncGaps(); serialize();
+          });
+
+          const label = document.createElement("span");
+          label.className = "run-label";
+
+          const zone = document.createElement("div");
+          zone.className = "run-zone";
+          zone.setAttribute("data-zone", "");
+          zone.addEventListener("dragover", (e) => {
+            if (!dragChip) return;
+            e.preventDefault(); zone.classList.add("zone-over");
+            // Live-move the dragged chip to its position under the cursor so a
+            // drop both groups it into this run and orders it within the run.
+            const after = chipAfter(zone, e.clientX);
+            if (after) zone.insertBefore(dragChip, after);
+            else zone.appendChild(dragChip);
+          });
+          zone.addEventListener("dragleave", () => zone.classList.remove("zone-over"));
+          zone.addEventListener("drop", (e) => {
+            if (!dragChip) return;
+            e.preventDefault(); zone.classList.remove("zone-over");
+            serialize();  // chip is already in place from the dragover live-move
+          });
+
+          run.appendChild(handle);
+          run.appendChild(label);
+          run.appendChild(zone);
+          return run;
+        }
+
+        function relabelRuns() {
+          runOrderEl.querySelectorAll("[data-run]").forEach((run, i) => {
+            run.querySelector(".run-label").textContent = "Run " + (i + 1);
+          });
+        }
+
+        // Which chip in `zone` sits just right of cursor x (insert the drag before it).
+        function chipAfter(zone, x) {
+          let after = null, afterOffset = -Infinity;
+          zone.querySelectorAll(".class-chip:not(.dragging)").forEach((chip) => {
+            const box = chip.getBoundingClientRect();
+            const offset = x - (box.left + box.width / 2);
+            if (offset < 0 && offset > afterOffset) { afterOffset = offset; after = chip; }
+          });
+          return after;
+        }
+
+        // Thin drop target between runs: dropping a class here spawns a new run.
+        function makeGap() {
+          const gap = document.createElement("div");
+          gap.className = "run-gap";
+          gap.addEventListener("dragover", (e) => {
+            if (!dragChip) return;
+            e.preventDefault(); gap.classList.add("gap-active");
+          });
+          gap.addEventListener("dragleave", () => gap.classList.remove("gap-active"));
+          gap.addEventListener("drop", (e) => {
+            if (!dragChip) return;
+            e.preventDefault(); gap.classList.remove("gap-active");
+            const run = makeRun();
+            runOrderEl.insertBefore(run, gap);  // new run takes this slot
+            run.querySelector("[data-zone]").appendChild(dragChip);
+            syncGaps(); serialize();
+          });
+          return gap;
+        }
+
+        // Drop the run if it no longer holds any classes.
+        function pruneEmptyRuns() {
+          runOrderEl.querySelectorAll("[data-run]").forEach((run) => {
+            if (!run.querySelector(".class-chip")) run.remove();
+          });
+        }
+
+        // Refresh the gap elements: one before every run and one after the last.
+        function syncGaps() {
+          runOrderEl.querySelectorAll(".run-gap").forEach((g) => g.remove());
+          runOrderEl.querySelectorAll("[data-run]").forEach((row) => {
+            runOrderEl.insertBefore(makeGap(), row);
+          });
+          runOrderEl.appendChild(makeGap());
+        }
+
+        // Reorder runs: drop a dragged run before the run under the cursor.
+        runOrderEl.addEventListener("dragover", (e) => {
+          if (!dragRun) return;
+          e.preventDefault();
+          const after = [...runOrderEl.querySelectorAll("[data-run]:not(.run-dragging)")]
+            .find((r) => e.clientY <= r.getBoundingClientRect().top + r.offsetHeight / 2);
+          if (after) runOrderEl.insertBefore(dragRun, after);
+          else runOrderEl.appendChild(dragRun);
+        });
+
+        function serialize() {
+          const runs = [];
+          runOrderEl.querySelectorAll("[data-run]").forEach((run) => {
+            const pks = [...run.querySelectorAll(".class-chip")]
+              .map((c) => parseInt(c.getAttribute("data-pk"), 10));
+            if (pks.length) runs.push(pks);
+          });
+          runOrderData.value = JSON.stringify(runs);
+          relabelRuns();
+          if (ready) document.dispatchEvent(new Event("unsaved-change"));
+        }
+
+        // Build the widget from the server-provided run groups.
+        groups.forEach((group) => {
+          const run = makeRun();
+          const zone = run.querySelector("[data-zone]");
+          group.forEach((c) => zone.appendChild(makeChip(c.pk, c.name)));
+          runOrderEl.appendChild(run);
+        });
+        syncGaps();
+        serialize();
+        ready = true;  // subsequent serialize() calls come from user edits
+      })();
+    </script>
+  {% else %}
+    <div class="empty-state">
+      No classes are running yet. Mark classes as <em>Running</em> on the
+      <a href="{% url 'competitions:classes' %}">Classes</a> page and they'll appear here.
+    </div>
+  {% endif %}
+{% endblock %}

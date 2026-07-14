@@ -34,7 +34,7 @@ class ParticipantFormContextMixin:
         ranges = []
         if competition:
             ranges = [
-                {"code": cc.code, "label": cc.get_code_display(), "age_from": cc.age_from, "age_to": cc.age_to}
+                {"label": cc.name, "age_from": cc.age_from, "age_to": cc.age_to}
                 for cc in competition.classes.filter(
                     is_running=True, age_from__isnull=False, age_to__isnull=False
                 )

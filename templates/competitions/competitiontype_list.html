@@ -51,7 +51,7 @@
             <td colspan="3">
               <ul class="type-competition-list">
                 {% for competition in competition_type.competitions.all %}
-                  <li><a href="{% url 'competitions:edit' competition.pk %}">{{ competition.name }} ({{ competition.date|date:"d.m.Y" }})</a></li>
+                  <li>{{ competition.name }} ({{ competition.date|date:"d.m.Y" }})</li>
                 {% endfor %}
               </ul>
             </td>

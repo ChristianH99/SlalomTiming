@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}General – Slalom Timing{% endblock %}
+{% block topbar_title %}General{% endblock %}
+{% block content %}
+  <h1 class="page-heading">General</h1>
+  <p class="hint">Basic details for <strong>{{ object.name }}</strong>.</p>
+  <form method="post" data-unsaved-guard>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="">
+    {{ form.non_field_errors }}
+    <p>
+      {{ form.competition_type.label_tag }}
+      {{ form.competition_type }}
+      <a href="{% url 'competitions:type-add' %}">+ add new type</a>
+      {{ form.competition_type.errors }}
+    </p>
+    <p>
+      {{ form.name.label_tag }}
+      {{ form.name }}
+      {{ form.name.errors }}
+    </p>
+    <p>
+      {{ form.date.label_tag }}
+      {{ form.date }}
+      {{ form.date.errors }}
+    </p>
+    <div class="actions">
+      <button class="button" type="submit">Save</button>
+    </div>
+  </form>
+{% endblock %}

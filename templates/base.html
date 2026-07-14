@@ -18,7 +18,15 @@
       </div>
       <nav class="shell-nav">
         <a class="shell-nav-item{% if request.resolver_match.app_name == 'timing' %} active{% endif %}" href="{% url 'timing:dashboard' %}">Dashboard</a>
-        <a class="shell-nav-item{% if request.resolver_match.app_name == 'competitions' %} active{% endif %}" href="{% url 'competitions:list' %}">Competition Setup</a>
+        {% with url_name=request.resolver_match.url_name %}
+        <a class="shell-nav-item shell-nav-parent{% if request.resolver_match.app_name == 'competitions' %} active{% endif %}" href="{% url 'competitions:list' %}">Competition Setup</a>
+        <div class="shell-nav-sub">
+          <a class="shell-nav-subitem{% if url_name == 'list' or url_name == 'add' or url_name == 'type-list' or url_name == 'type-add' %} active{% endif %}" href="{% url 'competitions:list' %}">Manage competitions</a>
+          <a class="shell-nav-subitem{% if url_name == 'general' %} active{% endif %}" href="{% url 'competitions:general' %}">General</a>
+          <a class="shell-nav-subitem{% if url_name == 'classes' %} active{% endif %}" href="{% url 'competitions:classes' %}">Classes</a>
+          <a class="shell-nav-subitem{% if url_name == 'runorder' %} active{% endif %}" href="{% url 'competitions:runorder' %}">Run order</a>
+        </div>
+        {% endwith %}
         <a class="shell-nav-item{% if request.resolver_match.app_name == 'participants' %} active{% endif %}" href="{% url 'participants:list' %}">Participants</a>
       </nav>
       <div class="shell-sidebar-footer">
@@ -54,6 +62,73 @@
       </main>
     </div>
   </div>
+
+  <div class="modal-overlay" id="unsaved-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="unsaved-title">
+      <h2 class="modal-title" id="unsaved-title">Unsaved changes</h2>
+      <p class="modal-body">You have unsaved changes on this page. Do you want to save them
+        before leaving?</p>
+      <div class="modal-actions">
+        <button type="button" class="button" data-unsaved-save>Save changes</button>
+        <button type="button" class="button button--secondary" data-unsaved-discard>Discard</button>
+        <button type="button" class="link-button" data-unsaved-cancel>Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Guard against leaving a page with unsaved form changes. Opt in by putting
+    // data-unsaved-guard on the form; pages fire an "unsaved-change" event for
+    // mutations that aren't plain input/change (drag, add/remove rows, set-all).
+    (function () {
+      const form = document.querySelector("form[data-unsaved-guard]");
+      const modal = document.getElementById("unsaved-modal");
+      if (!form || !modal) return;
+
+      let dirty = false;
+      let bypass = false;      // set once we intend to navigate (save/discard/submit)
+      let pendingUrl = null;
+
+      const markDirty = () => { dirty = true; };
+      form.addEventListener("input", markDirty);
+      form.addEventListener("change", markDirty);
+      document.addEventListener("unsaved-change", markDirty);
+      form.addEventListener("submit", () => { bypass = true; });
+
+      function openModal() { modal.hidden = false; document.body.classList.add("modal-open"); }
+      function closeModal() { modal.hidden = true; document.body.classList.remove("modal-open"); pendingUrl = null; }
+
+      document.addEventListener("click", (event) => {
+        const link = event.target.closest("a[href]");
+        if (!link || bypass || !dirty) return;
+        if (link.target === "_blank" || link.hasAttribute("download")) return;
+        const href = link.getAttribute("href");
+        if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
+        const dest = new URL(link.href, window.location.href);
+        if (dest.origin !== window.location.origin) return;  // only guard in-app nav
+        event.preventDefault();
+        pendingUrl = link.href;
+        openModal();
+      });
+
+      modal.querySelector("[data-unsaved-cancel]").addEventListener("click", closeModal);
+      modal.addEventListener("click", (event) => { if (event.target === modal) closeModal(); });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !modal.hidden) closeModal();
+      });
+      modal.querySelector("[data-unsaved-discard]").addEventListener("click", () => {
+        const url = pendingUrl;
+        bypass = true; closeModal();
+        if (url) window.location.href = url;
+      });
+      modal.querySelector("[data-unsaved-save]").addEventListener("click", () => {
+        bypass = true;
+        const next = form.querySelector('input[name="next"]');
+        if (next && pendingUrl) next.value = pendingUrl;  // return here after saving
+        form.submit();
+      });
+    })();
+  </script>
 
   <script>
     (function () {

@@ -23,7 +23,7 @@ class CompetitionTypeForm(forms.ModelForm):
 
 CompetitionClassFormSet = modelformset_factory(
     CompetitionClass,
-    fields=["is_running", "age_from", "age_to"],
+    fields=["name", "is_running", "age_from", "age_to", "practice_runs", "counted_runs"],
     extra=0,
-    can_delete=False,
+    can_delete=True,
 )
