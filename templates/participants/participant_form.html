@@ -31,14 +31,42 @@
       {{ form.date_of_birth }}
       {{ form.date_of_birth.errors }}
       <span id="dob-error" class="field-error"></span>
-      <span class="hint">
-        {% if active_competition %}
-          Class for {{ active_competition.name }}: <strong id="class-preview-value">–</strong>
-        {% else %}
-          No competition selected — class can't be computed.
-        {% endif %}
-      </span>
     </p>
+
+    <div class="class-line">
+      <label>Class{% if form.class_mode == "manual" and form.allow_multiple_classes %} <span class="hint">(one or more)</span>{% endif %}</label>
+      {% if form.class_mode == "age" %}
+        {% if active_competition %}
+          <div class="class-readonly">
+            <span class="class-chip" id="class-preview-value">–</span>
+          </div>
+          <span class="hint">Automatically derived from age for {{ active_competition.name }}.</span>
+        {% else %}
+          <span class="hint">No competition selected — class can't be computed.</span>
+        {% endif %}
+      {% elif form.class_mode == "manual" %}
+        <div class="class-picker" data-class-picker
+             data-allow-multiple="{% if form.allow_multiple_classes %}1{% else %}0{% endif %}">
+          <div class="class-picker-chips" data-picker-chips>
+            {% for cc in form.initial_classes %}
+              <span class="class-chip" data-chip data-pk="{{ cc.pk }}">{{ cc.name }}
+                <input type="hidden" name="classes" value="{{ cc.pk }}">
+                <button type="button" class="chip-remove" data-chip-remove aria-label="Remove">&times;</button>
+              </span>
+            {% endfor %}
+          </div>
+          <select class="class-picker-select" data-picker-add>
+            <option value="">Add class…</option>
+            {% for cc in form.running_classes %}
+              <option value="{{ cc.pk }}" data-repeat="{% if cc.allow_multiple_entries %}1{% else %}0{% endif %}">{{ cc.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% else %}
+        <span class="hint">No competition selected, or this participant's type doesn't match the current
+          competition — no class can be assigned.</span>
+      {% endif %}
+    </div>
 
     <h2 class="form-section">Address</h2>
     {% include "participants/_form_field.html" with field=form.address_street %}
@@ -135,6 +163,64 @@
       dobInput.addEventListener("blur", () => { clampYearOverflow(); checkValidity(); updateClass(); });
       checkValidity();
       updateClass();
+    })();
+  </script>
+
+  <script>
+    // Manual class picker: add classes from the dropdown as removable chips.
+    // Distinct-class and per-class repeat limits mirror the server-side rules.
+    (function () {
+      const picker = document.querySelector("[data-class-picker]");
+      if (!picker) return;
+      const chips = picker.querySelector("[data-picker-chips]");
+      const select = picker.querySelector("[data-picker-add]");
+      const allowMultiple = picker.dataset.allowMultiple === "1";
+
+      const chipEls = () => [...chips.querySelectorAll("[data-chip]")];
+      const distinctCount = () => new Set(chipEls().map((c) => c.dataset.pk)).size;
+      const count = (pk) => chipEls().filter((c) => c.dataset.pk === pk).length;
+      function repeatable(pk) {
+        const o = select.querySelector(`option[value="${pk}"]`);
+        return !!o && o.dataset.repeat === "1";
+      }
+      function canAdd(pk) {
+        const present = count(pk) > 0;
+        if (present && !repeatable(pk)) return false;
+        if (!present && distinctCount() >= 1 && !allowMultiple) return false;
+        return true;
+      }
+      function refreshOptions() {
+        select.querySelectorAll("option[value]").forEach((o) => {
+          if (o.value) o.disabled = !canAdd(o.value);
+        });
+      }
+      function addChip(pk, name) {
+        const chip = document.createElement("span");
+        chip.className = "class-chip";
+        chip.dataset.chip = "";
+        chip.dataset.pk = pk;
+        chip.append(name + " ");
+        const input = document.createElement("input");
+        input.type = "hidden"; input.name = "classes"; input.value = pk;
+        const btn = document.createElement("button");
+        btn.type = "button"; btn.className = "chip-remove"; btn.dataset.chipRemove = "";
+        btn.setAttribute("aria-label", "Remove"); btn.innerHTML = "&times;";
+        chip.append(input, btn);
+        chips.appendChild(chip);
+      }
+      select.addEventListener("change", () => {
+        const pk = select.value;
+        if (pk && canAdd(pk)) addChip(pk, select.options[select.selectedIndex].textContent.trim());
+        select.value = "";
+        refreshOptions();
+      });
+      chips.addEventListener("click", (event) => {
+        const btn = event.target.closest("[data-chip-remove]");
+        if (!btn) return;
+        btn.closest("[data-chip]").remove();
+        refreshOptions();
+      });
+      refreshOptions();
     })();
   </script>
 

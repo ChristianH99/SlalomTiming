@@ -365,3 +365,112 @@ def test_delete_view_removes_participant_and_entries(client):
     client.post(reverse("participants:delete", kwargs={"pk": participant.pk}))
     assert not Participant.objects.filter(pk=participant.pk).exists()
     assert not EventEntry.objects.filter(participant=participant).exists()
+
+
+# ----- class assignment -----
+
+def make_participant(ctype, license_number="LIC-XYZ"):
+    return Participant.objects.create(
+        competition_type=ctype,
+        first_name="Al",
+        last_name="Ice",
+        date_of_birth=datetime.date(2010, 6, 15),
+        address_street="1 St",
+        address_zip_code="1",
+        address_city="Town",
+        club="Club",
+        license_number=license_number,
+        email="al@example.com",
+    )
+
+
+def test_manual_assignment_persists_single_class(client):
+    from .models import ClassAssignment
+    ctype = make_type()
+    comp = make_competition(ctype)  # manual, single by default
+    comp.classes.filter(name="1").update(is_running=True)
+    c1 = comp.classes.get(name="1")
+    data = participant_data(ctype, classes=[c1.pk])
+    response = client.post(reverse("participants:add"), data)
+    assert response.status_code == 302
+    p = Participant.objects.get(license_number="LIC-001")
+    assert [a.competition_class_id for a in p.class_assignments.all()] == [c1.pk]
+    assert comp.classes_for_participant(p) == [c1]
+
+
+def test_manual_multiple_distinct_classes_when_allowed(client):
+    ctype = make_type()
+    comp = make_competition(ctype)
+    comp.allow_multiple_classes = True
+    comp.save()
+    comp.classes.filter(name__in=["1", "2"]).update(is_running=True)
+    c1, c2 = comp.classes.get(name="1"), comp.classes.get(name="2")
+    response = client.post(reverse("participants:add"), participant_data(ctype, classes=[c1.pk, c2.pk]))
+    assert response.status_code == 302
+    p = Participant.objects.get(license_number="LIC-001")
+    assert {a.competition_class_id for a in p.class_assignments.all()} == {c1.pk, c2.pk}
+
+
+def test_manual_rejects_second_class_when_single(client):
+    ctype = make_type()
+    comp = make_competition(ctype)  # allow_multiple_classes False
+    comp.classes.filter(name__in=["1", "2"]).update(is_running=True)
+    c1, c2 = comp.classes.get(name="1"), comp.classes.get(name="2")
+    response = client.post(reverse("participants:add"), participant_data(ctype, classes=[c1.pk, c2.pk]))
+    assert response.status_code == 200  # re-rendered with error
+    assert not Participant.objects.filter(license_number="LIC-001").exists()
+
+
+def test_manual_same_class_twice_when_repeat_allowed(client):
+    ctype = make_type()
+    comp = make_competition(ctype)
+    comp.classes.filter(name="1").update(is_running=True, allow_multiple_entries=True)
+    c1 = comp.classes.get(name="1")
+    response = client.post(reverse("participants:add"), participant_data(ctype, classes=[c1.pk, c1.pk]))
+    assert response.status_code == 302
+    p = Participant.objects.get(license_number="LIC-001")
+    assert p.class_assignments.count() == 2
+    assert comp.classes_for_participant(p) == [c1, c1]
+
+
+def test_manual_rejects_repeat_when_not_allowed(client):
+    ctype = make_type()
+    comp = make_competition(ctype)
+    comp.classes.filter(name="1").update(is_running=True)  # repeat off
+    c1 = comp.classes.get(name="1")
+    response = client.post(reverse("participants:add"), participant_data(ctype, classes=[c1.pk, c1.pk]))
+    assert response.status_code == 200
+    assert not Participant.objects.filter(license_number="LIC-001").exists()
+
+
+def test_age_method_stores_no_assignments_but_derives_class(client):
+    ctype = make_type()
+    comp = make_competition(ctype)
+    comp.assignment_method = "age"
+    comp.save()
+    comp.classes.filter(name="1").update(is_running=True, age_from=6, age_to=99)
+    c1 = comp.classes.get(name="1")
+    # a stray posted class is ignored in age mode
+    response = client.post(reverse("participants:add"), participant_data(ctype, classes=[c1.pk]))
+    assert response.status_code == 302
+    p = Participant.objects.get(license_number="LIC-001")
+    assert p.class_assignments.count() == 0
+    assert comp.classes_for_participant(p) == [c1]  # derived from DOB
+
+
+def test_duplicate_copies_class_assignments_not_bibs(client):
+    from .models import ClassAssignment
+    ctype = make_type()
+    comp = make_competition(ctype)
+    comp.classes.filter(name="1").update(is_running=True, allow_multiple_entries=True)
+    c1 = comp.classes.get(name="1")
+    p = make_participant(ctype)
+    ClassAssignment.objects.create(participant=p, competition_class=c1)
+    ClassAssignment.objects.create(participant=p, competition_class=c1)  # repeat
+    EventEntry.objects.create(participant=p, competition=comp, bib_number=5)
+
+    client.post(reverse("competitions:duplicate", kwargs={"pk": comp.pk}))
+    copy = Competition.objects.get(name=f"{comp.name} (Copy)")
+    copy_c1 = copy.classes.get(name="1")
+    assert ClassAssignment.objects.filter(competition_class=copy_c1, participant=p).count() == 2
+    assert not EventEntry.objects.filter(competition=copy).exists()  # bib never copied

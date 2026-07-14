@@ -33,9 +33,17 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          returns the ordered runs. Setup UI is a section: a tile list
                          ("Manage competitions") + General / Classes / Run order sub-pages that
                          all edit the *active* competition (no pk in the URL).
+  assignment.py          Pluggable class-assignment strategies (Manual, Based-on-age) chosen per
+                         competition via Competition.assignment_method; add a method in code only
+                         (subclass AssignmentMethod + register). Competition.classes_for_participant()
+                         resolves a participant's class(es). Toggles: Competition.allow_multiple_classes
+                         (several distinct classes) + CompetitionClass.allow_multiple_entries (same
+                         class more than once) — both Manual-only.
 apps/participants/
   models.py              Participant (personal/contact data) + EventEntry (bib +
-                         run status, unique per competition)
+                         run status, unique per competition) + ClassAssignment (participant↔class
+                         join for Manual assignment; explicit model, not a M2M, so duplicate
+                         rows allow entering the same class multiple times)
   forms.py               add/edit forms (club autocomplete, email-domain completion)
   views.py               CRUD views + participant_check duplicate-detection endpoint
 apps/timing/

@@ -143,39 +143,42 @@ def test_general_view_saves_active_competition(client):
     assert competition.date == datetime.date(2027, 3, 4)
 
 
-def classes_post_data(competition, overrides=None, extra_rows=None):
-    """Build POST payload for the Classes page from the current classes.
+def classes_post_data(competition, overrides=None, extra_rows=None,
+                       assignment_method=None, allow_multiple_classes=False):
+    """Build POST payload for the Classes page (assignment settings + class formset).
     `overrides` maps a class name to a dict of field values for that row;
     `extra_rows` is a list of dicts for brand-new (unsaved) class rows."""
     overrides = overrides or {}
     extra_rows = extra_rows or []
     classes = list(competition.classes.order_by("position", "name"))
     data = {
+        "assignment_method": assignment_method or competition.assignment_method,
+        "allow_multiple_classes": "on" if allow_multiple_classes else "",
         "form-INITIAL_FORMS": str(len(classes)),
         "form-MIN_NUM_FORMS": "0",
         "form-MAX_NUM_FORMS": "1000",
     }
-    for i, cc in enumerate(classes):
-        ov = overrides.get(cc.name, {})
-        data[f"form-{i}-id"] = cc.pk
-        data[f"form-{i}-name"] = ov.get("name", cc.name)
+
+    def fill(i, name, ov):
+        data[f"form-{i}-name"] = ov.get("name", name)
         data[f"form-{i}-is_running"] = "on" if ov.get("is_running") else ""
         data[f"form-{i}-age_from"] = ov.get("age_from", "")
         data[f"form-{i}-age_to"] = ov.get("age_to", "")
         data[f"form-{i}-practice_runs"] = ov.get("practice_runs", "1")
         data[f"form-{i}-counted_runs"] = ov.get("counted_runs", "2")
+        data[f"form-{i}-allow_multiple_entries"] = "on" if ov.get("allow_multiple_entries") else ""
+
+    for i, cc in enumerate(classes):
+        ov = overrides.get(cc.name, {})
+        data[f"form-{i}-id"] = cc.pk
+        fill(i, cc.name, ov)
         if ov.get("DELETE"):
             data[f"form-{i}-DELETE"] = "on"
     base = len(classes)
     for j, row in enumerate(extra_rows):
         i = base + j
         data[f"form-{i}-id"] = ""
-        data[f"form-{i}-name"] = row.get("name", f"New{j}")
-        data[f"form-{i}-is_running"] = "on" if row.get("is_running") else ""
-        data[f"form-{i}-age_from"] = row.get("age_from", "")
-        data[f"form-{i}-age_to"] = row.get("age_to", "")
-        data[f"form-{i}-practice_runs"] = row.get("practice_runs", "1")
-        data[f"form-{i}-counted_runs"] = row.get("counted_runs", "2")
+        fill(i, f"New{j}", row)
     data["form-TOTAL_FORMS"] = str(base + len(extra_rows))
     return data
 
@@ -344,3 +347,40 @@ def test_type_list_annotates_usage_counts(client):
     types = {t.pk: t for t in response.context["competition_types"]}
     assert types[ctype.pk].competition_count == 1
     assert types[ctype.pk].participant_count == 0
+
+
+# ----- assignment methods -----
+
+def test_get_assignment_method_falls_back_to_default():
+    from .assignment import get_assignment_method
+    assert get_assignment_method("age").key == "age"
+    assert get_assignment_method("nonsense").key == "manual"  # default fallback
+
+
+def test_classes_view_saves_assignment_settings(client):
+    competition = make_active_competition()
+    data = classes_post_data(
+        competition,
+        assignment_method="manual",
+        allow_multiple_classes=True,
+        overrides={"1": {"is_running": True, "allow_multiple_entries": True}},
+    )
+    response = client.post(reverse("competitions:classes"), data)
+    assert response.status_code == 302
+    competition.refresh_from_db()
+    assert competition.assignment_method == "manual"
+    assert competition.allow_multiple_classes is True
+    assert competition.classes.get(name="1").allow_multiple_entries is True
+
+
+def test_classes_view_age_method_forces_multiple_off(client):
+    competition = make_active_competition()
+    data = classes_post_data(
+        competition, assignment_method="age", allow_multiple_classes=True
+    )
+    response = client.post(reverse("competitions:classes"), data)
+    assert response.status_code == 302
+    competition.refresh_from_db()
+    assert competition.assignment_method == "age"
+    # age-based can't support multiple distinct classes → forced off
+    assert competition.allow_multiple_classes is False

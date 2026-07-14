@@ -57,16 +57,21 @@ The sub-pages always act on the **current** competition:
    picks the one the sub-pages edit; this also drives which participants are "active", the
    class computed on the participant form, and bib matching for timing events.
 4. **General** — the current competition's name, type and date.
-5. **Classes** — rename, add or remove classes, set age ranges (birth years update live)
-   and how many practice / counted runs each class does. "Set all" fills a run-count column
-   for every class at once.
+5. **Classes** — pick the **assignment method** (how participants get their class) at the top,
+   then edit each class as a tile: rename, Running, practice / counted runs, delete.
+   - **Manual**: you assign participants to classes by hand on the participant form. A top switch
+     allows a participant in several *different* classes; a per-class switch allows entering the
+     same class more than once.
+   - **Based on age**: each class gets an age range (birth years update live) and the class is
+     computed from the participant's date of birth.
 6. **Run order** — drag classes into runs to start them together, drop a class in the gap
    between runs to split it out, and drag a run's handle to reorder. Only classes marked
    *Running* on the Classes page appear here.
 7. **Participants → Add participant** — register a competitor and optionally assign a bib
-   for the current competition right away. The form autocompletes known clubs and common
-   email domains, computes the class live from the date of birth, and warns about likely
-   duplicates (matching name or licence) before you save.
+   for the current competition right away. The **Class** line follows the competition's
+   assignment method: Manual shows a class picker (one or several, with repeats where allowed),
+   Age based shows the class derived live from the date of birth. The form autocompletes known
+   clubs and common email domains and warns about likely duplicates (name or licence) before saving.
 8. **Dashboard** — watch live timing events resolve to participant names by bib.
 
 Leaving General, Classes or Run order with unsaved edits pops a styled confirmation

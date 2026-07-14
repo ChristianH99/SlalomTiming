@@ -10,7 +10,13 @@ from django.views import View
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView
 
-from .forms import CompetitionClassFormSet, CompetitionForm, CompetitionTypeForm
+from .assignment import assignment_methods_meta
+from .forms import (
+    AssignmentForm,
+    CompetitionClassFormSet,
+    CompetitionForm,
+    CompetitionTypeForm,
+)
 from .models import Competition, CompetitionClass, CompetitionType
 
 
@@ -87,20 +93,32 @@ class GeneralView(ActiveCompetitionMixin, View):
 class ClassesView(ActiveCompetitionMixin, View):
     template_name = "competitions/competition_classes.html"
 
+    def _context(self, competition, assignment_form, formset):
+        return {
+            "object": competition,
+            "assignment_form": assignment_form,
+            "formset": formset,
+            "assignment_methods_meta": assignment_methods_meta(),
+        }
+
     def get(self, request):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        assignment_form = AssignmentForm(instance=competition)
         formset = CompetitionClassFormSet(queryset=competition.classes.all())
-        return render(request, self.template_name, {"object": competition, "formset": formset})
+        return render(request, self.template_name,
+                      self._context(competition, assignment_form, formset))
 
     def post(self, request):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        assignment_form = AssignmentForm(request.POST, instance=competition)
         formset = CompetitionClassFormSet(request.POST, queryset=competition.classes.all())
-        if formset.is_valid():
+        if assignment_form.is_valid() and formset.is_valid():
             with transaction.atomic():
+                assignment_form.save()
                 # commit=False so we can attach the competition FK and give any
                 # brand-new class a list position after the existing ones. Run
                 # grouping (run_position) is owned by the Run order page, so it
@@ -119,7 +137,8 @@ class ClassesView(ActiveCompetitionMixin, View):
                     obj.delete()
             messages.success(request, "Classes saved.")
             return redirect(safe_next(request, reverse("competitions:classes")))
-        return render(request, self.template_name, {"object": competition, "formset": formset})
+        return render(request, self.template_name,
+                      self._context(competition, assignment_form, formset))
 
 
 class RunOrderView(ActiveCompetitionMixin, View):
@@ -200,16 +219,21 @@ def select_competition(request, pk):
 @require_POST
 def duplicate_competition(request, pk):
     original = get_object_or_404(Competition, pk=pk)
+    from apps.participants.models import ClassAssignment
+
     with transaction.atomic():
         copy = Competition.objects.create(
             competition_type=original.competition_type,
             name=f"{original.name} (Copy)",
             date=original.date,
+            assignment_method=original.assignment_method,
+            allow_multiple_classes=original.allow_multiple_classes,
         )
         # Drop the default classes seeded on create and mirror the original's.
         copy.classes.all().delete()
-        CompetitionClass.objects.bulk_create(
-            CompetitionClass(
+        name_to_copy = {}
+        for oc in original.classes.all():
+            name_to_copy[oc.name] = CompetitionClass.objects.create(
                 competition=copy,
                 name=oc.name,
                 position=oc.position,
@@ -218,9 +242,20 @@ def duplicate_competition(request, pk):
                 age_to=oc.age_to,
                 practice_runs=oc.practice_runs,
                 counted_runs=oc.counted_runs,
+                allow_multiple_entries=oc.allow_multiple_entries,
                 run_position=oc.run_position,
             )
-            for oc in original.classes.all()
+        # Copy participant class assignments (incl. repeats) onto the matching
+        # copied classes. Bibs (EventEntry) are deliberately never copied.
+        ClassAssignment.objects.bulk_create(
+            ClassAssignment(
+                participant_id=assignment.participant_id,
+                competition_class=name_to_copy[assignment.competition_class.name],
+            )
+            for assignment in ClassAssignment.objects.filter(
+                competition_class__competition=original
+            ).select_related("competition_class")
+            if assignment.competition_class.name in name_to_copy
         )
     return redirect("competitions:list")
 

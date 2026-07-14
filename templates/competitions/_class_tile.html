@@ -1,0 +1,45 @@
+{% comment %}One editable class tile. Age block and repeat toggle are shown/hidden
+by the Classes page JS according to the selected assignment method.{% endcomment %}
+<div class="competition-tile class-tile" data-class-tile>
+  <div class="class-tile-body">
+    <div class="class-tile-top">
+      <div class="class-tile-name">
+        {{ class_form.name }}
+        {{ class_form.name.errors }}
+      </div>
+      <label class="switch">
+        {{ class_form.is_running }}
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+        <span class="switch-text">Running</span>
+      </label>
+    </div>
+
+    <div class="class-tile-grid">
+      <label class="field-mini"><span>Practice runs</span>{{ class_form.practice_runs }}</label>
+      <label class="field-mini"><span>Counted runs</span>{{ class_form.counted_runs }}</label>
+    </div>
+
+    <div class="class-tile-age" data-age-block>
+      <label class="field-mini"><span>Age from</span>{{ class_form.age_from }}</label>
+      <label class="field-mini"><span>Age to</span>{{ class_form.age_to }}</label>
+      <span class="field-mini"><span>Birth years</span>
+        <strong class="birth-years">
+          {% with range=class_form.instance.birth_year_range %}
+            {% if range %}{{ range.0 }}–{{ range.1 }}{% else %}&mdash;{% endif %}
+          {% endwith %}
+        </strong>
+      </span>
+    </div>
+
+    <label class="switch class-repeat" data-manual-only>
+      {{ class_form.allow_multiple_entries }}
+      <span class="switch-track"><span class="switch-thumb"></span></span>
+      <span class="switch-text">Allow multiple entries per participant</span>
+    </label>
+  </div>
+
+  <div class="class-tile-actions">
+    <span class="delete-holder" hidden>{{ class_form.DELETE }}</span>
+    <button type="button" class="row-remove" data-remove-class title="Remove class">&times;</button>
+  </div>
+</div>

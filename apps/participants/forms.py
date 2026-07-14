@@ -6,6 +6,82 @@ from .models import EventEntry, Participant
 
 
 class ParticipantForm(forms.ModelForm):
+    # Class-assignment state prepared by setup_classes() and consumed by the
+    # template and the view. "classes" itself is not a Django field — a manual
+    # multi-entry selection is a repeatable list of pks, which a set-based field
+    # can't hold — so it's read from the raw POST and validated in clean().
+    class_mode = "disabled"          # "manual" | "age" | "disabled"
+    running_classes = ()
+    initial_classes = ()
+    allow_multiple_classes = False
+    selected_classes = None          # None => don't touch assignments on save
+
+    def setup_classes(self, competition):
+        self.competition = competition
+        if competition is None:
+            self.class_mode = "disabled"
+            return
+        method = competition.assignment()
+        if not method.manual:
+            self.class_mode = "age"   # display-only; nothing is stored
+            return
+        self.class_mode = "manual"
+        self.running_classes = list(
+            competition.classes.filter(is_running=True).order_by("position", "name")
+        )
+        self.allow_multiple_classes = competition.allows_multiple_classes_effective()
+        if self.instance.pk:
+            self.initial_classes = [
+                a.competition_class
+                for a in self.instance.class_assignments.select_related("competition_class")
+                if a.competition_class.competition_id == competition.id
+            ]
+
+    def _resolve_class_selection(self, cleaned):
+        """Validate the raw ``classes`` pk list (with duplicates) against the
+        distinct-class and per-class repeat rules, storing the result on
+        ``selected_classes`` for the view to persist."""
+        self.selected_classes = None
+        if self.class_mode != "manual":
+            return
+        ctype = cleaned.get("competition_type")
+        if ctype is None or ctype.pk != self.competition.competition_type_id:
+            return  # type mismatch → leave any existing assignments untouched
+        # Valid targets: running classes plus any already-assigned (possibly now
+        # non-running) class, so resubmitting doesn't silently drop them.
+        valid = {c.pk: c for c in self.running_classes}
+        repeatable = {c.pk for c in self.running_classes if c.allow_multiple_entries}
+        for cc in self.initial_classes:
+            valid.setdefault(cc.pk, cc)
+            if cc.allow_multiple_entries:
+                repeatable.add(cc.pk)
+
+        raw = self.data.getlist("classes") if hasattr(self.data, "getlist") else []
+        chosen, counts, distinct = [], {}, set()
+        for token in raw:
+            try:
+                pk = int(token)
+            except (TypeError, ValueError):
+                continue
+            cc = valid.get(pk)
+            if cc is None:
+                continue
+            counts[pk] = counts.get(pk, 0) + 1
+            if counts[pk] > 1 and pk not in repeatable:
+                self.add_error(None, f"“{cc.name}” can’t be added more than once.")
+                continue
+            if pk not in distinct and distinct and not self.allow_multiple_classes:
+                self.add_error(None, "Only one class can be assigned to this participant.")
+                continue
+            distinct.add(pk)
+            chosen.append(cc)
+        self.selected_classes = chosen
+
+    def clean(self):
+        cleaned = super().clean()
+        self._resolve_class_selection(cleaned)
+        return cleaned
+
     class Meta:
         model = Participant
         fields = [
@@ -45,6 +121,7 @@ class ParticipantCreateForm(ParticipantForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.competition = Competition.get_current()
+        self.setup_classes(self.competition)
         if self.competition is None:
             self.fields["bib_number"].disabled = True
             self.fields["bib_number"].help_text = (
@@ -74,6 +151,7 @@ class ParticipantUpdateForm(ParticipantForm):
         super().__init__(*args, **kwargs)
         self.competition = competition
         self.entry = None
+        self.setup_classes(competition)
 
         if competition is None:
             self._disable_bib_field("No competition is currently selected, so a bib can't be assigned.")

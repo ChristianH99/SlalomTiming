@@ -1,5 +1,11 @@
 from django.db import models
 
+from .assignment import (
+    ASSIGNMENT_METHOD_CHOICES,
+    DEFAULT_ASSIGNMENT_METHOD,
+    get_assignment_method,
+)
+
 
 class CompetitionType(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -18,6 +24,16 @@ class Competition(models.Model):
     name = models.CharField(max_length=150)
     date = models.DateField()
     is_active = models.BooleanField(default=False, help_text="The competition currently being run.")
+    assignment_method = models.CharField(
+        max_length=20,
+        choices=ASSIGNMENT_METHOD_CHOICES,
+        default=DEFAULT_ASSIGNMENT_METHOD,
+        help_text="How participants are assigned to classes.",
+    )
+    allow_multiple_classes = models.BooleanField(
+        default=False,
+        help_text="Manual assignment only: may a participant be in more than one class.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -80,6 +96,20 @@ class Competition(models.Model):
                 return competition_class
         return None
 
+    def assignment(self):
+        """The AssignmentMethod strategy for this competition."""
+        return get_assignment_method(self.assignment_method)
+
+    def allows_multiple_classes_effective(self):
+        """Whether a participant may be in multiple distinct classes, honouring
+        both the method (must support it) and the competition's toggle."""
+        return self.assignment().configurable_multiple and self.allow_multiple_classes
+
+    def classes_for_participant(self, participant):
+        """Resolve the class(es) a participant belongs to under the current
+        assignment method (may repeat for manual multi-entry)."""
+        return self.assignment().classes_for(self, participant)
+
     @classmethod
     def get_current(cls):
         return cls.objects.filter(is_active=True).first()
@@ -97,6 +127,10 @@ class CompetitionClass(models.Model):
     age_to = models.PositiveIntegerField(null=True, blank=True, help_text="Ending age, e.g. 7")
     practice_runs = models.PositiveIntegerField(default=1)
     counted_runs = models.PositiveIntegerField(default=2)
+    allow_multiple_entries = models.BooleanField(
+        default=False,
+        help_text="Manual assignment only: may a participant be entered into this class more than once.",
+    )
     run_position = models.PositiveIntegerField(
         null=True,
         blank=True,

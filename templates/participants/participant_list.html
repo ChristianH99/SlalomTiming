@@ -45,7 +45,11 @@
           <td class="col-bib">{{ participant.current_bib|default:"–" }}</td>
           <td class="col-name" title="{{ participant.first_name }} {{ participant.last_name }}">{{ participant.first_name }} {{ participant.last_name }}</td>
           <td class="col-dob">{{ participant.date_of_birth|date:"d.m.Y"|default:"–" }}</td>
-          <td class="col-class">{{ participant.date_of_birth.year|default_if_none:""|class_for_birth_year:competition|default:"–" }}</td>
+          <td class="col-class">
+            {% for cc in participant|participant_classes:competition %}
+              <span class="status-pill">{{ cc.name }}</span>
+            {% empty %}–{% endfor %}
+          </td>
           <td class="col-club" title="{{ participant.club }}">{{ participant.club }}</td>
           <td class="col-licence" title="{{ participant.license_number }}">{{ participant.license_number }}</td>
           <td class="col-actions">

@@ -4,8 +4,9 @@ register = template.Library()
 
 
 @register.filter
-def class_for_birth_year(birth_year, competition):
-    if not competition or not birth_year:
-        return None
-    competition_class = competition.class_for_birth_year(birth_year)
-    return competition_class.name if competition_class else None
+def participant_classes(participant, competition):
+    """The class(es) a participant belongs to under the competition's assignment
+    method — a list of CompetitionClass (may repeat for manual multi-entry)."""
+    if not competition:
+        return []
+    return competition.classes_for_participant(participant)

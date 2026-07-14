@@ -1,6 +1,6 @@
 from django.db import models
 
-from apps.competitions.models import Competition, CompetitionType
+from apps.competitions.models import Competition, CompetitionClass, CompetitionType
 
 
 class Participant(models.Model):
@@ -29,6 +29,28 @@ class Participant(models.Model):
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
+
+
+class ClassAssignment(models.Model):
+    """A manual assignment of a participant to a competition class. This is an
+    explicit join model (not a M2M) so the same participant can be entered into
+    the same class more than once when the class allows repeat entries — a
+    set-based M2M could not represent that. Which competition the assignment
+    belongs to is implied by ``competition_class.competition``."""
+
+    participant = models.ForeignKey(
+        Participant, on_delete=models.CASCADE, related_name="class_assignments"
+    )
+    competition_class = models.ForeignKey(
+        CompetitionClass, on_delete=models.CASCADE, related_name="assignments"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.participant} → {self.competition_class}"
 
 
 class EventEntry(models.Model):

@@ -6,7 +6,23 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from apps.competitions.models import Competition
 
 from .forms import ParticipantCreateForm, ParticipantUpdateForm
-from .models import EventEntry, Participant
+from .models import ClassAssignment, EventEntry, Participant
+
+
+def save_class_assignments(participant, competition, form):
+    """Persist a manual class selection: replace this competition's assignments
+    for the participant with the validated list (which may contain repeats)."""
+    if competition is None or getattr(form, "class_mode", None) != "manual":
+        return
+    if form.selected_classes is None:  # type mismatch / not applicable
+        return
+    ClassAssignment.objects.filter(
+        participant=participant, competition_class__competition=competition
+    ).delete()
+    ClassAssignment.objects.bulk_create(
+        ClassAssignment(participant=participant, competition_class=cc)
+        for cc in form.selected_classes
+    )
 
 # Common consumer email domains, offered as completions once the user types "@".
 COMMON_EMAIL_DOMAINS = [
@@ -91,6 +107,10 @@ class ParticipantListView(ListView):
                 | Q(club__icontains=self.query)
                 | Q(entries__bib_number__icontains=self.query)
             )
+        # Manual assignment resolves each participant's classes from their
+        # ClassAssignment rows — prefetch so the list doesn't do a query per row.
+        if self.competition and self.competition.assignment().manual:
+            qs = qs.prefetch_related("class_assignments__competition_class")
         return qs.distinct()
 
     def get_context_data(self, **kwargs):
@@ -116,13 +136,15 @@ class ParticipantCreateView(ParticipantFormContextMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
+        competition = Competition.get_current()
         bib_number = form.cleaned_data.get("bib_number")
         if bib_number is not None:
             EventEntry.objects.create(
                 participant=self.object,
-                competition=Competition.get_current(),
+                competition=competition,
                 bib_number=bib_number,
             )
+        save_class_assignments(self.object, competition, form)
         return response
 
 
@@ -154,6 +176,7 @@ class ParticipantUpdateView(ParticipantFormContextMixin, UpdateView):
                     entry.save(update_fields=["bib_number"])
             elif form.entry is not None:
                 form.entry.delete()
+        save_class_assignments(self.object, form.competition, form)
         return response
 
 

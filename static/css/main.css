@@ -524,6 +524,129 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   border-radius: var(--radius-md);
 }
 
+/* ===== TOGGLE SWITCH ===== */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-dark);
+  user-select: none;
+}
+.switch input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch-track {
+  position: relative;
+  flex-shrink: 0;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 0.15s;
+}
+.switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(22,35,63,0.3);
+  transition: transform 0.15s;
+}
+.switch input:checked + .switch-track { background: var(--flame); }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(16px); }
+.switch input:focus-visible + .switch-track { box-shadow: 0 0 0 3px rgba(232,73,29,0.25); }
+.switch--disabled { opacity: 0.45; cursor: not-allowed; }
+.switch--disabled .switch-track { background: var(--border); }
+
+/* ===== CLASSES PAGE (assignment bar + class tiles) ===== */
+.assignment-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.assignment-method { display: flex; align-items: center; gap: 0.6rem; }
+.assignment-method label {
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-light);
+  margin: 0;
+}
+.assignment-method select { min-width: 12rem; }
+
+.class-tiles { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
+.class-tile { align-items: flex-start; }
+.class-tile[hidden] { display: none; }
+.class-tile-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.7rem; }
+.class-tile-top { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.class-tile-name { flex: 1 1 12rem; min-width: 0; }
+.class-tile-name input[type="text"] {
+  width: 100%;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.4rem 0.6rem;
+}
+.class-tile-grid, .class-tile-age {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.25rem;
+  align-items: flex-end;
+}
+.class-tile-age[hidden], [data-manual-only][hidden] { display: none; }
+.field-mini {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.field-mini input[type="number"] { width: 5rem; }
+.field-mini .birth-years { color: var(--text-dark); font-weight: 700; font-size: 0.9rem; }
+.class-tile-actions { flex-shrink: 0; padding-left: 0.5rem; }
+
+/* ===== PARTICIPANT CLASS LINE / PICKER ===== */
+.class-line { margin: 0.7rem 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.class-line > label {
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+.class-readonly .class-chip { cursor: default; }
+.class-picker { display: flex; flex-direction: column; gap: 0.5rem; }
+.class-picker-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.class-picker-chips:empty { display: none; }
+.class-picker .class-chip { cursor: default; }
+.class-picker .class-chip:hover { box-shadow: none; }
+.class-picker-select { max-width: 16rem; }
+.chip-remove {
+  border: none;
+  background: none;
+  color: var(--glacier);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0 0 0.3rem;
+}
+.chip-remove:hover { color: var(--flame-hover); }
+
 /* ===== FORMS ===== */
 form p, form .combobox { margin: 0.7rem 0; display: flex; flex-direction: column; gap: 0.3rem; }
 form label {
