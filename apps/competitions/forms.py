@@ -44,7 +44,7 @@ CompetitionClassFormSet = modelformset_factory(
     CompetitionClass,
     fields=[
         "name", "is_running", "age_from", "age_to",
-        "practice_runs", "counted_runs", "allow_multiple_entries",
+        "practice_runs", "counted_runs", "scoring_method", "allow_multiple_entries",
     ],
     extra=0,
     can_delete=True,

@@ -285,6 +285,7 @@ def duplicate_competition(request, pk):
                 age_to=oc.age_to,
                 practice_runs=oc.practice_runs,
                 counted_runs=oc.counted_runs,
+                scoring_method=oc.scoring_method,
                 allow_multiple_entries=oc.allow_multiple_entries,
                 run_position=oc.run_position,
             )

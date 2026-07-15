@@ -182,6 +182,13 @@ class CompetitionClass(models.Model):
     # Starter classes seeded on a brand-new competition; fully editable afterwards.
     DEFAULT_NAMES = ["1", "2", "3", "4", "5", "6", "E"]
 
+    class Scoring(models.TextChoices):
+        """How a class's counted runs turn into a result. Recorded per class here;
+        the calculation itself lives with the results feature."""
+
+        AGGREGATE = "aggregate", "Aggregate times"
+        REGULARITY = "regularity", "Regularity test"
+
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name="classes")
     name = models.CharField(max_length=50)
     position = models.PositiveIntegerField(default=0, help_text="Display order in the classes list.")
@@ -190,6 +197,12 @@ class CompetitionClass(models.Model):
     age_to = models.PositiveIntegerField(null=True, blank=True, help_text="Ending age, e.g. 7")
     practice_runs = models.PositiveIntegerField(default=1)
     counted_runs = models.PositiveIntegerField(default=2)
+    scoring_method = models.CharField(
+        max_length=20,
+        choices=Scoring.choices,
+        default=Scoring.AGGREGATE,
+        help_text="How this class's counted runs are turned into a result.",
+    )
     allow_multiple_entries = models.BooleanField(
         default=False,
         help_text="Manual assignment only: may a participant be entered into this class more than once.",

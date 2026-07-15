@@ -167,6 +167,9 @@ def classes_post_data(competition, overrides=None, extra_rows=None,
         data[f"form-{i}-age_to"] = ov.get("age_to", "")
         data[f"form-{i}-practice_runs"] = ov.get("practice_runs", "1")
         data[f"form-{i}-counted_runs"] = ov.get("counted_runs", "2")
+        data[f"form-{i}-scoring_method"] = ov.get(
+            "scoring_method", CompetitionClass.Scoring.AGGREGATE
+        )
         data[f"form-{i}-allow_multiple_entries"] = "on" if ov.get("allow_multiple_entries") else ""
 
     for i, cc in enumerate(classes):
@@ -205,6 +208,39 @@ def test_classes_view_saves_per_class_run_counts(client):
     assert response.status_code == 302
     cc = competition.classes.get(name="1")
     assert (cc.practice_runs, cc.counted_runs) == (3, 4)
+
+
+def test_new_class_scores_on_aggregate_times_by_default():
+    competition = make_competition()
+    assert competition.classes.get(name="1").scoring_method == (
+        CompetitionClass.Scoring.AGGREGATE
+    )
+
+
+def test_classes_view_saves_per_class_scoring_method(client):
+    competition = make_active_competition()
+    data = classes_post_data(competition, overrides={
+        "1": {"scoring_method": CompetitionClass.Scoring.REGULARITY},
+    })
+    response = client.post(reverse("competitions:classes"), data)
+    assert response.status_code == 302
+    # Set per class: only the edited one changes.
+    assert competition.classes.get(name="1").scoring_method == (
+        CompetitionClass.Scoring.REGULARITY
+    )
+    assert competition.classes.get(name="2").scoring_method == (
+        CompetitionClass.Scoring.AGGREGATE
+    )
+
+
+def test_classes_view_rejects_an_unknown_scoring_method(client):
+    competition = make_active_competition()
+    data = classes_post_data(competition, overrides={"1": {"scoring_method": "bogus"}})
+    response = client.post(reverse("competitions:classes"), data)
+    assert response.status_code == 200  # redisplayed with errors, nothing saved
+    assert competition.classes.get(name="1").scoring_method == (
+        CompetitionClass.Scoring.AGGREGATE
+    )
 
 
 def test_classes_view_renames_class(client):
@@ -299,7 +335,8 @@ def test_select_competition_rejects_get(client):
 def test_duplicate_competition_copies_class_configuration(client):
     original = make_competition(name="Original")
     original.classes.filter(name="1").update(
-        is_running=True, age_from=6, age_to=7, practice_runs=3, counted_runs=4, run_position=0
+        is_running=True, age_from=6, age_to=7, practice_runs=3, counted_runs=4, run_position=0,
+        scoring_method=CompetitionClass.Scoring.REGULARITY,
     )
 
     client.post(reverse("competitions:duplicate", kwargs={"pk": original.pk}))
@@ -310,6 +347,7 @@ def test_duplicate_competition_copies_class_configuration(client):
     copied = copy.classes.get(name="1")
     assert (copied.is_running, copied.age_from, copied.age_to) == (True, 6, 7)
     assert (copied.practice_runs, copied.counted_runs, copied.run_position) == (3, 4, 0)
+    assert copied.scoring_method == CompetitionClass.Scoring.REGULARITY
 
 
 def test_create_competition_type_via_view(client):

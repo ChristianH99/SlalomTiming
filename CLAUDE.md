@@ -31,6 +31,9 @@ apps/common.py           Helpers shared across apps: safe_next() resolves the PO
 apps/competitions/       Competition, CompetitionType, CompetitionClass; active-competition
                          selection. CompetitionClass is fully dynamic (editable name, not a
                          fixed enum): is_running, age range, practice_runs, counted_runs,
+                         scoring_method (CompetitionClass.Scoring: aggregate times vs regularity
+                         test — recorded per class, the calculation belongs to the results
+                         feature and isn't written yet),
                          plus position (list order) and run_position (which run it starts in;
                          classes sharing a run_position start together). Competition.run_groups()
                          returns the ordered runs. Setup UI is a section: a tile list
