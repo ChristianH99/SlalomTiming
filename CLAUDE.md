@@ -25,6 +25,9 @@ participants / entering penalties) — no rewrite planned, just wider access + a
 
 ```
 config/                  Django project (settings, urls, asgi/wsgi)
+apps/common.py           Helpers shared across apps: safe_next() resolves the POSTed ?next to
+                         an in-app URL (rejecting off-site ones), so the unsaved-changes
+                         modal's "Save changes" lands where the user was navigating.
 apps/competitions/       Competition, CompetitionType, CompetitionClass; active-competition
                          selection. CompetitionClass is fully dynamic (editable name, not a
                          fixed enum): is_running, age range, practice_runs, counted_runs,

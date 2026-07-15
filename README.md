@@ -74,8 +74,10 @@ The sub-pages always act on the **current** competition:
    clubs and common email domains and warns about likely duplicates (name or licence) before saving.
 8. **Dashboard** — watch live timing events resolve to participant names by bib.
 
-Leaving General, Classes or Run order with unsaved edits pops a styled confirmation
-(Save / Discard / Cancel) rather than losing the changes.
+Leaving General, Classes, Run order or the participant form with unsaved edits pops a styled
+confirmation (Save / Discard / Cancel) rather than losing the changes. **Save changes** carries
+on to wherever you were heading; view-only controls (such as the start pattern's preview
+switches) don't count as changes.
 
 ## Common commands
 

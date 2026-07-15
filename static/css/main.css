@@ -457,6 +457,22 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   color: #15803d;
 }
 
+.status-pill--more {
+  background: var(--frost-bg);
+  color: var(--glacier);
+  flex: 0 0 auto;
+}
+
+/* First pill takes the space that's left and ellipsises; the +N pill never
+   shrinks, so it stays readable however long the class name is. */
+.class-cell { display: flex; align-items: center; gap: 0.3rem; min-width: 0; }
+.class-cell .status-pill {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ===== COMPETITION TILES ===== */
 .competition-tiles {
   display: flex;
@@ -600,11 +616,18 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   font-size: 1rem;
   padding: 0.4rem 0.6rem;
 }
-.class-tile-grid, .class-tile-age {
+.class-tile-fields, .class-tile-grid, .class-tile-age {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem 1.25rem;
   align-items: flex-end;
+}
+/* Runs and ages sit side by side, split by a rule. The rule lives on the age
+   block itself so it disappears with it when the method doesn't use ages. */
+.class-tile-fields { gap: 0.7rem 1.25rem; }
+.class-tile-age {
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--border);
 }
 .class-tile-age[hidden], [data-manual-only][hidden] { display: none; }
 .field-mini {
@@ -798,11 +821,11 @@ body.modal-open { overflow: hidden; }
 }
 /* Percentages summing to 100% so table-layout: fixed lays out exactly. */
 .participants-table .col-bib { width: 7%; }
-.participants-table .col-name { width: 28%; }
-.participants-table .col-dob { width: 14%; }
-.participants-table .col-class { width: 8%; }
-.participants-table .col-club { width: 17%; }
-.participants-table .col-licence { width: 13%; }
+.participants-table .col-name { width: 26%; }
+.participants-table .col-dob { width: 13%; }
+.participants-table .col-class { width: 13%; }
+.participants-table .col-club { width: 16%; }
+.participants-table .col-licence { width: 12%; }
 .participants-table .col-actions { width: 13%; }
 
 /* ===== COMPETITIONS TABLE (fixed rows, truncated overflow) ===== */

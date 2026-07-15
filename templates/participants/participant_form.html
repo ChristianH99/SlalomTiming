@@ -7,10 +7,11 @@
 
   <div id="duplicate-warning" class="notice notice--warning" hidden></div>
 
-  <form method="post" id="participant-form"
+  <form method="post" id="participant-form" data-unsaved-guard
         data-check-url="{{ check_url }}"
         data-exclude-pk="{{ object.pk|default:'' }}">
     {% csrf_token %}
+    <input type="hidden" name="next" value="">
     {{ form.non_field_errors }}
 
     <div class="bib-box">
@@ -219,6 +220,8 @@
         if (!btn) return;
         btn.closest("[data-chip]").remove();
         refreshOptions();
+        // Removing a chip fires no input/change event of its own.
+        document.dispatchEvent(new Event("unsaved-change"));
       });
       refreshOptions();
     })();

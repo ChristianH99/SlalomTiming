@@ -46,9 +46,18 @@
           <td class="col-name" title="{{ participant.first_name }} {{ participant.last_name }}">{{ participant.first_name }} {{ participant.last_name }}</td>
           <td class="col-dob">{{ participant.date_of_birth|date:"d.m.Y"|default:"–" }}</td>
           <td class="col-class">
-            {% for cc in participant|participant_classes:competition %}
-              <span class="status-pill">{{ cc.name }}</span>
-            {% empty %}–{% endfor %}
+            {% with classes=participant|participant_classes:competition %}
+              {% if classes %}
+                {% comment %}Only the first class fits the fixed column — the rest
+                collapse into a +N pill, with every name in the cell's tooltip.{% endcomment %}
+                <span class="class-cell" title="{% for cc in classes %}{{ cc.name }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+                  <span class="status-pill">{{ classes.0.name }}</span>
+                  {% if classes|length > 1 %}
+                    <span class="status-pill status-pill--more">+{{ classes|length|add:"-1" }}</span>
+                  {% endif %}
+                </span>
+              {% else %}–{% endif %}
+            {% endwith %}
           </td>
           <td class="col-club" title="{{ participant.club }}">{{ participant.club }}</td>
           <td class="col-licence" title="{{ participant.license_number }}">{{ participant.license_number }}</td>

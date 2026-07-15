@@ -474,3 +474,35 @@ def test_duplicate_copies_class_assignments_not_bibs(client):
     copy_c1 = copy.classes.get(name="1")
     assert ClassAssignment.objects.filter(competition_class=copy_c1, participant=p).count() == 2
     assert not EventEntry.objects.filter(competition=copy).exists()  # bib never copied
+
+
+# ----- unsaved-changes guard: ?next redirect -----
+
+def test_add_redirects_to_safe_next(client):
+    ctype = make_type()
+    make_competition(ctype)
+    data = participant_data(ctype, next=reverse("competitions:classes"))
+    response = client.post(reverse("participants:add"), data)
+    assert response.status_code == 302
+    assert response.url == reverse("competitions:classes")
+
+
+def test_add_ignores_unsafe_next(client):
+    ctype = make_type()
+    make_competition(ctype)
+    data = participant_data(ctype, next="https://evil.example.com/steal")
+    response = client.post(reverse("participants:add"), data)
+    assert response.status_code == 302
+    assert response.url == reverse("participants:list")
+
+
+def test_edit_redirects_to_safe_next(client):
+    ctype = make_type()
+    make_competition(ctype)
+    participant = make_participant(ctype)
+    data = participant_data(ctype, next=reverse("competitions:general"), license_number="LIC-XYZ")
+    response = client.post(
+        reverse("participants:edit", kwargs={"pk": participant.pk}), data
+    )
+    assert response.status_code == 302
+    assert response.url == reverse("competitions:general")

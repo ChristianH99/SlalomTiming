@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
+from apps.common import safe_next
 from apps.competitions.models import Competition
 
 from .forms import ParticipantCreateForm, ParticipantUpdateForm
@@ -43,6 +44,9 @@ class ParticipantFormContextMixin:
     """Shared context for the add/edit participant form: the active
     competition's per-class age ranges (for the live class preview), the known
     club names (for the club autocomplete), and the common email domains."""
+
+    def get_success_url(self):
+        return safe_next(self.request, reverse("participants:list"))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -125,7 +129,6 @@ class ParticipantCreateView(ParticipantFormContextMixin, CreateView):
     model = Participant
     form_class = ParticipantCreateForm
     template_name = "participants/participant_form.html"
-    success_url = reverse_lazy("participants:list")
 
     def get_initial(self):
         initial = super().get_initial()
@@ -152,7 +155,6 @@ class ParticipantUpdateView(ParticipantFormContextMixin, UpdateView):
     model = Participant
     form_class = ParticipantUpdateForm
     template_name = "participants/participant_form.html"
-    success_url = reverse_lazy("participants:list")
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()

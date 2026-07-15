@@ -14,21 +14,23 @@ by the Classes page JS according to the selected assignment method.{% endcomment
       </label>
     </div>
 
-    <div class="class-tile-grid">
-      <label class="field-mini"><span>Practice runs</span>{{ class_form.practice_runs }}</label>
-      <label class="field-mini"><span>Counted runs</span>{{ class_form.counted_runs }}</label>
-    </div>
+    <div class="class-tile-fields">
+      <div class="class-tile-grid">
+        <label class="field-mini"><span>Practice runs</span>{{ class_form.practice_runs }}</label>
+        <label class="field-mini"><span>Counted runs</span>{{ class_form.counted_runs }}</label>
+      </div>
 
-    <div class="class-tile-age" data-age-block>
-      <label class="field-mini"><span>Age from</span>{{ class_form.age_from }}</label>
-      <label class="field-mini"><span>Age to</span>{{ class_form.age_to }}</label>
-      <span class="field-mini"><span>Birth years</span>
-        <strong class="birth-years">
-          {% with range=class_form.instance.birth_year_range %}
-            {% if range %}{{ range.0 }}–{{ range.1 }}{% else %}&mdash;{% endif %}
-          {% endwith %}
-        </strong>
-      </span>
+      <div class="class-tile-age" data-age-block>
+        <label class="field-mini"><span>Age from</span>{{ class_form.age_from }}</label>
+        <label class="field-mini"><span>Age to</span>{{ class_form.age_to }}</label>
+        <span class="field-mini"><span>Birth years</span>
+          <strong class="birth-years">
+            {% with range=class_form.instance.birth_year_range %}
+              {% if range %}{{ range.0 }}–{{ range.1 }}{% else %}&mdash;{% endif %}
+            {% endwith %}
+          </strong>
+        </span>
+      </div>
     </div>
 
     <label class="switch class-repeat" data-manual-only>
