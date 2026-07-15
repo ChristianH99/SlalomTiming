@@ -89,7 +89,13 @@
       let bypass = false;      // set once we intend to navigate (save/discard/submit)
       let pendingUrl = null;
 
-      const markDirty = () => { dirty = true; };
+      // Controls inside a data-no-dirty region don't edit what gets saved (preview
+      // and other view-only switches), so they must not count as a change.
+      const markDirty = (event) => {
+        const target = event && event.target;
+        if (target && target.closest && target.closest("[data-no-dirty]")) return;
+        dirty = true;
+      };
       form.addEventListener("input", markDirty);
       form.addEventListener("change", markDirty);
       document.addEventListener("unsaved-change", markDirty);

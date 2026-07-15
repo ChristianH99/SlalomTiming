@@ -5,11 +5,13 @@ from django.db import transaction
 from django.db.models import Count, Max
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView
 
+from apps.common import safe_next
+
+from . import startpattern
 from .assignment import assignment_methods_meta
 from .forms import (
     AssignmentForm,
@@ -18,16 +20,6 @@ from .forms import (
     CompetitionTypeForm,
 )
 from .models import Competition, CompetitionClass, CompetitionType
-
-
-def safe_next(request, fallback):
-    """Return the POSTed ?next URL if it's a safe in-app path, else fallback.
-    Lets the unsaved-changes modal's "Save changes" land on the page the user
-    was navigating to."""
-    nxt = request.POST.get("next")
-    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
-        return nxt
-    return fallback
 
 
 class CompetitionListView(ListView):
@@ -148,21 +140,71 @@ class RunOrderView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        # practice/counted travel with each class so the preview can build dummy
+        # starters before anyone is registered, when there are no real starters
+        # to read run counts from.
         run_groups_data = [
-            [{"pk": cc.pk, "name": cc.name} for cc in run]
+            [
+                {
+                    "pk": cc.pk,
+                    "name": cc.name,
+                    "practice": cc.practice_runs,
+                    "counted": cc.counted_runs,
+                }
+                for cc in run
+            ]
             for run in competition.run_groups()
         ]
         return render(request, self.template_name, {
-            "object": competition, "run_groups_data": run_groups_data,
+            "object": competition,
+            "run_groups_data": run_groups_data,
+            "starters_data": self._starters_data(competition),
+            "start_pattern_data": startpattern.serialize(competition.start_pattern_blocks()),
+            "run_type_labels": startpattern.RUN_TYPE_LABELS,
+            "max_dummy": startpattern.MAX_DUMMY_STARTERS,
         })
 
     def post(self, request):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
-        self._apply_run_order(request, competition)
+        with transaction.atomic():
+            self._apply_run_order(request, competition)
+            self._apply_start_pattern(request, competition)
         messages.success(request, "Run order saved.")
         return redirect(safe_next(request, reverse("competitions:runorder")))
+
+    @staticmethod
+    def _starters_data(competition):
+        """Starters grouped by class pk, for the pattern preview. Keyed by class
+        rather than by run so the preview can follow the run-order widget as the
+        user drags classes about, without a round trip."""
+        return {
+            str(class_pk): [
+                {
+                    "key": "-".join(str(part) for part in starter.key),
+                    "bib": starter.bib,
+                    "name": starter.name,
+                    "class_name": starter.class_name,
+                    "practice": starter.practice_runs,
+                    "counted": starter.counted_runs,
+                }
+                for starter in starters
+            ]
+            for class_pk, starters in competition.starters_by_class().items()
+        }
+
+    @staticmethod
+    def _apply_start_pattern(request, competition):
+        """Persist the start pattern from the start_pattern hidden field: JSON
+        list of blocks, each {window, chips}. Parsed through startpattern so only
+        well-formed blocks are stored."""
+        try:
+            posted = json.loads(request.POST.get("start_pattern") or "[]")
+        except (ValueError, TypeError):
+            posted = []
+        competition.start_pattern = startpattern.serialize(startpattern.parse(posted))
+        competition.save(update_fields=["start_pattern"])
 
     @staticmethod
     def _apply_run_order(request, competition):
@@ -228,6 +270,7 @@ def duplicate_competition(request, pk):
             date=original.date,
             assignment_method=original.assignment_method,
             allow_multiple_classes=original.allow_multiple_classes,
+            start_pattern=original.start_pattern,
         )
         # Drop the default classes seeded on create and mirror the original's.
         copy.classes.all().delete()

@@ -1,5 +1,8 @@
+from collections import Counter
+
 from django.db import models
 
+from . import startpattern
 from .assignment import (
     ASSIGNMENT_METHOD_CHOICES,
     DEFAULT_ASSIGNMENT_METHOD,
@@ -33,6 +36,12 @@ class Competition(models.Model):
     allow_multiple_classes = models.BooleanField(
         default=False,
         help_text="Manual assignment only: may a participant be in more than one class.",
+    )
+    start_pattern = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="The order participants take their runs, as pattern blocks "
+        "(see apps/competitions/startpattern.py). Replayed for every run.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -82,6 +91,60 @@ class Competition(models.Model):
         groups = [placed[key] for key in sorted(placed)]
         groups.extend(unplaced)
         return groups
+
+    def start_pattern_blocks(self):
+        """The stored start pattern as startpattern.Block values."""
+        return startpattern.parse(self.start_pattern)
+
+    def starters_by_class(self):
+        """Map class pk -> the Starters entered in it, in bib order. One Starter
+        per entry-in-a-class, so a participant entered into a class twice (or into
+        two classes) yields a Starter each time."""
+        entries = (
+            self.entries.select_related("participant")
+            .prefetch_related("participant__class_assignments__competition_class")
+            .order_by("bib_number")
+        )
+        by_class = {}
+        repeats = Counter()  # (entry, class) -> Starters already made, to key repeats apart
+        for entry in entries:
+            for cc in self.classes_for_participant(entry.participant):
+                occurrence = repeats[(entry.pk, cc.pk)]
+                repeats[(entry.pk, cc.pk)] += 1
+                by_class.setdefault(cc.pk, []).append(
+                    startpattern.Starter(
+                        key=(entry.pk, cc.pk, occurrence),
+                        bib=entry.bib_number,
+                        name=str(entry.participant),
+                        class_name=cc.name,
+                        practice_runs=cc.practice_runs,
+                        counted_runs=cc.counted_runs,
+                    )
+                )
+        return by_class
+
+    def starters_by_run(self):
+        """``(run, starters)`` for every run in ``run_groups()``. A run's starters
+        are those of all its classes merged into one start list ordered by bib —
+        classes sharing a run start together, so they interleave."""
+        by_class = self.starters_by_class()
+        runs = []
+        for run in self.run_groups():
+            starters = []
+            for cc in run:
+                starters.extend(by_class.get(cc.pk, []))
+            starters.sort(key=lambda starter: (starter.bib, starter.class_name))
+            runs.append((run, starters))
+        return runs
+
+    def start_lists(self):
+        """``(run, slots)`` for every run: the start pattern played out over each
+        run's starters — who starts, in which run type, in order."""
+        blocks = self.start_pattern_blocks()
+        return [
+            (run, startpattern.expand(blocks, starters))
+            for run, starters in self.starters_by_run()
+        ]
 
     def class_for_birth_year(self, birth_year):
         if birth_year is None:

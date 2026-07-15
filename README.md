@@ -4,8 +4,9 @@ Local timekeeping and admin software for slalom races. A Django 6 app (Python 3.
 managed with [uv](https://docs.astral.sh/uv/)) that runs locally in the browser and:
 
 - manages race **competitions**, their **types** (disciplines), their **classes**
-  (age ranges, per-class practice/counted run counts) and the **run order** (which classes
-  start together and in what order)
+  (age ranges, per-class practice/counted run counts, scoring method) and the **run order**
+  (which classes start together and in what order, plus the **start pattern** — the order
+  participants take their runs within a run)
 - manages race **participants** (CRUD + Django admin) and their bib/entry per competition
 - ingests **live timing events** from a timing device through a pluggable connector
   interface, persists every event, and pushes it to a live dashboard over WebSockets
@@ -67,6 +68,19 @@ The sub-pages always act on the **current** competition:
 6. **Run order** — drag classes into runs to start them together, drop a class in the gap
    between runs to split it out, and drag a run's handle to reorder. Only classes marked
    *Running* on the Classes page appear here.
+   Below that, the **start pattern** sets the order participants take their runs *inside* a
+   run. It is a list of blocks; a block takes participants N at a time (or *all* at once) and
+   plays its runs — dragged in from a Practice / Counted palette — so every participant in
+   that group takes the first run, then the second, and so on, before the block slides on to
+   the next group and repeats until everyone has been through it. For example "2 at a time,
+   Practice + Counted" then "all, Counted" gives
+   `1P 2P 1C 2C | 3P 4P 3C 4C | …` followed by everyone's second counted run.
+   Chips name a run *type*, not a number: each participant uses up their own runs in the
+   order the blocks come, so one pattern serves classes with different run counts, and a
+   participant with none of that run left simply sits it out. One pattern is stored per
+   competition and replayed for every run. A live preview expands it per run and flags any
+   runs a class grants that the pattern never plays; toggle **Dummy participants** (on by
+   default) to check a pattern against a made-up field before anyone is registered.
 7. **Participants → Add participant** — register a competitor and optionally assign a bib
    for the current competition right away. The **Class** line follows the competition's
    assignment method: Manual shows a class picker (one or several, with repeats where allowed),

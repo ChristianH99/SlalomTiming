@@ -42,6 +42,22 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          resolves a participant's class(es). Toggles: Competition.allow_multiple_classes
                          (several distinct classes) + CompetitionClass.allow_multiple_entries (same
                          class more than once) — both Manual-only.
+  startpattern.py        The order participants take their runs *within* a run. One pattern per
+                         competition (Competition.start_pattern, JSON), replayed for every run.
+                         A pattern is a list of blocks; a block takes participants `window` at a
+                         time (None = all) and plays its chips (practice/counted) in order, every
+                         participant in the window taking a chip's run before the next chip —
+                         then slides the window on until everyone's through. Chips name a run
+                         *type*, not a number: each participant consumes their own runs in chip
+                         order, so one pattern serves classes with different run counts (a
+                         participant out of that type sits the chip out). Competition.start_lists()
+                         is the resulting per-run start order; shortfalls() flags runs a class
+                         grants that the pattern never plays. Edited on the Run order page below
+                         the run grouping; the live preview re-implements the expansion in JS.
+                         The preview can run on real starters or on made-up ones (one run of N,
+                         bibs 1..N, taking the first run's first class's run counts) so a pattern
+                         can be checked before anyone is registered. Its controls are unnamed and
+                         data-no-dirty, so they neither post nor trip the unsaved-changes guard.
 apps/participants/
   models.py              Participant (personal/contact data) + EventEntry (bib +
                          run status, unique per competition) + ClassAssignment (participant↔class

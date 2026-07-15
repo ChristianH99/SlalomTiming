@@ -672,6 +672,9 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
 
 /* ===== FORMS ===== */
 form p, form .combobox { margin: 0.7rem 0; display: flex; flex-direction: column; gap: 0.3rem; }
+/* ...but a hint inside a form is prose, not a label+field row: leave it as text,
+   or the column flex puts every inline child on its own line. */
+form p.hint { display: block; }
 form label {
   font-family: 'Manrope', sans-serif;
   font-size: 0.8rem;
@@ -712,6 +715,13 @@ form input:focus, form select:focus, form textarea:focus {
   color: var(--text-dark);
   letter-spacing: -0.3px;
   margin: 0 0 0.35rem;
+}
+/* A heading for a second section of a page, under the page's own h1. */
+.page-heading--sub {
+  font-size: 1.05rem;
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-light);
 }
 
 /* ===== MODAL ===== */
@@ -1069,3 +1079,199 @@ textarea:focus-visible,
 .class-chip:hover { box-shadow: 0 2px 6px rgba(62,142,222,0.25); }
 .class-chip.dragging { opacity: 0.5; }
 .class-chip:active { cursor: grabbing; transform: scale(0.97); }
+
+/* ===== START PATTERN (drag & drop) ===== */
+.pattern-palette {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.5rem;
+}
+.pattern-palette-label {
+  font-size: 0.78rem;
+  color: var(--text-light);
+}
+#start-pattern {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.75rem;
+}
+.pattern-block {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.6rem 0.5rem 0.5rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.pattern-block.run-dragging { opacity: 0.55; }
+/* Reads as "[2] all at a time": the number and the "all" box are alternatives,
+   both qualifying the same suffix. Child selectors below so the number styling
+   doesn't land on the "all" checkbox nested inside. */
+.pattern-window {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.pattern-window > input {
+  width: 3.25rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  text-align: center;
+  color: var(--text-dark);
+}
+.pattern-window > input:focus { outline: none; border-color: var(--glacier); }
+.pattern-window > input:disabled { background: var(--snow); color: var(--text-muted); }
+.pattern-window-suffix {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+/* "all" — the readable way to say "the whole field in one pass". */
+.pattern-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--text-light);
+  cursor: pointer;
+  user-select: none;
+}
+.pattern-all input { accent-color: var(--flame); cursor: pointer; margin: 0; }
+.pattern-block .run-zone:empty::after { content: "Drag a run here"; }
+.pattern-actions { margin-bottom: 0.5rem; }
+
+/* Run-type chips: practice reads as the quieter, non-scoring run. */
+.run-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.32rem 0.5rem 0.32rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: grab;
+  transition: box-shadow 0.15s, transform 0.05s;
+}
+.run-chip--practice {
+  background: var(--snow);
+  border: 1px dashed var(--text-muted);
+  color: var(--text-mid);
+}
+.run-chip--counted {
+  background: var(--flame-bg);
+  border: 1px solid rgba(232,73,29,0.35);
+  color: var(--flame-hover);
+}
+.run-chip:hover { box-shadow: 0 2px 6px rgba(22,35,63,0.12); }
+.run-chip.dragging { opacity: 0.5; }
+.run-chip:active { cursor: grabbing; transform: scale(0.97); }
+.run-chip-remove {
+  border: 0;
+  background: none;
+  padding: 0 0.1rem;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.45;
+  cursor: pointer;
+}
+.run-chip-remove:hover { opacity: 1; }
+.pattern-palette .run-chip { padding-right: 0.8rem; }
+
+/* ===== START PATTERN PREVIEW ===== */
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.6rem 0 0.25rem;
+}
+.preview-dummy-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-light);
+}
+.preview-dummy-count[hidden] { display: none; }
+.preview-dummy-count input {
+  width: 3.75rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  text-align: center;
+  color: var(--text-dark);
+}
+.preview-dummy-count input:focus { outline: none; border-color: var(--glacier); }
+.preview-run-note {
+  font-size: 0.72rem;
+  color: var(--text-light);
+  margin: -0.2rem 0 0.4rem;
+}
+#pattern-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+.preview-run {
+  padding: 0.6rem 0.75rem;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+.preview-run-head {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-light);
+  margin-bottom: 0.4rem;
+}
+.preview-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.2rem 0;
+}
+.preview-line-tag {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  min-width: 3.5rem;
+  flex-shrink: 0;
+}
+/* The expansion can get long — let it scroll rather than wrap the page. */
+.preview-seq {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+.preview-slot {
+  display: inline-flex;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: default;
+}
+.preview-slot--practice { background: var(--snow); color: var(--text-mid); border: 1px dashed var(--border); }
+.preview-slot--counted { background: var(--flame-bg); color: var(--flame-hover); }
+/* Marks where one window pass ends and the block starts over on the next
+   group — the pattern's repeat is the thing to read here, so keep it visible. */
+.preview-sep { color: var(--text-muted); padding: 0 0.25rem; font-weight: 700; }
+.preview-nothing { font-size: 0.75rem; color: var(--text-muted); font-style: italic; }
+.preview-empty, .preview-warning { font-size: 0.8rem; }
+.preview-empty { color: var(--text-muted); font-style: italic; }
+.preview-warning { color: var(--flame-hover); margin-top: 0.35rem; }

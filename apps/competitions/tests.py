@@ -5,6 +5,7 @@ import pytest
 from django.db import IntegrityError
 from django.urls import reverse
 
+from . import startpattern
 from .models import Competition, CompetitionClass, CompetitionType
 
 pytestmark = pytest.mark.django_db
@@ -347,6 +348,280 @@ def test_type_list_annotates_usage_counts(client):
     types = {t.pk: t for t in response.context["competition_types"]}
     assert types[ctype.pk].competition_count == 1
     assert types[ctype.pk].participant_count == 0
+
+
+# ----- start pattern -----
+
+def make_starters(count, practice_runs=1, counted_runs=2, class_name="1"):
+    return [
+        startpattern.Starter(
+            key=(bib,), bib=bib, name=f"Rider {bib}", class_name=class_name,
+            practice_runs=practice_runs, counted_runs=counted_runs,
+        )
+        for bib in range(1, count + 1)
+    ]
+
+
+def slot_labels(slots):
+    return [slot.label() for slot in slots]
+
+
+def test_expand_plays_chips_for_the_whole_window_before_the_next_chip():
+    # The worked example: bibs 1-5, two at a time, practice then counted run 1,
+    # then a second block giving everyone their second counted run.
+    blocks = [
+        startpattern.Block(window=2, chips=("practice", "counted")),
+        startpattern.Block(window=None, chips=("counted",)),
+    ]
+    assert slot_labels(startpattern.expand(blocks, make_starters(5))) == [
+        "#1 P1", "#2 P1", "#1 C1", "#2 C1",   # first window
+        "#3 P1", "#4 P1", "#3 C1", "#4 C1",   # second window
+        "#5 P1", "#5 C1",                     # short final window
+        "#1 C2", "#2 C2", "#3 C2", "#4 C2", "#5 C2",  # block 2, everyone at once
+    ]
+
+
+def test_expand_numbers_each_starters_runs_in_chip_order():
+    blocks = [startpattern.Block(window=None, chips=("counted", "counted"))]
+    slots = startpattern.expand(blocks, make_starters(2, counted_runs=2))
+    assert slot_labels(slots) == ["#1 C1", "#2 C1", "#1 C2", "#2 C2"]
+
+
+def test_expand_skips_starters_who_have_no_run_of_that_type_left():
+    # One pattern, two classes: the pattern offers two counted runs but this
+    # starter's class only grants one, so the second chip passes them over.
+    blocks = [startpattern.Block(window=None, chips=("counted", "counted"))]
+    starters = make_starters(1, counted_runs=1) + [
+        startpattern.Starter(key=(2,), bib=2, name="Rider 2", class_name="2",
+                             practice_runs=0, counted_runs=2)
+    ]
+    assert slot_labels(startpattern.expand(blocks, starters)) == ["#1 C1", "#2 C1", "#2 C2"]
+
+
+def test_expand_skips_a_run_type_a_class_does_not_grant():
+    blocks = [startpattern.Block(window=None, chips=("practice", "counted"))]
+    slots = startpattern.expand(blocks, make_starters(2, practice_runs=0, counted_runs=1))
+    assert slot_labels(slots) == ["#1 C1", "#2 C1"]
+
+
+def test_expand_of_empty_pattern_or_empty_field_is_empty():
+    assert startpattern.expand([], make_starters(3)) == []
+    assert startpattern.expand([startpattern.Block(2, ("counted",))], []) == []
+
+
+def test_passes_groups_slots_per_block_and_window():
+    blocks = [startpattern.Block(window=2, chips=("counted",))]
+    grouped = startpattern.passes(blocks, make_starters(5, counted_runs=1))
+    assert [[slot_labels(p) for p in block] for block in grouped] == [
+        [["#1 C1", "#2 C1"], ["#3 C1", "#4 C1"], ["#5 C1"]]
+    ]
+
+
+def test_shortfalls_reports_runs_the_pattern_never_plays():
+    blocks = [startpattern.Block(window=None, chips=("practice",))]
+    starters = make_starters(2, practice_runs=1, counted_runs=2)
+    assert [(s.bib, owed) for s, owed in startpattern.shortfalls(blocks, starters)] == [
+        (1, {"counted": 2}), (2, {"counted": 2}),
+    ]
+
+
+def test_shortfalls_is_empty_when_the_pattern_covers_every_run():
+    blocks = [
+        startpattern.Block(window=2, chips=("practice", "counted")),
+        startpattern.Block(window=None, chips=("counted",)),
+    ]
+    assert startpattern.shortfalls(blocks, make_starters(5)) == []
+
+
+def test_parse_drops_malformed_blocks_and_unknown_run_types():
+    parsed = startpattern.parse([
+        {"window": 2, "chips": ["practice", "bogus", "counted"]},
+        {"window": 3, "chips": []},        # no runs -> schedules nothing
+        {"window": 1, "chips": "counted"},  # chips must be a list
+        "not a block",
+        {"chips": ["counted"]},            # missing window -> all at once
+    ])
+    assert parsed == [
+        startpattern.Block(window=2, chips=("practice", "counted")),
+        startpattern.Block(window=None, chips=("counted",)),
+    ]
+
+
+def test_parse_of_junk_is_an_empty_pattern():
+    assert startpattern.parse(None) == []
+    assert startpattern.parse({"window": 1}) == []
+
+
+@pytest.mark.parametrize("value,expected", [
+    (0, None), (-3, None), ("2", 2), ("x", None), (None, None),
+    (startpattern.MAX_WINDOW + 5, startpattern.MAX_WINDOW),
+])
+def test_parse_window_normalises_to_a_sane_size(value, expected):
+    assert startpattern.parse([{"window": value, "chips": ["counted"]}])[0].window == expected
+
+
+def test_serialize_round_trips_through_parse():
+    blocks = [
+        startpattern.Block(window=2, chips=("practice", "counted")),
+        startpattern.Block(window=None, chips=("counted",)),
+    ]
+    assert startpattern.parse(startpattern.serialize(blocks)) == blocks
+
+
+def test_runorder_view_sends_class_run_counts_for_the_dummy_preview(client):
+    # The preview builds dummy starters from these, and there are no real
+    # starters to fall back on before anyone is registered.
+    competition = make_active_competition()
+    competition.classes.filter(name="1").update(
+        is_running=True, run_position=0, practice_runs=3, counted_runs=4
+    )
+    response = client.get(reverse("competitions:runorder"))
+    run_groups_data = response.context["run_groups_data"]
+    assert run_groups_data[0][0]["practice"] == 3
+    assert run_groups_data[0][0]["counted"] == 4
+    assert response.context["max_dummy"] == startpattern.MAX_DUMMY_STARTERS
+
+
+def test_runorder_view_saves_start_pattern(client):
+    competition = make_active_competition()
+    posted = json.dumps([
+        {"window": 2, "chips": ["practice", "counted"]},
+        {"window": None, "chips": ["counted"]},
+    ])
+    response = client.post(
+        reverse("competitions:runorder"), {"run_order": "[]", "start_pattern": posted}
+    )
+    assert response.status_code == 302
+    competition.refresh_from_db()
+    assert competition.start_pattern_blocks() == [
+        startpattern.Block(window=2, chips=("practice", "counted")),
+        startpattern.Block(window=None, chips=("counted",)),
+    ]
+
+
+def test_runorder_view_stores_only_well_formed_blocks(client):
+    competition = make_active_competition()
+    client.post(reverse("competitions:runorder"), {
+        "run_order": "[]",
+        "start_pattern": json.dumps([{"window": 0, "chips": ["counted", "junk"]}, {"x": 1}]),
+    })
+    competition.refresh_from_db()
+    assert competition.start_pattern == [{"window": None, "chips": ["counted"]}]
+
+
+def test_runorder_view_survives_an_unparseable_start_pattern(client):
+    competition = make_active_competition()
+    response = client.post(
+        reverse("competitions:runorder"), {"run_order": "[]", "start_pattern": "{not json"}
+    )
+    assert response.status_code == 302
+    competition.refresh_from_db()
+    assert competition.start_pattern == []
+
+
+def make_entered_participant(competition, bib, competition_class, first_name="Rider"):
+    from apps.participants.models import ClassAssignment, EventEntry, Participant
+
+    participant = Participant.objects.create(
+        competition_type=competition.competition_type,
+        first_name=first_name, last_name=f"No{bib}",
+        date_of_birth=datetime.date(2000, 1, 1),
+        address_street="Main St 1", address_zip_code="1000", address_city="Town",
+        club="Club", license_number=f"L{bib}", email=f"r{bib}@example.com",
+    )
+    EventEntry.objects.create(participant=participant, competition=competition, bib_number=bib)
+    ClassAssignment.objects.create(participant=participant, competition_class=competition_class)
+    return participant
+
+
+def test_starters_by_run_merges_a_runs_classes_in_bib_order():
+    competition = make_active_competition()
+    competition.classes.filter(name__in=["1", "2"]).update(is_running=True)
+    c1 = competition.classes.get(name="1")
+    c2 = competition.classes.get(name="2")
+    # Both classes share run 0, so their participants interleave by bib.
+    competition.classes.filter(name__in=["1", "2"]).update(run_position=0)
+    make_entered_participant(competition, 1, c1)
+    make_entered_participant(competition, 2, c2)
+    make_entered_participant(competition, 3, c1)
+
+    runs = competition.starters_by_run()
+    assert len(runs) == 1
+    run, starters = runs[0]
+    assert [(s.bib, s.class_name) for s in starters] == [(1, "1"), (2, "2"), (3, "1")]
+
+
+def test_starters_carry_their_own_classs_run_counts():
+    competition = make_active_competition()
+    competition.classes.filter(name="1").update(
+        is_running=True, run_position=0, practice_runs=1, counted_runs=2
+    )
+    c1 = competition.classes.get(name="1")
+    make_entered_participant(competition, 1, c1)
+    _, starters = competition.starters_by_run()[0]
+    assert (starters[0].practice_runs, starters[0].counted_runs) == (1, 2)
+
+
+def test_a_participant_entered_twice_in_a_class_is_two_starters():
+    competition = make_active_competition()
+    competition.classes.filter(name="1").update(
+        is_running=True, run_position=0, allow_multiple_entries=True
+    )
+    c1 = competition.classes.get(name="1")
+    participant = make_entered_participant(competition, 1, c1)
+    from apps.participants.models import ClassAssignment
+
+    ClassAssignment.objects.create(participant=participant, competition_class=c1)
+
+    _, starters = competition.starters_by_run()[0]
+    assert len(starters) == 2
+    # Distinct keys, so the pattern schedules each entry its own runs.
+    assert starters[0].key != starters[1].key
+
+
+def test_start_lists_plays_the_pattern_over_each_runs_participants():
+    competition = make_active_competition()
+    competition.classes.filter(name="1").update(
+        is_running=True, run_position=0, practice_runs=1, counted_runs=1
+    )
+    c1 = competition.classes.get(name="1")
+    make_entered_participant(competition, 1, c1)
+    make_entered_participant(competition, 2, c1)
+    competition.start_pattern = [{"window": None, "chips": ["practice", "counted"]}]
+    competition.save(update_fields=["start_pattern"])
+
+    (run, slots), = competition.start_lists()
+    assert slot_labels(slots) == ["#1 P1", "#2 P1", "#1 C1", "#2 C1"]
+
+
+def test_participants_without_a_bib_are_not_starters():
+    from apps.participants.models import Participant
+
+    competition = make_active_competition()
+    competition.classes.filter(name="1").update(is_running=True, run_position=0)
+    c1 = competition.classes.get(name="1")
+    make_entered_participant(competition, 1, c1)
+    unentered = Participant.objects.create(
+        competition_type=competition.competition_type,
+        first_name="No", last_name="Bib", date_of_birth=datetime.date(2000, 1, 1),
+        address_street="S", address_zip_code="1", address_city="T",
+        club="C", license_number="L9", email="n@example.com",
+    )
+    from apps.participants.models import ClassAssignment
+
+    ClassAssignment.objects.create(participant=unentered, competition_class=c1)
+
+    _, starters = competition.starters_by_run()[0]
+    assert [s.bib for s in starters] == [1]
+
+
+def test_duplicate_competition_copies_the_start_pattern(client):
+    original = make_competition(name="Original")
+    original.start_pattern = [{"window": 2, "chips": ["practice", "counted"]}]
+    original.save(update_fields=["start_pattern"])
+    client.post(reverse("competitions:duplicate", kwargs={"pk": original.pk}))
+    copy = Competition.objects.get(name="Original (Copy)")
+    assert copy.start_pattern == original.start_pattern
 
 
 # ----- assignment methods -----
