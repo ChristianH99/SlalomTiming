@@ -4,7 +4,7 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.common import safe_next
-from apps.competitions.models import Competition
+from apps.competitions.models import Competition, CompetitionType
 
 from .forms import ParticipantCreateForm, ParticipantUpdateForm
 from .models import ClassAssignment, EventEntry, Participant
@@ -66,6 +66,14 @@ class ParticipantFormContextMixin:
         context["club_options"] = known_clubs()
         context["email_domains"] = COMMON_EMAIL_DOMAINS
         context["check_url"] = reverse("participants:check")
+        # Which details each type collects, so the form can follow the type
+        # dropdown without a round trip.
+        context["type_info_map"] = {
+            str(ctype.pk): {
+                setting: getattr(ctype, setting) for setting in CompetitionType.PARTICIPANT_INFO
+            }
+            for ctype in CompetitionType.objects.all()
+        }
         return context
 
 

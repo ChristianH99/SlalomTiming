@@ -1,6 +1,10 @@
+{% comment %}One labelled form field. `mandatory` drives the required marker and is
+passed explicitly by every caller: for the type-optional fields it comes from
+CompetitionType.PARTICIPANT_INFO rather than from field.required, so the marker is
+right even on a group the JS reveals after a type switch.{% endcomment %}
 <p>
   <label for="{{ field.id_for_label }}">
-    {{ field.label }}{% if field.field.required %} <span class="required-marker" title="Required">*</span>{% endif %}
+    {{ field.label }}{% if mandatory %} <span class="required-marker" title="Required">*</span>{% endif %}
   </label>
   {{ field }}
   {{ field.errors }}

@@ -1,6 +1,6 @@
 from django import forms
 
-from apps.competitions.models import Competition
+from apps.competitions.models import Competition, CompetitionType
 
 from .models import EventEntry, Participant
 
@@ -15,6 +15,47 @@ class ParticipantForm(forms.ModelForm):
     initial_classes = ()
     allow_multiple_classes = False
     selected_classes = None          # None => don't touch assignments on save
+
+    # {Participant field: is_mandatory} for the currently selected type. Fields
+    # the type doesn't collect are absent; the template hides those.
+    field_requirements = {}
+
+    def setup_type_fields(self):
+        """Mark the type-optional fields required/not per the selected competition
+        type. Every field stays on the form so the template can render (and the
+        JS can reveal) them all — switching the type dropdown must not need a
+        round trip — but only the collected ones are required or saved."""
+        competition_type = self._selected_type()
+        self.field_requirements = (
+            competition_type.participant_field_requirements() if competition_type else {}
+        )
+        for name in CompetitionType.optional_participant_fields():
+            self.fields[name].required = self.field_requirements.get(name, False)
+
+    def _selected_type(self):
+        """The type the form is currently working against: what was submitted
+        when bound (so validation follows the dropdown), otherwise the
+        participant's own type, falling back to the initial for a new one."""
+        if self.is_bound:
+            raw = self.data.get(self.add_prefix("competition_type"))
+        elif self.instance.pk:
+            return self.instance.competition_type
+        else:
+            raw = self.initial.get("competition_type")
+        if isinstance(raw, CompetitionType):
+            return raw
+        try:
+            return CompetitionType.objects.filter(pk=int(raw)).first()
+        except (TypeError, ValueError):
+            return None
+
+    def _clear_uncollected_fields(self, cleaned):
+        """Blank anything the selected type doesn't collect, so a value typed
+        before the type was switched can't be saved through a hidden field."""
+        for name in CompetitionType.optional_participant_fields():
+            if name not in self.field_requirements:
+                cleaned[name] = ""
+                self.errors.pop(name, None)
 
     def setup_classes(self, competition):
         self.competition = competition
@@ -79,6 +120,7 @@ class ParticipantForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        self._clear_uncollected_fields(cleaned)
         self._resolve_class_selection(cleaned)
         return cleaned
 
@@ -89,6 +131,9 @@ class ParticipantForm(forms.ModelForm):
             "first_name",
             "last_name",
             "date_of_birth",
+            "co_driver_first_name",
+            "co_driver_last_name",
+            "vehicle",
             "address_street",
             "address_zip_code",
             "address_city",
@@ -106,6 +151,8 @@ class ParticipantForm(forms.ModelForm):
             "email": forms.EmailInput(attrs={"autocomplete": "off"}),
         }
         labels = {
+            "co_driver_first_name": "Co-driver first name",
+            "co_driver_last_name": "Co-driver last name",
             "address_street": "Street address",
             "address_zip_code": "ZIP code",
             "address_city": "City",
@@ -121,6 +168,7 @@ class ParticipantCreateForm(ParticipantForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.competition = Competition.get_current()
+        self.setup_type_fields()
         self.setup_classes(self.competition)
         if self.competition is None:
             self.fields["bib_number"].disabled = True
@@ -151,6 +199,7 @@ class ParticipantUpdateForm(ParticipantForm):
         super().__init__(*args, **kwargs)
         self.competition = competition
         self.entry = None
+        self.setup_type_fields()
         self.setup_classes(competition)
 
         if competition is None:

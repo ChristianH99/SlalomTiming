@@ -506,3 +506,74 @@ def test_edit_redirects_to_safe_next(client):
     )
     assert response.status_code == 302
     assert response.url == reverse("competitions:general")
+
+
+# ----- type-driven participant fields -----
+
+def test_fields_the_type_does_not_collect_are_not_required():
+    # A type that collects none of the optional details: name/dob/licence only.
+    ctype = CompetitionType.objects.create(
+        name="Minimal", requires_address=False, requires_club=False,
+        requires_email=False, requires_phone=False,
+    )
+    make_competition(ctype)
+    form = ParticipantCreateForm(data={
+        "competition_type": ctype.pk,
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "date_of_birth": "2010-06-15",
+        "license_number": "LIC-001",
+    })
+    assert form.is_valid(), form.errors
+
+
+def test_fields_the_type_collects_are_required():
+    ctype = CompetitionType.objects.create(name="Rally", requires_vehicle=True)
+    make_competition(ctype)
+    form = ParticipantCreateForm(data=participant_data(ctype, vehicle=""))
+    assert not form.is_valid()
+    assert "vehicle" in form.errors
+
+
+def test_optional_collected_field_may_be_blank():
+    # Co-driver is collected but not mandatory.
+    ctype = CompetitionType.objects.create(name="Rally", requires_co_driver=True)
+    make_competition(ctype)
+    form = ParticipantCreateForm(data=participant_data(ctype, co_driver_first_name=""))
+    assert form.is_valid(), form.errors
+
+
+def test_values_for_uncollected_fields_are_not_saved(client):
+    """A value posted for a detail the type doesn't collect is dropped rather
+    than stored through a field the form never showed."""
+    ctype = CompetitionType.objects.create(name="NoClub", requires_club=False)
+    make_competition(ctype)
+    response = client.post(
+        reverse("participants:add"), participant_data(ctype, club="Sneaky Club"),
+    )
+    assert response.status_code == 302
+    assert Participant.objects.get(license_number="LIC-001").club == ""
+
+
+def test_requirements_follow_the_submitted_type_not_the_active_one():
+    """The type dropdown drives validation: posting type B against a competition
+    of type A validates against B."""
+    active_type = CompetitionType.objects.create(name="Active", requires_vehicle=False)
+    make_competition(active_type)
+    other_type = CompetitionType.objects.create(name="Other", requires_vehicle=True)
+    form = ParticipantCreateForm(data=participant_data(other_type, vehicle=""))
+    assert not form.is_valid()
+    assert "vehicle" in form.errors
+
+
+def test_edit_form_uses_the_participants_own_type():
+    ctype = CompetitionType.objects.create(name="Rally", requires_vehicle=True)
+    competition = make_competition(ctype)
+    participant = Participant.objects.create(
+        competition_type=ctype, first_name="Jane", last_name="Doe",
+        date_of_birth=datetime.date(2010, 6, 15), license_number="LIC-001",
+        vehicle="Kart 5",
+    )
+    form = ParticipantUpdateForm(instance=participant, competition=competition)
+    assert form.fields["vehicle"].required is True
+    assert form.fields["phone_number"].required is False

@@ -14,12 +14,20 @@ class Participant(models.Model):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     date_of_birth = models.DateField()
-    address_street = models.CharField(max_length=200)
-    address_zip_code = models.CharField(max_length=20)
-    address_city = models.CharField(max_length=100)
-    club = models.CharField(max_length=150)
     license_number = models.CharField(max_length=50)
-    email = models.EmailField()
+
+    # Everything below is optional at the DB level: which of these a participant
+    # must supply is decided per discipline by CompetitionType.PARTICIPANT_INFO,
+    # and enforced by the participant form, not here. A type that stops
+    # collecting a detail leaves any value already recorded untouched.
+    co_driver_first_name = models.CharField(max_length=100, blank=True)
+    co_driver_last_name = models.CharField(max_length=100, blank=True)
+    vehicle = models.CharField(max_length=150, blank=True)
+    address_street = models.CharField(max_length=200, blank=True)
+    address_zip_code = models.CharField(max_length=20, blank=True)
+    address_city = models.CharField(max_length=100, blank=True)
+    club = models.CharField(max_length=150, blank=True)
+    email = models.EmailField(blank=True)
     phone_number = models.CharField(max_length=30, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
