@@ -5,8 +5,15 @@ from .models import Competition, CompetitionClass, CompetitionType
 
 @admin.register(CompetitionType)
 class CompetitionTypeAdmin(admin.ModelAdmin):
-    list_display = ("name",)
+    list_display = ("name", "penalties_enabled", "tie_break", "timing_precision")
+    list_filter = ("penalties_enabled", "tie_break", "timing_precision")
     search_fields = ("name",)
+    fieldsets = (
+        (None, {"fields": ("name",)}),
+        ("Penalties", {"fields": ("penalties_enabled", *CompetitionType.PENALTY_FIELDS)}),
+        ("Evaluation", {"fields": ("tie_break", "timing_precision")}),
+        ("Required participant info", {"fields": tuple(CompetitionType.PARTICIPANT_INFO)}),
+    )
 
 
 class CompetitionClassInline(admin.TabularInline):

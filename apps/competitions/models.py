@@ -11,13 +11,116 @@ from .assignment import (
 
 
 class CompetitionType(models.Model):
+    """A discipline (Motorcycle, Go-Cart, …) and the rules every competition of
+    that discipline is run and evaluated under. The evaluation settings are
+    recorded here only; the timing screen, the results calculation and the
+    participant form each read them when those features are built."""
+
+    class TieBreak(models.TextChoices):
+        FASTEST_RUN = "fastest_run", "Fastest run time"
+        MANUAL = "manual", "Manual"
+
+    class Precision(models.IntegerChoices):
+        """Decimal places the timing device resolves to."""
+
+        TENTHS = 1, "1/10 s"
+        HUNDREDTHS = 2, "1/100 s"
+        THOUSANDTHS = 3, "1/1000 s"
+
+    # Penalty amounts are only meaningful with penalties on, so they are nullable
+    # at the DB level; the settings form makes them mandatory when the toggle is on.
+    # Whole seconds only — a penalty is never a fraction of a second.
+    PENALTY_FIELDS = ["pylon_penalty", "task_penalty", "stop_line_penalty", "max_penalty_per_task"]
+
+    _penalty_amount = {"null": True, "blank": True}
+
     name = models.CharField(max_length=100, unique=True)
+
+    penalties_enabled = models.BooleanField(
+        default=True,
+        help_text="Show the penalties screen during timing so penalties can be entered per run.",
+    )
+    pylon_penalty = models.PositiveSmallIntegerField(
+        **_penalty_amount, help_text="Seconds added per pylon hit.",
+    )
+    task_penalty = models.PositiveSmallIntegerField(
+        **_penalty_amount, help_text="Seconds added for a failed task.",
+    )
+    stop_line_penalty = models.PositiveSmallIntegerField(
+        **_penalty_amount, help_text="Seconds added for missing the stop line.",
+    )
+    max_penalty_per_task = models.PositiveSmallIntegerField(
+        **_penalty_amount, help_text="Upper bound on the seconds a single task can add.",
+    )
+
+    tie_break = models.CharField(
+        max_length=20,
+        choices=TieBreak.choices,
+        default=TieBreak.FASTEST_RUN,
+        help_text="How equal results are separated.",
+    )
+    timing_precision = models.PositiveSmallIntegerField(
+        choices=Precision.choices,
+        default=Precision.HUNDREDTHS,
+        help_text="Resolution of the timing device.",
+    )
+
+    # Which optional participant details this discipline collects. Whether a collected
+    # field is mandatory is fixed per setting (see PARTICIPANT_INFO), not chosen here.
+    requires_co_driver = models.BooleanField(default=False)
+    requires_vehicle = models.BooleanField(default=False)
+    requires_address = models.BooleanField(default=True)
+    requires_club = models.BooleanField(default=True)
+    requires_email = models.BooleanField(default=True)
+    requires_phone = models.BooleanField(default=True)
+
+    # setting name -> (label, mandatory, the Participant fields it controls). The
+    # participant form builds itself from this: a setting that's off hides its
+    # fields, one that's on shows them and marks them per `mandatory`.
+    PARTICIPANT_INFO = {
+        "requires_co_driver": (
+            "Co-driver", False, ["co_driver_first_name", "co_driver_last_name"],
+        ),
+        "requires_vehicle": ("Vehicle", True, ["vehicle"]),
+        "requires_address": (
+            "Address", True, ["address_street", "address_zip_code", "address_city"],
+        ),
+        "requires_club": ("Club", True, ["club"]),
+        "requires_email": ("E-mail", True, ["email"]),
+        "requires_phone": ("Phone", False, ["phone_number"]),
+    }
 
     class Meta:
         ordering = ["name"]
 
     def __str__(self):
         return self.name
+
+    @classmethod
+    def optional_participant_fields(cls):
+        """Every Participant field whose presence a type decides."""
+        return [
+            field
+            for _, _, fields in cls.PARTICIPANT_INFO.values()
+            for field in fields
+        ]
+
+    def participant_field_requirements(self):
+        """``{Participant field: is_mandatory}`` for the details this type
+        collects. Fields of a setting that's off are absent — the participant
+        form hides those."""
+        return {
+            field: mandatory
+            for setting, (_, mandatory, fields) in self.PARTICIPANT_INFO.items()
+            if getattr(self, setting)
+            for field in fields
+        }
+
+    def format_time(self, seconds):
+        """A time in seconds rendered at this type's device precision."""
+        if seconds is None:
+            return ""
+        return f"{seconds:.{self.timing_precision}f}"
 
 
 class Competition(models.Model):

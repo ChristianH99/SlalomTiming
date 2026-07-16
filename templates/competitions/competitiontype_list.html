@@ -34,6 +34,7 @@
             {{ competition_type.participant_count }} participant{{ competition_type.participant_count|pluralize }}
           </td>
           <td class="col-actions">
+            <a class="link-button" href="{% url 'competitions:type-settings' competition_type.pk %}">Settings</a>
             {% if competition_type.competition_count or competition_type.participant_count %}
               <button type="button" class="link-button link-button--danger" disabled
                       title="This type is in use and can't be deleted">Delete</button>

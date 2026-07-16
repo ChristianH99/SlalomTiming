@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views import View
 from django.views.decorators.http import require_POST
-from django.views.generic import CreateView, DeleteView, ListView
+from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.common import safe_next
 
@@ -18,6 +18,7 @@ from .forms import (
     CompetitionClassFormSet,
     CompetitionForm,
     CompetitionTypeForm,
+    CompetitionTypeSettingsForm,
 )
 from .models import Competition, CompetitionClass, CompetitionType
 
@@ -326,6 +327,30 @@ class CompetitionTypeCreateView(CreateView):
     form_class = CompetitionTypeForm
     template_name = "competitions/competitiontype_form.html"
     success_url = reverse_lazy("competitions:type-list")
+
+
+class CompetitionTypeSettingsView(UpdateView):
+    model = CompetitionType
+    form_class = CompetitionTypeSettingsForm
+    template_name = "competitions/competitiontype_settings.html"
+    context_object_name = "competition_type"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        form = context["form"]
+        context["penalty_fields"] = [form[name] for name in CompetitionType.PENALTY_FIELDS]
+        context["participant_info_fields"] = [
+            (form[setting], mandatory)
+            for setting, (_, mandatory, _) in CompetitionType.PARTICIPANT_INFO.items()
+        ]
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, f"Settings for “{form.instance.name}” saved.")
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return safe_next(self.request, reverse("competitions:type-list"))
 
 
 @require_POST

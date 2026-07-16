@@ -388,6 +388,120 @@ def test_type_list_annotates_usage_counts(client):
     assert types[ctype.pk].participant_count == 0
 
 
+# ----- competition type settings -----
+
+def settings_post(**overrides):
+    data = {
+        "name": "Motorcycle",
+        "penalties_enabled": "on",
+        "pylon_penalty": "5",
+        "task_penalty": "10",
+        "stop_line_penalty": "3",
+        "max_penalty_per_task": "20",
+        "tie_break": CompetitionType.TieBreak.MANUAL,
+        "timing_precision": CompetitionType.Precision.THOUSANDTHS,
+        "requires_vehicle": "on",
+    }
+    data.update(overrides)
+    return {key: value for key, value in data.items() if value is not None}
+
+
+def test_type_settings_defaults():
+    ctype = CompetitionType.objects.create(name="Fresh")
+    assert ctype.penalties_enabled is True
+    assert ctype.tie_break == CompetitionType.TieBreak.FASTEST_RUN
+    assert ctype.timing_precision == CompetitionType.Precision.HUNDREDTHS
+    # Defaults mirror what the participant form already collects today.
+    assert (ctype.requires_address, ctype.requires_club) == (True, True)
+    assert (ctype.requires_email, ctype.requires_phone) == (True, True)
+    assert (ctype.requires_co_driver, ctype.requires_vehicle) == (False, False)
+
+
+def test_save_type_settings_via_view(client):
+    ctype = CompetitionType.objects.create(name="Motorcycle")
+    response = client.post(
+        reverse("competitions:type-settings", kwargs={"pk": ctype.pk}), settings_post()
+    )
+    assert response.status_code == 302
+    ctype.refresh_from_db()
+    assert ctype.pylon_penalty == 5
+    assert ctype.max_penalty_per_task == 20
+    assert ctype.tie_break == CompetitionType.TieBreak.MANUAL
+    assert ctype.timing_precision == CompetitionType.Precision.THOUSANDTHS
+    assert ctype.requires_vehicle is True
+    assert ctype.requires_club is False  # unchecked box → off
+
+
+def test_penalty_amounts_are_required_when_penalties_are_on(client):
+    ctype = CompetitionType.objects.create(name="Motorcycle")
+    response = client.post(
+        reverse("competitions:type-settings", kwargs={"pk": ctype.pk}),
+        settings_post(task_penalty=""),
+    )
+    assert response.status_code == 200
+    assert "task_penalty" in response.context["form"].errors
+
+
+def test_penalty_amounts_are_cleared_when_penalties_are_off(client):
+    ctype = CompetitionType.objects.create(name="Motorcycle", pylon_penalty=5)
+    response = client.post(
+        reverse("competitions:type-settings", kwargs={"pk": ctype.pk}),
+        settings_post(penalties_enabled=None, task_penalty="", stop_line_penalty="",
+                      max_penalty_per_task=""),
+    )
+    assert response.status_code == 302
+    ctype.refresh_from_db()
+    assert ctype.penalties_enabled is False
+    assert ctype.pylon_penalty is None
+
+
+def test_fractional_penalty_amounts_are_rejected(client):
+    ctype = CompetitionType.objects.create(name="Motorcycle")
+    response = client.post(
+        reverse("competitions:type-settings", kwargs={"pk": ctype.pk}),
+        settings_post(pylon_penalty="5.5"),
+    )
+    assert response.status_code == 200
+    assert "pylon_penalty" in response.context["form"].errors
+    ctype.refresh_from_db()
+    assert ctype.pylon_penalty is None
+
+
+def test_negative_penalty_amounts_are_rejected(client):
+    ctype = CompetitionType.objects.create(name="Motorcycle")
+    response = client.post(
+        reverse("competitions:type-settings", kwargs={"pk": ctype.pk}),
+        settings_post(pylon_penalty="-5"),
+    )
+    assert response.status_code == 200
+    assert "pylon_penalty" in response.context["form"].errors
+    ctype.refresh_from_db()
+    assert ctype.pylon_penalty is None
+
+
+def test_format_time_follows_device_precision():
+    ctype = CompetitionType.objects.create(
+        name="Tenths", timing_precision=CompetitionType.Precision.TENTHS
+    )
+    assert ctype.format_time(12.345) == "12.3"
+    ctype.timing_precision = CompetitionType.Precision.THOUSANDTHS
+    assert ctype.format_time(12.345) == "12.345"
+
+
+def test_participant_field_requirements_follow_the_settings():
+    ctype = CompetitionType.objects.create(
+        name="Rally", requires_co_driver=True, requires_vehicle=True,
+        requires_address=False, requires_phone=False,
+    )
+    requirements = ctype.participant_field_requirements()
+    # Collected and mandatory, collected and optional, and not collected at all.
+    assert requirements["vehicle"] is True
+    assert requirements["club"] is True
+    assert requirements["co_driver_first_name"] is False
+    assert "address_street" not in requirements
+    assert "phone_number" not in requirements
+
+
 # ----- start pattern -----
 
 def make_starters(count, practice_runs=1, counted_runs=2, class_name="1"):

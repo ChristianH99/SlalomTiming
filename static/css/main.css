@@ -861,7 +861,73 @@ body.modal-open { overflow: hidden; }
 
 /* ===== COMPETITION TYPES ===== */
 .types-table .col-expand { width: 42px; padding-right: 0; }
-.types-table .col-actions { width: 96px; overflow: visible; }
+.types-table .col-actions { width: 160px; overflow: visible; white-space: nowrap; }
+.types-table .col-actions .link-button { margin-right: 0.75rem; }
+
+/* ===== COMPETITION TYPE SETTINGS =====
+   One field component (.settings-field) for every control on the page, so the
+   label, the control and the error line up the same way in each section and the
+   rhythm between sections is a single value rather than per-widget margins. */
+.settings-form .form-section { margin-top: 2rem; }
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 1rem 0 0;
+}
+/* Immediate children only: a .hint sits directly under the control it explains,
+   not a gap away from it. */
+.settings-section > .hint { margin: -0.5rem 0 0; }
+
+/* Fixed-width columns, so a field's validation error wraps inside its own column
+   instead of widening it and reflowing the row. */
+.settings-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 11rem));
+  align-items: start;
+  gap: 1rem 1.5rem;
+  transition: opacity 0.2s;
+}
+/* Penalties off: the amounts stay readable but clearly don't apply. */
+.settings-row--off { opacity: 0.45; }
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.settings-field--wide { max-width: 34rem; }
+.settings-label {
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* The unit rides with the input rather than the label, so the row reads
+   "5 s" instead of putting the unit in the heading. */
+.settings-control { display: flex; align-items: center; gap: 0.45rem; }
+.settings-control input,
+.settings-control select { width: 100%; min-width: 0; }
+.settings-unit {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-light);
+}
+/* Whole seconds only — no spinner nudging the number a fraction at a time. */
+.settings-control input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.settings-control input[type="number"]::-webkit-outer-spin-button,
+.settings-control input[type="number"]::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.settings-checks { display: flex; flex-direction: column; gap: 0.7rem; }
+.settings-checks .switch-text { display: inline-flex; align-items: baseline; gap: 0.25rem; }
+.settings-form .actions { margin-top: 2rem; }
 .expander {
   background: none;
   border: none;

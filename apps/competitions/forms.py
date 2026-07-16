@@ -21,6 +21,54 @@ class CompetitionTypeForm(forms.ModelForm):
         fields = ["name"]
 
 
+class CompetitionTypeSettingsForm(forms.ModelForm):
+    """The rules a discipline is run under. Penalty amounts are nullable on the
+    model (they mean nothing with penalties off) but mandatory here whenever the
+    penalties toggle is on."""
+
+    class Meta:
+        model = CompetitionType
+        fields = [
+            "name",
+            "penalties_enabled",
+            *CompetitionType.PENALTY_FIELDS,
+            "tie_break",
+            "timing_precision",
+            *CompetitionType.PARTICIPANT_INFO,
+        ]
+        labels = {
+            "pylon_penalty": "Pylon",
+            "task_penalty": "Task",
+            "stop_line_penalty": "Stop line",
+            "max_penalty_per_task": "Max per task",
+            **{
+                setting: label
+                for setting, (label, _, _) in CompetitionType.PARTICIPANT_INFO.items()
+            },
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in CompetitionType.PENALTY_FIELDS:
+            # Whole seconds: step=1 makes the browser reject a typed decimal
+            # rather than silently rounding it. The unit is rendered next to the
+            # input by the template, so it stays out of the label.
+            self.fields[name].widget.attrs.update({"step": "1", "min": "0", "inputmode": "numeric"})
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("penalties_enabled"):
+            for name in CompetitionType.PENALTY_FIELDS:
+                if cleaned.get(name) is None and name not in self.errors:
+                    self.add_error(name, "Required when penalties are enabled.")
+        else:
+            # Amounts entered before the toggle was turned off aren't kept: with
+            # penalties off there is nothing for them to apply to.
+            for name in CompetitionType.PENALTY_FIELDS:
+                cleaned[name] = None
+        return cleaned
+
+
 class AssignmentForm(forms.ModelForm):
     """Competition-level class settings on the Classes page: how participants are
     assigned to classes, and (manual only) whether they may be in several."""

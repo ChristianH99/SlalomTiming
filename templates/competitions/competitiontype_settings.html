@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ competition_type.name }} settings – Slalom Timing{% endblock %}
+{% block topbar_title %}Competition type settings{% endblock %}
+{% block content %}
+  <a class="back-link" href="{% url 'competitions:type-list' %}">&larr; Back to Competition Types</a>
+
+  <h1 class="page-heading">{{ competition_type.name }}</h1>
+  <p class="hint">Rules every competition of this type is run and evaluated under.</p>
+
+  <form method="post" class="settings-form" data-unsaved-guard>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="">
+    {{ form.non_field_errors }}
+
+    <div class="settings-section">
+      <label class="settings-field settings-field--wide" for="{{ form.name.id_for_label }}">
+        <span class="settings-label">{{ form.name.label }}</span>
+        <span class="settings-control">{{ form.name }}</span>
+        <span class="field-error">{{ form.name.errors|join:" " }}</span>
+      </label>
+    </div>
+
+    <h2 class="form-section">Penalties</h2>
+    <div class="settings-section">
+      <label class="switch">
+        {{ form.penalties_enabled }}
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+        <span class="switch-text">Enter penalties during the race</span>
+      </label>
+      <p class="hint">With this on, the timing screen shows the penalties entry for each run.</p>
+
+      <div class="settings-row" data-penalty-block>
+        {% for field in penalty_fields %}
+          <label class="settings-field" for="{{ field.id_for_label }}">
+            <span class="settings-label">{{ field.label }}</span>
+            <span class="settings-control">
+              {{ field }}<span class="settings-unit">s</span>
+            </span>
+            <span class="field-error">{{ field.errors|join:" " }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <h2 class="form-section">Evaluation</h2>
+    <div class="settings-section">
+      <div class="settings-row">
+        <label class="settings-field" for="{{ form.tie_break.id_for_label }}">
+          <span class="settings-label">{{ form.tie_break.label }}</span>
+          <span class="settings-control">{{ form.tie_break }}</span>
+          <span class="field-error">{{ form.tie_break.errors|join:" " }}</span>
+        </label>
+        <label class="settings-field" for="{{ form.timing_precision.id_for_label }}">
+          <span class="settings-label">{{ form.timing_precision.label }}</span>
+          <span class="settings-control">{{ form.timing_precision }}</span>
+          <span class="field-error">{{ form.timing_precision.errors|join:" " }}</span>
+        </label>
+      </div>
+    </div>
+
+    <h2 class="form-section">Required participant info</h2>
+    <div class="settings-section">
+      <p class="hint">Which details the participant form asks for in this competition type.
+        Name, date of birth and licence number are always asked for.
+        <span class="required-marker">*</span> marks a detail that is mandatory once collected.</p>
+      <div class="settings-checks">
+        {% for field, mandatory in participant_info_fields %}
+          <label class="switch">
+            {{ field }}
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+            <span class="switch-text">{{ field.label }}{% if mandatory %}
+              <span class="required-marker" title="Mandatory">*</span>{% endif %}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="button" type="submit">Save</button>
+      <a href="{% url 'competitions:type-list' %}">Cancel</a>
+    </div>
+  </form>
+
+  <script>
+    (function () {
+      // The amounts only mean something with penalties on — grey them out with
+      // the toggle rather than hiding them, so the numbers stay visible. They
+      // are disabled too, so nothing can be typed into a value that the form
+      // would then discard.
+      const toggle = document.getElementById("{{ form.penalties_enabled.auto_id }}");
+      const block = document.querySelector("[data-penalty-block]");
+      if (!toggle || !block) return;
+      const apply = () => {
+        const off = !toggle.checked;
+        block.classList.toggle("settings-row--off", off);
+        block.querySelectorAll("input").forEach((input) => { input.disabled = off; });
+      };
+      toggle.addEventListener("change", apply);
+      apply();
+    })();
+  </script>
+{% endblock %}
