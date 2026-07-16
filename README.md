@@ -52,6 +52,17 @@ The sub-pages always act on the **current** competition:
 
 1. **Competition Setup → Manage competition types** — add a discipline (e.g. Motorcycle,
    Go-Cart). Types can be expanded to list their competitions, and deleted while unused.
+   **Settings** opens the rules every competition of that type is run under:
+   - **Penalties** — whether penalties are entered during the race, and the whole-second
+     amounts for a pylon, a task, the stop line, and the most a single task can add. The
+     amounts are required while penalties are on, and cleared if you switch them off. The
+     penalties screen that will read them is not built yet.
+   - **Evaluation** — the **tie break** rule (*Fastest run time* or *Manual*) and the
+     **timing precision** the device resolves to (1/10, 1/100 or 1/1000 s). Recorded here;
+     the results calculation that reads them isn't built yet.
+   - **Required participant info** — which details the participant form asks for in this
+     discipline: co-driver, vehicle, address, club, e-mail, phone. A `*` marks the ones that
+     are mandatory once collected. Name, date of birth and licence number are always asked for.
 2. **Competition Setup → New competition** — pick a type, name and date. The new
    competition becomes the current one so you can configure it right away.
 3. **Manage competitions** — the tile list of all competitions by date. **Set as current**
@@ -84,10 +95,12 @@ The sub-pages always act on the **current** competition:
    runs a class grants that the pattern never plays; toggle **Dummy participants** (on by
    default) to check a pattern against a made-up field before anyone is registered.
 7. **Participants → Add participant** — register a competitor and optionally assign a bib
-   for the current competition right away. The **Class** line follows the competition's
-   assignment method: Manual shows a class picker (one or several, with repeats where allowed),
-   Age based shows the class derived live from the date of birth. The form autocompletes known
-   clubs and common email domains and warns about likely duplicates (name or licence) before saving.
+   for the current competition right away. The form asks only for the details the selected
+   **competition type** collects (see step 1) — pick a different type and the fields follow
+   immediately. The **Class** line follows the competition's assignment method: Manual shows a
+   class picker (one or several, with repeats where allowed), Age based shows the class derived
+   live from the date of birth. The form autocompletes known clubs and common email domains and
+   warns about likely duplicates (name or licence) before saving.
 8. **Dashboard** — watch live timing events resolve to participant names by bib.
 
 Leaving General, Classes, Run order or the participant form with unsaved edits pops a styled
@@ -118,9 +131,11 @@ interface only.
 
 ```
 config/                  Django project (settings, urls, asgi/wsgi)
-apps/competitions/       Competition, CompetitionType, CompetitionClass + setup UI
+apps/competitions/       Competition, CompetitionType (discipline + its rules, edited on a
+                         per-type Settings page), CompetitionClass + setup UI
                          (tile list + General / Classes / Run order sub-pages)
-apps/participants/       Participant + EventEntry models, CRUD views, admin
+apps/participants/       Participant + EventEntry models, CRUD views, admin. The form is
+                         built from the selected type's "required participant info".
 apps/timing/             TimingEvent, connectors, ingestion service, WebSocket consumer
 templates/, static/      shared base template + per-app templates, plain CSS/JS
 ```

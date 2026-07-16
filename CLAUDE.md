@@ -29,7 +29,19 @@ apps/common.py           Helpers shared across apps: safe_next() resolves the PO
                          an in-app URL (rejecting off-site ones), so the unsaved-changes
                          modal's "Save changes" lands where the user was navigating.
 apps/competitions/       Competition, CompetitionType, CompetitionClass; active-competition
-                         selection. CompetitionClass is fully dynamic (editable name, not a
+                         selection. CompetitionType is the discipline *and* the rules its
+                         competitions run under, edited on a per-type Settings page
+                         (types/<pk>/settings/): penalties on/off plus four whole-second
+                         amounts (mandatory only while penalties are on — the form clears
+                         them when it's off), tie-break rule, timing-device precision
+                         (format_time() renders a time at it), and which participant details
+                         the discipline collects. Only the settings are stored so far; the
+                         penalties screen and the tie-break/scoring calculations belong to
+                         the timing and results features and aren't written yet.
+                         CompetitionType.PARTICIPANT_INFO is the single source of truth for
+                         the last of those: setting -> (label, mandatory, Participant fields),
+                         which both the settings page and the participant form build from.
+                         CompetitionClass is fully dynamic (editable name, not a
                          fixed enum): is_running, age range, practice_runs, counted_runs,
                          scoring_method (CompetitionClass.Scoring: aggregate times vs regularity
                          test — recorded per class, the calculation belongs to the results
@@ -65,8 +77,19 @@ apps/participants/
   models.py              Participant (personal/contact data) + EventEntry (bib +
                          run status, unique per competition) + ClassAssignment (participant↔class
                          join for Manual assignment; explicit model, not a M2M, so duplicate
-                         rows allow entering the same class multiple times)
-  forms.py               add/edit forms (club autocomplete, email-domain completion)
+                         rows allow entering the same class multiple times).
+                         Only name/date-of-birth/licence are required at the DB level —
+                         co-driver, vehicle, address, club, e-mail and phone are all blank=True
+                         because whether they're collected (and mandatory) is a per-discipline
+                         decision, enforced by the form, not the model.
+  forms.py               add/edit forms (club autocomplete, email-domain completion).
+                         The type-optional fields are always rendered but shown/hidden per the
+                         competition_type *selected in the dropdown*, so switching it needs no
+                         round trip: the JS toggles each [data-type-group], and the server
+                         (authoritative) validates against the submitted type and blanks
+                         whatever that type doesn't collect. The required marker comes from
+                         PARTICIPANT_INFO's static mandatory flag rather than field.required,
+                         so a group revealed by JS is already marked correctly.
   views.py               CRUD views + participant_check duplicate-detection endpoint
 apps/timing/
   models.py              TimingEvent
