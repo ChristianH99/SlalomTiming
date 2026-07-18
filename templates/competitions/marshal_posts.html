@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Marshal Posts – Slalom Timing{% endblock %}
+{% block topbar_title %}Marshal Posts{% endblock %}
+{% block content %}
+  {% if not penalties_by_marshal_posts or not has_posts %}
+    <h1 class="page-heading">Marshal Posts</h1>
+    <div class="empty-state">
+      <p>Marshal-post penalties aren't set up for <strong>{{ object.name }}</strong> yet.</p>
+      <p class="hint">Turn on “Penalties set by marshal posts” and define the posts on the
+        <a href="{% url 'competitions:penalties' %}">Penalties</a> page first.</p>
+    </div>
+  {% else %}
+    <script id="marshal-config" type="application/json">{{ config_json|safe }}</script>
+
+    <div class="marshal" data-marshal>
+      <div class="marshal-select" data-select-bar>
+        <label class="marshal-select-label" for="marshal-post-select">Your post</label>
+        <select id="marshal-post-select" data-post-select></select>
+        <button type="button" class="button" data-confirm>Confirm</button>
+        <button type="button" class="button button--danger" data-change hidden>Change post</button>
+      </div>
+
+      <div class="marshal-board" data-board hidden>
+        <div class="marshal-starter" data-starter>
+          <span class="marshal-bib" data-bib>—</span>
+          <span class="marshal-name">
+            <span class="marshal-name-main" data-name>Waiting for the next starter…</span>
+            <span class="marshal-name-club" data-club></span>
+          </span>
+        </div>
+
+        <div class="marshal-tasks" data-tasks></div>
+
+        <div class="marshal-footer">
+          <span class="marshal-total" data-total></span>
+          <button type="button" class="button button--big" data-submit>Submit</button>
+        </div>
+      </div>
+
+      <p class="marshal-toast" data-toast hidden></p>
+    </div>
+
+    <script src="{% static 'js/marshal_posts.js' %}"></script>
+  {% endif %}
+{% endblock %}

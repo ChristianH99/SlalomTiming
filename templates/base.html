@@ -19,15 +19,17 @@
       <nav class="shell-nav">
         {% with url_name=request.resolver_match.url_name app_name=request.resolver_match.app_name %}
         <a class="shell-nav-item{% if url_name == 'dashboard' %} active{% endif %}" href="{% url 'timing:dashboard' %}">Dashboard</a>
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'competitions' %} active{% endif %}" href="{% url 'competitions:list' %}">Competition Setup</a>
+        <a class="shell-nav-item shell-nav-parent{% if app_name == 'competitions' and url_name != 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:list' %}">Competition Setup</a>
         <div class="shell-nav-sub">
           {% comment %}"list"/"add" also match participants:list/add, so guard by app.{% endcomment %}
           <a class="shell-nav-subitem{% if url_name == 'type-list' or url_name == 'type-add' or app_name == 'competitions' and url_name == 'list' or app_name == 'competitions' and url_name == 'add' %} active{% endif %}" href="{% url 'competitions:list' %}">Manage competitions</a>
           <a class="shell-nav-subitem{% if url_name == 'general' %} active{% endif %}" href="{% url 'competitions:general' %}">General</a>
           <a class="shell-nav-subitem{% if url_name == 'classes' %} active{% endif %}" href="{% url 'competitions:classes' %}">Classes</a>
           <a class="shell-nav-subitem{% if url_name == 'runorder' %} active{% endif %}" href="{% url 'competitions:runorder' %}">Run order</a>
+          <a class="shell-nav-subitem{% if url_name == 'penalties' %} active{% endif %}" href="{% url 'competitions:penalties' %}">Penalties</a>
         </div>
         <a class="shell-nav-item{% if request.resolver_match.app_name == 'participants' %} active{% endif %}" href="{% url 'participants:list' %}">Participants</a>
+        <a class="shell-nav-item{% if url_name == 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">Marshal Posts</a>
         {% comment %}Timing sub-pages will grow; Settings is kept last (future
         pages go above it).{% endcomment %}
         <a class="shell-nav-item shell-nav-parent{% if app_name == 'timing' and url_name != 'dashboard' %} active{% endif %}" href="{% url 'timing:times' %}">Timing</a>

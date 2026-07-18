@@ -858,3 +858,154 @@ def test_reverting_type_keeps_now_matching_registrations(client):
     comp.refresh_from_db()
     assert comp.competition_type == type_a
     assert EventEntry.objects.filter(competition=comp).exists()  # now matches → kept
+
+
+# ----- task specs -----
+
+from . import taskspec  # noqa: E402
+from .models import MarshalPost  # noqa: E402
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("", []),
+    ("   ", []),
+    ("5", [5]),
+    ("1, 5, 9", [1, 5, 9]),
+    ("11-15", [11, 12, 13, 14, 15]),
+    ("1, 5, 9, 11-15, 20, 18, 25-27", [1, 5, 9, 11, 12, 13, 14, 15, 18, 20, 25, 26, 27]),
+    ("3-1", [1, 2, 3]),          # reversed range is accepted
+    ("5, 5, 3-5", [3, 4, 5]),    # duplicates collapse
+])
+def test_taskspec_parse(text, expected):
+    assert taskspec.parse(text) == expected
+
+
+@pytest.mark.parametrize("text", ["0", "a", "1-", "1--3", "1,,x", "-4"])
+def test_taskspec_parse_rejects_malformed(text):
+    with pytest.raises(taskspec.TaskSpecError):
+        taskspec.parse(text)
+
+
+def test_taskspec_format_and_summary():
+    assert taskspec.format_ranges([1, 2, 3, 5, 9, 10, 11]) == "1-3, 5, 9-11"
+    assert taskspec.summary([]) == "No tasks assigned yet"
+    assert taskspec.summary(range(1, 36)) == "Tasks 1-35 assigned"
+    assert taskspec.summary([1, 2, 4]) == "Tasks 1-2, 4 assigned"
+
+
+# ----- penalties setup -----
+
+def test_penalties_view_saves_posts_and_stop_line(client):
+    competition = make_active_competition()
+    response = client.post(reverse("competitions:penalties"), {
+        "penalties_by_marshal_posts": "on",
+        "post_count": "2",
+        "post-1-tasks": "1-10",
+        "post-2-tasks": "11, 12, 15-18",
+        "stop_line_post": "2",
+    })
+    assert response.status_code == 302
+    competition.refresh_from_db()
+    assert competition.penalties_by_marshal_posts is True
+    posts = list(competition.marshal_posts.all())
+    assert [p.number for p in posts] == [1, 2]
+    assert posts[0].tasks == "1-10"
+    assert [p.handles_stop_line for p in posts] == [False, True]
+    assert competition.assigned_task_numbers()[:3] == [1, 2, 3]
+
+
+def test_penalties_view_combines_tasks_into_summary(client):
+    competition = make_active_competition()
+    client.post(reverse("competitions:penalties"), {
+        "penalties_by_marshal_posts": "on", "post_count": "2",
+        "post-1-tasks": "1-20", "post-2-tasks": "21-35",
+    })
+    response = client.get(reverse("competitions:penalties"))
+    assert response.context["tasks_summary"] == "Tasks 1-35 assigned"
+
+
+def test_penalties_view_rejects_malformed_tasks(client):
+    competition = make_active_competition()
+    response = client.post(reverse("competitions:penalties"), {
+        "penalties_by_marshal_posts": "on", "post_count": "1", "post-1-tasks": "1, oops",
+    })
+    assert response.status_code == 200          # re-rendered with the error
+    assert competition.marshal_posts.count() == 0
+
+
+def test_penalties_view_rejects_a_task_on_two_posts(client):
+    competition = make_active_competition()
+    response = client.post(reverse("competitions:penalties"), {
+        "penalties_by_marshal_posts": "on", "post_count": "2",
+        "post-1-tasks": "1-10", "post-2-tasks": "8-15",   # 8, 9, 10 overlap
+    })
+    assert response.status_code == 200          # re-rendered, not saved
+    assert competition.marshal_posts.count() == 0
+    rows = response.context["rows"]
+    assert "another post" in rows[0]["error"]
+    assert "another post" in rows[1]["error"]
+
+
+def test_penalties_view_off_removes_posts(client):
+    competition = make_active_competition()
+    MarshalPost.objects.create(competition=competition, number=1, tasks="1-5")
+    response = client.post(reverse("competitions:penalties"), {"post_count": "1"})
+    assert response.status_code == 302
+    competition.refresh_from_db()
+    assert competition.penalties_by_marshal_posts is False
+    assert competition.marshal_posts.count() == 0
+
+
+def test_penalties_view_shrinking_count_drops_extra_posts(client):
+    competition = make_active_competition()
+    MarshalPost.objects.create(competition=competition, number=1, tasks="1-5")
+    MarshalPost.objects.create(competition=competition, number=2, tasks="6-10",
+                               handles_stop_line=True)
+    client.post(reverse("competitions:penalties"), {
+        "penalties_by_marshal_posts": "on", "post_count": "1", "post-1-tasks": "1-8",
+    })
+    competition.refresh_from_db()
+    assert [p.number for p in competition.marshal_posts.all()] == [1]
+    assert competition.marshal_posts.get(number=1).tasks == "1-8"
+
+
+def test_penalties_page_needs_an_active_competition(client):
+    response = client.get(reverse("competitions:penalties"))
+    assert "competitions/no_active_competition.html" in [t.name for t in response.templates]
+
+
+# ----- marshal posts operator page -----
+
+def test_marshal_posts_page_prompts_when_not_configured(client):
+    make_active_competition()
+    response = client.get(reverse("competitions:marshal-posts"))
+    assert response.context["has_posts"] is False
+
+
+def test_marshal_posts_page_serves_config(client):
+    competition = make_active_competition()
+    ctype = competition.competition_type
+    CompetitionType.objects.filter(pk=ctype.pk).update(
+        pylon_penalty=2, task_penalty=10, stop_line_penalty=5, max_penalty_per_task=10
+    )
+    competition.penalties_by_marshal_posts = True
+    competition.save(update_fields=["penalties_by_marshal_posts"])
+    MarshalPost.objects.create(competition=competition, number=1, tasks="1-3",
+                               handles_stop_line=True)
+    response = client.get(reverse("competitions:marshal-posts"))
+    config = json.loads(response.context["config_json"])
+    assert config["maxPylons"] == 5          # max_penalty_per_task // pylon_penalty
+    assert config["posts"][0]["tasks"] == [1, 2, 3]
+    assert config["posts"][0]["stop_line"] is True
+
+
+def test_duplicate_competition_copies_marshal_posts(client):
+    original = make_competition(name="Original")
+    original.penalties_by_marshal_posts = True
+    original.save(update_fields=["penalties_by_marshal_posts"])
+    MarshalPost.objects.create(competition=original, number=1, tasks="1-5",
+                               handles_stop_line=True)
+    client.post(reverse("competitions:duplicate", kwargs={"pk": original.pk}))
+    copy = Competition.objects.get(name="Original (Copy)")
+    assert copy.penalties_by_marshal_posts is True
+    assert copy.marshal_posts.get(number=1).tasks == "1-5"

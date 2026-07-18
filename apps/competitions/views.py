@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 
 from django.contrib import messages
 from django.db import transaction
@@ -11,7 +12,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.common import safe_next
 
-from . import startpattern
+from . import startpattern, taskspec
 from .assignment import assignment_methods_meta
 from .forms import (
     AssignmentForm,
@@ -20,7 +21,7 @@ from .forms import (
     CompetitionTypeForm,
     CompetitionTypeSettingsForm,
 )
-from .models import Competition, CompetitionClass, CompetitionType
+from .models import Competition, CompetitionClass, CompetitionType, MarshalPost
 
 
 class CompetitionListView(ListView):
@@ -304,6 +305,131 @@ class RunOrderView(ActiveCompetitionMixin, View):
                 position += 1
 
 
+MAX_MARSHAL_POSTS = 99
+
+
+class PenaltiesView(ActiveCompetitionMixin, View):
+    """Competition Setup > Penalties: whether marshal posts enter their own
+    penalties and, if so, how many posts there are and which tasks each watches."""
+
+    template_name = "competitions/competition_penalties.html"
+
+    def get(self, request):
+        competition = self.get_active()
+        if competition is None:
+            return self.render_empty(request)
+        rows = self._rows_from_db(competition)
+        return render(request, self.template_name,
+                      self._context(competition, competition.penalties_by_marshal_posts, rows))
+
+    def post(self, request):
+        competition = self.get_active()
+        if competition is None:
+            return self.render_empty(request)
+        enabled = bool(request.POST.get("penalties_by_marshal_posts"))
+        if not enabled:
+            # Turning it off removes the posts entirely — the timekeeper is back
+            # in charge and there is nothing for a post to enter.
+            with transaction.atomic():
+                competition.penalties_by_marshal_posts = False
+                competition.save(update_fields=["penalties_by_marshal_posts"])
+                competition.marshal_posts.all().delete()
+            messages.success(request, "Penalties settings saved.")
+            return redirect(safe_next(request, reverse("competitions:penalties")))
+
+        rows, has_errors = self._rows_from_post(request)
+        if has_errors:
+            messages.error(request, "Some task lists couldn't be read — fix them and save again.")
+            return render(request, self.template_name, self._context(competition, True, rows))
+        with transaction.atomic():
+            competition.penalties_by_marshal_posts = True
+            competition.save(update_fields=["penalties_by_marshal_posts"])
+            self._reconcile_posts(competition, rows)
+        messages.success(request, "Penalties settings saved.")
+        return redirect(safe_next(request, reverse("competitions:penalties")))
+
+    @staticmethod
+    def _context(competition, enabled, rows):
+        numbers = sorted({n for row in rows for n in row["numbers"]})
+        return {
+            "object": competition,
+            "enabled": enabled,
+            "rows": rows,
+            "post_count": len(rows),
+            "tasks_summary": taskspec.summary(numbers),
+            "max_posts": MAX_MARSHAL_POSTS,
+        }
+
+    @staticmethod
+    def _rows_from_db(competition):
+        rows = [
+            {
+                "number": post.number,
+                "tasks": post.tasks,
+                "numbers": post.task_numbers(),
+                "stop_line": post.handles_stop_line,
+                "error": "",
+            }
+            for post in competition.marshal_posts.all()
+        ]
+        if not rows:
+            rows.append(
+                {"number": 1, "tasks": "", "numbers": [], "stop_line": False, "error": ""}
+            )
+        return rows
+
+    @staticmethod
+    def _rows_from_post(request):
+        try:
+            count = int(request.POST.get("post_count", "1"))
+        except (TypeError, ValueError):
+            count = 1
+        count = max(1, min(count, MAX_MARSHAL_POSTS))
+        stop_line_post = request.POST.get("stop_line_post") or ""
+        rows = []
+        has_errors = False
+        for i in range(1, count + 1):
+            tasks = (request.POST.get(f"post-{i}-tasks") or "").strip()
+            error, numbers = "", []
+            try:
+                numbers = taskspec.parse(tasks)
+            except taskspec.TaskSpecError as exc:
+                error = str(exc)
+                has_errors = True
+            rows.append({
+                "number": i,
+                "tasks": tasks,
+                "numbers": numbers,
+                "stop_line": stop_line_post == str(i),
+                "error": error,
+            })
+        # A task may belong to only one post: flag any assigned to more than one.
+        counts = Counter(n for row in rows for n in row["numbers"])
+        dupes = {n for n, c in counts.items() if c > 1}
+        if dupes:
+            has_errors = True
+            for row in rows:
+                overlap = sorted(dupes.intersection(row["numbers"]))
+                if overlap and not row["error"]:
+                    row["error"] = (
+                        f"Task {taskspec.format_ranges(overlap)} is on another post too."
+                    )
+        return rows, has_errors
+
+    @staticmethod
+    def _reconcile_posts(competition, rows):
+        """Make the stored MarshalPost rows match the submitted ones: drop posts
+        past the new count, then update-or-create 1..count."""
+        keep = {row["number"] for row in rows}
+        competition.marshal_posts.exclude(number__in=keep).delete()
+        for row in rows:
+            MarshalPost.objects.update_or_create(
+                competition=competition,
+                number=row["number"],
+                defaults={"tasks": row["tasks"], "handles_stop_line": row["stop_line"]},
+            )
+
+
 class CompetitionDeleteView(DeleteView):
     model = Competition
     template_name = "competitions/competition_confirm_delete.html"
@@ -359,7 +485,17 @@ def duplicate_competition(request, pk):
             date=original.date,
             assignment_method=original.assignment_method,
             allow_multiple_classes=original.allow_multiple_classes,
+            penalties_by_marshal_posts=original.penalties_by_marshal_posts,
             start_pattern=original.start_pattern,
+        )
+        MarshalPost.objects.bulk_create(
+            MarshalPost(
+                competition=copy,
+                number=post.number,
+                tasks=post.tasks,
+                handles_stop_line=post.handles_stop_line,
+            )
+            for post in original.marshal_posts.all()
         )
         # Drop the default classes seeded on create and mirror the original's.
         copy.classes.all().delete()
@@ -439,6 +575,50 @@ class CompetitionTypeSettingsView(UpdateView):
 
     def get_success_url(self):
         return safe_next(self.request, reverse("competitions:type-list"))
+
+
+class MarshalPostsView(ActiveCompetitionMixin, View):
+    """Top-level operator surface a marshal uses on their phone: pick your post,
+    then tap the task buttons to enter penalties for the current starter. The
+    config (which tasks, stop-line) comes from the active competition's setup;
+    penalty amounts come from its type. Submitting is a no-op stub for now — the
+    transmission back into the system is a later feature."""
+
+    template_name = "competitions/marshal_posts.html"
+
+    def get(self, request):
+        competition = self.get_active()
+        if competition is None:
+            return self.render_empty(request)
+        ctype = competition.competition_type
+        posts = list(competition.marshal_posts.all())
+        posts_data = [
+            {
+                "number": post.number,
+                "tasks": post.task_numbers(),
+                "stop_line": post.handles_stop_line,
+            }
+            for post in posts
+        ]
+        # Max pylon presses before a task tips over the type's per-task ceiling.
+        # None means no ceiling is configured, so the button never blocks.
+        max_pylons = None
+        if ctype.pylon_penalty and ctype.max_penalty_per_task:
+            max_pylons = ctype.max_penalty_per_task // ctype.pylon_penalty
+        config = {
+            "competitionId": competition.pk,
+            "posts": posts_data,
+            "maxPylons": max_pylons,
+            "pylonPenalty": ctype.pylon_penalty,
+            "taskPenalty": ctype.task_penalty,
+            "stopLinePenalty": ctype.stop_line_penalty,
+        }
+        return render(request, self.template_name, {
+            "object": competition,
+            "penalties_by_marshal_posts": competition.penalties_by_marshal_posts,
+            "has_posts": bool(posts),
+            "config_json": json.dumps(config),
+        })
 
 
 @require_POST

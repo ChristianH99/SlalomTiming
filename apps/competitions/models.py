@@ -2,7 +2,7 @@ from collections import Counter
 
 from django.db import models
 
-from . import startpattern
+from . import startpattern, taskspec
 from .assignment import (
     ASSIGNMENT_METHOD_CHOICES,
     DEFAULT_ASSIGNMENT_METHOD,
@@ -142,6 +142,11 @@ class Competition(models.Model):
         default=False,
         help_text="Manual assignment only: may a participant be in more than one class.",
     )
+    penalties_by_marshal_posts = models.BooleanField(
+        default=False,
+        help_text="Marshal posts enter penalties for their own area, instead of the "
+        "timekeeper entering every penalty.",
+    )
     start_pattern = models.JSONField(
         default=list,
         blank=True,
@@ -278,6 +283,13 @@ class Competition(models.Model):
         assignment method (may repeat for manual multi-entry)."""
         return self.assignment().classes_for(self, participant)
 
+    def assigned_task_numbers(self):
+        """Every task number watched by any marshal post, deduplicated and sorted."""
+        numbers = set()
+        for post in self.marshal_posts.all():
+            numbers.update(post.task_numbers())
+        return sorted(numbers)
+
     @classmethod
     def get_current(cls):
         return cls.objects.filter(is_active=True).first()
@@ -336,3 +348,40 @@ class CompetitionClass(models.Model):
             return None
         year = self.competition.date.year
         return (year - self.age_to, year - self.age_from)
+
+
+class MarshalPost(models.Model):
+    """One marshal post of a competition that enters penalties for its own area.
+    Only present when Competition.penalties_by_marshal_posts is on. Numbered 1..n
+    within a competition; each watches a set of numbered tasks and at most one
+    post is responsible for the stop line. The tasks are stored as the raw spec
+    the operator typed (see taskspec) so it round-trips exactly."""
+
+    competition = models.ForeignKey(
+        Competition, on_delete=models.CASCADE, related_name="marshal_posts"
+    )
+    number = models.PositiveSmallIntegerField(help_text="1-based post number, in setup order.")
+    tasks = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Task numbers this post watches, e.g. “1, 5, 11-15”.",
+    )
+    handles_stop_line = models.BooleanField(
+        default=False,
+        help_text="This post also judges the stop line (at most one post per competition).",
+    )
+
+    class Meta:
+        ordering = ["number"]
+        unique_together = ("competition", "number")
+
+    def __str__(self):
+        return f"{self.competition} – Marshal Post {self.number}"
+
+    def task_numbers(self):
+        """The task numbers this post watches, sorted. Malformed stored specs
+        (shouldn't happen — the form validates) yield an empty list."""
+        try:
+            return taskspec.parse(self.tasks)
+        except taskspec.TaskSpecError:
+            return []

@@ -49,8 +49,18 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          plus position (list order) and run_position (which run it starts in;
                          classes sharing a run_position start together). Competition.run_groups()
                          returns the ordered runs. Setup UI is a section: a tile list
-                         ("Manage competitions") + General / Classes / Run order sub-pages that
-                         all edit the *active* competition (no pk in the URL).
+                         ("Manage competitions") + General / Classes / Run order / Penalties
+                         sub-pages that all edit the *active* competition (no pk in the URL).
+                         MarshalPost (competition FK, 1-based number, tasks spec, one
+                         handles_stop_line per competition) records the marshal-post penalty
+                         setup: Competition.penalties_by_marshal_posts turns it on, and each
+                         post watches a set of numbered tasks. taskspec.py parses/renders the
+                         free-text task lists ("1, 5, 11-15") the Penalties page collects.
+                         The top-level Marshal Posts page (competitions:marshal-posts) is the
+                         operator surface a marshal drives on a phone — front-end only so far,
+                         no transmission back into the system yet.
+  taskspec.py            parse()/format_ranges()/summary() for the marshal-post task-number
+                         specs. Shared by the Penalties page and the Marshal Posts page.
   assignment.py          Pluggable class-assignment strategies (Manual, Based-on-age) chosen per
                          competition via Competition.assignment_method; add a method in code only
                          (subclass AssignmentMethod + register). Competition.classes_for_participant()

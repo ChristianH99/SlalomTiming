@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Competition, CompetitionClass, CompetitionType
+from .models import Competition, CompetitionClass, CompetitionType, MarshalPost
 
 
 @admin.register(CompetitionType)
@@ -27,13 +27,21 @@ class CompetitionClassInline(admin.TabularInline):
     ordering = ("position",)
 
 
+class MarshalPostInline(admin.TabularInline):
+    model = MarshalPost
+    extra = 0
+    can_delete = True
+    fields = ("number", "tasks", "handles_stop_line")
+    ordering = ("number",)
+
+
 @admin.register(Competition)
 class CompetitionAdmin(admin.ModelAdmin):
     list_display = ("name", "competition_type", "date", "classes_running", "is_active")
     list_filter = ("competition_type", "date", "is_active")
     search_fields = ("name",)
     ordering = ("-date",)
-    inlines = [CompetitionClassInline]
+    inlines = [CompetitionClassInline, MarshalPostInline]
 
     @admin.display(description="Classes")
     def classes_running(self, obj):

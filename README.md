@@ -95,16 +95,29 @@ The sub-pages always act on the **current** competition:
    competition and replayed for every run. A live preview expands it per run and flags any
    runs a class grants that the pattern never plays; toggle **Dummy participants** (on by
    default) to check a pattern against a made-up field before anyone is registered.
-7. **Participants → Add participant** — register a competitor and optionally assign a bib
+7. **Penalties** — how penalties are entered for the current competition. **Penalties set by
+   marshal posts** off leaves the timekeeper entering every penalty on the Times view; on, each
+   marshal post enters the penalties for its own area. When on, set the **number of posts**, then
+   for each post type the **tasks it watches** as a free-text list (`1, 5, 9, 11-15, 20`) and tick
+   which single post is **responsible for the stop line** (ticking one locks it out on the others).
+   A confirmation under General combines every post's tasks into e.g. *Tasks 1-35 assigned*.
+8. **Marshal Posts** (top-level) — the operator surface a marshal drives on their phone. Pick your
+   post from the dropdown and press **Confirm** (it locks in as a red **Change post** button so it
+   isn't nudged by accident). Below, each task the post watches is a big touch button: tap to add a
+   pylon hit, long-press for a task penalty (the per-task ceiling from the competition type caps the
+   pylons — going over wiggles the button). The stop line, if this post owns it, is its own button.
+   **Submit** finalises the current bib. Sending these entries back into the system is a later
+   feature — the page is front-end only for now.
+9. **Participants → Add participant** — register a competitor and optionally assign a bib
    for the current competition right away. The form asks only for the details the selected
    **competition type** collects (see step 1) — pick a different type and the fields follow
    immediately. The **Class** line follows the competition's assignment method: Manual shows a
    class picker (one or several, with repeats where allowed), Age based shows the class derived
    live from the date of birth. The form autocompletes known clubs and common email domains and
    warns about likely duplicates (name or licence) before saving.
-8. **Dashboard** — watch live timing events resolve to participant names by bib.
+10. **Dashboard** — watch live timing events resolve to participant names by bib.
 
-Leaving General, Classes, Run order or the participant form with unsaved edits pops a styled
+Leaving General, Classes, Run order, Penalties or the participant form with unsaved edits pops a styled
 confirmation (Save / Discard / Cancel) rather than losing the changes. **Save changes** carries
 on to wherever you were heading; view-only controls (such as the start pattern's preview
 switches) don't count as changes.
