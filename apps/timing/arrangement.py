@@ -16,7 +16,7 @@ from .models import TimedRun, TimingSignal
 
 def ingest(signal, settings):
     """Place a newly arrived (or restored) start/finish signal into a run."""
-    role = signal.role(settings)
+    role = effective_role(signal, settings)
     if role == TimingSignal.Role.START:
         TimedRun.objects.create(competition=signal.competition, start_signal=signal)
     elif role == TimingSignal.Role.FINISH:
@@ -26,6 +26,23 @@ def ingest(signal, settings):
             open_run.save(update_fields=["finish_signal", "updated_at"])
         else:
             TimedRun.objects.create(competition=signal.competition, finish_signal=signal)
+
+
+def effective_role(signal, settings):
+    """The role a signal plays. With distinct start/finish channels it is fixed by
+    port. With a single light barrier (start_channel == finish_channel) the one
+    channel alternates: a pulse closes the open run if there is one, otherwise it
+    opens a new run — so start, finish, start, finish… on the same channel."""
+    if settings.start_channel != settings.finish_channel:
+        return signal.role(settings)
+    if signal.port != settings.start_channel:
+        return None
+    has_open_run = TimedRun.objects.filter(
+        competition=signal.competition,
+        start_signal__isnull=False,
+        finish_signal__isnull=True,
+    ).exists()
+    return TimingSignal.Role.FINISH if has_open_run else TimingSignal.Role.START
 
 
 def _oldest_open_run(finish_signal):

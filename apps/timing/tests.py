@@ -335,3 +335,42 @@ def test_live_view_renders_and_prompts_without_competition(client):
     Competition.objects.update(is_active=False)
     body = client.get(reverse("timing:times")).content.decode()
     assert "pick a competition" in body.lower()
+
+
+def test_single_light_barrier_alternates_start_finish():
+    comp = make_active_competition()
+    settings = TimingSettings.load()
+    settings.start_channel = settings.finish_channel = 1  # one beam for both
+    settings.save()
+    signal_in(comp, 1, "10:00:00.000", running=1)  # start
+    signal_in(comp, 1, "10:00:30.000", running=2)  # finish → closes the start
+    signal_in(comp, 1, "10:01:00.000", running=3)  # start again
+    rows = serialize_arrangement(comp)["rows"]
+    assert rows[0]["start"]["time"] == "10:01:00.000" and rows[0]["finish"] is None
+    assert rows[1]["start"]["time"] == "10:00:00.000"
+    assert rows[1]["finish"]["time"] == "10:00:30.000"
+
+
+def test_already_recorded_run_is_disabled(client):
+    comp = make_active_competition()
+    comp.classes.filter(name="1").update(is_running=True, counted_runs=2)
+    cclass = comp.classes.get(name="1")
+    r0 = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    r1 = run_of(signal_in(comp, 1, "10:00:30.000", running=2))
+    post_json(client, "timing:run-update", run_id=r0.id, bib_number="5",
+              class_id=cclass.pk, run_value="counted-1")
+    post_json(client, "timing:run-update", run_id=r1.id, bib_number="5", class_id=cclass.pk)
+    rows = {row["run"]["id"]: row for row in serialize_arrangement(comp)["rows"]}
+    options = {o["value"]: o["disabled"] for o in rows[r1.id]["run"]["run_options"]}
+    assert options["counted-1"] is True   # #5 already has a C1
+    assert options["counted-2"] is False
+
+
+def test_serialized_time_carries_manual_flag():
+    comp = make_active_competition()
+    manual = TimingSignal.objects.create(
+        competition=comp, running_number=1, port=1, device_time=_t("10:00:00.000"), is_manual=True
+    )
+    arrangement.ingest(manual, TimingSettings.load())
+    row = serialize_arrangement(comp)["rows"][0]
+    assert row["start"]["manual"] is True

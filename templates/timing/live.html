@@ -12,36 +12,35 @@
     </div>
   {% else %}
     <div class="timing-live" id="timing-live">
-      <div class="table-card">
-        <table class="timing-table">
-          <thead>
-            <tr>
-              <th class="tt-time">Start</th>
-              <th class="tt-time">Finish</th>
-              <th class="tt-run">Run time</th>
-              <th class="tt-bib">Bib</th>
-              <th class="tt-class">Class</th>
-              <th class="tt-run-sel">Run</th>
-              {% if arrangement.penalties_enabled %}
-                <th class="tt-pen">Pylon</th>
-                <th class="tt-pen">Task</th>
-                <th class="tt-pen">Stop line</th>
-                <th class="tt-pen-total">Penalty</th>
-              {% endif %}
-              <th class="tt-total">Total</th>
-            </tr>
-          </thead>
-          <tbody id="timing-rows"></tbody>
-        </table>
+      <p class="hint timing-help"><strong>Double-click</strong> a time to ignore a wrong measurement —
+        ignored times move to the rail on the right, beside where they fall. Drag one back onto a run's
+        start or finish slot (or double-click it) to use it again.</p>
+      <div class="timing-live-body" id="timing-live-body">
+        <div class="table-card">
+          <table class="timing-table">
+            <thead>
+              <tr>
+                <th class="tt-time">Start</th>
+                <th class="tt-time">Finish</th>
+                <th class="tt-run">Run time</th>
+                <th class="tt-bib">Bib</th>
+                <th class="tt-class">Class</th>
+                <th class="tt-run-sel">Run</th>
+                {% if arrangement.penalties_enabled %}
+                  <th class="tt-pen">Pylon</th>
+                  <th class="tt-pen">Task</th>
+                  <th class="tt-pen">Stop line</th>
+                  <th class="tt-pen-total">Penalty</th>
+                {% endif %}
+                <th class="tt-total">Total</th>
+              </tr>
+            </thead>
+            <tbody id="timing-rows"></tbody>
+          </table>
+        </div>
+        <div class="ignored-rail" id="ignored-rail" aria-label="Ignored times"></div>
       </div>
       <p class="timing-empty hint" id="timing-empty" hidden>Waiting for the first start signal…</p>
-
-      <div class="timing-ignored" id="timing-ignored-zone">
-        <h2 class="form-section">Ignored times</h2>
-        <p class="hint">Wrong measurements — <strong>double-click</strong> a time to move it here.
-          Drag one back onto a run's start or finish slot to use it again.</p>
-        <ul class="timing-ignored-list" id="timing-ignored-list"></ul>
-      </div>
     </div>
 
     {{ arrangement|json_script:"timing-data" }}

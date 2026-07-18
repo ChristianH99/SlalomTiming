@@ -239,6 +239,7 @@ def serialize_arrangement(competition):
                 "id": signal.id,
                 "role": signal.role(settings) or "",
                 "time": _format_device_time(signal.device_time),
+                "manual": signal.is_manual,
             }
             for signal in ignored
         ],
@@ -271,7 +272,7 @@ def _serialize_run(run, competition, ctype):
             "class_name": cclass.name if cclass else "",
             "class_options": _class_options(competition, participant),
             "run_value": _run_value(run),
-            "run_options": _run_options(cclass),
+            "run_options": _run_options(competition, run, cclass),
             "pylon_count": run.pylon_count,
             "task_count": run.task_count,
             "stopline_count": run.stopline_count,
@@ -285,7 +286,11 @@ def _serialize_run(run, competition, ctype):
 def _signal_ref(signal):
     if signal is None:
         return None
-    return {"id": signal.id, "time": _format_device_time(signal.device_time)}
+    return {
+        "id": signal.id,
+        "time": _format_device_time(signal.device_time),
+        "manual": signal.is_manual,
+    }
 
 
 def _format_device_time(t):
@@ -315,14 +320,31 @@ def _class_options(competition, participant):
     return options
 
 
-def _run_options(cclass):
+def _run_options(competition, run, cclass):
+    """Run choices for a class, with any already recorded for this bib+class
+    marked disabled (e.g. P1 is disabled once this bib has a P1 on another run)."""
     if cclass is None:
         return []
+    used = set()
+    if run.bib_number:
+        used = {
+            (other.run_type, other.run_number)
+            for other in TimedRun.objects.filter(
+                competition=competition, bib_number=run.bib_number, competition_class=cclass
+            ).exclude(pk=run.pk)
+            if other.run_type and other.run_number
+        }
     options = []
-    for number in range(1, (cclass.practice_runs or 0) + 1):
-        options.append({"value": f"practice-{number}", "label": f"P{number}"})
-    for number in range(1, (cclass.counted_runs or 0) + 1):
-        options.append({"value": f"counted-{number}", "label": f"C{number}"})
+    for run_type, short, count in (
+        ("practice", "P", cclass.practice_runs or 0),
+        ("counted", "C", cclass.counted_runs or 0),
+    ):
+        for number in range(1, count + 1):
+            options.append({
+                "value": f"{run_type}-{number}",
+                "label": f"{short}{number}",
+                "disabled": (run_type, number) in used,
+            })
     return options
 
 

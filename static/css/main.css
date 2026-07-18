@@ -1553,44 +1553,61 @@ textarea:focus-visible,
   border-radius: var(--radius-sm);
   cursor: grab;
 }
+/* A manual trigger reads warm (amber) vs the cool light-barrier blue. */
+.time-chip--manual { background: #FBEBD8; color: #8A4B12; }
 .time-chip:active { cursor: grabbing; }
 .time-empty { color: var(--text-muted); }
 
-/* Bib + name stacked, but the name line is always present (min-height reserved)
-   so the row height is identical whether or not a bib has been entered. */
-.bib-field { display: flex; flex-direction: column; justify-content: center; gap: 0.05rem; }
+/* Bib + name stacked. The column is a fixed width and the name clips with an
+   ellipsis, so a long name changes neither the row height nor the column width. */
+.tt-bib { width: 9rem; }
+.bib-field { display: flex; flex-direction: column; justify-content: center; gap: 0.05rem; width: 7.5rem; }
 .bib-input { width: 3.6rem; }
 .bib-name {
   min-height: 0.95rem; line-height: 0.95rem;
   font-size: 0.76rem; color: var(--text-mid);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 11rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 7.5rem;
 }
-.class-select, .run-select { min-width: 3.6rem; }
-.class-static { color: var(--text-dark); font-weight: 600; }
+/* Class/run columns are pre-sized too, so revealing them on bib entry doesn't
+   shift the columns to their right. */
+.tt-class { width: 7rem; }
+.tt-run-sel { width: 5rem; }
+.class-select, .run-select { width: 100%; min-width: 0; }
+.class-static {
+  display: inline-block; max-width: 100%;
+  color: var(--text-dark); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
+}
 
-/* Plain penalty box — no spinner arrows, wide enough for two digits. */
-.penalty-input { width: 3rem; text-align: center; appearance: textfield; -moz-appearance: textfield; }
+/* Penalty stepper: −/+ buttons beside a plain box (no in-box spinner arrows). */
+.pen-stepper { display: inline-flex; align-items: center; gap: 0.15rem; }
+.pen-btn {
+  width: 1.4rem; height: 1.7rem; flex-shrink: 0;
+  border: 1px solid var(--border); background: var(--white);
+  border-radius: var(--radius-sm);
+  font-weight: 700; line-height: 1; cursor: pointer; color: var(--text-mid);
+}
+.pen-btn:hover { background: var(--snow); color: var(--ink); }
+.penalty-input { width: 2.4rem; text-align: center; appearance: textfield; -moz-appearance: textfield; }
 .penalty-input::-webkit-outer-spin-button,
 .penalty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .pen-total { color: var(--text-mid); font-variant-numeric: tabular-nums; }
 
+.timing-help { margin: 0 0 1rem; max-width: 60rem; }
 .timing-empty { margin: 1rem 0; }
 
-.timing-ignored { margin-top: 1.75rem; }
-.timing-ignored .ignore-word { text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.03em; }
-.timing-ignored--drop, .ignored-zone--drop { outline: 2px dashed var(--glacier); outline-offset: 4px; border-radius: var(--radius-md); }
-.timing-ignored-list { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
-.ignored-item {
-  display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.35rem 0.6rem;
-  background: var(--snow);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
+/* Ignored times: a rail down the right of the table. Each chip is absolutely
+   positioned (by JS) beside where its time falls between two run rows. */
+.timing-live-body { display: flex; align-items: flex-start; gap: 0.9rem; }
+.ignored-rail { position: relative; align-self: stretch; width: 7.5rem; flex-shrink: 0; }
+.ignored-rail--drop { outline: 2px dashed var(--glacier); outline-offset: 2px; border-radius: var(--radius-md); }
+.ignored-chip {
+  position: absolute; left: 0;
+  font-variant-numeric: tabular-nums; font-size: 0.82rem;
+  background: var(--snow); border: 1px solid var(--border-light);
   color: var(--text-light);
-  font-variant-numeric: tabular-nums;
-  cursor: grab;
-  max-width: 22rem;
+  padding: 0.2rem 0.5rem; border-radius: var(--radius-sm);
+  white-space: nowrap; cursor: grab;
+  text-decoration: line-through; text-decoration-color: var(--text-muted);
 }
-.ignored-role { text-transform: uppercase; font-size: 0.66rem; letter-spacing: 0.05em; color: var(--text-muted); min-width: 3rem; }
-.ignored-time { color: var(--text-mid); }
-.ignored-item .link-button { margin-left: auto; font-size: 0.78rem; }
+.ignored-chip--manual { background: #F7EFE6; color: #A9814F; }

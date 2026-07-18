@@ -1,8 +1,8 @@
 // Live timing view. Renders runs (a start time paired with a finish time) newest
 // first, lets the operator enter bib/class/run/penalties, double-click a time to
-// ignore it, and drag a time into a run's start/finish slot to pair it. State
-// lives on the server; edits POST and the view is nudged over a WebSocket to
-// re-fetch when signals or assignments change.
+// ignore it (ignored times sit on a rail to the right, beside where they fall in
+// time), and drag a time onto a run's start/finish slot to pair it. State lives on
+// the server; edits POST and the view is nudged over a WebSocket to re-fetch.
 (function () {
   "use strict";
 
@@ -15,8 +15,7 @@
 
   const rowsEl = document.getElementById("timing-rows");
   const emptyEl = document.getElementById("timing-empty");
-  const ignoredList = document.getElementById("timing-ignored-list");
-  const ignoredZone = document.getElementById("timing-ignored-zone");
+  const rail = document.getElementById("ignored-rail");
 
   // ---- server calls -------------------------------------------------------
   async function postJSON(url, body) {
@@ -83,12 +82,13 @@
       return wrap;
     }
     wrap.dataset.time = sig.time;
-    const chip = el("span", "time-chip", sig.time);
+    // Manual triggers (device hand button / simulator M-buttons) get a distinct tint.
+    const chip = el("span", "time-chip" + (sig.manual ? " time-chip--manual" : ""), sig.time);
     chip.draggable = true;
     chip.dataset.signalId = sig.id;
     chip.dataset.role = role;
     chip.dataset.time = sig.time;
-    chip.title = "Drag to pair · double-click to ignore";
+    chip.title = (sig.manual ? "Manual" : "Light barrier") + " · drag to pair · double-click to ignore";
     chip.addEventListener("dragstart", (e) => onDragStart(e, sig.id, role, sig.time));
     chip.addEventListener("dragend", clearDrag);
     chip.addEventListener("dblclick", () => setIgnored(sig.id, true).then(refresh));
@@ -141,6 +141,8 @@
     run.run_options.forEach((opt) => {
       const o = el("option", null, opt.label);
       o.value = opt.value;
+      // A run already recorded for this bib+class is disabled (can't repeat it).
+      if (opt.disabled && opt.value !== run.run_value) o.disabled = true;
       if (opt.value === run.run_value) o.selected = true;
       select.append(o);
     });
@@ -151,41 +153,78 @@
   }
 
   function penaltyBox(run, field) {
+    const wrap = el("div", "pen-stepper");
     const input = el("input", "penalty-input");
     input.type = "number";
     input.min = "0";
     input.value = run[field];
     input.dataset.rowKey = run.id;
     input.dataset.field = field;
-    input.addEventListener("change", () => {
-      const v = Math.max(0, parseInt(input.value, 10) || 0);
+    const commit = (value) => {
+      const v = Math.max(0, parseInt(value, 10) || 0);
       input.value = v;
       updateRun({ run_id: run.id, [field]: v }).then(applyRow);
-    });
-    return input;
-  }
-
-  function renderIgnored() {
-    ignoredList.replaceChildren(
-      ...state.ignored.map((sig) => {
-        const li = el("li", "ignored-item");
-        li.draggable = true;
-        li.dataset.signalId = sig.id;
-        li.dataset.role = sig.role;
-        li.dataset.time = sig.time;
-        li.addEventListener("dragstart", (e) => onDragStart(e, sig.id, sig.role, sig.time));
-        li.addEventListener("dragend", clearDrag);
-        li.append(el("span", "ignored-role", sig.role || "?"), el("span", "ignored-time", sig.time));
-        const use = el("button", "link-button", "use");
-        use.type = "button";
-        use.addEventListener("click", () => setIgnored(sig.id, false).then(refresh));
-        li.append(use);
-        return li;
-      })
-    );
+    };
+    const minus = el("button", "pen-btn", "−");
+    minus.type = "button";
+    minus.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) - 1));
+    const plus = el("button", "pen-btn", "+");
+    plus.type = "button";
+    plus.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) + 1));
+    input.addEventListener("change", () => commit(input.value));
+    wrap.append(minus, input, plus);
+    return wrap;
   }
 
   const secs = (n) => (n ? `${n}s` : "0s");
+
+  // ---- ignored times: a rail to the right, each beside where it falls -------
+  function renderIgnored() {
+    rail.replaceChildren(...state.ignored.map(ignoredChip));
+    positionIgnored();
+  }
+
+  function ignoredChip(sig) {
+    const chip = el("div", "ignored-chip" + (sig.manual ? " ignored-chip--manual" : ""), sig.time);
+    chip.draggable = true;
+    chip.dataset.signalId = sig.id;
+    chip.dataset.role = sig.role;
+    chip.dataset.time = sig.time;
+    chip.title = "Drag onto a run's slot · double-click to restore";
+    chip.addEventListener("dragstart", (e) => onDragStart(e, sig.id, sig.role, sig.time));
+    chip.addEventListener("dragend", clearDrag);
+    chip.addEventListener("dblclick", () => setIgnored(sig.id, false).then(refresh));
+    return chip;
+  }
+
+  // Float each ignored chip vertically at the boundary between the two rows its
+  // time falls between (rows themselves never move); stack to avoid overlaps.
+  function positionIgnored() {
+    const chips = [...rail.children];
+    if (!chips.length) return;
+    const railTop = rail.getBoundingClientRect().top;
+    const rowInfo = [...rowsEl.querySelectorAll("tr[data-run-id]")].map((tr) => {
+      const rect = tr.getBoundingClientRect();
+      const row = state.rows.find((r) => String(r.id) === tr.dataset.runId);
+      const time = (row.start && row.start.time) || (row.finish && row.finish.time) || "";
+      return { top: rect.top - railTop, bottom: rect.bottom - railTop, time };
+    });
+    let lastBottom = -Infinity;
+    chips.forEach((chip) => {
+      const t = chip.dataset.time;
+      let y = 0;
+      if (rowInfo.length) {
+        const idx = rowInfo.findIndex((ri) => ri.time < t); // rows are newest-first
+        if (idx === -1) y = rowInfo[rowInfo.length - 1].bottom; // older than all
+        else if (idx === 0) y = rowInfo[0].top; // newer than all
+        else y = rowInfo[idx].top; // between idx-1 and idx
+      }
+      let top = y - chip.offsetHeight / 2;
+      if (top < lastBottom + 4) top = lastBottom + 4; // don't overlap the one above
+      chip.style.top = `${Math.max(0, top)}px`;
+      lastBottom = top + chip.offsetHeight;
+    });
+  }
 
   // ---- apply a single updated row (edit reply) ----------------------------
   function applyRow(resp) {
@@ -194,9 +233,10 @@
     if (i !== -1) state.rows[i] = resp.row;
     const tr = rowsEl.querySelector(`tr[data-run-id="${resp.row.id}"]`);
     if (tr) tr.replaceWith(renderRow(resp.row));
+    positionIgnored();
   }
 
-  // ---- drag and drop (pairing) -------------------------------------------
+  // ---- drag and drop ------------------------------------------------------
   let dragged = null; // { id, role, time }
 
   function onDragStart(e, id, role, time) {
@@ -208,7 +248,6 @@
     dragged = null;
   }
 
-  // A start can only go after a finish it shares a row with; a finish only before.
   function pairingValid(slot, targetRunId) {
     const row = state.rows.find((r) => r.id === Number(targetRunId));
     if (!row) return true;
@@ -226,7 +265,6 @@
 
   rowsEl.addEventListener("dragover", (e) => {
     const slot = e.target.closest(".time-slot");
-    // Only a matching role may drop here (start into start, finish into finish).
     if (slot && dragged && dragged.role === slot.dataset.role) {
       e.preventDefault();
       slot.classList.add("time-slot--drop");
@@ -251,9 +289,24 @@
     });
   });
 
+  // Dropping a run's time onto the rail ignores it.
+  rail.addEventListener("dragover", (e) => {
+    if (dragged && !state.ignored.some((s) => s.id === dragged.id)) {
+      e.preventDefault();
+      rail.classList.add("ignored-rail--drop");
+    }
+  });
+  rail.addEventListener("dragleave", () => rail.classList.remove("ignored-rail--drop"));
+  rail.addEventListener("drop", (e) => {
+    rail.classList.remove("ignored-rail--drop");
+    if (dragged && !state.ignored.some((s) => s.id === dragged.id)) {
+      e.preventDefault();
+      setIgnored(dragged.id, true).then(refresh);
+    }
+  });
+
   // ---- live refresh (WebSocket nudge) -------------------------------------
   async function refresh() {
-    // Preserve the field being edited so a streamed-in time doesn't drop focus.
     const active = document.activeElement;
     let key = null;
     if (active && active.dataset && active.dataset.rowKey !== undefined) {
@@ -295,6 +348,7 @@
     ws.addEventListener("close", () => setTimeout(connect, 2000));
   }
 
+  window.addEventListener("resize", positionIgnored);
   render();
   connect();
 })();

@@ -106,6 +106,8 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
   arrangement.py         Causal pairing of signals into runs: a finish joins the oldest open
                          start that began before it; a start never adopts an earlier orphan
                          finish. ingest()/detach()/assign()/rows(); rows() is newest-first.
+                         effective_role() handles a single light barrier (start_channel ==
+                         finish_channel): the one channel alternates start/finish/start/…
   calc.py                Run time (integer-microsecond truncation to the type's precision, never
                          rounded), total penalty, fixed-decimal formatting.
   forms.py               TimingSettingsForm (IP required only for the TP540).
@@ -134,8 +136,11 @@ static/js/               dashboard.js (legacy) + timing_live.js (Times view: ren
   → same port, is_manual), and an on-page log. Each press POSTs a signal to `timing:signal`.
 - **Times** (`timing/times/`) — the operator's live view for the active competition: start/finish
   times paired into runs (newest first), with bib (→ name/class lookup), class/run, and penalty
-  entry, live over a WebSocket. Double-click a time to ignore it; drag a time onto a run's slot to
-  pair it (rejected with a wiggle if it would put a start after its finish).
+  entry (−/+ steppers), live over a WebSocket. Manual times are tinted differently from light-barrier
+  ones; a run option already recorded for a bib+class is disabled. Double-click a time to ignore it —
+  ignored times sit on a rail down the right of the table, floated beside where they fall between two
+  rows; drag one back onto a run's slot to use it (rejected with a wiggle if it would put a start after
+  its finish). Column widths are fixed so entering a bib never shifts them.
 
 ### Adding a real device connector
 
