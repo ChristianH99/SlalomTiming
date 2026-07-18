@@ -17,17 +17,25 @@
         <a class="brand" href="{% url 'timing:dashboard' %}">Slalom<span class="brand-slash">/</span>Timing</a>
       </div>
       <nav class="shell-nav">
-        <a class="shell-nav-item{% if request.resolver_match.app_name == 'timing' %} active{% endif %}" href="{% url 'timing:dashboard' %}">Dashboard</a>
-        {% with url_name=request.resolver_match.url_name %}
-        <a class="shell-nav-item shell-nav-parent{% if request.resolver_match.app_name == 'competitions' %} active{% endif %}" href="{% url 'competitions:list' %}">Competition Setup</a>
+        {% with url_name=request.resolver_match.url_name app_name=request.resolver_match.app_name %}
+        <a class="shell-nav-item{% if url_name == 'dashboard' %} active{% endif %}" href="{% url 'timing:dashboard' %}">Dashboard</a>
+        <a class="shell-nav-item shell-nav-parent{% if app_name == 'competitions' %} active{% endif %}" href="{% url 'competitions:list' %}">Competition Setup</a>
         <div class="shell-nav-sub">
-          <a class="shell-nav-subitem{% if url_name == 'list' or url_name == 'add' or url_name == 'type-list' or url_name == 'type-add' %} active{% endif %}" href="{% url 'competitions:list' %}">Manage competitions</a>
+          {% comment %}"list"/"add" also match participants:list/add, so guard by app.{% endcomment %}
+          <a class="shell-nav-subitem{% if url_name == 'type-list' or url_name == 'type-add' or app_name == 'competitions' and url_name == 'list' or app_name == 'competitions' and url_name == 'add' %} active{% endif %}" href="{% url 'competitions:list' %}">Manage competitions</a>
           <a class="shell-nav-subitem{% if url_name == 'general' %} active{% endif %}" href="{% url 'competitions:general' %}">General</a>
           <a class="shell-nav-subitem{% if url_name == 'classes' %} active{% endif %}" href="{% url 'competitions:classes' %}">Classes</a>
           <a class="shell-nav-subitem{% if url_name == 'runorder' %} active{% endif %}" href="{% url 'competitions:runorder' %}">Run order</a>
         </div>
-        {% endwith %}
         <a class="shell-nav-item{% if request.resolver_match.app_name == 'participants' %} active{% endif %}" href="{% url 'participants:list' %}">Participants</a>
+        {% comment %}Timing sub-pages will grow; Settings is kept last (future
+        pages go above it).{% endcomment %}
+        <a class="shell-nav-item shell-nav-parent{% if app_name == 'timing' and url_name != 'dashboard' %} active{% endif %}" href="{% url 'timing:times' %}">Timing</a>
+        <div class="shell-nav-sub">
+          <a class="shell-nav-subitem{% if url_name == 'times' %} active{% endif %}" href="{% url 'timing:times' %}">Times</a>
+          <a class="shell-nav-subitem{% if url_name == 'settings' %} active{% endif %}" href="{% url 'timing:settings' %}">Settings</a>
+        </div>
+        {% endwith %}
       </nav>
       <div class="shell-sidebar-footer">
         <a class="shell-admin-link" href="/admin/">Django Admin</a>

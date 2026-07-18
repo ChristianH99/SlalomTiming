@@ -78,30 +78,64 @@ apps/participants/
                          run status, unique per competition) + ClassAssignment (participant↔class
                          join for Manual assignment; explicit model, not a M2M, so duplicate
                          rows allow entering the same class multiple times).
-                         Only name/date-of-birth/licence are required at the DB level —
+                         Only name and date-of-birth are required at the DB level — licence,
                          co-driver, vehicle, address, club, e-mail and phone are all blank=True
                          because whether they're collected (and mandatory) is a per-discipline
-                         decision, enforced by the form, not the model.
+                         decision (CompetitionType.PARTICIPANT_INFO, which now includes licence),
+                         enforced by the form, not the model.
   forms.py               add/edit forms (club autocomplete, email-domain completion).
-                         The type-optional fields are always rendered but shown/hidden per the
-                         competition_type *selected in the dropdown*, so switching it needs no
-                         round trip: the JS toggles each [data-type-group], and the server
-                         (authoritative) validates against the submitted type and blanks
-                         whatever that type doesn't collect. The required marker comes from
-                         PARTICIPANT_INFO's static mandatory flag rather than field.required,
-                         so a group revealed by JS is already marked correctly.
-  views.py               CRUD views + participant_check duplicate-detection endpoint
-apps/timing/
-  models.py              TimingEvent
-  connectors/
-    base.py              TimingDeviceConnector ABC + TimingPulse dataclass
-    simulator.py          SimulatorConnector — fake device for dev, no hardware needed
-    __init__.py            get_connector() factory reads settings.TIMING_CONNECTOR
-  services.py             run_ingestion(): connect -> persist each pulse -> broadcast over Channels
-  consumers.py            TimingConsumer (WebSocket, group "timing_updates")
-  management/commands/run_timing_connector.py   entrypoint that runs the connector loop
-templates/, static/      shared base template + per-app templates, plain CSS/JS
+                         A participant is always registered under the *active competition's*
+                         type — there is no type picker. The form resolves the type once (an
+                         existing participant keeps its own; a new one takes the active
+                         competition's) and renders only the groups that type collects; the
+                         server blanks anything it doesn't. The required marker comes from
+                         PARTICIPANT_INFO's static mandatory flag rather than field.required.
+  views.py               CRUD views + participant_check duplicate-detection endpoint. The list
+                         is scoped to the active competition's type and only shows the columns
+                         that type collects (club, licence); with no competition selected it
+                         prompts to pick one and shows nothing, and adding is blocked.
+apps/timing/            The current timing path is TimingSignal -> arrangement -> TimedRun,
+                        surfaced on the live Times view. The old TimingEvent + connector-loop
+                        dashboard is legacy and slated to be redone.
+  models.py              TimingSettings (singleton: device [Tag Heuer TP540 / Simulator],
+                         single-digit start/finish channel, IP), TimingSignal (the raw device
+                         inbox — running number, port, is_manual, device_time; stamped with the
+                         active competition; `ignored`), TimedRun (one run: a start_signal
+                         paired with a finish_signal, each OneToOne so a time is used once, plus
+                         the operator's bib/class/run/penalty entry), and legacy TimingEvent.
+  arrangement.py         Causal pairing of signals into runs: a finish joins the oldest open
+                         start that began before it; a start never adopts an earlier orphan
+                         finish. ingest()/detach()/assign()/rows(); rows() is newest-first.
+  calc.py                Run time (integer-microsecond truncation to the type's precision, never
+                         rounded), total penalty, fixed-decimal formatting.
+  forms.py               TimingSettingsForm (IP required only for the TP540).
+  views.py               Settings page; standalone Simulator; live Times view + a JSON
+                         arrangement endpoint and mutate endpoints (run-update by run id,
+                         ignore, pair). timing_signal ingests device posts (csrf-exempt, since a
+                         real device can't send a token) and nudges live views to refresh.
+  connectors/            (legacy) TimingDeviceConnector ABC + SimulatorConnector for the old
+                         connector-loop dashboard; get_connector() reads settings.TIMING_CONNECTOR.
+  services.py            run_ingestion() [legacy] + Channels group names (timing_updates,
+                         timing_live).
+  consumers.py           TimingConsumer (legacy dashboard) + TimingLiveConsumer (pushes refresh
+                         nudges to open Times views, group "timing_live").
+  management/commands/run_timing_connector.py   [legacy] runs the connector loop
+templates/timing/        settings.html, simulator.html (standalone, no app shell), live.html
+static/js/               dashboard.js (legacy) + timing_live.js (Times view: render, edits,
+                         double-click-to-ignore, drag-to-pair, WebSocket refresh)
 ```
+
+### Timing UI (under the sidebar "Timing" menu)
+
+- **Settings** (`timing/settings/`) — pick the device and channels. "Start" opens the Simulator
+  in a new tab (Simulator) or connects to the device (TP540; the driver is a stub for now).
+- **Simulator** (`timing/simulator/`) — a standalone new-tab device emulator: a running clock, an
+  auto-incrementing running number (with reset), a 2×4 pad (ports 1–4 light barrier, M1–M4 manual
+  → same port, is_manual), and an on-page log. Each press POSTs a signal to `timing:signal`.
+- **Times** (`timing/times/`) — the operator's live view for the active competition: start/finish
+  times paired into runs (newest first), with bib (→ name/class lookup), class/run, and penalty
+  entry, live over a WebSocket. Double-click a time to ignore it; drag a time onto a run's slot to
+  pair it (rejected with a wiggle if it would put a start after its finish).
 
 ### Adding a real device connector
 
@@ -129,6 +163,9 @@ live data (the app itself works with just `runserver`, it just won't receive dev
 
 - `CHANNEL_LAYERS` uses `InMemoryChannelLayer` — fine for a single local process. Switch to
   `channels_redis` only if this ever needs to run multi-process/multi-host.
+- The three `TimingEvent` bullets below describe the **legacy** dashboard/connector-loop path,
+  kept working but slated to be redone; the current operator surface is the live Times view built
+  on `TimingSignal` -> `TimedRun`.
 - Every timing pulse is written to the DB (`TimingEvent`) before/as it's broadcast, so a dropped
   WebSocket or crashed dashboard never loses data.
 - `TimingEvent.bib_number` is matched against the current competition's `EventEntry.bib_number` at

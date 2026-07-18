@@ -12,6 +12,8 @@ from .models import TimingEvent
 logger = logging.getLogger(__name__)
 
 TIMING_GROUP = "timing_updates"
+# Live timing view: a nudge channel telling open views to re-fetch the arrangement.
+LIVE_GROUP = "timing_live"
 
 
 @sync_to_async

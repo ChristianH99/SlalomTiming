@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Timing settings – Slalom Timing{% endblock %}
+{% block topbar_title %}Timing settings{% endblock %}
+{% block content %}
+  <h1 class="page-heading">Timing</h1>
+  <p class="hint">The timing device this machine receives signals from, and how its channels map to start and finish.</p>
+
+  <form method="post" class="settings-form" data-unsaved-guard>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div class="settings-section">
+      <label class="settings-field settings-field--wide" for="{{ form.device.id_for_label }}">
+        <span class="settings-label">{{ form.device.label }}</span>
+        <span class="settings-control">{{ form.device }}</span>
+        <span class="field-error">{{ form.device.errors|join:" " }}</span>
+      </label>
+
+      <div class="settings-row">
+        <label class="settings-field" for="{{ form.start_channel.id_for_label }}">
+          <span class="settings-label">Start channel</span>
+          <span class="settings-control">{{ form.start_channel }}</span>
+          <span class="field-error">{{ form.start_channel.errors|join:" " }}</span>
+        </label>
+        <label class="settings-field" for="{{ form.finish_channel.id_for_label }}">
+          <span class="settings-label">Finish channel</span>
+          <span class="settings-control">{{ form.finish_channel }}</span>
+          <span class="field-error">{{ form.finish_channel.errors|join:" " }}</span>
+        </label>
+      </div>
+
+      {# Networked-device only: shown when the TP540 is selected. #}
+      <div class="settings-field settings-field--wide" data-device-group="tp540" hidden>
+        <span class="settings-label">{{ form.ip_address.label }}</span>
+        <span class="settings-control">{{ form.ip_address }}</span>
+        <span class="field-error">{{ form.ip_address.errors|join:" " }}</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="button button--secondary" type="submit" name="action" value="save">Save</button>
+
+      {% comment %}The Start control depends on the device: the simulator opens in
+      a new tab; a real device initialises its connection (not built yet).{% endcomment %}
+      <a class="button" href="{% url 'timing:simulator' %}" target="_blank" rel="noopener"
+         data-start="simulator" hidden>Start simulator ↗</a>
+      <button class="button" type="submit" name="action" value="connect"
+              data-start="tp540" hidden>Start</button>
+    </div>
+  </form>
+
+  <script>
+    (function () {
+      const select = document.getElementById("{{ form.device.id_for_label }}");
+      if (!select) return;
+      const groups = [...document.querySelectorAll("[data-device-group]")];
+      const starts = [...document.querySelectorAll("[data-start]")];
+
+      function apply() {
+        const device = select.value;
+        groups.forEach((el) => { el.hidden = el.dataset.deviceGroup !== device; });
+        starts.forEach((el) => { el.hidden = el.dataset.start !== device; });
+      }
+      select.addEventListener("change", apply);
+      apply();
+    })();
+  </script>
+{% endblock %}

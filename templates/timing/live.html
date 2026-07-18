@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Live timing – Slalom Timing{% endblock %}
+{% block topbar_title %}Live timing{% endblock %}
+{% block content %}
+  {# The run table is wide (up to 11 columns) — let this page use the full width. #}
+  <style>.content { max-width: none; }</style>
+  {% if not competition %}
+    <div class="notice">
+      <p>No competition is selected. Timing runs against the active competition, so
+        <a href="{% url 'competitions:list' %}">pick a competition</a> to start timing it.</p>
+    </div>
+  {% else %}
+    <div class="timing-live" id="timing-live">
+      <div class="table-card">
+        <table class="timing-table">
+          <thead>
+            <tr>
+              <th class="tt-time">Start</th>
+              <th class="tt-time">Finish</th>
+              <th class="tt-run">Run time</th>
+              <th class="tt-bib">Bib</th>
+              <th class="tt-class">Class</th>
+              <th class="tt-run-sel">Run</th>
+              {% if arrangement.penalties_enabled %}
+                <th class="tt-pen">Pylon</th>
+                <th class="tt-pen">Task</th>
+                <th class="tt-pen">Stop line</th>
+                <th class="tt-pen-total">Penalty</th>
+              {% endif %}
+              <th class="tt-total">Total</th>
+            </tr>
+          </thead>
+          <tbody id="timing-rows"></tbody>
+        </table>
+      </div>
+      <p class="timing-empty hint" id="timing-empty" hidden>Waiting for the first start signal…</p>
+
+      <div class="timing-ignored" id="timing-ignored-zone">
+        <h2 class="form-section">Ignored times</h2>
+        <p class="hint">Wrong measurements — <strong>double-click</strong> a time to move it here.
+          Drag one back onto a run's start or finish slot to use it again.</p>
+        <ul class="timing-ignored-list" id="timing-ignored-list"></ul>
+      </div>
+    </div>
+
+    {{ arrangement|json_script:"timing-data" }}
+    <script>
+      window.TIMING_URLS = {
+        arrangement: "{% url 'timing:arrangement' %}",
+        run: "{% url 'timing:run-update' %}",
+        ignore: "{% url 'timing:ignore' %}",
+        pair: "{% url 'timing:pair' %}",
+      };
+      window.TIMING_CSRF = "{{ csrf_token }}";
+    </script>
+    <script src="{% static 'js/timing_live.js' %}"></script>
+  {% endif %}
+{% endblock %}

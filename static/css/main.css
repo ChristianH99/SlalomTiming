@@ -29,6 +29,10 @@
 
 * { box-sizing: border-box; }
 
+/* The `hidden` attribute must always win, even over components that set their
+   own `display` (e.g. flex fields/buttons toggled by JS). */
+[hidden] { display: none !important; }
+
 html { min-height: 100%; }
 
 body {
@@ -1341,3 +1345,252 @@ textarea:focus-visible,
 .preview-empty, .preview-warning { font-size: 0.8rem; }
 .preview-empty { color: var(--text-muted); font-style: italic; }
 .preview-warning { color: var(--flame-hover); margin-top: 0.35rem; }
+
+/* ===== TIMING SIMULATOR (standalone) =====
+   Its own dark, chrome-free page (opened in a new tab) that emulates a timing
+   device. Reuses the design tokens so it reads as the same product. */
+.sim-body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 50% -10%, var(--ink-light), var(--ink) 60%);
+  color: #fff;
+  font-family: 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+.sim-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.sim-badge {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--flame-light);
+  border: 1px solid rgba(242,106,66,0.4);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+}
+.sim {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.sim-card, .sim-clock-card, .sim-runnum, .sim-log-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-lg);
+}
+.sim-clock-card { text-align: center; padding: 1.75rem 1rem 1.4rem; }
+.sim-clock {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  font-size: clamp(3rem, 14vw, 5rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.sim-clock-label {
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sim-runnum {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+}
+.sim-runnum-info { display: flex; flex-direction: column; gap: 0.15rem; }
+.sim-runnum-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sim-runnum-value {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  font-size: 2rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.sim-body .button--secondary {
+  color: #fff;
+  border-color: rgba(255,255,255,0.25);
+}
+.sim-body .button--secondary:hover { background: rgba(255,255,255,0.08); }
+
+.sim-pads { display: flex; flex-direction: column; gap: 1.1rem; }
+.sim-pad-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sim-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.7rem;
+}
+.sim-btn {
+  border: none;
+  border-radius: var(--radius-md);
+  min-height: 4.75rem;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  font-size: 1.5rem;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.sim-btn--barrier {
+  background: linear-gradient(180deg, var(--glacier-light), var(--glacier));
+  box-shadow: 0 6px 16px rgba(62,142,222,0.28);
+}
+.sim-btn--manual {
+  background: linear-gradient(180deg, var(--flame-light), var(--flame));
+  box-shadow: 0 6px 16px rgba(232,73,29,0.28);
+}
+.sim-btn:hover { filter: brightness(1.06); }
+.sim-btn:active, .sim-btn--fired { transform: translateY(2px) scale(0.98); filter: brightness(0.95); }
+
+.sim-log-card { padding: 1.1rem 1.25rem 1.25rem; }
+.sim-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+.sim-log-head h2 {
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.95rem;
+  color: #fff;
+}
+.sim-body .link-button { color: var(--text-muted); }
+.sim-body .link-button:hover { color: #fff; }
+.sim-log { list-style: none; margin: 0; padding: 0; max-height: 15rem; overflow-y: auto; }
+.sim-log-item {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+  padding: 0.5rem 0.2rem 0.5rem 0.85rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-left: 3px solid transparent;
+  color: rgba(255,255,255,0.9);
+}
+.sim-log-item--barrier { border-left-color: var(--glacier); }
+.sim-log-item--manual { border-left-color: var(--flame); }
+.sim-log-item--error { border-left-color: #f2b8b8; color: #f4c0c0; }
+.sim-log-empty { color: var(--text-muted); font-size: 0.88rem; font-style: italic; margin: 0.25rem 0 0; }
+
+@media (max-width: 480px) {
+  .sim-btn { min-height: 4rem; font-size: 1.25rem; }
+  .sim-row { gap: 0.5rem; }
+}
+
+/* ===== LIVE TIMING VIEW ===== */
+/* Content-sized: the card hugs the table so columns size to their content
+   instead of stretching across empty space. */
+.timing-live .table-card { width: fit-content; max-width: 100%; }
+.timing-table { width: auto; border-collapse: collapse; font-size: 0.9rem; }
+.timing-table thead th {
+  text-align: left;
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+/* Fixed row height: entering a bib (which reveals the name line) must not grow
+   the row. The name line is always rendered and reserved below. */
+.timing-table td {
+  padding: 0.3rem 0.7rem;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+  height: 3.25rem;
+  white-space: nowrap;
+}
+.timing-row--over { background: var(--flame-bg); }
+.timing-row--over .run-select { border-color: var(--flame); }
+
+.tt-run, .tt-total { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text-dark); }
+
+.time-slot { display: flex; align-items: center; min-height: 2rem; border-radius: var(--radius-sm); }
+.time-slot--empty { min-width: 5rem; opacity: 0.5; }
+.time-slot--drop { outline: 2px dashed var(--glacier); outline-offset: 2px; }
+.time-slot--reject { animation: time-reject 0.4s ease; }
+@keyframes time-reject {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.time-chip {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  background: var(--frost-bg);
+  color: var(--ink);
+  padding: 0.25rem 0.55rem;
+  border-radius: var(--radius-sm);
+  cursor: grab;
+}
+.time-chip:active { cursor: grabbing; }
+.time-empty { color: var(--text-muted); }
+
+/* Bib + name stacked, but the name line is always present (min-height reserved)
+   so the row height is identical whether or not a bib has been entered. */
+.bib-field { display: flex; flex-direction: column; justify-content: center; gap: 0.05rem; }
+.bib-input { width: 3.6rem; }
+.bib-name {
+  min-height: 0.95rem; line-height: 0.95rem;
+  font-size: 0.76rem; color: var(--text-mid);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 11rem;
+}
+.class-select, .run-select { min-width: 3.6rem; }
+.class-static { color: var(--text-dark); font-weight: 600; }
+
+/* Plain penalty box — no spinner arrows, wide enough for two digits. */
+.penalty-input { width: 3rem; text-align: center; appearance: textfield; -moz-appearance: textfield; }
+.penalty-input::-webkit-outer-spin-button,
+.penalty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pen-total { color: var(--text-mid); font-variant-numeric: tabular-nums; }
+
+.timing-empty { margin: 1rem 0; }
+
+.timing-ignored { margin-top: 1.75rem; }
+.timing-ignored .ignore-word { text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.03em; }
+.timing-ignored--drop, .ignored-zone--drop { outline: 2px dashed var(--glacier); outline-offset: 4px; border-radius: var(--radius-md); }
+.timing-ignored-list { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.ignored-item {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  background: var(--snow);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-light);
+  font-variant-numeric: tabular-nums;
+  cursor: grab;
+  max-width: 22rem;
+}
+.ignored-role { text-transform: uppercase; font-size: 0.66rem; letter-spacing: 0.05em; color: var(--text-muted); min-width: 3rem; }
+.ignored-time { color: var(--text-mid); }
+.ignored-item .link-button { margin-left: auto; font-size: 0.78rem; }
