@@ -47,8 +47,8 @@ the pipeline and dashboard work without any hardware. The app itself runs fine w
 
 ## Typical workflow
 
-Competition Setup is a section with a landing page plus three sub-pages (in the sidebar).
-The sub-pages always act on the **current** competition:
+Competition Setup is a section with a landing page plus four sub-pages (General, Classes,
+Run order, Penalties) in the sidebar. The sub-pages always act on the **current** competition:
 
 1. **Competition Setup → Manage competition types** — add a discipline (e.g. Motorcycle,
    Go-Cart). Types can be expanded to list their competitions, and deleted while unused.
@@ -106,16 +106,24 @@ The sub-pages always act on the **current** competition:
    isn't nudged by accident). Below, each task the post watches is a big touch button: tap to add a
    pylon hit, long-press for a task penalty (the per-task ceiling from the competition type caps the
    pylons — going over wiggles the button). The stop line, if this post owns it, is its own button.
-   **Submit** finalises the current bib. Sending these entries back into the system is a later
-   feature — the page is front-end only for now.
-9. **Participants → Add participant** — register a competitor and optionally assign a bib
+   **Submit** finalises the current bib. The current competitor and each post's running penalty are
+   exchanged live with **Auto timing** (below).
+9. **Timing → Auto timing** — the order-driven live view. The start order (run order × start pattern)
+   runs down the left as draggable tiles; reordering is saved (Reset order re-derives it). Incoming
+   start/finish times attach to the order automatically — no bib typing — and the right shows the
+   previous / current / next competitor with their times and run time. The current competitor stays
+   centred until the next one starts, then the tiles shift up. Beside the times, one box per marshal
+   post shows its running penalty, turning green once that marshal submits — so the timekeeper sees
+   all-green when a competitor is fully judged. Double-click a time to ignore it (listed on the right),
+   drag it back onto a slot to re-pair. The centred competitor is the one the marshal posts judge.
+10. **Participants → Add participant** — register a competitor and optionally assign a bib
    for the current competition right away. The form asks only for the details the selected
    **competition type** collects (see step 1) — pick a different type and the fields follow
    immediately. The **Class** line follows the competition's assignment method: Manual shows a
    class picker (one or several, with repeats where allowed), Age based shows the class derived
    live from the date of birth. The form autocompletes known clubs and common email domains and
    warns about likely duplicates (name or licence) before saving.
-10. **Dashboard** — watch live timing events resolve to participant names by bib.
+11. **Dashboard** — watch live timing events resolve to participant names by bib.
 
 Leaving General, Classes, Run order, Penalties or the participant form with unsaved edits pops a styled
 confirmation (Save / Discard / Cancel) rather than losing the changes. **Save changes** carries
@@ -146,11 +154,14 @@ interface only.
 ```
 config/                  Django project (settings, urls, asgi/wsgi)
 apps/competitions/       Competition, CompetitionType (discipline + its rules, edited on a
-                         per-type Settings page), CompetitionClass + setup UI
-                         (tile list + General / Classes / Run order sub-pages)
+                         per-type Settings page), CompetitionClass, MarshalPost + setup UI
+                         (tile list + General / Classes / Run order / Penalties sub-pages) and
+                         the top-level Marshal Posts operator page
 apps/participants/       Participant + EventEntry models, CRUD views, admin. The form is
                          built from the selected type's "required participant info".
-apps/timing/             TimingEvent, connectors, ingestion service, WebSocket consumer
+apps/timing/             TimingSignal -> arrangement -> TimedRun timing path, the live Times
+                         and Auto timing views, MarshalPenalty, WebSocket consumers (plus the
+                         legacy TimingEvent connector/dashboard path)
 templates/, static/      shared base template + per-app templates, plain CSS/JS
 ```
 

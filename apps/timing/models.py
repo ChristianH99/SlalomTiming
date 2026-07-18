@@ -139,6 +139,34 @@ class TimedRun(models.Model):
         return f"Run {anchor} (bib {self.bib_number})"
 
 
+class MarshalPenalty(models.Model):
+    """A marshal post's penalty entry for one run: the aggregate counts the post
+    recorded for the competitor it was judging, plus whether the marshal has
+    submitted (finalised) them. One row per (run, post). Written from the Marshal
+    Posts page and shown on the Auto timing view as a per-post box that fills as
+    the marshal taps and turns green once submitted."""
+
+    timed_run = models.ForeignKey(
+        TimedRun, on_delete=models.CASCADE, related_name="marshal_penalties"
+    )
+    marshal_post = models.ForeignKey(
+        "competitions.MarshalPost", on_delete=models.CASCADE, related_name="penalties"
+    )
+    # Aggregated across the post's tasks: total pylon hits, number of tasks failed,
+    # and whether the stop line was missed (0/1) — mirroring TimedRun's counts.
+    pylon_count = models.PositiveSmallIntegerField(default=0)
+    task_count = models.PositiveSmallIntegerField(default=0)
+    stopline_count = models.PositiveSmallIntegerField(default=0)
+    submitted = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("timed_run", "marshal_post")
+
+    def __str__(self):
+        return f"Post {self.marshal_post.number} on run {self.timed_run_id}"
+
+
 class TimingEvent(models.Model):
     class Channel(models.TextChoices):
         START = "start", "Start"

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Auto timing – Slalom Timing{% endblock %}
+{% block topbar_title %}Auto timing{% endblock %}
+{% block content %}
+  <style>.content { max-width: none; }</style>
+  {% if not competition %}
+    <div class="notice">
+      <p>No competition is selected. Timing runs against the active competition, so
+        <a href="{% url 'competitions:list' %}">pick a competition</a> to time it.</p>
+    </div>
+  {% else %}
+    <div class="autotiming" id="autotiming">
+      <p class="hint auto-help">The start order comes from <strong>Run order</strong> and the
+        <strong>start pattern</strong>; times attach to it automatically. Drag a tile in the list to
+        reorder, <strong>double-click</strong> a time to ignore it, and drag an ignored time back onto a
+        slot to re-pair it.</p>
+
+      <div class="auto-layout">
+        <aside class="auto-order">
+          <div class="auto-order-head">
+            <h2 class="auto-col-title">Start order</h2>
+            <button type="button" class="button button--small" data-reset>Reset order</button>
+          </div>
+          <ol class="auto-order-list" id="auto-order-list"></ol>
+          <p class="auto-empty hint" id="auto-empty" hidden>No start order yet — set the
+            <a href="{% url 'competitions:runorder' %}">run order</a> and register starters.</p>
+        </aside>
+
+        <section class="auto-stage">
+          <div class="auto-tiles" id="auto-tiles"></div>
+        </section>
+
+        <aside class="auto-ignored">
+          <h2 class="auto-col-title">Ignored times</h2>
+          <div class="auto-ignored-list" id="auto-ignored-list" aria-label="Ignored times"></div>
+          <p class="auto-ignored-empty hint" id="auto-ignored-empty">None.</p>
+        </aside>
+      </div>
+    </div>
+
+    {{ auto|json_script:"auto-data" }}
+    <script>
+      window.AUTO_URLS = {
+        state: "{% url 'timing:auto-state' %}",
+        reorder: "{% url 'timing:auto-reorder' %}",
+        resetOrder: "{% url 'timing:auto-reset-order' %}",
+        ignore: "{% url 'timing:ignore' %}",
+        pair: "{% url 'timing:pair' %}",
+      };
+      window.AUTO_CSRF = "{{ csrf_token }}";
+    </script>
+    <script src="{% static 'js/auto_timing.js' %}"></script>
+  {% endif %}
+{% endblock %}

@@ -14,9 +14,9 @@ from django.views.generic import ListView, TemplateView, UpdateView
 from apps.competitions.models import Competition, CompetitionClass
 from apps.participants.models import EventEntry
 
-from . import arrangement, calc
+from . import arrangement, autotiming, calc
 from .forms import TimingSettingsForm
-from .models import TimedRun, TimingEvent, TimingSettings, TimingSignal
+from .models import MarshalPenalty, TimedRun, TimingEvent, TimingSettings, TimingSignal
 from .services import LIVE_GROUP
 
 
@@ -77,6 +77,103 @@ class TimingLiveView(TemplateView):
         if competition is not None:
             context["arrangement"] = serialize_arrangement(competition)
         return context
+
+
+class AutoTimingView(TemplateView):
+    """The order-driven live view: the start order down the left, and the
+    previous/current/next competitors with their times and each marshal post's
+    running penalty on the right."""
+
+    template_name = "timing/auto.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        competition = Competition.get_current()
+        context["competition"] = competition
+        if competition is not None:
+            context["auto"] = autotiming.serialize(competition)
+        return context
+
+
+def auto_arrangement(request):
+    """Auto timing state as JSON — fetched on load and on every WebSocket nudge."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"competition": False})
+    data = autotiming.serialize(competition)
+    data["competition"] = True
+    return JsonResponse(data)
+
+
+@require_POST
+def auto_reorder(request):
+    """Persist a manual start-order override: a list of slot keys, kept only for
+    the keys that currently exist."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    payload = _json_body(request)
+    posted = payload.get("order")
+    if not isinstance(posted, list):
+        return JsonResponse({"ok": False, "error": "order must be a list."}, status=400)
+    known = {slot["key"] for slot in autotiming.computed_slots(competition)}
+    competition.auto_timing_order = [key for key in posted if key in known]
+    competition.save(update_fields=["auto_timing_order"])
+    broadcast_live()
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+def auto_reset_order(request):
+    """Drop the manual override so the order re-derives from run order + pattern."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition.auto_timing_order = []
+    competition.save(update_fields=["auto_timing_order"])
+    broadcast_live()
+    return JsonResponse({"ok": True})
+
+
+# ----- marshal posts <-> auto timing link -----
+
+def marshal_state(request):
+    """The current competitor (and this post's stored penalty) for a marshal
+    post's page. ``?post=N`` names the post."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"run_id": None})
+    try:
+        post_number = int(request.GET.get("post"))
+    except (TypeError, ValueError):
+        return JsonResponse({"run_id": None})
+    return JsonResponse(autotiming.marshal_state(competition, post_number))
+
+
+@require_POST
+def marshal_submit(request):
+    """A marshal post's penalty for the run it's judging: the aggregate counts and
+    whether they've been submitted. Upserts one row per (run, post)."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    payload = _json_body(request)
+    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    if run is None or post is None:
+        return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
+    MarshalPenalty.objects.update_or_create(
+        timed_run=run,
+        marshal_post=post,
+        defaults={
+            "pylon_count": _as_count(payload.get("pylon_count")),
+            "task_count": _as_count(payload.get("task_count")),
+            "stopline_count": _as_count(payload.get("stopline_count")),
+            "submitted": bool(payload.get("submitted")),
+        },
+    )
+    broadcast_live()
+    return JsonResponse({"ok": True})
 
 
 # ----- signal ingestion (called by the simulator / device) -----

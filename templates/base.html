@@ -29,14 +29,15 @@
           <a class="shell-nav-subitem{% if url_name == 'penalties' %} active{% endif %}" href="{% url 'competitions:penalties' %}">Penalties</a>
         </div>
         <a class="shell-nav-item{% if request.resolver_match.app_name == 'participants' %} active{% endif %}" href="{% url 'participants:list' %}">Participants</a>
-        <a class="shell-nav-item{% if url_name == 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">Marshal Posts</a>
         {% comment %}Timing sub-pages will grow; Settings is kept last (future
         pages go above it).{% endcomment %}
         <a class="shell-nav-item shell-nav-parent{% if app_name == 'timing' and url_name != 'dashboard' %} active{% endif %}" href="{% url 'timing:times' %}">Timing</a>
         <div class="shell-nav-sub">
           <a class="shell-nav-subitem{% if url_name == 'times' %} active{% endif %}" href="{% url 'timing:times' %}">Times</a>
+          <a class="shell-nav-subitem{% if url_name == 'auto' %} active{% endif %}" href="{% url 'timing:auto' %}">Auto timing</a>
           <a class="shell-nav-subitem{% if url_name == 'settings' %} active{% endif %}" href="{% url 'timing:settings' %}">Settings</a>
         </div>
+        <a class="shell-nav-item{% if url_name == 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">Marshal Posts</a>
         {% endwith %}
       </nav>
       <div class="shell-sidebar-footer">

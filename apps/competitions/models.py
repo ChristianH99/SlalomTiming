@@ -153,6 +153,12 @@ class Competition(models.Model):
         help_text="The order participants take their runs, as pattern blocks "
         "(see apps/competitions/startpattern.py). Replayed for every run.",
     )
+    auto_timing_order = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Manual override of the Auto timing start order, as a list of slot "
+        "keys. Empty means the computed order (run order × start pattern) is used.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

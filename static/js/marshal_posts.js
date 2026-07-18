@@ -1,10 +1,16 @@
 // Marshal Posts operator page: pick your post, then tap the task buttons to
-// enter penalties for the current starter. Front-end only for now — Submit is a
-// local stub; wiring the entries back into the system is a later feature.
+// enter penalties for the current starter. The current starter comes from the
+// Auto timing view (the competitor being timed now) over the timing WebSocket;
+// every tap and the final Submit are pushed back so the timekeeper's per-post
+// box fills and turns green.
 (function () {
   const root = document.querySelector("[data-marshal]");
   if (!root) return;
   const config = JSON.parse(document.getElementById("marshal-config").textContent);
+  // The link to the timing side; absent (e.g. in isolation) leaves the page
+  // usable via the window.marshalSetStarter hook without any network calls.
+  const URLS = window.MARSHAL_URLS || null;
+  const CSRF = window.MARSHAL_CSRF || "";
 
   const select = root.querySelector("[data-post-select]");
   const confirmBtn = root.querySelector("[data-confirm]");
@@ -27,9 +33,11 @@
   let state = new Map();
   let stopLine = false;
   // The current starter, or null before anyone has started. Nothing on the board
-  // can be pressed or submitted while this is null — the bib arrives later, from
-  // the timing side, via marshalSetStarter().
+  // can be pressed or submitted while this is null — the starter arrives from the
+  // timing side (or the marshalSetStarter hook).
   let starter = null;
+  let confirmedPost = null;   // the post number once its selection is locked in
+  let currentRunId = null;    // the timing run the current entries attach to
 
   // --- Post selection ------------------------------------------------------
   config.posts.forEach((post) => {
@@ -54,6 +62,8 @@
     confirmBtn.hidden = false;
     changeBtn.hidden = true;
     board.hidden = true;
+    confirmedPost = null;
+    currentRunId = null;
   });
 
   function lockSelection() {
@@ -61,7 +71,10 @@
     confirmBtn.hidden = true;
     changeBtn.hidden = false;
     board.hidden = false;
+    confirmedPost = select.value;
+    currentRunId = null;
     buildBoard();
+    fetchState();   // pull the current competitor for this post right away
   }
 
   // --- Board ---------------------------------------------------------------
@@ -115,7 +128,7 @@
     btn.innerHTML =
       '<span class="marshal-task-num">Stop line</span>' +
       '<span class="marshal-task-state"></span>';
-    bindPress(btn, () => { stopLine = !stopLine; renderStop(btn); updateTotal(); }, () => {});
+    bindPress(btn, () => { stopLine = !stopLine; renderStop(btn); commitChange(); }, () => {});
     renderStop(btn);
     cell.appendChild(btn);
     return cell;
@@ -139,7 +152,7 @@
       cell.pylons = next;
     }
     renderTask(n, btn);
-    updateTotal();
+    commitChange();
   }
 
   function longTask(n, btn) {
@@ -152,7 +165,7 @@
       cell.pylons = 0;
     }
     renderTask(n, btn);
-    updateTotal();
+    commitChange();
   }
 
   // Reduce = step a task's penalty back down: one pylon at a time (clearing at
@@ -166,7 +179,7 @@
       if (cell.pylons <= 0) { cell.pylons = 0; cell.mode = "none"; }
     }
     renderTask(n, btn);
-    updateTotal();
+    commitChange();
   }
 
   function renderTask(n, btn) {
@@ -221,16 +234,104 @@
     submitBtn.disabled = !on;
   }
 
-  // Hook for the (later) timing integration to announce who's on course.
+  // Hook for driving the page without the timing link (tests, manual checks).
   window.marshalSetStarter = setStarter;
 
-  // --- Submit (stub) -------------------------------------------------------
+  // --- Submit --------------------------------------------------------------
   submitBtn.addEventListener("click", () => {
     if (!starter) return;
+    pushPenalty(true);
     showToast("Penalties submitted for bib " + starter.bib);
-    setStarter(null);
-    buildBoard();
   });
+
+  // --- Timing link ---------------------------------------------------------
+  // Every change is pushed so the timekeeper's box tracks the marshal live; the
+  // final Submit flags it done (green). Running total and the server share the
+  // same aggregate.
+  function commitChange() {
+    updateTotal();
+    pushPenalty(false);
+  }
+
+  function aggregate() {
+    let pylon = 0;
+    let task = 0;
+    state.forEach((cell) => {
+      if (cell.mode === "pylon") pylon += cell.pylons;
+      else if (cell.mode === "task") task += 1;
+    });
+    return { pylon_count: pylon, task_count: task, stopline_count: stopLine ? 1 : 0 };
+  }
+
+  // Single-flight push so a burst of taps can't land out of order on the server:
+  // only one request is in flight; the latest state is always what gets sent
+  // last. (Fire-and-forget POSTs otherwise race — last writer wins by arrival.)
+  let sending = false;
+  let queued = null;
+  function pushPenalty(submitted) {
+    if (!URLS || currentRunId == null || confirmedPost == null) return;
+    queued = Object.assign(
+      { post: Number(confirmedPost), run_id: currentRunId, submitted },
+      aggregate()
+    );
+    flushPenalty();
+  }
+  function flushPenalty() {
+    if (sending || !queued) return;
+    const body = queued;
+    queued = null;
+    sending = true;
+    fetch(URLS.submit, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      body: JSON.stringify(body),
+    })
+      .catch(() => {})
+      .finally(() => { sending = false; flushPenalty(); });
+  }
+
+  // Pull the current competitor for this post. A new run resets the board; the
+  // same run is left alone so the marshal's in-progress taps aren't wiped.
+  async function fetchState() {
+    if (!URLS || confirmedPost == null) return;
+    let data;
+    try {
+      data = await fetch(URLS.state + "?post=" + encodeURIComponent(confirmedPost))
+        .then((r) => r.json());
+    } catch (e) {
+      return;
+    }
+    if (!data || data.run_id == null) {
+      if (currentRunId !== null) {
+        currentRunId = null;
+        buildBoard();
+      }
+      setStarter(null);
+      return;
+    }
+    if (data.run_id !== currentRunId) {
+      currentRunId = data.run_id;
+      buildBoard();   // fresh board for the new competitor
+      setStarter({ bib: data.bib, name: data.name, club: data.club });
+    }
+  }
+
+  function connect() {
+    if (!URLS) return;
+    const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${scheme}://${window.location.host}/ws/timing/live/`);
+    ws.addEventListener("message", (event) => {
+      let msg = {};
+      try {
+        msg = JSON.parse(event.data);
+      } catch (e) {
+        return;
+      }
+      if (msg.event === "refresh") fetchState();
+    });
+    ws.addEventListener("close", () => setTimeout(connect, 2000));
+  }
+  connect();
 
   // --- Helpers -------------------------------------------------------------
   // Distinguish a tap from a long press with one timer; suppress the tap that

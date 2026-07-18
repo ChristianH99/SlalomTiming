@@ -56,11 +56,15 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          setup: Competition.penalties_by_marshal_posts turns it on, and each
                          post watches a set of numbered tasks. taskspec.py parses/renders the
                          free-text task lists ("1, 5, 11-15") the Penalties page collects.
-                         The top-level Marshal Posts page (competitions:marshal-posts) is the
-                         operator surface a marshal drives on a phone — front-end only so far,
-                         no transmission back into the system yet.
+                         The Marshal Posts page (competitions:marshal-posts, a top-level sidebar
+                         item below Timing) is the operator surface a marshal drives on a phone;
+                         it reads the current competitor from the Auto timing view and pushes
+                         penalties back over the timing WebSocket (see apps/timing/autotiming.py
+                         and timing.MarshalPenalty).
   taskspec.py            parse()/format_ranges()/summary() for the marshal-post task-number
                          specs. Shared by the Penalties page and the Marshal Posts page.
+  Competition            also carries auto_timing_order (a saved manual override of the Auto
+                         timing start order; see apps/timing/autotiming.py).
   assignment.py          Pluggable class-assignment strategies (Manual, Based-on-age) chosen per
                          competition via Competition.assignment_method; add a method in code only
                          (subclass AssignmentMethod + register). Competition.classes_for_participant()
@@ -112,7 +116,17 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          inbox — running number, port, is_manual, device_time; stamped with the
                          active competition; `ignored`), TimedRun (one run: a start_signal
                          paired with a finish_signal, each OneToOne so a time is used once, plus
-                         the operator's bib/class/run/penalty entry), and legacy TimingEvent.
+                         the operator's bib/class/run/penalty entry), MarshalPenalty (one per
+                         run×marshal-post: the post's aggregate counts + a `submitted` flag,
+                         written from the Marshal Posts page and shown on Auto timing), and
+                         legacy TimingEvent.
+  autotiming.py          The Auto timing view's logic. The start order (Competition.start_lists()
+                         = run order × start pattern) is a flat list of slots; a saved override
+                         (Competition.auto_timing_order, a list of slot keys) reorders it. Times
+                         still arrive as TimingSignal -> arrangement -> TimedRun, but bind to
+                         slots *positionally* (n-th started run = n-th slot) so no bib is typed —
+                         identity is the order. current_run() is the last to have started (the
+                         one marshals judge); serialize()/marshal_state() build the page + link.
   arrangement.py         Causal pairing of signals into runs: a finish joins the oldest open
                          start that began before it; a start never adopts an earlier orphan
                          finish. A start first fills the oldest empty *placeholder* row (one
@@ -129,6 +143,11 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          arrangement endpoint and mutate endpoints (run-update by run id,
                          ignore, pair). timing_signal ingests device posts (csrf-exempt, since a
                          real device can't send a token) and nudges live views to refresh.
+                         AutoTimingView + auto-state/reorder/reset-order endpoints; marshal-state
+                         (the current competitor for a post) + marshal-submit (a post's penalty
+                         for the current run) tie the Marshal Posts page to Auto timing. All
+                         share broadcast_live()/timing_live so a device post or a marshal tap
+                         nudges every open Auto timing and Marshal Posts page to re-fetch.
   connectors/            (legacy) TimingDeviceConnector ABC + SimulatorConnector for the old
                          connector-loop dashboard; get_connector() reads settings.TIMING_CONNECTOR.
   services.py            run_ingestion() [legacy] + Channels group names (timing_updates,
@@ -136,9 +155,14 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
   consumers.py           TimingConsumer (legacy dashboard) + TimingLiveConsumer (pushes refresh
                          nudges to open Times views, group "timing_live").
   management/commands/run_timing_connector.py   [legacy] runs the connector loop
-templates/timing/        settings.html, simulator.html (standalone, no app shell), live.html
+templates/timing/        settings.html, simulator.html (standalone, no app shell), live.html,
+                         auto.html (Auto timing)
 static/js/               dashboard.js (legacy) + timing_live.js (Times view: render, edits,
-                         double-click-to-ignore, drag-to-pair, WebSocket refresh)
+                         double-click-to-ignore, drag-to-pair, WebSocket refresh) + auto_timing.js
+                         (Auto timing: draggable start order, prev/current/next tiles, marshal
+                         boxes, ignore/re-pair, WS refresh). marshal_posts.js pushes taps/submit
+                         to timing:marshal-submit and pulls the current competitor via
+                         timing:marshal-state, single-flight so rapid taps can't land out of order.
 ```
 
 ### Timing UI (under the sidebar "Timing" menu)
@@ -163,6 +187,17 @@ static/js/               dashboard.js (legacy) + timing_live.js (Times view: ren
   Double-click a time to ignore it — ignored starts and finishes each get a rail column on the right,
   floated beside where they fall; drag one back onto a run's slot to use it (rejected with a wiggle if
   it would put a start after its finish). Column widths are fixed so entering a bib never shifts them.
+- **Auto timing** (`timing/auto/`) — the order-driven live view. The start order (run order × start
+  pattern) runs down the left as draggable tiles ("#3 C1"); dragging saves a persisted override
+  (Reset order re-derives it). Incoming times bind to the order positionally — no bib typing — and the
+  right shows the previous / current / next competitor with start, finish and run time. The current
+  (last to start) stays centred until the next one starts, then the tiles shift up. Beside the times,
+  one box per marshal post shows its running penalty for that competitor, turning green once the marshal
+  submits (so the timekeeper sees all-green when done). The current competitor is what the marshal posts
+  judge. Double-click a time to ignore it (listed on the right), drag it back onto a slot to re-pair.
+- **Marshal Posts** is a top-level sidebar item (below Timing) — the marshal's phone surface (see the
+  competitions app). It reads the current competitor from Auto timing over the timing WebSocket and
+  pushes every tap and the final submit back so the boxes above fill and go green.
 
 ### Adding a real device connector
 

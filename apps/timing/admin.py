@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import TimedRun, TimingEvent, TimingSettings, TimingSignal
+from .models import MarshalPenalty, TimedRun, TimingEvent, TimingSettings, TimingSignal
 
 
 @admin.register(TimingEvent)
@@ -28,3 +28,10 @@ class TimedRunAdmin(admin.ModelAdmin):
     list_display = ("competition", "bib_number", "competition_class", "run_type", "run_number",
                     "pylon_count", "task_count", "stopline_count")
     list_filter = ("competition", "run_type")
+
+
+@admin.register(MarshalPenalty)
+class MarshalPenaltyAdmin(admin.ModelAdmin):
+    list_display = ("timed_run", "marshal_post", "pylon_count", "task_count",
+                    "stopline_count", "submitted", "updated_at")
+    list_filter = ("submitted", "marshal_post")

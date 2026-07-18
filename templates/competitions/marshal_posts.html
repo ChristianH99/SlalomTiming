@@ -41,6 +41,13 @@
       <p class="marshal-toast" data-toast hidden></p>
     </div>
 
+    <script>
+      window.MARSHAL_URLS = {
+        state: "{% url 'timing:marshal-state' %}",
+        submit: "{% url 'timing:marshal-submit' %}",
+      };
+      window.MARSHAL_CSRF = "{{ csrf_token }}";
+    </script>
     <script src="{% static 'js/marshal_posts.js' %}"></script>
   {% endif %}
 {% endblock %}

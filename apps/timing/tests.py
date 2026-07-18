@@ -6,10 +6,10 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.urls import reverse
 
-from apps.competitions.models import Competition, CompetitionClass, CompetitionType
+from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
 from apps.participants.models import ClassAssignment, EventEntry, Participant
 
-from . import arrangement, calc
+from . import arrangement, autotiming, calc
 from .connectors import TimingPulse, get_connector
 from .connectors.simulator import SimulatorConnector
 from .models import TimedRun, TimingEvent, TimingSettings, TimingSignal
@@ -537,3 +537,96 @@ def test_completed_class_slot_is_disabled_and_default_advances(client):
     assert opts[f"{c2.pk}:0"] is True    # first slot complete → disabled
     assert opts[f"{c2.pk}:1"] is False   # second slot still open
     assert resp["row"]["run"]["class_key"] == f"{c2.pk}:1"  # default advanced to it
+
+
+# ----- auto timing -----
+
+def auto_scenario(bibs=(1, 2)):
+    """An active competition whose start order is one counted run for each of the
+    given bibs, in bib order."""
+    comp = make_active_competition(
+        penalties_enabled=True, pylon_penalty=2, task_penalty=10,
+        stop_line_penalty=5, max_penalty_per_task=10,
+    )
+    comp.classes.filter(name="1").update(
+        is_running=True, run_position=0, practice_runs=0, counted_runs=1
+    )
+    cls = comp.classes.get(name="1")
+    comp.start_pattern = [{"window": None, "chips": ["counted"]}]
+    comp.save(update_fields=["start_pattern"])
+    for bib in bibs:
+        participant = make_participant(comp.competition_type, bib, comp)
+        ClassAssignment.objects.create(participant=participant, competition_class=cls)
+    return comp, cls
+
+
+def test_computed_slots_follow_the_start_order():
+    comp, _ = auto_scenario()
+    slots = autotiming.computed_slots(comp)
+    assert [slot["bib"] for slot in slots] == [1, 2]
+    assert [slot["run_label"] for slot in slots] == ["C1", "C1"]
+    assert all(key["key"].endswith(":counted:1") for key in slots)
+
+
+def test_ordered_slots_apply_the_saved_override():
+    comp, _ = auto_scenario()
+    slots = autotiming.computed_slots(comp)
+    comp.auto_timing_order = [slots[1]["key"], slots[0]["key"]]
+    comp.save(update_fields=["auto_timing_order"])
+    assert [slot["bib"] for slot in autotiming.ordered_slots(comp)] == [2, 1]
+
+
+def test_times_bind_to_slots_positionally():
+    comp, _ = auto_scenario()
+    signal_in(comp, 1, "10:00:00.000", running=1)   # first start → slot 0 (bib 1)
+    signal_in(comp, 1, "10:00:05.000", running=2)   # second start → slot 1 (bib 2)
+    data = autotiming.serialize(comp)
+    assert [item["bib"] for item in data["items"][:2]] == [1, 2]
+    assert data["items"][0]["started"] is True
+    assert data["current_index"] == 1   # the last to start stays current
+
+
+def test_marshal_state_tracks_the_current_competitor():
+    comp, _ = auto_scenario()
+    signal_in(comp, 1, "10:00:00.000", running=1)
+    state = autotiming.marshal_state(comp, 1)
+    assert state["bib"] == 1
+    assert state["run_id"] is not None
+
+
+def test_marshal_submit_stores_and_shows_on_auto(client):
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    resp = post_json(client, "timing:marshal-submit", post=1, run_id=run.id,
+                     pylon_count=3, task_count=0, stopline_count=0, submitted=True)
+    assert resp.status_code == 200 and resp.json()["ok"]
+    box = autotiming.serialize(comp)["items"][0]["marshals"][0]
+    assert box["submitted"] is True
+    assert box["seconds"] == 6   # 3 pylons × 2s
+
+
+def test_auto_reorder_persists_and_drops_unknown_keys(client):
+    comp, _ = auto_scenario()
+    slots = autotiming.computed_slots(comp)
+    keys = [slots[1]["key"], slots[0]["key"]]
+    post_json(client, "timing:auto-reorder", order=["bogus"] + keys)
+    comp.refresh_from_db()
+    assert comp.auto_timing_order == keys   # unknown key dropped, order kept
+    post_json(client, "timing:auto-reset-order")
+    comp.refresh_from_db()
+    assert comp.auto_timing_order == []
+
+
+def test_auto_state_endpoint_returns_ordered_items(client):
+    comp, _ = auto_scenario()
+    signal_in(comp, 1, "10:00:00.000", running=1)
+    data = client.get(reverse("timing:auto-state")).json()
+    assert data["competition"] is True
+    assert data["items"][0]["bib"] == 1
+
+
+def test_auto_page_needs_an_active_competition(client):
+    Competition.objects.update(is_active=False)
+    data = client.get(reverse("timing:auto-state")).json()
+    assert data["competition"] is False
