@@ -156,20 +156,26 @@ def timing_run_update(request):
         return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
 
     if "bib_number" in payload:
+        # A new bib re-resolves the class (clearing the bib clears the class), and
+        # resets the run so it re-derives for the new participant.
         run.bib_number = _as_positive_int(payload.get("bib_number"))
-        # On bib entry, default the class to the participant's first (the operator
-        # can change it later when multiple classes are allowed).
+        run.run_type, run.run_number = "", None
         entry = _resolve_entry(competition, run.bib_number)
-        if entry is not None and run.competition_class is None:
-            classes = competition.classes_for_participant(entry.participant)
-            if classes:
-                run.competition_class = classes[0]
+        classes = competition.classes_for_participant(entry.participant) if entry else []
+        run.competition_class = classes[0] if classes else None
     if "class_id" in payload:
         run.competition_class = CompetitionClass.objects.filter(
             id=payload.get("class_id"), competition=competition
         ).first()
+        run.run_type, run.run_number = "", None  # class changed → re-derive the run
     if "run_value" in payload:
         run.run_type, run.run_number = _parse_run_value(payload.get("run_value"))
+    # Once a class is set (auto or manual) and the run wasn't set explicitly here,
+    # default the run to the next not-yet-done one, in order P then C.
+    if "run_value" not in payload and run.competition_class and not run.run_type:
+        nxt = _next_undone_run(competition, run)
+        if nxt:
+            run.run_type, run.run_number = nxt
     for field in ("pylon_count", "task_count", "stopline_count"):
         if field in payload:
             setattr(run, field, _as_count(payload.get(field)))
@@ -221,6 +227,34 @@ def timing_pair(request):
     return JsonResponse({"ok": ok, "rejected": not ok})
 
 
+@require_POST
+def timing_add_run(request):
+    """Add an empty run row so the operator can enter a bib/run for an upcoming
+    starter. Incoming start times fill these placeholders oldest-first."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    TimedRun.objects.create(competition=competition)
+    broadcast_live()
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+def timing_delete_run(request):
+    """Remove an empty placeholder row (one with no start and no finish yet)."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    run = TimedRun.objects.filter(
+        id=_json_body(request).get("run_id"), competition=competition,
+        start_signal__isnull=True, finish_signal__isnull=True,
+    ).first()
+    if run is not None:
+        run.delete()
+        broadcast_live()
+    return JsonResponse({"ok": True})
+
+
 # ----- serialization -----
 
 def serialize_arrangement(competition):
@@ -238,7 +272,7 @@ def serialize_arrangement(competition):
             {
                 "id": signal.id,
                 "role": signal.role(settings) or "",
-                "time": _format_device_time(signal.device_time),
+                "time": _format_device_time(signal.device_time, ctype.timing_precision),
                 "manual": signal.is_manual,
             }
             for signal in ignored
@@ -261,13 +295,17 @@ def _serialize_run(run, competition, ctype):
     total = calc.format_precision(rt + penalty, precision) if rt is not None else ""
     return {
         "id": run.id,
-        "start": _signal_ref(start),
-        "finish": _signal_ref(finish),
+        "start": _signal_ref(start, precision),
+        "finish": _signal_ref(finish, precision),
+        # A row with neither time is a placeholder awaiting a starter.
+        "placeholder": start is None and finish is None,
         "run_time": calc.format_precision(rt, precision),
         "run": {
             "id": run.id,
             "bib_number": run.bib_number,
             "name": str(participant) if participant else "",
+            # Bib entered but no such starter registered — flag it, but keep it.
+            "bib_unknown": bool(run.bib_number and participant is None),
             "class_id": cclass.pk if cclass else None,
             "class_name": cclass.name if cclass else "",
             "class_options": _class_options(competition, participant),
@@ -283,20 +321,46 @@ def _serialize_run(run, competition, ctype):
     }
 
 
-def _signal_ref(signal):
+def _signal_ref(signal, precision):
     if signal is None:
         return None
     return {
         "id": signal.id,
-        "time": _format_device_time(signal.device_time),
+        "time": _format_device_time(signal.device_time, precision),
         "manual": signal.is_manual,
     }
 
 
-def _format_device_time(t):
+def _format_device_time(t, precision):
+    """hh:mm:ss with the fractional second truncated to the device precision."""
     if t is None:
         return ""
-    return f"{t:%H:%M:%S}.{t.microsecond // 1000:03d}"
+    frac = t.microsecond // (10 ** (6 - precision))
+    return f"{t:%H:%M:%S}." + str(frac).zfill(precision)
+
+
+def _next_undone_run(competition, run):
+    """The next run (P1, P2, …, C1, …) not yet recorded for this run's bib+class."""
+    cclass = run.competition_class
+    if cclass is None:
+        return None
+    used = set()
+    if run.bib_number:
+        used = {
+            (other.run_type, other.run_number)
+            for other in TimedRun.objects.filter(
+                competition=competition, bib_number=run.bib_number, competition_class=cclass
+            ).exclude(pk=run.pk)
+            if other.run_type and other.run_number
+        }
+    for run_type, count in (
+        ("practice", cclass.practice_runs or 0),
+        ("counted", cclass.counted_runs or 0),
+    ):
+        for number in range(1, count + 1):
+            if (run_type, number) not in used:
+                return (run_type, number)
+    return None
 
 
 def _resolve_entry(competition, bib):

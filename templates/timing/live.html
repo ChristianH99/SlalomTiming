@@ -12,9 +12,10 @@
     </div>
   {% else %}
     <div class="timing-live" id="timing-live">
-      <p class="hint timing-help"><strong>Double-click</strong> a time to ignore a wrong measurement —
-        ignored times move to the rail on the right, beside where they fall. Drag one back onto a run's
-        start or finish slot (or double-click it) to use it again.</p>
+      <p class="hint timing-help">Hover between the header and the top row for a <strong>+</strong> to
+        pre-enter an upcoming starter. <strong>Double-click</strong> a time to ignore a wrong measurement —
+        ignored starts and finishes move to their rails on the right, beside where they fall. Drag one back
+        onto a run's slot (or double-click it) to use it again.</p>
       <div class="timing-live-body" id="timing-live-body">
         <div class="table-card">
           <table class="timing-table">
@@ -38,7 +39,10 @@
             <tbody id="timing-rows"></tbody>
           </table>
         </div>
-        <div class="ignored-rail" id="ignored-rail" aria-label="Ignored times"></div>
+        <div class="ignored-rail" id="ignored-rail" aria-label="Ignored times">
+          <div class="ignored-col" data-role="start"><span class="ignored-cap">Ign. start</span></div>
+          <div class="ignored-col" data-role="finish"><span class="ignored-cap">Ign. finish</span></div>
+        </div>
       </div>
       <p class="timing-empty hint" id="timing-empty" hidden>Waiting for the first start signal…</p>
     </div>
@@ -48,6 +52,8 @@
       window.TIMING_URLS = {
         arrangement: "{% url 'timing:arrangement' %}",
         run: "{% url 'timing:run-update' %}",
+        runAdd: "{% url 'timing:run-add' %}",
+        runDelete: "{% url 'timing:run-delete' %}",
         ignore: "{% url 'timing:ignore' %}",
         pair: "{% url 'timing:pair' %}",
       };

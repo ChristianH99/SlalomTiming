@@ -18,7 +18,22 @@ def ingest(signal, settings):
     """Place a newly arrived (or restored) start/finish signal into a run."""
     role = effective_role(signal, settings)
     if role == TimingSignal.Role.START:
-        TimedRun.objects.create(competition=signal.competition, start_signal=signal)
+        # Fill the oldest pre-entered placeholder (a row with a bib/run but no
+        # times yet) so times populate those bottom-first; else open a new run.
+        placeholder = (
+            TimedRun.objects.filter(
+                competition=signal.competition,
+                start_signal__isnull=True,
+                finish_signal__isnull=True,
+            )
+            .order_by("id")
+            .first()
+        )
+        if placeholder is not None:
+            placeholder.start_signal = signal
+            placeholder.save(update_fields=["start_signal", "updated_at"])
+        else:
+            TimedRun.objects.create(competition=signal.competition, start_signal=signal)
     elif role == TimingSignal.Role.FINISH:
         open_run = _oldest_open_run(signal)
         if open_run is not None:
@@ -62,8 +77,10 @@ def _oldest_open_run(finish_signal):
 
 
 def detach(signal):
-    """Remove a signal from whatever run holds it (e.g. when it is ignored),
-    deleting the run if that leaves it empty."""
+    """Remove a signal from whatever run holds it (e.g. when it is ignored). If
+    that leaves the run empty, delete it — unless it still carries operator entry
+    (a bib, a run, or penalties), in which case it stays as a placeholder so a
+    pre-entered starter isn't lost when a wrong time is ignored."""
     run = _run_holding(signal)
     if run is None:
         return
@@ -71,10 +88,17 @@ def detach(signal):
         run.start_signal = None
     if run.finish_signal_id == signal.id:
         run.finish_signal = None
-    if run.start_signal_id is None and run.finish_signal_id is None:
+    if run.start_signal_id is None and run.finish_signal_id is None and _is_blank(run):
         run.delete()
     else:
         run.save()
+
+
+def _is_blank(run):
+    return not (
+        run.bib_number or run.run_type
+        or run.pylon_count or run.task_count or run.stopline_count
+    )
 
 
 def _run_holding(signal):
@@ -124,16 +148,21 @@ def assign(signal, target_run, slot):
 
 def rows(competition):
     """Every run for the competition, newest first (by the run's earliest time),
-    so fresh times appear at the top without scrolling."""
+    so fresh times appear at the top without scrolling. Placeholders (no times
+    yet) sort above all timed rows, newest-added first."""
     runs = list(
         TimedRun.objects.filter(competition=competition).select_related(
             "start_signal", "finish_signal", "competition_class"
         )
     )
-    runs.sort(key=_anchor_key, reverse=True)
+    runs.sort(key=_sort_key, reverse=True)
     return runs
 
 
-def _anchor_key(run):
+def _sort_key(run):
     signal = run.start_signal or run.finish_signal
-    return (signal.device_time, signal.received_at, signal.id)
+    if signal is None:
+        # Placeholder: bucket 1 (above timed rows), newest-added (created_at) first.
+        return (1, run.created_at, run.id)
+    # Timed: bucket 0, newest time first.
+    return (0, signal.device_time, signal.received_at, signal.id)

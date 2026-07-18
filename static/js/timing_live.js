@@ -1,8 +1,9 @@
 // Live timing view. Renders runs (a start time paired with a finish time) newest
-// first, lets the operator enter bib/class/run/penalties, double-click a time to
-// ignore it (ignored times sit on a rail to the right, beside where they fall in
-// time), and drag a time onto a run's start/finish slot to pair it. State lives on
-// the server; edits POST and the view is nudged over a WebSocket to re-fetch.
+// first, with pre-enterable placeholder rows at the top; lets the operator enter
+// bib/class/run/penalties, double-click a time to ignore it (ignored starts and
+// finishes each get their own rail column on the right, beside where they fall),
+// and drag a time onto a run's slot to pair it. State lives on the server; edits
+// POST and the view is nudged over a WebSocket to re-fetch.
 (function () {
   "use strict";
 
@@ -22,11 +23,13 @@
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-      body: JSON.stringify(body),
+      body: JSON.stringify(body || {}),
     });
     return res.json().catch(() => ({ ok: false }));
   }
   const updateRun = (body) => postJSON(URLS.run, body);
+  const addRun = () => postJSON(URLS.runAdd);
+  const deleteRun = (runId) => postJSON(URLS.runDelete, { run_id: runId });
   const setIgnored = (signalId, ignored) => postJSON(URLS.ignore, { signal_id: signalId, ignored });
   const pair = (signalId, runId, slot) => postJSON(URLS.pair, { signal_id: signalId, run_id: runId, slot });
 
@@ -42,18 +45,34 @@
     if (child) td.append(child);
     return td;
   }
+  const colspan = () => (state.penalties_enabled ? 11 : 7);
 
   // ---- rendering ----------------------------------------------------------
   function render() {
-    rowsEl.replaceChildren(...state.rows.map(renderRow));
+    rowsEl.replaceChildren(addStrip(), ...state.rows.map(renderRow));
     emptyEl.hidden = state.rows.length > 0;
     renderIgnored();
+  }
+
+  // A thin strip below the header; hover reveals a + to add a placeholder row.
+  function addStrip() {
+    const tr = el("tr", "tt-add-strip");
+    const td = el("td");
+    td.colSpan = colspan();
+    const btn = el("button", "tt-add-btn", "+");
+    btn.type = "button";
+    btn.title = "Add a row for an upcoming starter";
+    btn.addEventListener("click", () => addRun().then(refresh));
+    td.append(btn);
+    tr.append(td);
+    return tr;
   }
 
   function renderRow(row) {
     const run = row.run;
     const tr = el("tr", "timing-row");
     tr.dataset.runId = run.id;
+    if (row.placeholder) tr.classList.add("timing-row--placeholder");
     if (run.over_max) tr.classList.add("timing-row--over");
 
     tr.append(cell("tt-time", timeSlot(row.start, "start", run.id)));
@@ -68,7 +87,17 @@
       tr.append(cell("tt-pen", penaltyBox(run, "stopline_count")));
       tr.append(cell("tt-pen-total", el("span", "pen-total", secs(run.penalty))));
     }
-    tr.append(cell("tt-total", el("span", "run-total", run.total || "–")));
+    const totalCell = cell("tt-total", el("span", "run-total", run.total || "–"));
+    // An empty placeholder can be removed.
+    if (row.placeholder) {
+      const del = el("button", "row-delete", "×");
+      del.type = "button";
+      del.tabIndex = -1;
+      del.title = "Remove this row";
+      del.addEventListener("click", () => deleteRun(run.id).then(refresh));
+      totalCell.append(del);
+    }
+    tr.append(totalCell);
     return tr;
   }
 
@@ -82,7 +111,6 @@
       return wrap;
     }
     wrap.dataset.time = sig.time;
-    // Manual triggers (device hand button / simulator M-buttons) get a distinct tint.
     const chip = el("span", "time-chip" + (sig.manual ? " time-chip--manual" : ""), sig.time);
     chip.draggable = true;
     chip.dataset.signalId = sig.id;
@@ -98,12 +126,13 @@
 
   function bibField(run) {
     const wrap = el("div", "bib-field");
-    const input = el("input", "bib-input");
+    const input = el("input", "bib-input" + (run.bib_unknown ? " bib-input--unknown" : ""));
     input.type = "number";
     input.min = "1";
     input.value = run.bib_number == null ? "" : run.bib_number;
     input.dataset.rowKey = run.id;
     input.dataset.field = "bib";
+    if (run.bib_unknown) input.title = "No starter with this bib is registered (kept anyway).";
     input.addEventListener("change", () =>
       updateRun({ run_id: run.id, bib_number: input.value }).then(applyRow)
     );
@@ -141,7 +170,6 @@
     run.run_options.forEach((opt) => {
       const o = el("option", null, opt.label);
       o.value = opt.value;
-      // A run already recorded for this bib+class is disabled (can't repeat it).
       if (opt.disabled && opt.value !== run.run_value) o.disabled = true;
       if (opt.value === run.run_value) o.selected = true;
       select.append(o);
@@ -165,11 +193,14 @@
       input.value = v;
       updateRun({ run_id: run.id, [field]: v }).then(applyRow);
     };
+    // The −/+ buttons are out of the tab order, so Tab runs bib → run → penalties.
     const minus = el("button", "pen-btn", "−");
     minus.type = "button";
+    minus.tabIndex = -1;
     minus.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) - 1));
     const plus = el("button", "pen-btn", "+");
     plus.type = "button";
+    plus.tabIndex = -1;
     plus.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) + 1));
     input.addEventListener("change", () => commit(input.value));
     wrap.append(minus, input, plus);
@@ -178,9 +209,15 @@
 
   const secs = (n) => (n ? `${n}s` : "0s");
 
-  // ---- ignored times: a rail to the right, each beside where it falls -------
+  // ---- ignored times: start and finish rails, each beside where it falls ----
   function renderIgnored() {
-    rail.replaceChildren(...state.ignored.map(ignoredChip));
+    rail.querySelectorAll(".ignored-col").forEach((col) => {
+      col.querySelectorAll(".ignored-chip").forEach((c) => c.remove());
+      const role = col.dataset.role;
+      const chips = state.ignored.filter((s) => s.role === role);
+      col.classList.toggle("ignored-col--empty", chips.length === 0);
+      chips.forEach((s) => col.append(ignoredChip(s)));
+    });
     positionIgnored();
   }
 
@@ -198,10 +235,8 @@
   }
 
   // Float each ignored chip vertically at the boundary between the two rows its
-  // time falls between (rows themselves never move); stack to avoid overlaps.
+  // time falls between (rows never move); stack within a column to avoid overlaps.
   function positionIgnored() {
-    const chips = [...rail.children];
-    if (!chips.length) return;
     const railTop = rail.getBoundingClientRect().top;
     const rowInfo = [...rowsEl.querySelectorAll("tr[data-run-id]")].map((tr) => {
       const rect = tr.getBoundingClientRect();
@@ -209,20 +244,22 @@
       const time = (row.start && row.start.time) || (row.finish && row.finish.time) || "";
       return { top: rect.top - railTop, bottom: rect.bottom - railTop, time };
     });
-    let lastBottom = -Infinity;
-    chips.forEach((chip) => {
-      const t = chip.dataset.time;
-      let y = 0;
-      if (rowInfo.length) {
-        const idx = rowInfo.findIndex((ri) => ri.time < t); // rows are newest-first
-        if (idx === -1) y = rowInfo[rowInfo.length - 1].bottom; // older than all
-        else if (idx === 0) y = rowInfo[0].top; // newer than all
-        else y = rowInfo[idx].top; // between idx-1 and idx
-      }
-      let top = y - chip.offsetHeight / 2;
-      if (top < lastBottom + 4) top = lastBottom + 4; // don't overlap the one above
-      chip.style.top = `${Math.max(0, top)}px`;
-      lastBottom = top + chip.offsetHeight;
+    rail.querySelectorAll(".ignored-col").forEach((col) => {
+      let lastBottom = -Infinity;
+      col.querySelectorAll(".ignored-chip").forEach((chip) => {
+        const t = chip.dataset.time;
+        let y = 0;
+        if (rowInfo.length) {
+          const idx = rowInfo.findIndex((ri) => ri.time && ri.time < t);
+          if (idx === -1) y = rowInfo[rowInfo.length - 1].bottom;
+          else if (idx === 0) y = rowInfo[0].top;
+          else y = rowInfo[idx].top;
+        }
+        let top = y - chip.offsetHeight / 2;
+        if (top < lastBottom + 4) top = lastBottom + 4;
+        chip.style.top = `${Math.max(0, top)}px`;
+        lastBottom = top + chip.offsetHeight;
+      });
     });
   }
 
@@ -258,7 +295,7 @@
 
   function wiggle(node) {
     node.classList.remove("time-slot--reject");
-    void node.offsetWidth; // restart the animation
+    void node.offsetWidth;
     node.classList.add("time-slot--reject");
     setTimeout(() => node.classList.remove("time-slot--reject"), 450);
   }

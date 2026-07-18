@@ -105,9 +105,13 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          the operator's bib/class/run/penalty entry), and legacy TimingEvent.
   arrangement.py         Causal pairing of signals into runs: a finish joins the oldest open
                          start that began before it; a start never adopts an earlier orphan
-                         finish. ingest()/detach()/assign()/rows(); rows() is newest-first.
-                         effective_role() handles a single light barrier (start_channel ==
-                         finish_channel): the one channel alternates start/finish/start/…
+                         finish. A start first fills the oldest empty *placeholder* row (one
+                         pre-entered by the operator) before opening a new run. ignore keeps a
+                         row that still carries a bib/run (placeholder) rather than deleting it.
+                         ingest()/detach()/assign()/rows(); rows() is newest-first with
+                         placeholders on top. effective_role() handles a single light barrier
+                         (start_channel == finish_channel): the one channel alternates
+                         start/finish/start/…
   calc.py                Run time (integer-microsecond truncation to the type's precision, never
                          rounded), total penalty, fixed-decimal formatting.
   forms.py               TimingSettingsForm (IP required only for the TP540).
@@ -135,12 +139,16 @@ static/js/               dashboard.js (legacy) + timing_live.js (Times view: ren
   auto-incrementing running number (with reset), a 2×4 pad (ports 1–4 light barrier, M1–M4 manual
   → same port, is_manual), and an on-page log. Each press POSTs a signal to `timing:signal`.
 - **Times** (`timing/times/`) — the operator's live view for the active competition: start/finish
-  times paired into runs (newest first), with bib (→ name/class lookup), class/run, and penalty
-  entry (−/+ steppers), live over a WebSocket. Manual times are tinted differently from light-barrier
-  ones; a run option already recorded for a bib+class is disabled. Double-click a time to ignore it —
-  ignored times sit on a rail down the right of the table, floated beside where they fall between two
-  rows; drag one back onto a run's slot to use it (rejected with a wiggle if it would put a start after
-  its finish). Column widths are fixed so entering a bib never shifts them.
+  times (shown at the type's precision, truncated) paired into runs (newest first), with bib, class,
+  run, and penalty entry (−/+ steppers, out of the tab order), live over a WebSocket. Entering a bib
+  looks up the name, sets the class (updating it if the bib changes, clearing it if the bib is cleared),
+  and auto-selects the next not-yet-done run (P then C); an unknown bib is flagged but kept. A run
+  option already recorded for a bib+class is disabled. Manual times are tinted vs light-barrier ones.
+  Hover between the header and the top row for a **+** to pre-enter an upcoming starter (an empty
+  placeholder row); incoming starts fill placeholders oldest-first, so times populate bottom-to-top.
+  Double-click a time to ignore it — ignored starts and finishes each get a rail column on the right,
+  floated beside where they fall; drag one back onto a run's slot to use it (rejected with a wiggle if
+  it would put a start after its finish). Column widths are fixed so entering a bib never shifts them.
 
 ### Adding a real device connector
 

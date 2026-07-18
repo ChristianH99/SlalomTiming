@@ -195,6 +195,8 @@ def _t(text):
 
 
 def make_active_competition(**type_kwargs):
+    # 1/1000 precision by default so device times keep their milliseconds in tests.
+    type_kwargs.setdefault("timing_precision", CompetitionType.Precision.THOUSANDTHS)
     ctype = CompetitionType.objects.create(name="Moto", **type_kwargs)
     return Competition.objects.create(
         competition_type=ctype, name="Race", date=datetime.date(2026, 5, 1), is_active=True
@@ -247,7 +249,7 @@ def test_finish_pairs_with_oldest_open_start_newest_row_on_top():
     assert rows[0]["start"]["time"] == "10:00:05.000" and rows[0]["finish"] is None
     assert rows[1]["start"]["time"] == "10:00:00.000"
     assert rows[1]["finish"]["time"] == "10:00:12.500"
-    assert rows[1]["run_time"] == "12.50"
+    assert rows[1]["run_time"] == "12.500"
 
 
 def test_start_does_not_adopt_earlier_orphan_finish():
@@ -374,3 +376,90 @@ def test_serialized_time_carries_manual_flag():
     arrangement.ingest(manual, TimingSettings.load())
     row = serialize_arrangement(comp)["rows"][0]
     assert row["start"]["manual"] is True
+
+
+def _bib_participant(comp, bib, cclass):
+    p = Participant.objects.create(
+        competition_type=comp.competition_type, first_name=f"P{bib}", last_name="X",
+        date_of_birth=datetime.date(2010, 1, 1), license_number=str(bib),
+    )
+    EventEntry.objects.create(participant=p, competition=comp, bib_number=bib)
+    ClassAssignment.objects.create(participant=p, competition_class=cclass)
+    return p
+
+
+def test_start_finish_times_truncated_to_precision():
+    comp = make_active_competition(timing_precision=CompetitionType.Precision.HUNDREDTHS)
+    signal_in(comp, 1, "10:00:00.567", running=1)
+    row = serialize_arrangement(comp)["rows"][0]
+    assert row["start"]["time"] == "10:00:00.56"  # cut to 1/100, not .567 or rounded
+
+
+def test_run_auto_sets_to_next_undone(client):
+    comp = make_active_competition()
+    comp.classes.filter(name="1").update(is_running=True)  # practice_runs=1, counted_runs=2
+    cclass = comp.classes.get(name="1")
+    _bib_participant(comp, 1, cclass)
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    resp = post_json(client, "timing:run-update", run_id=run.id, bib_number="1").json()
+    assert resp["row"]["run"]["run_value"] == "practice-1"
+
+
+def test_new_bib_updates_class_and_clearing_bib_clears_it(client):
+    comp = make_active_competition()
+    comp.classes.filter(name__in=["1", "2"]).update(is_running=True)
+    c1, c2 = comp.classes.get(name="1"), comp.classes.get(name="2")
+    _bib_participant(comp, 1, c1)
+    _bib_participant(comp, 2, c2)
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    first = post_json(client, "timing:run-update", run_id=run.id, bib_number="1").json()
+    assert first["row"]["run"]["class_id"] == c1.pk
+    second = post_json(client, "timing:run-update", run_id=run.id, bib_number="2").json()
+    assert second["row"]["run"]["class_id"] == c2.pk  # updated, not sticky
+    cleared = post_json(client, "timing:run-update", run_id=run.id, bib_number="").json()
+    assert cleared["row"]["run"]["bib_number"] is None
+    assert cleared["row"]["run"]["class_id"] is None
+
+
+def test_unknown_bib_is_flagged_but_kept(client):
+    comp = make_active_competition()
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    resp = post_json(client, "timing:run-update", run_id=run.id, bib_number="999").json()
+    assert resp["row"]["run"]["bib_number"] == 999
+    assert resp["row"]["run"]["bib_unknown"] is True
+
+
+def test_start_fills_oldest_placeholder(client):
+    comp = make_active_competition()
+    post_json(client, "timing:run-add")  # placeholder A (created first)
+    post_json(client, "timing:run-add")  # placeholder B
+    a, b = list(TimedRun.objects.order_by("id"))
+    assert serialize_arrangement(comp)["rows"][0]["placeholder"] is True
+    signal_in(comp, 1, "10:00:00.000", running=1)  # first start fills A
+    a.refresh_from_db(); b.refresh_from_db()
+    assert a.start_signal is not None and b.start_signal is None
+    assert TimedRun.objects.count() == 2  # no extra row created
+
+
+def test_delete_removes_only_empty_placeholder(client):
+    comp = make_active_competition()
+    timed = run_of(signal_in(comp, 1, "10:00:00.000"))  # timed run first (no placeholder)
+    post_json(client, "timing:run-add")                 # then an empty placeholder
+    placeholder = TimedRun.objects.exclude(pk=timed.pk).get()
+    post_json(client, "timing:run-delete", run_id=timed.id)       # has a time → kept
+    post_json(client, "timing:run-delete", run_id=placeholder.id)  # empty → removed
+    assert TimedRun.objects.filter(pk=timed.pk).exists()
+    assert not TimedRun.objects.filter(pk=placeholder.pk).exists()
+
+
+def test_ignoring_sole_time_keeps_pre_entered_row(client):
+    comp = make_active_competition()
+    comp.classes.filter(name="1").update(is_running=True)
+    _bib_participant(comp, 1, comp.classes.get(name="1"))
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    post_json(client, "timing:run-update", run_id=run.id, bib_number="1")  # pre-enter a bib
+    start = run.start_signal
+    post_json(client, "timing:ignore", signal_id=start.id, ignored=True)
+    run.refresh_from_db()
+    # The wrong start is gone but the row survives as a placeholder holding the bib.
+    assert run.start_signal_id is None and run.bib_number == 1
