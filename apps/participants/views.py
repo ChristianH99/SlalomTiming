@@ -204,6 +204,30 @@ class ParticipantDeleteView(DeleteView):
     template_name = "participants/participant_confirm_delete.html"
     success_url = reverse_lazy("participants:list")
 
+    def get_context_data(self, **kwargs):
+        # Deleting a participant CASCADE-removes their registrations and class
+        # assignments, but their recorded runs are keyed only by bib number (no
+        # FK back to the participant), so those times survive — orphaned. Surface
+        # both facts so the operator isn't surprised.
+        context = super().get_context_data(**kwargs)
+        from apps.timing.models import TimedRun
+
+        participant = self.object
+        entries = list(participant.entries.select_related("competition"))
+        context["entry_count"] = len(entries)
+        context["assignment_count"] = participant.class_assignments.count()
+        orphaned = 0
+        for entry in entries:
+            orphaned += (
+                TimedRun.objects.filter(
+                    competition=entry.competition, bib_number=entry.bib_number
+                )
+                .filter(Q(start_signal__isnull=False) | Q(finish_signal__isnull=False))
+                .count()
+            )
+        context["orphaned_run_count"] = orphaned
+        return context
+
 
 def participant_check(request):
     """Return participants that look like duplicates of what's being entered:

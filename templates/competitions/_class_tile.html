@@ -1,6 +1,8 @@
 {% comment %}One editable class tile. Age block and repeat toggle are shown/hidden
 by the Classes page JS according to the selected assignment method.{% endcomment %}
-<div class="competition-tile class-tile" data-class-tile>
+<div class="competition-tile class-tile" data-class-tile
+     data-run-count="{{ class_form.instance.recorded_run_count|default:0 }}"
+     data-assignment-count="{{ class_form.instance.assignment_count|default:0 }}">
   <div class="class-tile-body">
     <div class="class-tile-top">
       <div class="class-tile-name">

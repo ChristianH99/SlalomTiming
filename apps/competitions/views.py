@@ -2,7 +2,7 @@ import json
 
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Count, Max
+from django.db.models import Count, Max, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views import View
@@ -116,12 +116,44 @@ class ClassesView(ActiveCompetitionMixin, View):
     template_name = "competitions/competition_classes.html"
 
     def _context(self, competition, assignment_form, formset):
+        self._annotate_usage(competition, formset)
         return {
             "object": competition,
             "assignment_form": assignment_form,
             "formset": formset,
             "assignment_methods_meta": assignment_methods_meta(),
         }
+
+    @staticmethod
+    def _annotate_usage(competition, formset):
+        """Tag each class form's instance with how much data references it, so the
+        template can warn before a class carrying results or assignments is
+        removed. Deleting a class unlinks its recorded runs (SET_NULL) and
+        CASCADE-deletes its participant assignments."""
+        from apps.participants.models import ClassAssignment
+        from apps.timing.models import TimedRun
+
+        run_counts = {
+            row["competition_class"]: row["n"]
+            for row in TimedRun.objects.filter(
+                competition=competition, competition_class__isnull=False
+            )
+            .filter(Q(start_signal__isnull=False) | Q(finish_signal__isnull=False))
+            .values("competition_class")
+            .annotate(n=Count("id"))
+        }
+        assignment_counts = {
+            row["competition_class"]: row["n"]
+            for row in ClassAssignment.objects.filter(
+                competition_class__competition=competition
+            )
+            .values("competition_class")
+            .annotate(n=Count("id"))
+        }
+        for form in formset.forms:
+            pk = form.instance.pk
+            form.instance.recorded_run_count = run_counts.get(pk, 0)
+            form.instance.assignment_count = assignment_counts.get(pk, 0)
 
     def get(self, request):
         competition = self.get_active()
@@ -276,6 +308,29 @@ class CompetitionDeleteView(DeleteView):
     model = Competition
     template_name = "competitions/competition_confirm_delete.html"
     success_url = reverse_lazy("competitions:list")
+
+    def get_context_data(self, **kwargs):
+        # Spell out what deleting the competition takes with it: everything below
+        # is CASCADE-deleted along with it and cannot be recovered.
+        context = super().get_context_data(**kwargs)
+        from apps.participants.models import ClassAssignment, EventEntry
+        from apps.timing.models import TimedRun, TimingSignal
+
+        competition = self.object
+        context["entry_count"] = EventEntry.objects.filter(competition=competition).count()
+        context["class_count"] = competition.classes.count()
+        context["assignment_count"] = ClassAssignment.objects.filter(
+            competition_class__competition=competition
+        ).count()
+        context["signal_count"] = TimingSignal.objects.filter(competition=competition).count()
+        # "Recorded" runs are those that actually captured a time (not empty
+        # placeholder rows) — the results that would be lost.
+        context["recorded_run_count"] = (
+            TimedRun.objects.filter(competition=competition)
+            .filter(Q(start_signal__isnull=False) | Q(finish_signal__isnull=False))
+            .count()
+        )
+        return context
 
 
 @require_POST

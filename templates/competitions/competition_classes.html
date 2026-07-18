@@ -48,6 +48,17 @@
     </div>
   </form>
 
+  <div class="modal-overlay" id="delete-class-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-class-title">
+      <h2 class="modal-title" id="delete-class-title">Delete class?</h2>
+      <div class="modal-body" data-delete-class-body></div>
+      <div class="modal-actions">
+        <button type="button" class="button" data-delete-class-confirm>Delete class</button>
+        <button type="button" class="button button--secondary" data-delete-class-cancel>Cancel</button>
+      </div>
+    </div>
+  </div>
+
   {{ assignment_methods_meta|json_script:"assignment-methods" }}
 
   <script>
@@ -114,10 +125,9 @@
         if (nameInput) nameInput.focus();
       });
 
-      container.addEventListener("click", (event) => {
-        const btn = event.target.closest("[data-remove-class]");
-        if (!btn) return;
-        const tile = btn.closest("[data-class-tile]");
+      // Actually take a tile out of the form: existing classes are flagged for
+      // deletion (applied on Save) and hidden; brand-new ones are just dropped.
+      function removeTile(tile) {
         const idInput = tile.querySelector('input[name$="-id"]');
         if (idInput && idInput.value) {
           const del = tile.querySelector('input[name$="-DELETE"]');
@@ -127,7 +137,62 @@
           tile.remove();
         }
         markUnsaved();
+      }
+
+      // In-page confirm (matching the unsaved-changes dialog) shown before a class
+      // that other data references is removed — recorded runs lose their class
+      // (times kept), and participant assignments are deleted.
+      const deleteModal = document.getElementById("delete-class-modal");
+      const deleteBody = deleteModal && deleteModal.querySelector("[data-delete-class-body]");
+      let pendingTile = null;
+
+      const escapeHtml = (s) => s.replace(/[&<>"']/g, (ch) => (
+        { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
+      ));
+
+      function closeDeleteModal() {
+        if (!deleteModal) return;
+        deleteModal.hidden = true;
+        document.body.classList.remove("modal-open");
+        pendingTile = null;
+      }
+
+      container.addEventListener("click", (event) => {
+        const btn = event.target.closest("[data-remove-class]");
+        if (!btn) return;
+        const tile = btn.closest("[data-class-tile]");
+        const runCount = parseInt(tile.dataset.runCount || "0", 10);
+        const assignCount = parseInt(tile.dataset.assignmentCount || "0", 10);
+        if ((runCount > 0 || assignCount > 0) && deleteModal && deleteBody) {
+          const nameInput = tile.querySelector('input[name$="-name"]');
+          const name = nameInput && nameInput.value ? nameInput.value : "This class";
+          const items = [];
+          if (runCount > 0) items.push(`<li><strong>${runCount}</strong> recorded run(s) — the times are kept but lose their class</li>`);
+          if (assignCount > 0) items.push(`<li><strong>${assignCount}</strong> participant assignment(s) — removed</li>`);
+          deleteBody.innerHTML = `<p>“${escapeHtml(name)}” has:</p><ul>${items.join("")}</ul>`
+            + `<p>It will be deleted when you press Save.</p>`;
+          pendingTile = tile;
+          deleteModal.hidden = false;
+          document.body.classList.add("modal-open");
+          return;
+        }
+        removeTile(tile);
       });
+
+      if (deleteModal) {
+        deleteModal.querySelector("[data-delete-class-confirm]").addEventListener("click", () => {
+          const tile = pendingTile;
+          closeDeleteModal();
+          if (tile) removeTile(tile);
+        });
+        deleteModal.querySelector("[data-delete-class-cancel]").addEventListener("click", closeDeleteModal);
+        deleteModal.addEventListener("click", (event) => {
+          if (event.target === deleteModal) closeDeleteModal();
+        });
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && !deleteModal.hidden) closeDeleteModal();
+        });
+      }
 
       applyMethod();
       container.querySelectorAll("[data-class-tile]").forEach(updateBirthYears);

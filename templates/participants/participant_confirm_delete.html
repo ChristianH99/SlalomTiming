@@ -3,7 +3,28 @@
 {% block topbar_title %}Delete participant{% endblock %}
 {% block content %}
   <h1>Delete {{ object }}?</h1>
-  <p>{{ object.first_name }} {{ object.last_name }} ({{ object.club }}) and all of their event entries will be permanently removed.</p>
+  <p>{{ object.first_name }} {{ object.last_name }}{% if object.club %} ({{ object.club }}){% endif %}
+     will be <strong>permanently removed</strong>.</p>
+
+  {% if entry_count or assignment_count %}
+    <div class="delete-warning">
+      <p>This also removes:</p>
+      <ul>
+        {% if entry_count %}<li><strong>{{ entry_count }}</strong> bib registration{{ entry_count|pluralize }} across all competitions</li>{% endif %}
+        {% if assignment_count %}<li><strong>{{ assignment_count }}</strong> class assignment{{ assignment_count|pluralize }}</li>{% endif %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {% if orphaned_run_count %}
+    <div class="delete-warning">
+      <p><strong>{{ orphaned_run_count }} recorded run{{ orphaned_run_count|pluralize }}</strong>
+         under this participant's bib{{ entry_count|pluralize }} will <strong>not</strong> be deleted —
+         the times stay in the timing data but will no longer show a name, and the bib may be reused
+         by someone else. Delete anyway only if you're sure.</p>
+    </div>
+  {% endif %}
+
   <form method="post">
     {% csrf_token %}
     <button class="button" type="submit">Confirm delete</button>
