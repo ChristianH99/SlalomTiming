@@ -1,5 +1,6 @@
 from django.db.models import F, OuterRef, Q, Subquery
 from django.http import JsonResponse
+from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
@@ -66,14 +67,6 @@ class ParticipantFormContextMixin:
         context["club_options"] = known_clubs()
         context["email_domains"] = COMMON_EMAIL_DOMAINS
         context["check_url"] = reverse("participants:check")
-        # Which details each type collects, so the form can follow the type
-        # dropdown without a round trip.
-        context["type_info_map"] = {
-            str(ctype.pk): {
-                setting: getattr(ctype, setting) for setting in CompetitionType.PARTICIPANT_INFO
-            }
-            for ctype in CompetitionType.objects.all()
-        }
         return context
 
 
@@ -98,19 +91,21 @@ class ParticipantListView(ListView):
         self.active_only = self.request.GET.get("active") == "1"
         self.query = self.request.GET.get("q", "").strip()
 
-        qs = Participant.objects.all()
-        if self.competition:
-            qs = qs.filter(competition_type=self.competition.competition_type)
-            bib_subquery = EventEntry.objects.filter(
-                competition=self.competition, participant=OuterRef("pk")
-            ).values("bib_number")[:1]
-            qs = qs.annotate(current_bib=Subquery(bib_subquery))
-            if self.active_only:
-                qs = qs.filter(entries__competition=self.competition)
-            # Bib order first (unassigned last), then last name as the tiebreaker.
-            qs = qs.order_by(F("current_bib").asc(nulls_last=True), "last_name", "first_name")
-        else:
-            qs = qs.order_by("last_name", "first_name")
+        # Participants are always scoped to the active competition's type, so with
+        # no competition selected there is nothing to show — the template prompts
+        # the user to pick one.
+        if self.competition is None:
+            return Participant.objects.none()
+
+        qs = Participant.objects.filter(competition_type=self.competition.competition_type)
+        bib_subquery = EventEntry.objects.filter(
+            competition=self.competition, participant=OuterRef("pk")
+        ).values("bib_number")[:1]
+        qs = qs.annotate(current_bib=Subquery(bib_subquery))
+        if self.active_only:
+            qs = qs.filter(entries__competition=self.competition)
+        # Bib order first (unassigned last), then last name as the tiebreaker.
+        qs = qs.order_by(F("current_bib").asc(nulls_last=True), "last_name", "first_name")
 
         if self.query:
             qs = qs.filter(
@@ -121,7 +116,7 @@ class ParticipantListView(ListView):
             )
         # Manual assignment resolves each participant's classes from their
         # ClassAssignment rows — prefetch so the list doesn't do a query per row.
-        if self.competition and self.competition.assignment().manual:
+        if self.competition.assignment().manual:
             qs = qs.prefetch_related("class_assignments__competition_class")
         return qs.distinct()
 
@@ -130,6 +125,19 @@ class ParticipantListView(ListView):
         context["competition"] = self.competition
         context["active_only"] = self.active_only
         context["query"] = self.query
+        # Which type-optional columns (club, licence) to show — only the details
+        # the active competition's type actually collects.
+        collected = set()
+        if self.competition:
+            ctype = self.competition.competition_type
+            collected = {
+                setting
+                for setting in CompetitionType.PARTICIPANT_INFO
+                if getattr(ctype, setting)
+            }
+        context["collected_info"] = collected
+        # Fixed columns (bib, name, dob, class, actions) plus the shown optional ones.
+        context["column_count"] = 5 + ("requires_club" in collected) + ("requires_license" in collected)
         return context
 
 
@@ -138,12 +146,13 @@ class ParticipantCreateView(ParticipantFormContextMixin, CreateView):
     form_class = ParticipantCreateForm
     template_name = "participants/participant_form.html"
 
-    def get_initial(self):
-        initial = super().get_initial()
-        competition = Competition.get_current()
-        if competition:
-            initial["competition_type"] = competition.competition_type_id
-        return initial
+    def dispatch(self, request, *args, **kwargs):
+        # A participant is registered under the active competition's type, so one
+        # can't be added with no competition selected — send the user to the list,
+        # which prompts them to pick a competition first.
+        if Competition.get_current() is None:
+            return redirect("participants:list")
+        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
         response = super().form_valid(form)

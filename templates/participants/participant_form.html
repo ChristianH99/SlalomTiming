@@ -21,7 +21,6 @@
       {% if form.bib_number.help_text %}<span class="hint">{{ form.bib_number.help_text }}</span>{% endif %}
     </div>
 
-    {% include "participants/_form_field.html" with field=form.competition_type mandatory=True %}
     {% include "participants/_form_field.html" with field=form.first_name mandatory=True %}
     {% include "participants/_form_field.html" with field=form.last_name mandatory=True %}
 
@@ -69,58 +68,63 @@
       {% endif %}
     </div>
 
-    {% comment %}Everything below is shown only when the selected competition type
-    collects it. The groups are always rendered so switching the type dropdown can
-    reveal one without a round trip; the JS at the bottom hides those the type
-    doesn't collect, and the server blanks anything hidden on save. The required
-    marker is rendered from the type-independent "mandatory" flag, so a group is
-    correct the moment it's revealed.{% endcomment %}
+    {% comment %}Only the details this participant's competition type collects are
+    rendered. The type is fixed (the active competition's, resolved server-side),
+    so there is no client-side reveal: the server both decides what to show and
+    blanks anything a type doesn't collect on save. The required marker comes from
+    PARTICIPANT_INFO's static "mandatory" flag.{% endcomment %}
 
-    <div data-type-group="requires_co_driver" data-mandatory="0">
+    {% if "requires_co_driver" in form.collected_info %}
       {% include "participants/_form_field.html" with field=form.co_driver_first_name mandatory=False %}
       {% include "participants/_form_field.html" with field=form.co_driver_last_name mandatory=False %}
-    </div>
+    {% endif %}
 
-    <div data-type-group="requires_vehicle" data-mandatory="1">
+    {% if "requires_vehicle" in form.collected_info %}
       {% include "participants/_form_field.html" with field=form.vehicle mandatory=True %}
-    </div>
+    {% endif %}
 
-    <div data-type-group="requires_address" data-mandatory="1">
+    {% if "requires_address" in form.collected_info %}
       <h2 class="form-section">Address</h2>
       {% include "participants/_form_field.html" with field=form.address_street mandatory=True %}
       {% include "participants/_form_field.html" with field=form.address_zip_code mandatory=True %}
       {% include "participants/_form_field.html" with field=form.address_city mandatory=True %}
-    </div>
+    {% endif %}
 
-    <div class="combobox" data-combobox="club" data-type-group="requires_club" data-mandatory="1">
-      <label for="{{ form.club.id_for_label }}">
-        {{ form.club.label }} <span class="required-marker" title="Required">*</span>
-      </label>
-      <span class="combobox-control">
-        {{ form.club }}
-        <ul class="combobox-list" data-combobox-list role="listbox" hidden></ul>
-      </span>
-      {{ form.club.errors }}
-      {% if form.club.help_text %}<span class="hint">{{ form.club.help_text }}</span>{% endif %}
-    </div>
+    {% if "requires_club" in form.collected_info %}
+      <div class="combobox" data-combobox="club">
+        <label for="{{ form.club.id_for_label }}">
+          {{ form.club.label }} <span class="required-marker" title="Required">*</span>
+        </label>
+        <span class="combobox-control">
+          {{ form.club }}
+          <ul class="combobox-list" data-combobox-list role="listbox" hidden></ul>
+        </span>
+        {{ form.club.errors }}
+        {% if form.club.help_text %}<span class="hint">{{ form.club.help_text }}</span>{% endif %}
+      </div>
+    {% endif %}
 
-    {% include "participants/_form_field.html" with field=form.license_number mandatory=True %}
+    {% if "requires_license" in form.collected_info %}
+      {% include "participants/_form_field.html" with field=form.license_number mandatory=True %}
+    {% endif %}
 
-    <div class="combobox" data-combobox="email" data-type-group="requires_email" data-mandatory="1">
-      <label for="{{ form.email.id_for_label }}">
-        {{ form.email.label }} <span class="required-marker" title="Required">*</span>
-      </label>
-      <span class="combobox-control">
-        {{ form.email }}
-        <ul class="combobox-list" data-combobox-list role="listbox" hidden></ul>
-      </span>
-      {{ form.email.errors }}
-      <span class="hint" data-email-hint hidden></span>
-    </div>
+    {% if "requires_email" in form.collected_info %}
+      <div class="combobox" data-combobox="email">
+        <label for="{{ form.email.id_for_label }}">
+          {{ form.email.label }} <span class="required-marker" title="Required">*</span>
+        </label>
+        <span class="combobox-control">
+          {{ form.email }}
+          <ul class="combobox-list" data-combobox-list role="listbox" hidden></ul>
+        </span>
+        {{ form.email.errors }}
+        <span class="hint" data-email-hint hidden></span>
+      </div>
+    {% endif %}
 
-    <div data-type-group="requires_phone" data-mandatory="0">
+    {% if "requires_phone" in form.collected_info %}
       {% include "participants/_form_field.html" with field=form.phone_number mandatory=False %}
-    </div>
+    {% endif %}
 
     <div class="actions">
       <button class="button" type="submit">Save</button>
@@ -131,37 +135,7 @@
   {{ class_ranges|json_script:"class-ranges-data" }}
   {{ club_options|json_script:"club-options-data" }}
   {{ email_domains|json_script:"email-domains-data" }}
-  {{ type_info_map|json_script:"type-info-data" }}
   <script>window.SLALOM_COMPETITION_YEAR = {{ competition_year|default_if_none:"null" }};</script>
-
-  <script>
-    // Show only the details the selected competition type collects. The server
-    // decides this too (and is the authority — it blanks whatever it doesn't
-    // collect); this just keeps the form honest as the type dropdown changes.
-    (function () {
-      const select = document.getElementById("id_competition_type");
-      const groups = [...document.querySelectorAll("[data-type-group]")];
-      const map = JSON.parse(document.getElementById("type-info-data").textContent);
-      if (!select || !groups.length) return;
-
-      function applyType() {
-        const collected = map[select.value] || {};
-        groups.forEach((group) => {
-          const on = !!collected[group.dataset.typeGroup];
-          group.hidden = !on;
-          // A hidden input that's still `required` blocks submit with no visible
-          // message, so required tracks visibility, not just the mandatory flag.
-          const mandatory = group.dataset.mandatory === "1";
-          group.querySelectorAll("input").forEach((input) => {
-            input.required = on && mandatory;
-          });
-        });
-      }
-
-      select.addEventListener("change", applyType);
-      applyType();
-    })();
-  </script>
 
   <script>
     (function () {

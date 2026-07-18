@@ -71,6 +71,7 @@ class CompetitionType(models.Model):
     requires_vehicle = models.BooleanField(default=False)
     requires_address = models.BooleanField(default=True)
     requires_club = models.BooleanField(default=True)
+    requires_license = models.BooleanField(default=True)
     requires_email = models.BooleanField(default=True)
     requires_phone = models.BooleanField(default=True)
 
@@ -86,6 +87,7 @@ class CompetitionType(models.Model):
             "Address", True, ["address_street", "address_zip_code", "address_city"],
         ),
         "requires_club": ("Club", True, ["club"]),
+        "requires_license": ("Licence number", True, ["license_number"]),
         "requires_email": ("E-mail", True, ["email"]),
         "requires_phone": ("Phone", False, ["phone_number"]),
     }

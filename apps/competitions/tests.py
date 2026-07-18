@@ -415,6 +415,7 @@ def test_type_settings_defaults():
     assert (ctype.requires_address, ctype.requires_club) == (True, True)
     assert (ctype.requires_email, ctype.requires_phone) == (True, True)
     assert (ctype.requires_co_driver, ctype.requires_vehicle) == (False, False)
+    assert ctype.requires_license is True
 
 
 def test_save_type_settings_via_view(client):

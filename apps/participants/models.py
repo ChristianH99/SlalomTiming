@@ -14,12 +14,12 @@ class Participant(models.Model):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     date_of_birth = models.DateField()
-    license_number = models.CharField(max_length=50)
 
     # Everything below is optional at the DB level: which of these a participant
     # must supply is decided per discipline by CompetitionType.PARTICIPANT_INFO,
     # and enforced by the participant form, not here. A type that stops
     # collecting a detail leaves any value already recorded untouched.
+    license_number = models.CharField(max_length=50, blank=True)
     co_driver_first_name = models.CharField(max_length=100, blank=True)
     co_driver_last_name = models.CharField(max_length=100, blank=True)
     vehicle = models.CharField(max_length=150, blank=True)

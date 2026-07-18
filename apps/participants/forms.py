@@ -16,38 +16,40 @@ class ParticipantForm(forms.ModelForm):
     allow_multiple_classes = False
     selected_classes = None          # None => don't touch assignments on save
 
-    # {Participant field: is_mandatory} for the currently selected type. Fields
-    # the type doesn't collect are absent; the template hides those.
+    # {Participant field: is_mandatory} for this participant's type. Fields the
+    # type doesn't collect are absent; the template renders only collected ones.
     field_requirements = {}
+    # The PARTICIPANT_INFO setting names this type collects (co_driver, …), for
+    # the template to decide which groups to render.
+    collected_info = frozenset()
+    competition = None
 
     def setup_type_fields(self):
-        """Mark the type-optional fields required/not per the selected competition
-        type. Every field stays on the form so the template can render (and the
-        JS can reveal) them all — switching the type dropdown must not need a
-        round trip — but only the collected ones are required or saved."""
+        """Mark the type-optional fields required/not per this participant's
+        competition type. Every field stays on the form (so the template can
+        render the collected ones), but only the collected ones are required or
+        saved; the rest are blanked on save by _clear_uncollected_fields."""
         competition_type = self._selected_type()
         self.field_requirements = (
             competition_type.participant_field_requirements() if competition_type else {}
+        )
+        self.collected_info = frozenset(
+            setting
+            for setting in CompetitionType.PARTICIPANT_INFO
+            if competition_type and getattr(competition_type, setting)
         )
         for name in CompetitionType.optional_participant_fields():
             self.fields[name].required = self.field_requirements.get(name, False)
 
     def _selected_type(self):
-        """The type the form is currently working against: what was submitted
-        when bound (so validation follows the dropdown), otherwise the
-        participant's own type, falling back to the initial for a new one."""
-        if self.is_bound:
-            raw = self.data.get(self.add_prefix("competition_type"))
-        elif self.instance.pk:
+        """The type this participant is registered under. It is never chosen on
+        the form: an existing participant keeps its own type, and a new one takes
+        the active competition's type. (The participant list only ever surfaces
+        participants of the active competition's type, so an edit's own type and
+        the active type coincide in practice.)"""
+        if self.instance.pk:
             return self.instance.competition_type
-        else:
-            raw = self.initial.get("competition_type")
-        if isinstance(raw, CompetitionType):
-            return raw
-        try:
-            return CompetitionType.objects.filter(pk=int(raw)).first()
-        except (TypeError, ValueError):
-            return None
+        return self.competition.competition_type if self.competition else None
 
     def _clear_uncollected_fields(self, cleaned):
         """Blank anything the selected type doesn't collect, so a value typed
@@ -85,7 +87,7 @@ class ParticipantForm(forms.ModelForm):
         self.selected_classes = None
         if self.class_mode != "manual":
             return
-        ctype = cleaned.get("competition_type")
+        ctype = self._selected_type()
         if ctype is None or ctype.pk != self.competition.competition_type_id:
             return  # type mismatch → leave any existing assignments untouched
         # Valid targets: running classes plus any already-assigned (possibly now
@@ -127,7 +129,6 @@ class ParticipantForm(forms.ModelForm):
     class Meta:
         model = Participant
         fields = [
-            "competition_type",
             "first_name",
             "last_name",
             "date_of_birth",
@@ -168,6 +169,10 @@ class ParticipantCreateForm(ParticipantForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.competition = Competition.get_current()
+        # A new participant always takes the active competition's type — there is
+        # no case for registering someone under a different discipline.
+        if self.competition is not None:
+            self.instance.competition_type = self.competition.competition_type
         self.setup_type_fields()
         self.setup_classes(self.competition)
         if self.competition is None:
@@ -181,13 +186,7 @@ class ParticipantCreateForm(ParticipantForm):
         bib_number = cleaned_data.get("bib_number")
         if bib_number is None or self.competition is None:
             return cleaned_data
-        competition_type = cleaned_data.get("competition_type")
-        if competition_type and competition_type != self.competition.competition_type:
-            self.add_error(
-                "bib_number",
-                "This participant's type doesn't match the current competition, so a bib can't be assigned.",
-            )
-        elif EventEntry.objects.filter(competition=self.competition, bib_number=bib_number).exists():
+        if EventEntry.objects.filter(competition=self.competition, bib_number=bib_number).exists():
             self.add_error("bib_number", "This bib number is already taken in the current competition.")
         return cleaned_data
 

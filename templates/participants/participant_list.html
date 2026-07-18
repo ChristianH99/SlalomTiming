@@ -3,6 +3,13 @@
 {% block title %}Participants – Slalom Timing{% endblock %}
 {% block topbar_title %}Participants{% endblock %}
 {% block content %}
+  {% if not competition %}
+    <div class="notice">
+      <p>No competition is selected. Participants are registered under a competition's
+        type, so <a href="{% url 'competitions:list' %}">pick a competition</a> to see and
+        manage its participants.</p>
+    </div>
+  {% else %}
   <div class="list-toolbar">
     <form method="get" class="search-form" role="search" id="participant-search">
       <input type="text" name="q" value="{{ query }}" id="participant-search-input"
@@ -13,18 +20,14 @@
     <a class="button" href="{% url 'participants:add' %}">+ Add participant</a>
   </div>
 
-  {% if not competition %}
-    <p class="hint">No competition selected — showing every participant. <a href="{% url 'competitions:list' %}">Pick a competition</a> to see who's active.</p>
-  {% else %}
-    <p class="hint">
-      {{ competition.competition_type.name }} · {{ competition.name }} —
-      {% if active_only %}
-        showing active participants only. <a href="?q={{ query }}">Show all</a>
-      {% else %}
-        showing all registered participants. <a href="?active=1&q={{ query }}">Show active only</a>
-      {% endif %}
-    </p>
-  {% endif %}
+  <p class="hint">
+    {{ competition.competition_type.name }} · {{ competition.name }} —
+    {% if active_only %}
+      showing active participants only. <a href="?q={{ query }}">Show all</a>
+    {% else %}
+      showing all registered participants. <a href="?active=1&q={{ query }}">Show active only</a>
+    {% endif %}
+  </p>
 
   <div class="table-card">
   <table class="participants-table">
@@ -34,8 +37,8 @@
         <th class="col-name">Name</th>
         <th class="col-dob">Date of birth</th>
         <th class="col-class">Class</th>
-        <th class="col-club">Club</th>
-        <th class="col-licence">Licence</th>
+        {% if "requires_club" in collected_info %}<th class="col-club">Club</th>{% endif %}
+        {% if "requires_license" in collected_info %}<th class="col-licence">Licence</th>{% endif %}
         <th class="col-actions"></th>
       </tr>
     </thead>
@@ -59,8 +62,8 @@
               {% else %}–{% endif %}
             {% endwith %}
           </td>
-          <td class="col-club" title="{{ participant.club }}">{{ participant.club }}</td>
-          <td class="col-licence" title="{{ participant.license_number }}">{{ participant.license_number }}</td>
+          {% if "requires_club" in collected_info %}<td class="col-club" title="{{ participant.club }}">{{ participant.club }}</td>{% endif %}
+          {% if "requires_license" in collected_info %}<td class="col-licence" title="{{ participant.license_number }}">{{ participant.license_number }}</td>{% endif %}
           <td class="col-actions">
             <a href="{% url 'participants:edit' participant.pk %}">Edit</a>
             &middot;
@@ -68,9 +71,9 @@
           </td>
         </tr>
       {% empty %}
-        <tr class="empty-row"><td colspan="7">No participants found.</td></tr>
+        <tr class="empty-row"><td colspan="{{ column_count }}">No participants found.</td></tr>
       {% endfor %}
-      <tr class="empty-row no-results-row" hidden><td colspan="7">No participants match your search.</td></tr>
+      <tr class="empty-row no-results-row" hidden><td colspan="{{ column_count }}">No participants match your search.</td></tr>
     </tbody>
   </table>
   </div>
@@ -104,4 +107,5 @@
       apply();
     })();
   </script>
+  {% endif %}
 {% endblock %}

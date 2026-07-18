@@ -79,15 +79,15 @@ def test_create_form_rejects_duplicate_bib():
     assert "bib_number" in form.errors
 
 
-def test_create_form_rejects_bib_when_type_mismatches_competition():
+def test_create_form_registers_under_active_competition_type():
     running_type = make_type("Motorcycle")
     other_type = make_type("Go-Cart")
     make_competition(running_type)
-    form = ParticipantCreateForm(
-        data=participant_data(other_type, bib_number="3")
-    )
-    assert not form.is_valid()
-    assert "bib_number" in form.errors
+    # A stray posted type is ignored — the participant takes the active type.
+    form = ParticipantCreateForm(data=participant_data(other_type, bib_number="3"))
+    assert form.is_valid(), form.errors
+    participant = form.save()
+    assert participant.competition_type == running_type
 
 
 def test_create_form_disables_bib_without_active_competition():
@@ -555,12 +555,13 @@ def test_values_for_uncollected_fields_are_not_saved(client):
     assert Participant.objects.get(license_number="LIC-001").club == ""
 
 
-def test_requirements_follow_the_submitted_type_not_the_active_one():
-    """The type dropdown drives validation: posting type B against a competition
-    of type A validates against B."""
-    active_type = CompetitionType.objects.create(name="Active", requires_vehicle=False)
+def test_requirements_follow_the_active_competition_type():
+    """A new participant is validated against the active competition's type,
+    regardless of any type posted with the form."""
+    active_type = CompetitionType.objects.create(name="Active", requires_vehicle=True)
     make_competition(active_type)
-    other_type = CompetitionType.objects.create(name="Other", requires_vehicle=True)
+    other_type = CompetitionType.objects.create(name="Other", requires_vehicle=False)
+    # Posting a type that doesn't require a vehicle can't relax the active type.
     form = ParticipantCreateForm(data=participant_data(other_type, vehicle=""))
     assert not form.is_valid()
     assert "vehicle" in form.errors
@@ -577,3 +578,58 @@ def test_edit_form_uses_the_participants_own_type():
     form = ParticipantUpdateForm(instance=participant, competition=competition)
     assert form.fields["vehicle"].required is True
     assert form.fields["phone_number"].required is False
+
+
+def test_licence_not_required_when_type_does_not_collect_it():
+    ctype = CompetitionType.objects.create(name="NoLicence", requires_license=False)
+    make_competition(ctype)
+    form = ParticipantCreateForm(data=participant_data(ctype, license_number=""))
+    assert form.is_valid(), form.errors
+
+
+def test_licence_value_dropped_when_type_does_not_collect_it(client):
+    ctype = CompetitionType.objects.create(name="NoLicence", requires_license=False)
+    make_competition(ctype)
+    response = client.post(
+        reverse("participants:add"), participant_data(ctype, license_number="SNEAK-1"),
+    )
+    assert response.status_code == 302
+    assert Participant.objects.get(last_name="Doe").license_number == ""
+
+
+# ----- no active competition -----
+
+def test_list_view_without_competition_shows_no_participants(client):
+    ctype = make_type()
+    Participant.objects.create(
+        competition_type=ctype, first_name="Ghost", last_name="Racer",
+        date_of_birth=datetime.date(2010, 1, 1), license_number="1",
+    )
+    # No active competition.
+    response = client.get(reverse("participants:list"))
+    assert response.context["competition"] is None
+    assert list(response.context["participants"]) == []
+
+
+def test_add_view_redirects_without_active_competition(client):
+    response = client.get(reverse("participants:add"))
+    assert response.status_code == 302
+    assert response.url == reverse("participants:list")
+
+
+def test_list_columns_follow_type_settings(client):
+    ctype = make_type("NoLicNoClub")
+    ctype.requires_license = False
+    ctype.requires_club = False
+    ctype.save()
+    make_competition(ctype)
+    response = client.get(reverse("participants:list"))
+    body = response.content.decode()
+    assert "requires_license" not in response.context["collected_info"]
+    assert "<th class=\"col-licence\">Licence</th>" not in body
+    assert "<th class=\"col-club\">Club</th>" not in body
+    # A collected detail keeps its column.
+    ctype.requires_club = True
+    ctype.save()
+    body = client.get(reverse("participants:list")).content.decode()
+    assert "<th class=\"col-club\">Club</th>" in body
