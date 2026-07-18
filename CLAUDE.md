@@ -43,9 +43,9 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          which both the settings page and the participant form build from.
                          CompetitionClass is fully dynamic (editable name, not a
                          fixed enum): is_running, age range, practice_runs, counted_runs,
-                         scoring_method (CompetitionClass.Scoring: aggregate times vs regularity
-                         test — recorded per class, the calculation belongs to the results
-                         feature and isn't written yet),
+                         scoring_method (CompetitionClass.Scoring: aggregate times, best run
+                         only, or regularity test — recorded per class, the calculation belongs
+                         to the results feature and isn't written yet),
                          plus position (list order) and run_position (which run it starts in;
                          classes sharing a run_position start together). Competition.run_groups()
                          returns the ordered runs. Setup UI is a section: a tile list

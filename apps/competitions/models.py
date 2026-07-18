@@ -292,6 +292,7 @@ class CompetitionClass(models.Model):
         the calculation itself lives with the results feature."""
 
         AGGREGATE = "aggregate", "Aggregate times"
+        BEST_RUN = "best_run", "Best run only"
         REGULARITY = "regularity", "Regularity test"
 
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name="classes")

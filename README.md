@@ -71,8 +71,9 @@ The sub-pages always act on the **current** competition:
 4. **General** — the current competition's name, type and date.
 5. **Classes** — pick the **assignment method** (how participants get their class) at the top,
    then edit each class as a tile: rename, Running, practice / counted runs, scoring, delete.
-   **Scoring** picks how the class's counted runs become a result — *Aggregate times* or
-   *Regularity test*. It is recorded per class; the results feature that reads it isn't built yet.
+   **Scoring** picks how the class's counted runs become a result — *Aggregate times*,
+   *Best run only*, or *Regularity test*. It is recorded per class; the results feature that
+   reads it isn't built yet.
    - **Manual**: you assign participants to classes by hand on the participant form. A top switch
      allows a participant in several *different* classes; a per-class switch allows entering the
      same class more than once.
