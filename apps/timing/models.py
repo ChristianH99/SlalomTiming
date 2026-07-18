@@ -122,6 +122,10 @@ class TimedRun(models.Model):
         "competitions.CompetitionClass", null=True, blank=True,
         on_delete=models.SET_NULL, related_name="+",
     )
+    # Which entry-in-a-class this run belongs to (0-based): a participant entered
+    # into the same class more than once runs it that many times, each occurrence
+    # tracked separately.
+    class_occurrence = models.PositiveSmallIntegerField(default=0)
     run_type = models.CharField(max_length=10, choices=RunType.choices, blank=True)
     run_number = models.PositiveIntegerField(null=True, blank=True)
     pylon_count = models.PositiveSmallIntegerField(default=0)

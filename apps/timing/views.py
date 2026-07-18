@@ -1,5 +1,6 @@
 import datetime
 import json
+from collections import Counter
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -157,16 +158,17 @@ def timing_run_update(request):
 
     if "bib_number" in payload:
         # A new bib re-resolves the class (clearing the bib clears the class), and
-        # resets the run so it re-derives for the new participant.
+        # resets the run so it re-derives for the new participant. The default
+        # class is the participant's first slot they haven't yet completed.
         run.bib_number = _as_positive_int(payload.get("bib_number"))
         run.run_type, run.run_number = "", None
         entry = _resolve_entry(competition, run.bib_number)
-        classes = competition.classes_for_participant(entry.participant) if entry else []
-        run.competition_class = classes[0] if classes else None
-    if "class_id" in payload:
-        run.competition_class = CompetitionClass.objects.filter(
-            id=payload.get("class_id"), competition=competition
-        ).first()
+        slot = _default_class_slot(competition, entry.participant if entry else None, run)
+        run.competition_class, run.class_occurrence = slot if slot else (None, 0)
+    if "class_key" in payload:
+        run.competition_class, run.class_occurrence = _parse_class_key(
+            payload.get("class_key"), competition
+        )
         run.run_type, run.run_number = "", None  # class changed → re-derive the run
     if "run_value" in payload:
         run.run_type, run.run_number = _parse_run_value(payload.get("run_value"))
@@ -290,7 +292,12 @@ def _serialize_run(run, competition, ctype):
     )
     entry = _resolve_entry(competition, run.bib_number)
     participant = entry.participant if entry else None
-    cclass = run.competition_class
+    slots = _class_slots(competition, participant, run)
+    class_key = _class_key(run) if run.competition_class_id else None
+    class_label = next(
+        (slot["label"] for slot in slots if slot["value"] == class_key),
+        run.competition_class.name if run.competition_class else "",
+    )
     penalty = calc.total_penalty(run, ctype)
     total = calc.format_precision(rt + penalty, precision) if rt is not None else ""
     return {
@@ -306,11 +313,11 @@ def _serialize_run(run, competition, ctype):
             "name": str(participant) if participant else "",
             # Bib entered but no such starter registered — flag it, but keep it.
             "bib_unknown": bool(run.bib_number and participant is None),
-            "class_id": cclass.pk if cclass else None,
-            "class_name": cclass.name if cclass else "",
-            "class_options": _class_options(competition, participant),
+            "class_key": class_key,
+            "class_name": class_label,
+            "class_options": slots,
             "run_value": _run_value(run),
-            "run_options": _run_options(competition, run, cclass),
+            "run_options": _run_options(competition, run),
             "pylon_count": run.pylon_count,
             "task_count": run.task_count,
             "stopline_count": run.stopline_count,
@@ -339,20 +346,28 @@ def _format_device_time(t, precision):
     return f"{t:%H:%M:%S}." + str(frac).zfill(precision)
 
 
+def _recorded_runs(competition, run, cclass, occurrence):
+    """The (run_type, run_number) pairs already recorded for this bib in this
+    class occurrence, on rows other than `run`."""
+    if not run.bib_number:
+        return set()
+    return {
+        (other.run_type, other.run_number)
+        for other in TimedRun.objects.filter(
+            competition=competition, bib_number=run.bib_number,
+            competition_class=cclass, class_occurrence=occurrence,
+        ).exclude(pk=run.pk)
+        if other.run_type and other.run_number
+    }
+
+
 def _next_undone_run(competition, run):
-    """The next run (P1, P2, …, C1, …) not yet recorded for this run's bib+class."""
+    """The next run (P1, P2, …, C1, …) not yet recorded for this run's bib in its
+    class occurrence."""
     cclass = run.competition_class
     if cclass is None:
         return None
-    used = set()
-    if run.bib_number:
-        used = {
-            (other.run_type, other.run_number)
-            for other in TimedRun.objects.filter(
-                competition=competition, bib_number=run.bib_number, competition_class=cclass
-            ).exclude(pk=run.pk)
-            if other.run_type and other.run_number
-        }
+    used = _recorded_runs(competition, run, cclass, run.class_occurrence)
     for run_type, count in (
         ("practice", cclass.practice_runs or 0),
         ("counted", cclass.counted_runs or 0),
@@ -373,31 +388,76 @@ def _resolve_entry(competition, bib):
     )
 
 
-def _class_options(competition, participant):
-    if participant is None:
-        return []
-    seen, options = set(), []
-    for cclass in competition.classes_for_participant(participant):
-        if cclass.pk not in seen:
-            seen.add(cclass.pk)
-            options.append({"value": cclass.pk, "label": cclass.name})
+def _class_key(run):
+    return f"{run.competition_class_id}:{run.class_occurrence}"
+
+
+def _parse_class_key(value, competition):
+    """'pk:occurrence' -> (CompetitionClass or None, occurrence int)."""
+    pk, _, occ = str(value or "").partition(":")
+    cclass = CompetitionClass.objects.filter(id=pk, competition=competition).first()
+    try:
+        occurrence = int(occ)
+    except (TypeError, ValueError):
+        occurrence = 0
+    return cclass, occurrence
+
+
+def _participant_slots(competition, participant):
+    """The participant's class slots, in order, as (class, occurrence). A class
+    they're entered into more than once yields one slot per entry."""
+    classes = list(competition.classes_for_participant(participant)) if participant else []
+    seen, slots = {}, []
+    for cclass in classes:
+        occurrence = seen.get(cclass.pk, 0)
+        seen[cclass.pk] = occurrence + 1
+        slots.append((cclass, occurrence))
+    return slots
+
+
+def _class_slots(competition, participant, run):
+    """Serialized class options for the participant: one per class slot, with a
+    "(1)/(2)" suffix on classes entered more than once, and disabled once all of
+    that slot's runs are recorded."""
+    slots = _participant_slots(competition, participant)
+    totals = Counter(cclass.pk for cclass, _ in slots)
+    options = []
+    for cclass, occurrence in slots:
+        label = f"{cclass.name} ({occurrence + 1})" if totals[cclass.pk] > 1 else cclass.name
+        options.append({
+            "value": f"{cclass.pk}:{occurrence}",
+            "label": label,
+            "disabled": _class_complete(competition, run, cclass, occurrence),
+        })
     return options
 
 
-def _run_options(competition, run, cclass):
-    """Run choices for a class, with any already recorded for this bib+class
-    marked disabled (e.g. P1 is disabled once this bib has a P1 on another run)."""
+def _class_complete(competition, run, cclass, occurrence):
+    """Whether every run this class grants is already recorded for this bib in
+    this occurrence."""
+    total = (cclass.practice_runs or 0) + (cclass.counted_runs or 0)
+    if total == 0:
+        return False
+    return len(_recorded_runs(competition, run, cclass, occurrence)) >= total
+
+
+def _default_class_slot(competition, participant, run):
+    """The first class slot the participant hasn't completed (falls back to the
+    first slot if all are done), or None if they have no classes."""
+    slots = _participant_slots(competition, participant)
+    for cclass, occurrence in slots:
+        if not _class_complete(competition, run, cclass, occurrence):
+            return (cclass, occurrence)
+    return slots[0] if slots else None
+
+
+def _run_options(competition, run):
+    """Run choices for this run's class occurrence, with any already recorded for
+    this bib marked disabled (e.g. P1 is disabled once this bib has a P1)."""
+    cclass = run.competition_class
     if cclass is None:
         return []
-    used = set()
-    if run.bib_number:
-        used = {
-            (other.run_type, other.run_number)
-            for other in TimedRun.objects.filter(
-                competition=competition, bib_number=run.bib_number, competition_class=cclass
-            ).exclude(pk=run.pk)
-            if other.run_type and other.run_number
-        }
+    used = _recorded_runs(competition, run, cclass, run.class_occurrence)
     options = []
     for run_type, short, count in (
         ("practice", "P", cclass.practice_runs or 0),
@@ -419,8 +479,8 @@ def _run_value(run):
 
 
 def _over_max(competition, run):
-    """Whether more runs of this type have been assigned for this bib+class than
-    the class grants."""
+    """Whether more runs of this type are assigned for this bib in this class
+    occurrence than the class grants."""
     if not run.bib_number or not run.competition_class or not run.run_type:
         return False
     cclass = run.competition_class
@@ -431,6 +491,7 @@ def _over_max(competition, run):
         competition=competition,
         bib_number=run.bib_number,
         competition_class=cclass,
+        class_occurrence=run.class_occurrence,
         run_type=run.run_type,
     ).count()
     return used > allowance

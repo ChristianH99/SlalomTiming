@@ -142,8 +142,12 @@ static/js/               dashboard.js (legacy) + timing_live.js (Times view: ren
   times (shown at the type's precision, truncated) paired into runs (newest first), with bib, class,
   run, and penalty entry (−/+ steppers, out of the tab order), live over a WebSocket. Entering a bib
   looks up the name, sets the class (updating it if the bib changes, clearing it if the bib is cleared),
-  and auto-selects the next not-yet-done run (P then C); an unknown bib is flagged but kept. A run
-  option already recorded for a bib+class is disabled. Manual times are tinted vs light-barrier ones.
+  and auto-selects the next not-yet-done run (P then C); an unknown bib is flagged but kept. Tab out of
+  the bib field lands on the Class dropdown for a multi-class participant. The dropdown has one slot per
+  class the participant is entered into — a class entered more than once shows as "Klasse 2 (1)/(2)"
+  (TimedRun.class_occurrence tracks which), each with its own runs; a run already recorded, or a class
+  whose runs are all done, is disabled, and the default class advances to the first slot not yet
+  completed. Manual times are tinted vs light-barrier ones.
   Hover between the header and the top row for a **+** to pre-enter an upcoming starter (an empty
   placeholder row); incoming starts fill placeholders oldest-first, so times populate bottom-to-top.
   Double-click a time to ignore it — ignored starts and finishes each get a rail column on the right,

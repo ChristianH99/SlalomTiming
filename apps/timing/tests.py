@@ -307,7 +307,7 @@ def test_run_update_resolves_name_and_defaults_class(client):
     run = run_of(signal_in(comp, 1, "10:00:00.000"))
     resp = post_json(client, "timing:run-update", run_id=run.id, bib_number="7").json()
     assert resp["ok"] and resp["row"]["run"]["name"] == "Ada Lovelace"
-    assert resp["row"]["run"]["class_id"] == cclass.pk
+    assert resp["row"]["run"]["class_key"] == f"{cclass.pk}:0"
 
 
 def test_run_update_marks_over_max(client):
@@ -318,7 +318,7 @@ def test_run_update_marks_over_max(client):
     r1 = run_of(signal_in(comp, 1, "10:00:05.000", running=2))
     for run, number in ((r0, 1), (r1, 2)):
         post_json(client, "timing:run-update", run_id=run.id, bib_number="9",
-                  class_id=cclass.pk, run_value=f"counted-{number}")
+                  class_key=f"{cclass.pk}:0", run_value=f"counted-{number}")
     rows = serialize_arrangement(comp)["rows"]
     assert all(row["run"]["over_max"] for row in rows)
 
@@ -360,8 +360,8 @@ def test_already_recorded_run_is_disabled(client):
     r0 = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
     r1 = run_of(signal_in(comp, 1, "10:00:30.000", running=2))
     post_json(client, "timing:run-update", run_id=r0.id, bib_number="5",
-              class_id=cclass.pk, run_value="counted-1")
-    post_json(client, "timing:run-update", run_id=r1.id, bib_number="5", class_id=cclass.pk)
+              class_key=f"{cclass.pk}:0", run_value="counted-1")
+    post_json(client, "timing:run-update", run_id=r1.id, bib_number="5", class_key=f"{cclass.pk}:0")
     rows = {row["run"]["id"]: row for row in serialize_arrangement(comp)["rows"]}
     options = {o["value"]: o["disabled"] for o in rows[r1.id]["run"]["run_options"]}
     assert options["counted-1"] is True   # #5 already has a C1
@@ -413,12 +413,12 @@ def test_new_bib_updates_class_and_clearing_bib_clears_it(client):
     _bib_participant(comp, 2, c2)
     run = run_of(signal_in(comp, 1, "10:00:00.000"))
     first = post_json(client, "timing:run-update", run_id=run.id, bib_number="1").json()
-    assert first["row"]["run"]["class_id"] == c1.pk
+    assert first["row"]["run"]["class_key"] == f"{c1.pk}:0"
     second = post_json(client, "timing:run-update", run_id=run.id, bib_number="2").json()
-    assert second["row"]["run"]["class_id"] == c2.pk  # updated, not sticky
+    assert second["row"]["run"]["class_key"] == f"{c2.pk}:0"  # updated, not sticky
     cleared = post_json(client, "timing:run-update", run_id=run.id, bib_number="").json()
     assert cleared["row"]["run"]["bib_number"] is None
-    assert cleared["row"]["run"]["class_id"] is None
+    assert cleared["row"]["run"]["class_key"] is None
 
 
 def test_unknown_bib_is_flagged_but_kept(client):
@@ -476,3 +476,64 @@ def test_timing_view_does_not_leak_across_competitions(client):
     client.post(reverse("competitions:select", kwargs={"pk": comp_b.pk}))
     resp = client.get(reverse("timing:arrangement")).json()
     assert resp["competition"] is True and resp["rows"] == []
+
+
+def _assign_twice(comp, bib, cclass):
+    p = Participant.objects.create(
+        competition_type=comp.competition_type, first_name=f"P{bib}", last_name="X",
+        date_of_birth=datetime.date(2010, 1, 1), license_number=str(bib),
+    )
+    EventEntry.objects.create(participant=p, competition=comp, bib_number=bib)
+    ClassAssignment.objects.create(participant=p, competition_class=cclass)
+    ClassAssignment.objects.create(participant=p, competition_class=cclass)
+    return p
+
+
+def test_multi_entry_class_offers_separate_numbered_slots(client):
+    comp = make_active_competition()
+    comp.classes.filter(name="2").update(is_running=True, allow_multiple_entries=True)
+    c2 = comp.classes.get(name="2")
+    _assign_twice(comp, 1, c2)
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    resp = post_json(client, "timing:run-update", run_id=run.id, bib_number="1").json()
+    opts = resp["row"]["run"]["class_options"]
+    assert [o["value"] for o in opts] == [f"{c2.pk}:0", f"{c2.pk}:1"]
+    assert [o["label"] for o in opts] == ["2 (1)", "2 (2)"]
+
+
+def test_run_occurrences_are_independent(client):
+    comp = make_active_competition()
+    comp.classes.filter(name="2").update(is_running=True, allow_multiple_entries=True)
+    c2 = comp.classes.get(name="2")
+    _assign_twice(comp, 1, c2)
+    r0 = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    post_json(client, "timing:run-update", run_id=r0.id, bib_number="1",
+              class_key=f"{c2.pk}:0", run_value="practice-1")
+    # A second run on occurrence 1 can still take P1 (independent of occurrence 0).
+    r1 = run_of(signal_in(comp, 1, "10:00:10.000", running=2))
+    resp = post_json(client, "timing:run-update", run_id=r1.id, bib_number="1",
+                     class_key=f"{c2.pk}:1").json()
+    disabled = {o["value"]: o["disabled"] for o in resp["row"]["run"]["run_options"]}
+    assert disabled["practice-1"] is False
+
+
+def test_completed_class_slot_is_disabled_and_default_advances(client):
+    comp = make_active_competition()
+    # 2 runs per slot (P1 + C1); allow the class twice.
+    comp.classes.filter(name="2").update(
+        is_running=True, allow_multiple_entries=True, practice_runs=1, counted_runs=1
+    )
+    c2 = comp.classes.get(name="2")
+    _assign_twice(comp, 1, c2)
+    r0 = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    r1 = run_of(signal_in(comp, 1, "10:00:10.000", running=2))
+    post_json(client, "timing:run-update", run_id=r0.id, bib_number="1",
+              class_key=f"{c2.pk}:0", run_value="practice-1")
+    post_json(client, "timing:run-update", run_id=r1.id, bib_number="1",
+              class_key=f"{c2.pk}:0", run_value="counted-1")  # occurrence 0 now complete
+    r2 = run_of(signal_in(comp, 1, "10:00:20.000", running=3))
+    resp = post_json(client, "timing:run-update", run_id=r2.id, bib_number="1").json()
+    opts = {o["value"]: o["disabled"] for o in resp["row"]["run"]["class_options"]}
+    assert opts[f"{c2.pk}:0"] is True    # first slot complete → disabled
+    assert opts[f"{c2.pk}:1"] is False   # second slot still open
+    assert resp["row"]["run"]["class_key"] == f"{c2.pk}:1"  # default advanced to it

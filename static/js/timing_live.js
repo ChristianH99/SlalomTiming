@@ -133,27 +133,49 @@
     input.dataset.rowKey = run.id;
     input.dataset.field = "bib";
     if (run.bib_unknown) input.title = "No starter with this bib is registered (kept anyway).";
-    input.addEventListener("change", () =>
-      updateRun({ run_id: run.id, bib_number: input.value }).then(applyRow)
-    );
+
+    let lastSent = input.value;
+    const submit = () => {
+      if (input.value === lastSent) return Promise.resolve(null);
+      lastSent = input.value;
+      return updateRun({ run_id: run.id, bib_number: input.value });
+    };
+    input.addEventListener("change", () => submit().then(applyRow));
+    // Tab out of the bib field lands on the Class dropdown (if the participant is
+    // multi-class — the dropdown only exists after the bib resolves), else the
+    // Run field. We drive it ourselves so it isn't skipped before the row renders.
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab" || e.shiftKey) return;
+      e.preventDefault();
+      submit().then((resp) => {
+        applyRow(resp);
+        const tr = rowsEl.querySelector(`tr[data-run-id="${run.id}"]`);
+        const target = tr && (tr.querySelector(".class-select") || tr.querySelector(".run-select"));
+        if (target) target.focus();
+      });
+    });
     // Name line is always present so the row height never changes when it fills in.
     wrap.append(input, el("span", "bib-name", run.name || ""));
     return wrap;
   }
 
   function classField(run) {
-    if (state.multi_class && run.class_options.length) {
+    // A dropdown when the participant has more than one class slot (distinct
+    // classes, or the same class entered more than once — "Klasse 2 (1)/(2)").
+    if (run.class_options.length > 1) {
       const select = el("select", "class-select");
       select.dataset.rowKey = run.id;
       select.dataset.field = "class";
       run.class_options.forEach((opt) => {
         const o = el("option", null, opt.label);
         o.value = opt.value;
-        if (String(opt.value) === String(run.class_id)) o.selected = true;
+        // A class whose runs are all done is disabled (unless it's the current one).
+        if (opt.disabled && opt.value !== run.class_key) o.disabled = true;
+        if (opt.value === run.class_key) o.selected = true;
         select.append(o);
       });
       select.addEventListener("change", () =>
-        updateRun({ run_id: run.id, class_id: select.value }).then(applyRow)
+        updateRun({ run_id: run.id, class_key: select.value }).then(applyRow)
       );
       return select;
     }
