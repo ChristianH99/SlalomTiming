@@ -463,3 +463,16 @@ def test_ignoring_sole_time_keeps_pre_entered_row(client):
     run.refresh_from_db()
     # The wrong start is gone but the row survives as a placeholder holding the bib.
     assert run.start_signal_id is None and run.bib_number == 1
+
+
+def test_timing_view_does_not_leak_across_competitions(client):
+    comp_a = make_active_competition()  # active
+    comp_b = Competition.objects.create(
+        competition_type=comp_a.competition_type, name="B", date=datetime.date(2026, 5, 2)
+    )
+    signal_in(comp_a, 1, "10:00:00.000")  # a run under A
+    assert serialize_arrangement(comp_a)["rows"]  # A has it
+    # Switching the active competition must leave the live view empty for B.
+    client.post(reverse("competitions:select", kwargs={"pk": comp_b.pk}))
+    resp = client.get(reverse("timing:arrangement")).json()
+    assert resp["competition"] is True and resp["rows"] == []

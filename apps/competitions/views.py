@@ -75,12 +75,41 @@ class GeneralView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        old_type_id = competition.competition_type_id
         form = CompetitionForm(request.POST, instance=competition)
         if form.is_valid():
             form.save()
+            if competition.competition_type_id != old_type_id:
+                # A registration belongs to one discipline; changing the
+                # competition's type drops the ones that no longer fit (their
+                # bibs were silently blocking the new discipline otherwise).
+                removed = _clear_foreign_registrations(competition)
+                if removed:
+                    messages.info(
+                        request,
+                        f"Removed {removed} registration(s) that didn't belong to "
+                        f"“{competition.competition_type}”.",
+                    )
             messages.success(request, "General settings saved.")
             return redirect(safe_next(request, reverse("competitions:general")))
         return render(request, self.template_name, {"object": competition, "form": form})
+
+
+def _clear_foreign_registrations(competition):
+    """Drop this competition's entries/class-assignments for participants that
+    aren't of its (current) type — used after the type is changed. Returns the
+    number of event entries removed. The Participant records themselves stay."""
+    from apps.participants.models import ClassAssignment, EventEntry
+
+    entries = EventEntry.objects.filter(competition=competition).exclude(
+        participant__competition_type=competition.competition_type
+    )
+    removed = entries.count()
+    entries.delete()
+    ClassAssignment.objects.filter(
+        competition_class__competition=competition
+    ).exclude(participant__competition_type=competition.competition_type).delete()
+    return removed
 
 
 class ClassesView(ActiveCompetitionMixin, View):
@@ -256,6 +285,10 @@ def select_competition(request, pk):
         Competition.objects.exclude(pk=pk).update(is_active=False)
         competition.is_active = True
         competition.save(update_fields=["is_active"])
+    # Timing is scoped to the active competition, so tell any open live-timing view
+    # to re-fetch — it must not keep showing the previous competition's times.
+    from apps.timing.views import broadcast_live
+    broadcast_live()
     return redirect("competitions:list")
 
 

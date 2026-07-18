@@ -812,3 +812,49 @@ def test_classes_view_age_method_forces_multiple_off(client):
     assert competition.assignment_method == "age"
     # age-based can't support multiple distinct classes → forced off
     assert competition.allow_multiple_classes is False
+
+
+# ----- changing a competition's type drops registrations that no longer fit -----
+
+def test_changing_competition_type_clears_foreign_registrations(client):
+    from apps.participants.models import EventEntry, Participant
+    type_a = CompetitionType.objects.create(name="Kart")
+    type_b = CompetitionType.objects.create(name="Moto")
+    comp = Competition.objects.create(
+        competition_type=type_a, name="C", date=datetime.date(2026, 5, 1), is_active=True
+    )
+    p = Participant.objects.create(
+        competition_type=type_a, first_name="A", last_name="A",
+        date_of_birth=datetime.date(2010, 1, 1), license_number="1",
+    )
+    EventEntry.objects.create(participant=p, competition=comp, bib_number=1)
+
+    resp = client.post(reverse("competitions:general"), {
+        "competition_type": type_b.pk, "name": comp.name, "date": "2026-05-01",
+    })
+    assert resp.status_code == 302
+    comp.refresh_from_db()
+    assert comp.competition_type == type_b
+    assert not EventEntry.objects.filter(competition=comp).exists()  # foreign entry cleared
+
+
+def test_reverting_type_keeps_now_matching_registrations(client):
+    from apps.participants.models import EventEntry, Participant
+    type_a = CompetitionType.objects.create(name="Kart")
+    type_b = CompetitionType.objects.create(name="Moto")
+    # Competition currently type B but holding a type-A entry (a prior bad switch).
+    comp = Competition.objects.create(
+        competition_type=type_b, name="C", date=datetime.date(2026, 5, 1), is_active=True
+    )
+    p = Participant.objects.create(
+        competition_type=type_a, first_name="A", last_name="A",
+        date_of_birth=datetime.date(2010, 1, 1), license_number="1",
+    )
+    EventEntry.objects.create(participant=p, competition=comp, bib_number=1)
+
+    client.post(reverse("competitions:general"), {
+        "competition_type": type_a.pk, "name": comp.name, "date": "2026-05-01",
+    })
+    comp.refresh_from_db()
+    assert comp.competition_type == type_a
+    assert EventEntry.objects.filter(competition=comp).exists()  # now matches → kept
