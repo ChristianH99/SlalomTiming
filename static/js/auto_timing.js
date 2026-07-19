@@ -1,10 +1,11 @@
 // Auto timing view. The start order (run order × start pattern) runs down the
-// left as draggable tiles; the right shows the previous / current / next
-// competitor with their start, finish and run time, plus a box per marshal post
-// that fills as the marshal taps and turns green on submit. Times attach to the
-// order automatically — the operator only reorders, ignores a wrong time, or
-// drags an ignored time back onto a slot. State lives on the server; the view is
-// nudged over the WebSocket to re-fetch.
+// left as draggable tiles, grouped by run; the right shows the previous /
+// current / next competitor with start, finish, run time and total time (run +
+// penalties), plus a box per marshal post showing its pylon/task/stop-line
+// counts — green and locked once submitted. Clicking a box opens a pop-up with
+// the per-task breakdown and an Unlock button; the timekeeper can also nudge the
+// total pylon/task counts. Times attach to the order automatically. State lives
+// on the server; the view is nudged over the WebSocket to re-fetch.
 (function () {
   "use strict";
 
@@ -14,13 +15,40 @@
   if (!URLS || !dataEl) return;
 
   let state = JSON.parse(dataEl.textContent);
+  let openPopup = null; // { runId, post } of the marshal box whose pop-up is open
+  // The list follows the current starter automatically until the operator
+  // scrolls it manually; the ▲/▼ cue re-engages following.
+  let following = true;
+  // Optimistic single-flight state for the timekeeper's +/- so rapid clicks
+  // all register: "runId:field" -> { value, queued, sending }.
+  const adjustCtrl = new Map();
+  // Same, for per-task pylon edits in the pop-up: "runId:post:task" -> {...}.
+  const taskCtrl = new Map();
 
+  const orderCol = document.querySelector(".auto-order");
   const listEl = document.getElementById("auto-order-list");
   const tilesEl = document.getElementById("auto-tiles");
   const ignoredEl = document.getElementById("auto-ignored-list");
   const emptyEl = document.getElementById("auto-empty");
   const ignoredEmptyEl = document.getElementById("auto-ignored-empty");
   const resetBtn = document.querySelector("[data-reset]");
+
+  // Scroll-to-current affordances, floated over the top/bottom of the list.
+  const scrollUp = el("button", "auto-scroll-cue auto-scroll-cue--up", "▲ current");
+  const scrollDown = el("button", "auto-scroll-cue auto-scroll-cue--down", "▼ current");
+  scrollUp.type = scrollDown.type = "button";
+  scrollUp.hidden = scrollDown.hidden = true;
+  scrollUp.addEventListener("click", returnToCurrent);
+  scrollDown.addEventListener("click", returnToCurrent);
+  if (orderCol) orderCol.append(scrollUp, scrollDown);
+  // A manual scroll (wheel or touch) hands control to the operator.
+  listEl.addEventListener("wheel", () => { following = false; }, { passive: true });
+  listEl.addEventListener("touchmove", () => { following = false; }, { passive: true });
+
+  function returnToCurrent() {
+    following = true;
+    scrollToCurrent(true);
+  }
 
   // ---- server calls -------------------------------------------------------
   async function postJSON(url, body) {
@@ -35,6 +63,11 @@
   const pair = (id, runId, slot) => postJSON(URLS.pair, { signal_id: id, run_id: runId, slot });
   const reorder = (order) => postJSON(URLS.reorder, { order });
   const resetOrder = () => postJSON(URLS.resetOrder, {});
+  const adjust = (runId, field, value) => postJSON(URLS.adjust, { run_id: runId, [field]: value });
+  const unlock = (runId, post) => postJSON(URLS.unlock, { run_id: runId, post });
+  const lockAll = (runId) => postJSON(URLS.lockAll, { run_id: runId });
+  const lockPost = (runId, post) => postJSON(URLS.lock, { run_id: runId, post });
+  const taskEdit = (body) => postJSON(URLS.taskEdit, body);
 
   // ---- DOM helpers --------------------------------------------------------
   function el(tag, className, text) {
@@ -50,23 +83,37 @@
     renderTiles();
     renderIgnored();
     emptyEl.hidden = state.items.length > 0;
+    // Keep the current starter in view as the field advances, unless the
+    // operator has scrolled away.
+    if (following) scrollToCurrent(false);
+    updateScrollCues();
   }
 
   function renderList() {
-    listEl.replaceChildren(...state.items.map(orderRow));
+    const nodes = [];
+    let lastGroup = null;
+    state.items.forEach((item) => {
+      if (item.group_index !== null && item.group_index !== lastGroup) {
+        lastGroup = item.group_index;
+        nodes.push(el("li", "auto-order-divider", item.group_label || "Run"));
+      }
+      nodes.push(orderRow(item));
+    });
+    listEl.replaceChildren(...nodes);
   }
 
   function orderRow(item, index) {
     const li = el("li", "auto-order-item");
     li.draggable = true;
     li.dataset.key = item.key || "";
-    if (index === state.current_index) li.classList.add("auto-order-item--current");
+    if (item.index === state.current_index) li.classList.add("auto-order-item--current");
     if (item.finished) li.classList.add("auto-order-item--done");
     else if (item.started) li.classList.add("auto-order-item--running");
     li.append(el("span", "auto-order-bib", "#" + (item.bib == null ? "?" : item.bib)));
     li.append(el("span", "auto-order-run", item.run_label || ""));
     li.append(el("span", "auto-order-name", item.name || (item.orphan ? "(extra start)" : "")));
-    if (item.run_time) li.append(el("span", "auto-order-time", item.run_time));
+    // The total (run + penalties) is the meaningful figure here.
+    if (item.total_time) li.append(el("span", "auto-order-time", item.total_time));
     li.addEventListener("dragstart", onOrderDragStart);
     li.addEventListener("dragover", onOrderDragOver);
     li.addEventListener("drop", onOrderDrop);
@@ -82,6 +129,22 @@
       tile(ci >= 0 ? at(ci) : null, "current", "Current"),
       tile(at(ci + 1), "next", "Next up")
     );
+    positionPopup();
+  }
+
+  // Line the pop-up (and its tail) up under the marshal box that was clicked,
+  // clamped to stay inside the tile.
+  function positionPopup() {
+    const pop = tilesEl.querySelector(".auto-popup");
+    if (!pop || !openPopup) return;
+    const tile = pop.closest(".auto-tile");
+    const box = tile && tile.querySelector('.auto-marshal[data-post="' + openPopup.post + '"]');
+    if (!box) return;
+    const margin = 12;
+    let left = Math.max(margin, Math.min(box.offsetLeft, tile.clientWidth - pop.offsetWidth - margin));
+    pop.style.left = left + "px";
+    const tail = box.offsetLeft + box.offsetWidth / 2 - left - 6;
+    pop.style.setProperty("--tail-left", Math.max(10, Math.min(tail, pop.offsetWidth - 22)) + "px");
   }
 
   function tile(item, kind, label) {
@@ -106,18 +169,40 @@
     const times = el("div", "auto-tile-times");
     times.append(timeBlock("Start", item.start, item.run_id, "start"));
     times.append(timeBlock("Finish", item.finish, item.run_id, "finish"));
-    const rt = el("div", "auto-time");
-    rt.append(el("span", "auto-time-label", "Run time"));
-    rt.append(el("span", "auto-runtime", item.run_time || "–"));
-    times.append(rt);
+    times.append(figure("Run time", item.run_time || "–"));
+    times.append(figure("Total", item.total_time || "–", "auto-runtime--total"));
     div.append(times);
+
+    // Timekeeper manual +/- on the run's total pylon / task counts.
+    if (state.penalties_enabled && item.run_id) div.append(adjustRow(item));
 
     if (state.penalties_enabled && state.posts.length) {
       const boxes = el("div", "auto-marshals");
-      item.marshals.forEach((m) => boxes.append(marshalBox(m)));
+      // A lock-all button on the left force-submits every post at once.
+      if (item.run_id) {
+        const all = el("button", "auto-lock-all", "🔒");
+        all.type = "button";
+        all.title = "Lock all posts";
+        all.setAttribute("aria-label", "Lock all posts");
+        all.addEventListener("click", () => lockAll(item.run_id).then(refresh));
+        boxes.append(all);
+      }
+      item.marshals.forEach((m) => boxes.append(marshalBox(m, item)));
       div.append(boxes);
+      if (openPopup && openPopup.runId === item.run_id) {
+        const box = item.marshals.find((m) => m.number === openPopup.post);
+        if (box) div.append(popup(box, item));
+        else openPopup = null;
+      }
     }
     return div;
+  }
+
+  function figure(label, value, extra) {
+    const wrap = el("div", "auto-time");
+    wrap.append(el("span", "auto-time-label", label));
+    wrap.append(el("span", "auto-runtime" + (extra ? " " + extra : ""), value));
+    return wrap;
   }
 
   function timeBlock(label, sig, runId, role) {
@@ -145,15 +230,212 @@
     return wrap;
   }
 
-  function marshalBox(m) {
+  function adjustRow(item) {
+    const row = el("div", "auto-adjust");
+    row.append(stepper("Pylons", item, "pylon_adjust", item.total_pylons));
+    row.append(stepper("Task", item, "task_adjust", item.total_tasks));
+    return row;
+  }
+
+  function stepper(label, item, field, total) {
+    // While a burst of clicks is settling, show the optimistic total.
+    const key = item.run_id + ":" + field;
+    const ctrl = adjustCtrl.get(key);
+    if (ctrl) total = marshalSum(item, field) + ctrl.value;
+
+    const box = el("div", "auto-adjust-field");
+    box.append(el("span", "auto-adjust-label", label));
+    const controls = el("div", "auto-adjust-controls");
+    const value = el("span", "auto-adjust-value", String(total));
+    const minus = el("button", "pen-btn", "−");
+    minus.type = "button";
+    minus.addEventListener("click", () => stepAdjust(item, field, -1, value));
+    const plus = el("button", "pen-btn", "+");
+    plus.type = "button";
+    plus.addEventListener("click", () => stepAdjust(item, field, 1, value));
+    controls.append(minus, value, plus);
+    box.append(controls);
+    return box;
+  }
+
+  // The marshal-post sum for a field, which stays put while the timekeeper clicks.
+  function marshalSum(item, field) {
+    const posted = field === "pylon_adjust" ? item.total_pylons : item.total_tasks;
+    return posted - item[field];
+  }
+
+  function stepAdjust(item, field, delta, valueEl) {
+    const key = item.run_id + ":" + field;
+    const sum = marshalSum(item, field);
+    const ctrl = adjustCtrl.get(key) || { value: item[field], queued: null, sending: false };
+    let next = ctrl.value + delta;
+    if (sum + next < 0) next = -sum;          // the total can't go below zero
+    if (next === ctrl.value) return;
+    ctrl.value = next;
+    ctrl.queued = next;
+    adjustCtrl.set(key, ctrl);
+    valueEl.textContent = String(sum + next); // optimistic — no wait for a re-fetch
+    flushAdjust(key, item.run_id, field);
+  }
+
+  function flushAdjust(key, runId, field) {
+    const ctrl = adjustCtrl.get(key);
+    if (!ctrl || ctrl.sending || ctrl.queued === null) return;
+    const value = ctrl.queued;
+    ctrl.queued = null;
+    ctrl.sending = true;
+    adjust(runId, field, value).finally(() => {
+      ctrl.sending = false;
+      if (ctrl.queued !== null) flushAdjust(key, runId, field);
+      else { adjustCtrl.delete(key); refresh(); }  // settled → re-sync from the server
+    });
+  }
+
+  function marshalBox(m, item) {
     let cls = "auto-marshal";
     if (m.submitted) cls += " auto-marshal--done";
     else if (m.entered) cls += " auto-marshal--pending";
-    const box = el("div", cls);
-    box.append(el("span", "auto-marshal-post", "P" + m.number));
-    box.append(el("span", "auto-marshal-secs", (m.seconds || 0) + "s"));
+    if (openPopup && openPopup.runId === item.run_id && openPopup.post === m.number)
+      cls += " auto-marshal--open";
+    const box = el("button", cls);
+    box.type = "button";
+    box.dataset.post = m.number;
+    const head = el("span", "auto-marshal-head");
+    head.append(el("span", "auto-marshal-post", "P" + m.number));
+    if (m.submitted) head.append(el("span", "auto-marshal-lock", "🔒"));
+    box.append(head);
+    box.append(el("span", "auto-marshal-counts", boxCounts(m)));
+    if (item.run_id) {
+      box.addEventListener("click", () => {
+        openPopup = openPopup && openPopup.runId === item.run_id && openPopup.post === m.number
+          ? null
+          : { runId: item.run_id, post: m.number };
+        renderTiles();
+      });
+    } else {
+      box.disabled = true;
+    }
     return box;
   }
+
+  function boxCounts(m) {
+    const parts = [m.pylons + " P", m.tasks + " T"];
+    if (m.stop_line) parts.push("SL");
+    return parts.join(" · ");
+  }
+
+  // Speech-bubble pop-up under the tile: the post's tasks with their penalties.
+  // Once the post is locked the timekeeper can +/- each task's pylons (and toggle
+  // the stop line); while it's unlocked the rows are read-only and a Lock button
+  // sits where Unlock would.
+  function popup(box, item) {
+    const editable = box.submitted;
+    const pop = el("div", "auto-popup");
+    pop.append(el("div", "auto-popup-title", "Post " + box.number));
+    const list = el("div", "auto-popup-tasks");
+    box.detail.tasks.forEach((t) => {
+      const row = el("div", "auto-popup-row");
+      row.append(el("span", "auto-popup-task", "Task " + t.task));
+      if (editable) {
+        row.append(taskStepper(item, box.number, t));
+      } else {
+        let mark = "—";
+        if (t.task_penalty) mark = "Task";
+        else if (t.pylons) mark = t.pylons + " P";
+        row.append(el("span", "auto-popup-mark" + (mark === "—" ? " auto-popup-mark--none" : ""), mark));
+      }
+      list.append(row);
+    });
+    if (box.detail.handles_stop_line) {
+      const row = el("div", "auto-popup-row");
+      row.append(el("span", "auto-popup-task", "Stop line"));
+      if (editable) {
+        row.append(stopStepper(item, box.number, box.detail.stop_line));
+      } else {
+        row.append(el("span", "auto-popup-mark" + (box.detail.stop_line ? "" : " auto-popup-mark--none"),
+          box.detail.stop_line ? "Penalty" : "—"));
+      }
+      list.append(row);
+    }
+    pop.append(list);
+
+    const foot = el("div", "auto-popup-foot");
+    if (box.submitted) {
+      foot.append(popupButton("Unlock", () =>
+        unlock(item.run_id, box.number).then(() => { openPopup = null; refresh(); })));
+    } else {
+      // Locking here lets the timekeeper then edit the post's per-task penalties.
+      foot.append(popupButton("Lock", () => lockPost(item.run_id, box.number).then(refresh)));
+    }
+    pop.append(foot);
+    return pop;
+  }
+
+  function popupButton(label, onClick) {
+    const btn = el("button", "button button--small", label);
+    btn.type = "button";
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+
+  // A pylon stepper for one task, optimistic + single-flight (per run/post/task).
+  function taskStepper(item, post, t) {
+    const key = item.run_id + ":" + post + ":" + t.task;
+    const wrap = el("div", "auto-popup-stepper");
+    const start = taskCtrl.has(key) ? taskCtrl.get(key).value : t.pylons;
+    const value = el("span", "auto-popup-mark", start + " P");
+    const minus = el("button", "pen-btn", "−");
+    minus.type = "button";
+    minus.addEventListener("click", () => stepTask(key, item.run_id, post, t.task, -1, value));
+    const plus = el("button", "pen-btn", "+");
+    plus.type = "button";
+    plus.addEventListener("click", () => stepTask(key, item.run_id, post, t.task, 1, value));
+    wrap.append(minus, value, plus);
+    return wrap;
+  }
+
+  function stepTask(key, runId, post, task, delta, valueEl) {
+    const ctrl = taskCtrl.get(key) || { value: parseInt(valueEl.textContent, 10) || 0, queued: null, sending: false };
+    const next = Math.max(0, ctrl.value + delta);
+    if (next === ctrl.value) return;
+    ctrl.value = next;
+    ctrl.queued = { run_id: runId, post, task, pylons: next };
+    taskCtrl.set(key, ctrl);
+    valueEl.textContent = next + " P";
+    flushTask(key);
+  }
+
+  function flushTask(key) {
+    const ctrl = taskCtrl.get(key);
+    if (!ctrl || ctrl.sending || ctrl.queued === null) return;
+    const body = ctrl.queued;
+    ctrl.queued = null;
+    ctrl.sending = true;
+    taskEdit(body).finally(() => {
+      ctrl.sending = false;
+      if (ctrl.queued !== null) flushTask(key);
+      else { taskCtrl.delete(key); refresh(); }
+    });
+  }
+
+  function stopStepper(item, post, on) {
+    const wrap = el("div", "auto-popup-stepper");
+    const label = el("span", "auto-popup-mark" + (on ? "" : " auto-popup-mark--none"), on ? "Penalty" : "—");
+    const toggle = el("button", "pen-btn", on ? "−" : "+");
+    toggle.type = "button";
+    toggle.addEventListener("click", () =>
+      taskEdit({ run_id: item.run_id, post, stop_line: !on }).then(refresh));
+    wrap.append(toggle, label);
+    return wrap;
+  }
+
+  // Close the pop-up when clicking outside a box or the pop-up itself.
+  document.addEventListener("click", (e) => {
+    if (!openPopup) return;
+    if (e.target.closest(".auto-marshal") || e.target.closest(".auto-popup")) return;
+    openPopup = null;
+    renderTiles();
+  });
 
   function renderIgnored() {
     ignoredEl.replaceChildren(...state.ignored.map(ignoredChip));
@@ -175,6 +457,30 @@
     chip.addEventListener("dblclick", () => ignore(sig.id, false).then(refresh));
     return chip;
   }
+
+  // ---- scroll-to-current --------------------------------------------------
+  function currentEl() {
+    return listEl.querySelector(".auto-order-item--current");
+  }
+  function scrollToCurrent(smooth) {
+    const node = currentEl();
+    if (!node) return;
+    // Scroll the list itself (scrollIntoView is unreliable inside a tall,
+    // independently scrolling container) so the current row sits centred.
+    const listBox = listEl.getBoundingClientRect();
+    const itemBox = node.getBoundingClientRect();
+    const delta = (itemBox.top - listBox.top) - (listEl.clientHeight - node.offsetHeight) / 2;
+    listEl.scrollTo({ top: listEl.scrollTop + delta, behavior: smooth ? "smooth" : "auto" });
+  }
+  function updateScrollCues() {
+    const node = currentEl();
+    if (!node) { scrollUp.hidden = scrollDown.hidden = true; return; }
+    const list = listEl.getBoundingClientRect();
+    const item = node.getBoundingClientRect();
+    scrollUp.hidden = item.top >= list.top;         // current is above the view
+    scrollDown.hidden = item.bottom <= list.bottom; // current is below the view
+  }
+  listEl.addEventListener("scroll", updateScrollCues);
 
   // ---- reordering the start list (persisted override) ---------------------
   let dragKey = null;
@@ -271,7 +577,6 @@
     });
   });
 
-  // Dropping a run's time onto the ignored column ignores it.
   ignoredEl.addEventListener("dragover", (e) => {
     if (timeDrag && !state.ignored.some((s) => s.id === timeDrag.id)) {
       e.preventDefault();
@@ -316,6 +621,7 @@
     ws.addEventListener("close", () => setTimeout(connect, 2000));
   }
 
+  window.addEventListener("resize", updateScrollCues);
   render();
   connect();
 })();

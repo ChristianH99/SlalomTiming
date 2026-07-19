@@ -9,6 +9,9 @@ from .assignment import (
     get_assignment_method,
 )
 
+# Seconds a marshal-post claim survives without a heartbeat before it's free again.
+CLAIM_TTL = 30
+
 
 class CompetitionType(models.Model):
     """A discipline (Motorcycle, Go-Cart, …) and the rules every competition of
@@ -376,6 +379,11 @@ class MarshalPost(models.Model):
         default=False,
         help_text="This post also judges the stop line (at most one post per competition).",
     )
+    # A soft claim so only one device edits a post at a time: the token of the
+    # device that confirmed it on the Marshal Posts page, kept alive by a
+    # heartbeat (claim_seen). A claim older than CLAIM_TTL is treated as free.
+    claim_token = models.CharField(max_length=64, blank=True)
+    claim_seen = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["number"]
@@ -383,6 +391,14 @@ class MarshalPost(models.Model):
 
     def __str__(self):
         return f"{self.competition} – Marshal Post {self.number}"
+
+    def claimed_by_other(self, token, now):
+        """Whether a *different, still-live* device holds this post."""
+        from datetime import timedelta
+
+        if not self.claim_token or self.claim_token == token:
+            return False
+        return self.claim_seen is not None and (now - self.claim_seen) < timedelta(seconds=CLAIM_TTL)
 
     def task_numbers(self):
         """The task numbers this post watches, sorted. Malformed stored specs

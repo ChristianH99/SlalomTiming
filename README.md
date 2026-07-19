@@ -103,19 +103,27 @@ Run order, Penalties) in the sidebar. The sub-pages always act on the **current*
    A confirmation under General combines every post's tasks into e.g. *Tasks 1-35 assigned*.
 8. **Marshal Posts** (top-level) — the operator surface a marshal drives on their phone. Pick your
    post from the dropdown and press **Confirm** (it locks in as a red **Change post** button so it
-   isn't nudged by accident). Below, each task the post watches is a big touch button: tap to add a
+   isn't nudged by accident, and claims the post so no other device can pick it — taken posts show
+   *— in use*). Below, each task the post watches is a big touch button: tap to add a
    pylon hit, long-press for a task penalty (the per-task ceiling from the competition type caps the
    pylons — going over wiggles the button). The stop line, if this post owns it, is its own button.
-   **Submit** finalises the current bib. The current competitor and each post's running penalty are
-   exchanged live with **Auto timing** (below).
+   **Submit** finalises the current bib and **locks** the board (a 🔒 shows); there's no way back until a
+   timekeeper unlocks it from Auto timing. The current competitor and each post's penalty are exchanged
+   live with **Auto timing** (below).
 9. **Timing → Auto timing** — the order-driven live view. The start order (run order × start pattern)
-   runs down the left as draggable tiles; reordering is saved (Reset order re-derives it). Incoming
-   start/finish times attach to the order automatically — no bib typing — and the right shows the
-   previous / current / next competitor with their times and run time. The current competitor stays
-   centred until the next one starts, then the tiles shift up. Beside the times, one box per marshal
-   post shows its running penalty, turning green once that marshal submits — so the timekeeper sees
-   all-green when a competitor is fully judged. Double-click a time to ignore it (listed on the right),
-   drag it back onto a slot to re-pair. The centred competitor is the one the marshal posts judge.
+   runs down the left as draggable tiles, grouped by run with a header (e.g. *Run · Klasse 5, Klasse 6*
+   for combined classes) that sticks to the top and is replaced by the next run's as you scroll; each tile
+   carries its total time (run + penalties). The list follows the current starter automatically until you
+   scroll away, and a *▲/▼ current* cue brings it back. Incoming start/finish times attach to the order
+   automatically — no bib typing — and the right shows the previous / current / next competitor with their
+   start, finish, run time and **total time**. The current competitor stays centred until the next one
+   starts, then the tiles shift up. Beside the times, one box per marshal post shows its pylon/task/stop-line
+   counts (*2 P · 1 T · SL*), turning green with a 🔒 once submitted — so the timekeeper sees all-green when
+   a competitor is fully judged. A 🔒 button locks every post at once; clicking a box opens a pop-up under
+   it — a locked post gets **+/-** steppers to correct each task's pylons (and toggle the stop line) plus
+   **Unlock**, an unlocked post shows the read-only breakdown and a **Lock** button. The timekeeper can
+   also **+/-** the total pylon and task counts. Double-click a time to ignore it (listed on the right),
+   drag it back onto a slot to re-pair.
 10. **Participants → Add participant** — register a competitor and optionally assign a bib
    for the current competition right away. The form asks only for the details the selected
    **competition type** collects (see step 1) — pick a different type and the fields follow

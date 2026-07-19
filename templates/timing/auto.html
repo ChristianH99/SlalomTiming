@@ -47,6 +47,11 @@
         resetOrder: "{% url 'timing:auto-reset-order' %}",
         ignore: "{% url 'timing:ignore' %}",
         pair: "{% url 'timing:pair' %}",
+        adjust: "{% url 'timing:auto-adjust' %}",
+        unlock: "{% url 'timing:marshal-unlock' %}",
+        lock: "{% url 'timing:marshal-lock' %}",
+        lockAll: "{% url 'timing:marshal-lock-all' %}",
+        taskEdit: "{% url 'timing:marshal-task-edit' %}",
       };
       window.AUTO_CSRF = "{{ csrf_token }}";
     </script>

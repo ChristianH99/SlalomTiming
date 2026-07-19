@@ -1781,6 +1781,16 @@ textarea:focus-visible,
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
+/* Shown in place of Submit once the marshal has submitted (locked). */
+.marshal-lock {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  color: #1F7A44;
+  background: #E7F6EC;
+  border: 1.5px solid #2E9E5B;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.9rem;
+}
 .marshal-toast {
   margin-top: 1rem;
   padding: 0.6rem 0.9rem;
@@ -1954,25 +1964,93 @@ textarea:focus-visible,
 /* The time chip/slot styles are shared with the manual timing view. */
 .auto-tile .time-slot { min-height: 2rem; }
 
-/* Marshal boxes: one per post, green once submitted. */
-.auto-marshals { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
-.auto-marshal {
-  display: flex; flex-direction: column; align-items: center;
-  min-width: 3.4rem; padding: 0.35rem 0.55rem;
+/* Marshal boxes: one per post, showing pylon/task/stop-line counts; green and
+   locked once submitted. Clickable to open the per-task pop-up. */
+.auto-marshals { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0.5rem; margin-top: 1rem; }
+/* Lock-all: force-submit every post at once, to the left of the post boxes. */
+.auto-lock-all {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 2.4rem; padding: 0.4rem 0.55rem;
   border: 1.5px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--snow);
+  background: var(--white); color: var(--ink); cursor: pointer; font-size: 1rem;
 }
+.auto-lock-all:hover { background: var(--snow); border-color: var(--ink); }
+.auto-marshal {
+  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+  /* Fixed width sized for the widest content ("12 P · 10 T · SL") so the box
+     never resizes as counts grow from one digit to two (or the stop line shows). */
+  min-width: 7.75rem; padding: 0.4rem 0.6rem;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--snow); color: var(--ink);
+  font: inherit; cursor: pointer;
+}
+.auto-marshal:disabled { cursor: default; opacity: 0.6; }
+.auto-marshal-head { display: inline-flex; align-items: center; gap: 0.25rem; }
 .auto-marshal-post {
   font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 0.7rem;
   color: var(--text-light);
 }
-.auto-marshal-secs { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); }
-.auto-marshal--pending { border-color: var(--glacier); background: var(--frost-bg); }
-.auto-marshal--done {
-  border-color: #2E9E5B; background: #E7F6EC;
+.auto-marshal-lock { font-size: 0.7rem; line-height: 1; }
+.auto-marshal-counts {
+  font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.85rem;
+  white-space: nowrap;
 }
+.auto-marshal--pending { border-color: var(--glacier); background: var(--frost-bg); }
+.auto-marshal--done { border-color: #2E9E5B; background: #E7F6EC; }
 .auto-marshal--done .auto-marshal-post,
-.auto-marshal--done .auto-marshal-secs { color: #1F7A44; }
+.auto-marshal--done .auto-marshal-counts { color: #1F7A44; }
+.auto-marshal--open { box-shadow: 0 0 0 2px var(--ink); }
+
+/* Timekeeper manual +/- on the run's total pylon / task counts. */
+.auto-adjust { display: flex; gap: 1.5rem; margin-top: 0.85rem; }
+.auto-adjust-field { display: flex; flex-direction: column; gap: 0.25rem; }
+.auto-adjust-label {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--text-light);
+}
+.auto-adjust-controls { display: inline-flex; align-items: center; gap: 0.4rem; }
+.auto-adjust-value {
+  min-width: 1.5rem; text-align: center;
+  font-family: 'Manrope', sans-serif; font-weight: 800;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+}
+
+/* Per-task pop-up (speech bubble) below the tile. */
+.auto-tile { position: relative; }
+.auto-popup {
+  position: absolute; left: 1rem; right: auto; top: calc(100% - 0.4rem);
+  z-index: 20;
+  width: max-content; max-width: 20rem;
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+  padding: 0.75rem 0.9rem;
+}
+.auto-popup::before {
+  content: ""; position: absolute; top: -7px; left: var(--tail-left, 2rem);
+  width: 12px; height: 12px; background: var(--white);
+  border-left: 1px solid var(--border); border-top: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+.auto-popup-title {
+  font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 0.8rem;
+  margin-bottom: 0.5rem; color: var(--ink);
+}
+.auto-popup-tasks { display: flex; flex-direction: column; gap: 0.2rem; }
+.auto-popup-row {
+  display: flex; gap: 0.9rem;
+  font-size: 0.85rem; padding: 0.15rem 0;
+}
+/* A modest fixed label width keeps the marks aligned in a column but sitting
+   right next to the task names. */
+.auto-popup-task { color: var(--text-mid); min-width: 4.5rem; }
+.auto-popup-mark { font-weight: 700; color: var(--flame-hover); font-variant-numeric: tabular-nums; }
+.auto-popup-mark--none { color: var(--text-muted); font-weight: 500; }
+/* Timekeeper per-task pylon stepper inside the pop-up (locked posts only). */
+.auto-popup-stepper { display: inline-flex; align-items: center; gap: 0.4rem; margin-left: auto; }
+.auto-popup-stepper .auto-popup-mark { min-width: 2.4rem; text-align: center; }
+.auto-popup-row { align-items: center; }
+.auto-popup-foot { margin-top: 0.6rem; display: flex; justify-content: flex-end; }
+.auto-popup-note { font-size: 0.8rem; color: var(--text-light); }
 
 /* Ignored times: a plain flowing list here (not the manual view's floating rail). */
 .auto-ignored-list {
@@ -1988,3 +2066,45 @@ textarea:focus-visible,
   font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 0.7rem;
   color: var(--text-muted);
 }
+
+/* Run-group divider in the start order (classes starting together). Sticks to the
+   top of the list as its run scrolls under it, and is replaced when the next run's
+   divider reaches the top — so the header always names the run shown at the top. */
+.auto-order-divider {
+  list-style: none;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 0 0.15rem;
+  padding: 0.4rem 0.3rem;
+  background: var(--snow);
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-mid);
+  border-bottom: 1px solid var(--border);
+}
+.auto-order-divider::before { content: "Run · "; color: var(--text-muted); }
+
+/* The total (run + penalties) is the emphasised figure. */
+.auto-runtime--total { color: var(--flame); }
+.auto-order-time { font-weight: 700; color: var(--flame-hover); }
+
+/* Scroll-to-current cues, floated over the order list when it's out of view. */
+.auto-order { position: relative; }
+.auto-scroll-cue {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  z-index: 5;
+  padding: 0.5rem 1.1rem;
+  background: var(--ink); color: #fff;
+  border: none; border-radius: 999px;
+  font-family: 'Manrope', sans-serif; font-weight: 700; font-size: 0.85rem;
+  cursor: pointer; box-shadow: var(--shadow-md);
+}
+/* Clear of the sticky run header at the top of the list (which can wrap to two
+   lines for combined classes). */
+.auto-scroll-cue--up { top: 5.75rem; }
+.auto-scroll-cue--down { bottom: 0.6rem; }
+.auto-scroll-cue:hover { background: var(--ink-hover); }

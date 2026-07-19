@@ -131,6 +131,11 @@ class TimedRun(models.Model):
     pylon_count = models.PositiveSmallIntegerField(default=0)
     task_count = models.PositiveSmallIntegerField(default=0)
     stopline_count = models.PositiveSmallIntegerField(default=0)
+    # Auto timing only: the timekeeper's manual +/- to the total pylon/task counts
+    # (signed — can pull the marshal-post totals up or down). Applied on top of the
+    # summed MarshalPenalty counts; the grand total is clamped at zero.
+    pylon_adjust = models.IntegerField(default=0)
+    task_adjust = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -157,6 +162,11 @@ class MarshalPenalty(models.Model):
     pylon_count = models.PositiveSmallIntegerField(default=0)
     task_count = models.PositiveSmallIntegerField(default=0)
     stopline_count = models.PositiveSmallIntegerField(default=0)
+    # The per-task breakdown the timekeeper's pop-up shows and the marshal resumes
+    # from after an unlock: {"tasks": {"3": {"pylons": 2}, "5": {"task": true}},
+    # "stop_line": true}. The counts above are its aggregate.
+    detail = models.JSONField(default=dict, blank=True)
+    # Submitted == locked: the marshal can't edit until a timekeeper unlocks it.
     submitted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 

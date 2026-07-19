@@ -7,6 +7,7 @@ from channels.layers import get_channel_layer
 from django.contrib import messages
 from django.http import JsonResponse
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.views.generic import ListView, TemplateView, UpdateView
@@ -152,8 +153,9 @@ def marshal_state(request):
 
 @require_POST
 def marshal_submit(request):
-    """A marshal post's penalty for the run it's judging: the aggregate counts and
-    whether they've been submitted. Upserts one row per (run, post)."""
+    """A marshal post's penalty for the run it's judging: the aggregate counts, the
+    per-task breakdown, and whether it's submitted. Upserts one row per (run,post).
+    A submitted (locked) row is refused — only a timekeeper unlock reopens it."""
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
@@ -162,6 +164,10 @@ def marshal_submit(request):
     post = competition.marshal_posts.filter(number=payload.get("post")).first()
     if run is None or post is None:
         return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
+    existing = MarshalPenalty.objects.filter(timed_run=run, marshal_post=post).first()
+    if existing is not None and existing.submitted:
+        return JsonResponse({"ok": False, "locked": True}, status=409)
+    detail = payload.get("detail")
     MarshalPenalty.objects.update_or_create(
         timed_run=run,
         marshal_post=post,
@@ -169,10 +175,183 @@ def marshal_submit(request):
             "pylon_count": _as_count(payload.get("pylon_count")),
             "task_count": _as_count(payload.get("task_count")),
             "stopline_count": _as_count(payload.get("stopline_count")),
+            "detail": detail if isinstance(detail, dict) else {},
             "submitted": bool(payload.get("submitted")),
         },
     )
     broadcast_live()
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+def marshal_unlock(request):
+    """Timekeeper action: reopen a submitted marshal penalty so the marshal can
+    edit and re-submit it. Identified by the run and post number."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    payload = _json_body(request)
+    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    if run is None or post is None:
+        return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
+    mp = MarshalPenalty.objects.filter(timed_run=run, marshal_post=post).first()
+    if mp is not None and mp.submitted:
+        mp.submitted = False
+        mp.save(update_fields=["submitted", "updated_at"])
+        broadcast_live()
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+def marshal_lock_all(request):
+    """Timekeeper action: lock (submit) every post for a run at once. A post that
+    hasn't entered anything gets a zero row locked, so the whole run reads green."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    payload = _json_body(request)
+    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    if run is None:
+        return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
+    for post in competition.marshal_posts.all():
+        MarshalPenalty.objects.update_or_create(
+            timed_run=run, marshal_post=post, defaults={"submitted": True},
+        )
+    broadcast_live()
+    return JsonResponse({"ok": True})
+
+
+def _resolve_run_and_post(competition, payload):
+    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    return run, post
+
+
+@require_POST
+def marshal_lock(request):
+    """Timekeeper locks (submits) a single post at its current values."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    run, post = _resolve_run_and_post(competition, _json_body(request))
+    if run is None or post is None:
+        return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
+    MarshalPenalty.objects.update_or_create(
+        timed_run=run, marshal_post=post, defaults={"submitted": True},
+    )
+    broadcast_live()
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+def marshal_task_edit(request):
+    """Timekeeper edits one task's pylons (or the stop line) on a *locked* post,
+    then the aggregate counts are recomputed from the per-task detail."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    payload = _json_body(request)
+    run, post = _resolve_run_and_post(competition, payload)
+    if run is None or post is None:
+        return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
+    mp = MarshalPenalty.objects.filter(timed_run=run, marshal_post=post).first()
+    if mp is None or not mp.submitted:
+        return JsonResponse({"ok": False, "error": "Post isn't locked."}, status=409)
+    detail = mp.detail if isinstance(mp.detail, dict) else {}
+    tasks = detail.get("tasks") if isinstance(detail.get("tasks"), dict) else {}
+    if "task" in payload:
+        try:
+            key = str(int(payload["task"]))
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "error": "Bad task."}, status=400)
+        pylons = _as_count(payload.get("pylons"))
+        if pylons > 0:
+            tasks[key] = {"pylons": pylons}   # editing pylons clears any task penalty
+        else:
+            tasks.pop(key, None)
+    if "stop_line" in payload:
+        detail["stop_line"] = bool(payload.get("stop_line"))
+    detail["tasks"] = tasks
+    mp.detail = detail
+    mp.pylon_count = sum(int((v or {}).get("pylons", 0) or 0) for v in tasks.values())
+    mp.task_count = sum(1 for v in tasks.values() if isinstance(v, dict) and v.get("task"))
+    mp.stopline_count = 1 if detail.get("stop_line") else 0
+    mp.save()
+    broadcast_live()
+    return JsonResponse({"ok": True})
+
+
+# ----- exclusive post claims (one device edits a post at a time) -----
+
+@require_POST
+def marshal_claim(request):
+    """Claim a post (or refresh the claim) for a device token. Refused if a
+    different, still-live device already holds it."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    payload = _json_body(request)
+    token = str(payload.get("token") or "")[:64]
+    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    if post is None or not token:
+        return JsonResponse({"ok": False, "error": "Unknown post."}, status=404)
+    now = timezone.now()
+    if post.claimed_by_other(token, now):
+        return JsonResponse({"ok": False, "taken": True})
+    post.claim_token = token
+    post.claim_seen = now
+    post.save(update_fields=["claim_token", "claim_seen"])
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+def marshal_release(request):
+    """Release a post claim (on change-post or when the page closes)."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": True})
+    payload = _json_body(request)
+    token = str(payload.get("token") or "")
+    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    if post is not None and post.claim_token and post.claim_token == token:
+        post.claim_token = ""
+        post.claim_seen = None
+        post.save(update_fields=["claim_token", "claim_seen"])
+    return JsonResponse({"ok": True})
+
+
+def marshal_claims(request):
+    """Post numbers currently held by *another* device — the dropdown greys these."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"taken": []})
+    token = request.GET.get("token") or ""
+    now = timezone.now()
+    taken = [p.number for p in competition.marshal_posts.all() if p.claimed_by_other(token, now)]
+    return JsonResponse({"taken": taken})
+
+
+@require_POST
+def auto_penalty_adjust(request):
+    """Timekeeper's manual +/- to a run's total pylon/task counts (signed)."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    payload = _json_body(request)
+    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    if run is None:
+        return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
+    fields = []
+    if "pylon_adjust" in payload:
+        run.pylon_adjust = _as_signed(payload.get("pylon_adjust"))
+        fields.append("pylon_adjust")
+    if "task_adjust" in payload:
+        run.task_adjust = _as_signed(payload.get("task_adjust"))
+        fields.append("task_adjust")
+    if fields:
+        run.save(update_fields=[*fields, "updated_at"])
+        broadcast_live()
     return JsonResponse({"ok": True})
 
 
@@ -611,6 +790,13 @@ def _as_positive_int(value):
 def _as_count(value):
     text = str(value).strip()
     return int(text) if text.isdigit() else 0
+
+
+def _as_signed(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _parse_run_value(value):

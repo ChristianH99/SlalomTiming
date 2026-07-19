@@ -22,4 +22,12 @@ urlpatterns = [
     path("timing/auto/reset-order/", views.auto_reset_order, name="auto-reset-order"),
     path("timing/marshal/state/", views.marshal_state, name="marshal-state"),
     path("timing/marshal/submit/", views.marshal_submit, name="marshal-submit"),
+    path("timing/marshal/unlock/", views.marshal_unlock, name="marshal-unlock"),
+    path("timing/marshal/lock/", views.marshal_lock, name="marshal-lock"),
+    path("timing/marshal/lock-all/", views.marshal_lock_all, name="marshal-lock-all"),
+    path("timing/marshal/task-edit/", views.marshal_task_edit, name="marshal-task-edit"),
+    path("timing/marshal/claim/", views.marshal_claim, name="marshal-claim"),
+    path("timing/marshal/release/", views.marshal_release, name="marshal-release"),
+    path("timing/marshal/claims/", views.marshal_claims, name="marshal-claims"),
+    path("timing/auto/adjust/", views.auto_penalty_adjust, name="auto-adjust"),
 ]

@@ -29,9 +29,12 @@ def slot_key(entry_pk, class_pk, occurrence, run_type, run_number):
 
 
 def computed_slots(competition):
-    """The start order as a flat list of slot dicts (run order × start pattern)."""
+    """The start order as a flat list of slot dicts (run order × start pattern).
+    Each slot carries its run-group index and label (the classes starting
+    together, e.g. "5, 6") so the list can show a divider between runs."""
     slots = []
-    for _run_group, slot_list in competition.start_lists():
+    for group_index, (run_group, slot_list) in enumerate(competition.start_lists()):
+        group_label = ", ".join(cc.name for cc in run_group)
         for slot in slot_list:
             entry_pk, class_pk, occurrence = slot.starter.key
             slots.append({
@@ -41,6 +44,8 @@ def computed_slots(competition):
                 "name": slot.starter.name,
                 "class_name": slot.starter.class_name,
                 "run_label": startpattern.RUN_TYPE_SHORT[slot.run_type] + str(slot.run_number),
+                "group_index": group_index,
+                "group_label": group_label,
             })
     return slots
 
@@ -119,6 +124,9 @@ def _item(precision, ctype, index, slot, run, posts):
         finish.device_time if finish else None,
         precision,
     )
+    stored = {mp.marshal_post_id: mp for mp in run.marshal_penalties.all()} if run else {}
+    pylons, tasks, stop, seconds = _totals(run, stored, ctype)
+    total_time = calc.format_precision(rt + seconds, precision) if rt is not None else ""
     return {
         "index": index,
         "key": slot["key"] if slot else None,
@@ -126,42 +134,85 @@ def _item(precision, ctype, index, slot, run, posts):
         "name": slot["name"] if slot else "",
         "class_name": slot["class_name"] if slot else "",
         "run_label": slot["run_label"] if slot else "",
+        "group_index": slot["group_index"] if slot else None,
+        "group_label": slot["group_label"] if slot else "",
         "run_id": run.id if run else None,
         "start": _signal(start, precision),
         "finish": _signal(finish, precision),
         "run_time": calc.format_precision(rt, precision),
+        "total_time": total_time,
+        # Grand totals (marshal posts + timekeeper adjustment) and the raw
+        # adjustment, so the timekeeper's +/- can read and change it.
+        "total_pylons": pylons,
+        "total_tasks": tasks,
+        "total_stop": stop,
+        "pylon_adjust": run.pylon_adjust if run else 0,
+        "task_adjust": run.task_adjust if run else 0,
         "started": start is not None,
         "finished": finish is not None,
-        "marshals": _marshals(run, posts, ctype),
+        "marshals": _marshals(run, posts, stored),
         # A run with no matching slot (more starts than the order expects).
         "orphan": run is not None and slot is None,
     }
 
 
-def _marshals(run, posts, ctype):
-    """One box per post for this run: its penalty seconds so far and whether the
-    marshal has submitted. Posts with nothing entered yet show 0/not-submitted."""
-    stored = {mp.marshal_post_id: mp for mp in run.marshal_penalties.all()} if run else {}
+def _totals(run, stored, ctype):
+    """Grand pylon/task/stop-line counts for a run: the marshal posts summed, then
+    the timekeeper's signed adjustment applied to pylons/tasks (clamped at zero).
+    Returns the counts plus the penalty seconds they add."""
+    pylons = sum(mp.pylon_count for mp in stored.values())
+    tasks = sum(mp.task_count for mp in stored.values())
+    stop = sum(mp.stopline_count for mp in stored.values())
+    if run is not None:
+        pylons = max(0, pylons + run.pylon_adjust)
+        tasks = max(0, tasks + run.task_adjust)
+    seconds = 0
+    if ctype.penalties_enabled:
+        seconds = (
+            pylons * (ctype.pylon_penalty or 0)
+            + tasks * (ctype.task_penalty or 0)
+            + stop * (ctype.stop_line_penalty or 0)
+        )
+    return pylons, tasks, stop, seconds
+
+
+def _marshals(run, posts, stored):
+    """One box per post for this run: its pylon/task counts, whether it hit the
+    stop line, its submitted (locked) state, and the per-task breakdown the
+    timekeeper's pop-up shows. Posts with nothing entered read as zero."""
     boxes = []
     for post in posts:
         mp = stored.get(post.id)
         boxes.append({
             "number": post.number,
-            "seconds": penalty_seconds(mp, ctype) if mp else 0,
+            "pylons": mp.pylon_count if mp else 0,
+            "tasks": mp.task_count if mp else 0,
+            "stop_line": bool(mp and mp.stopline_count),
             "submitted": bool(mp and mp.submitted),
             "entered": mp is not None,
+            "detail": _detail_rows(post, mp),
         })
     return boxes
 
 
-def penalty_seconds(mp, ctype):
-    if not ctype.penalties_enabled:
-        return 0
-    return (
-        mp.pylon_count * (ctype.pylon_penalty or 0)
-        + mp.task_count * (ctype.task_penalty or 0)
-        + mp.stopline_count * (ctype.stop_line_penalty or 0)
-    )
+def _detail_rows(post, mp):
+    """Every task the post watches with its recorded penalty, for the pop-up."""
+    detail = (mp.detail if mp else None) or {}
+    tasks = detail.get("tasks", {}) if isinstance(detail, dict) else {}
+    rows = []
+    for number in post.task_numbers():
+        cell = tasks.get(str(number)) if isinstance(tasks, dict) else None
+        cell = cell if isinstance(cell, dict) else {}
+        rows.append({
+            "task": number,
+            "pylons": int(cell.get("pylons", 0) or 0),
+            "task_penalty": bool(cell.get("task")),
+        })
+    return {
+        "tasks": rows,
+        "handles_stop_line": post.handles_stop_line,
+        "stop_line": bool(detail.get("stop_line")) if isinstance(detail, dict) else False,
+    }
 
 
 def _signal(signal, precision):
@@ -209,17 +260,14 @@ def marshal_state(competition, post_number):
     )
     if entry is not None:
         club = entry.participant.club or ""
-    penalty = {"pylon_count": 0, "task_count": 0, "stopline_count": 0, "submitted": False}
+    # detail lets the marshal's board resume its exact per-task state after an
+    # unlock; submitted == locked.
+    penalty = {"detail": {}, "submitted": False}
     post = competition.marshal_posts.filter(number=post_number).first()
     if post is not None:
         mp = run.marshal_penalties.filter(marshal_post=post).first()
         if mp is not None:
-            penalty = {
-                "pylon_count": mp.pylon_count,
-                "task_count": mp.task_count,
-                "stopline_count": mp.stopline_count,
-                "submitted": mp.submitted,
-            }
+            penalty = {"detail": mp.detail or {}, "submitted": mp.submitted}
     return {
         "run_id": run.id,
         "bib": slot["bib"],

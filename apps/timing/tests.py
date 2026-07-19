@@ -594,16 +594,163 @@ def test_marshal_state_tracks_the_current_competitor():
     assert state["run_id"] is not None
 
 
-def test_marshal_submit_stores_and_shows_on_auto(client):
+def submit_penalty(client, run, post=1, pylons=0, tasks=0, stopline=0, detail=None, submitted=True):
+    return post_json(client, "timing:marshal-submit", post=post, run_id=run.id,
+                     pylon_count=pylons, task_count=tasks, stopline_count=stopline,
+                     detail=detail or {}, submitted=submitted)
+
+
+def test_marshal_submit_shows_counts_and_detail_on_auto(client):
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5", handles_stop_line=True)
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    submit_penalty(client, run, pylons=3, tasks=1, stopline=1,
+                   detail={"tasks": {"2": {"pylons": 3}, "4": {"task": True}}, "stop_line": True})
+    box = autotiming.serialize(comp)["items"][0]["marshals"][0]
+    assert box["submitted"] is True
+    assert (box["pylons"], box["tasks"], box["stop_line"]) == (3, 1, True)
+    # detail carries every watched task; the pop-up reads the marked ones.
+    marks = {row["task"]: (row["pylons"], row["task_penalty"]) for row in box["detail"]["tasks"]}
+    assert marks[2] == (3, False)
+    assert marks[4] == (0, True)
+    assert box["detail"]["stop_line"] is True
+
+
+def test_total_time_includes_penalties(client):
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    sig = signal_in(comp, 1, "10:00:00.000", running=1)
+    signal_in(comp, 2, "10:00:10.000", running=1)   # finish → run time 10.000
+    run = run_of(sig)
+    submit_penalty(client, run, pylons=2)            # 2 × 2s = 4s
+    item = autotiming.serialize(comp)["items"][0]
+    assert item["run_time"] == "10.000"
+    assert item["total_time"] == "14.000"            # run + penalty seconds
+    assert item["total_pylons"] == 2
+
+
+def test_submitted_penalty_is_locked_until_unlocked(client):
     comp, _ = auto_scenario()
     MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
     run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
-    resp = post_json(client, "timing:marshal-submit", post=1, run_id=run.id,
-                     pylon_count=3, task_count=0, stopline_count=0, submitted=True)
-    assert resp.status_code == 200 and resp.json()["ok"]
+    submit_penalty(client, run, pylons=1, submitted=True)
+    # A locked row refuses further edits from the marshal.
+    resp = submit_penalty(client, run, pylons=9, submitted=True)
+    assert resp.status_code == 409 and resp.json()["locked"] is True
+    assert autotiming.serialize(comp)["items"][0]["marshals"][0]["pylons"] == 1
+    # The timekeeper unlocks it; edits are accepted again.
+    assert post_json(client, "timing:marshal-unlock", post=1, run_id=run.id).status_code == 200
+    submit_penalty(client, run, pylons=9, submitted=True)
+    assert autotiming.serialize(comp)["items"][0]["marshals"][0]["pylons"] == 9
+
+
+def test_lock_all_submits_every_post(client):
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    MarshalPost.objects.create(competition=comp, number=2, tasks="6-8")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    submit_penalty(client, run, post=1, pylons=2, submitted=False)   # entered, not submitted
+    assert post_json(client, "timing:marshal-lock-all", run_id=run.id).status_code == 200
+    boxes = {b["number"]: b for b in autotiming.serialize(comp)["items"][0]["marshals"]}
+    assert boxes[1]["submitted"] and boxes[2]["submitted"]   # both locked
+    assert boxes[1]["pylons"] == 2   # post 1 keeps its count
+    assert boxes[2]["pylons"] == 0   # post 2 locked at zero
+
+
+def test_task_edit_recomputes_and_requires_lock(client):
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    # An unlocked post refuses a timekeeper edit.
+    resp = post_json(client, "timing:marshal-task-edit", run_id=run.id, post=1, task=3, pylons=2)
+    assert resp.status_code == 409
+    # Lock, then edit a task's pylons — the aggregate recomputes.
+    submit_penalty(client, run, post=1, pylons=1, detail={"tasks": {"2": {"pylons": 1}}})
+    post_json(client, "timing:marshal-task-edit", run_id=run.id, post=1, task=3, pylons=2)
     box = autotiming.serialize(comp)["items"][0]["marshals"][0]
-    assert box["submitted"] is True
-    assert box["seconds"] == 6   # 3 pylons × 2s
+    assert box["pylons"] == 3   # task 2 (1) + task 3 (2)
+    marks = {r["task"]: r["pylons"] for r in box["detail"]["tasks"]}
+    assert marks[3] == 2
+    # Setting a task's pylons to zero drops it.
+    post_json(client, "timing:marshal-task-edit", run_id=run.id, post=1, task=2, pylons=0)
+    assert autotiming.serialize(comp)["items"][0]["marshals"][0]["pylons"] == 2
+
+
+def test_task_edit_toggles_stop_line(client):
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-3", handles_stop_line=True)
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    submit_penalty(client, run, post=1)
+    post_json(client, "timing:marshal-task-edit", run_id=run.id, post=1, stop_line=True)
+    assert autotiming.serialize(comp)["items"][0]["marshals"][0]["stop_line"] is True
+
+
+def test_single_post_lock(client):
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    assert post_json(client, "timing:marshal-lock", run_id=run.id, post=1).status_code == 200
+    assert autotiming.serialize(comp)["items"][0]["marshals"][0]["submitted"] is True
+
+
+def test_post_claim_is_exclusive(client):
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    assert post_json(client, "timing:marshal-claim", post=1, token="A").json()["ok"] is True
+    other = post_json(client, "timing:marshal-claim", post=1, token="B").json()
+    assert other["ok"] is False and other["taken"] is True   # held by A
+    assert post_json(client, "timing:marshal-claim", post=1, token="A").json()["ok"] is True  # heartbeat
+    assert client.get(reverse("timing:marshal-claims"), {"token": "B"}).json()["taken"] == [1]
+    assert client.get(reverse("timing:marshal-claims"), {"token": "A"}).json()["taken"] == []
+    post_json(client, "timing:marshal-release", post=1, token="A")
+    assert post_json(client, "timing:marshal-claim", post=1, token="B").json()["ok"] is True
+
+
+def test_stale_claim_is_free(client):
+    import datetime as _dt
+
+    from django.utils import timezone
+
+    from apps.competitions.models import CLAIM_TTL
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(
+        competition=comp, number=1, tasks="1-5", claim_token="A",
+        claim_seen=timezone.now() - _dt.timedelta(seconds=CLAIM_TTL + 5),
+    )
+    # The old claim has gone stale, so another device may take it.
+    assert post_json(client, "timing:marshal-claim", post=1, token="B").json()["ok"] is True
+
+
+def test_timekeeper_adjust_changes_the_total(client):
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    submit_penalty(client, run, pylons=2)
+    post_json(client, "timing:auto-adjust", run_id=run.id, pylon_adjust=1, task_adjust=2)
+    item = autotiming.serialize(comp)["items"][0]
+    assert item["total_pylons"] == 3   # 2 from the post + 1 adjust
+    assert item["total_tasks"] == 2    # 0 from the post + 2 adjust
+    # A negative adjustment can't push the total below zero.
+    post_json(client, "timing:auto-adjust", run_id=run.id, pylon_adjust=-9)
+    assert autotiming.serialize(comp)["items"][0]["total_pylons"] == 0
+
+
+def test_marshal_state_returns_detail_for_resume(client):
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    submit_penalty(client, run, pylons=2, detail={"tasks": {"3": {"pylons": 2}}, "stop_line": False})
+    state = autotiming.marshal_state(comp, 1)
+    assert state["run_id"] == run.id
+    assert state["penalty"]["submitted"] is True
+    assert state["penalty"]["detail"]["tasks"]["3"]["pylons"] == 2
+
+
+def test_run_group_labels_are_carried(client):
+    comp, _ = auto_scenario()
+    slots = autotiming.computed_slots(comp)
+    assert slots[0]["group_index"] == 0
+    assert slots[0]["group_label"] == "1"   # the running class's name
 
 
 def test_auto_reorder_persists_and_drops_unknown_keys(client):

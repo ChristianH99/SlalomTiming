@@ -22,6 +22,7 @@
   const bibEl = root.querySelector("[data-bib]");
   const nameEl = root.querySelector("[data-name]");
   const clubEl = root.querySelector("[data-club]");
+  const lockEl = root.querySelector("[data-lock]");
   const toastEl = root.querySelector("[data-toast]");
 
   const LONG_PRESS_MS = 500;
@@ -38,6 +39,27 @@
   let starter = null;
   let confirmedPost = null;   // the post number once its selection is locked in
   let currentRunId = null;    // the timing run the current entries attach to
+  let locked = false;         // submitted → no edits until a timekeeper unlocks
+
+  // A per-device id so a post can only be held by one device at a time.
+  const deviceToken = (() => {
+    let t = localStorage.getItem("marshalDevice");
+    if (!t) {
+      t = window.crypto && crypto.randomUUID ? crypto.randomUUID()
+        : String(Math.random()).slice(2) + Date.now();
+      localStorage.setItem("marshalDevice", t);
+    }
+    return t;
+  })();
+
+  function postJSON(url, body) {
+    if (!URLS) return Promise.resolve({ ok: true });
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      body: JSON.stringify(body || {}),
+    }).then((r) => r.json()).catch(() => ({ ok: false }));
+  }
 
   // --- Post selection ------------------------------------------------------
   config.posts.forEach((post) => {
@@ -50,20 +72,36 @@
   const saved = localStorage.getItem(storageKey);
   if (saved && postsByNumber.has(saved)) {
     select.value = saved;
-    lockSelection();
+    claimPost(saved).then((ok) => {
+      if (ok) lockSelection();
+      else { showToast("Post " + saved + " is in use on another device."); refreshClaims(); }
+    });
   }
+  refreshClaims();
+  setInterval(refreshClaims, 8000);
+  setInterval(() => { if (confirmedPost != null) claimPost(confirmedPost); }, 12000);  // heartbeat
+  window.addEventListener("pagehide", () => releasePost(confirmedPost));
 
-  confirmBtn.addEventListener("click", () => {
-    localStorage.setItem(storageKey, select.value);
+  confirmBtn.addEventListener("click", async () => {
+    const number = select.value;
+    if (!(await claimPost(number))) {
+      showToast("Post " + number + " is in use on another device.");
+      refreshClaims();
+      return;
+    }
+    localStorage.setItem(storageKey, number);
     lockSelection();
   });
   changeBtn.addEventListener("click", () => {
+    releasePost(confirmedPost);
     select.disabled = false;
     confirmBtn.hidden = false;
     changeBtn.hidden = true;
     board.hidden = true;
     confirmedPost = null;
     currentRunId = null;
+    locked = false;
+    refreshClaims();
   });
 
   function lockSelection() {
@@ -73,18 +111,60 @@
     board.hidden = false;
     confirmedPost = select.value;
     currentRunId = null;
+    locked = false;
     buildBoard();
     fetchState();   // pull the current competitor for this post right away
   }
 
+  // --- Claims (one device per post) ----------------------------------------
+  async function claimPost(number) {
+    if (!URLS) return true;
+    const resp = await postJSON(URLS.claim, { post: Number(number), token: deviceToken });
+    return !!resp.ok;
+  }
+  function releasePost(number) {
+    if (!URLS || number == null) return;
+    // keepalive so the release still goes out as the page unloads.
+    fetch(URLS.release, {
+      method: "POST", keepalive: true,
+      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      body: JSON.stringify({ post: Number(number), token: deviceToken }),
+    }).catch(() => {});
+  }
+  async function refreshClaims() {
+    if (!URLS) return;
+    let taken = [];
+    try {
+      const resp = await fetch(URLS.claims + "?token=" + encodeURIComponent(deviceToken)).then((r) => r.json());
+      taken = resp.taken || [];
+    } catch (e) {
+      return;
+    }
+    const takenSet = new Set(taken.map(String));
+    Array.from(select.options).forEach((opt) => {
+      const busy = takenSet.has(opt.value) && opt.value !== String(confirmedPost);
+      opt.disabled = busy;
+      opt.textContent = "Post " + opt.value + (busy ? " — in use" : "");
+    });
+  }
+
   // --- Board ---------------------------------------------------------------
-  function buildBoard() {
+  // Build the task tiles, optionally hydrated from a stored per-task detail
+  // (used when a competitor's earlier state must be restored after an unlock).
+  function buildBoard(detail) {
+    detail = detail || {};
+    const savedTasks = detail.tasks || {};
     const post = postsByNumber.get(select.value);
     state = new Map();
-    stopLine = false;
+    stopLine = !!detail.stop_line;
     tasksWrap.innerHTML = "";
     (post.tasks || []).forEach((n) => {
-      state.set(n, { mode: "none", pylons: 0 });
+      const cell = savedTasks[String(n)] || {};
+      let mode = "none";
+      let pylons = 0;
+      if (cell.task) mode = "task";
+      else if (cell.pylons) { mode = "pylon"; pylons = cell.pylons; }
+      state.set(n, { mode, pylons });
       tasksWrap.appendChild(makeTaskCell(n));
     });
     if (post.stop_line) tasksWrap.appendChild(makeStopCell());
@@ -229,18 +309,25 @@
   }
 
   function applyEnabled() {
-    const on = !!starter;
+    // Editable only with a starter and while not locked (submitted).
+    const on = !!starter && !locked;
     tasksWrap.querySelectorAll("button").forEach((btn) => { btn.disabled = !on; });
     submitBtn.disabled = !on;
+    if (lockEl) lockEl.hidden = !locked;
+    submitBtn.hidden = locked;
   }
 
   // Hook for driving the page without the timing link (tests, manual checks).
   window.marshalSetStarter = setStarter;
 
   // --- Submit --------------------------------------------------------------
+  // Submitting locks the board here immediately (the timekeeper can unlock it);
+  // no way back to edit until then.
   submitBtn.addEventListener("click", () => {
-    if (!starter) return;
+    if (!starter || locked) return;
     pushPenalty(true);
+    locked = true;
+    applyEnabled();
     showToast("Penalties submitted for bib " + starter.bib);
   });
 
@@ -263,6 +350,17 @@
     return { pylon_count: pylon, task_count: task, stopline_count: stopLine ? 1 : 0 };
   }
 
+  // The per-task breakdown the timekeeper's pop-up shows and the board resumes
+  // from after an unlock.
+  function detailObject() {
+    const tasks = {};
+    state.forEach((cell, n) => {
+      if (cell.mode === "task") tasks[String(n)] = { task: true };
+      else if (cell.mode === "pylon" && cell.pylons > 0) tasks[String(n)] = { pylons: cell.pylons };
+    });
+    return { tasks, stop_line: stopLine };
+  }
+
   // Single-flight push so a burst of taps can't land out of order on the server:
   // only one request is in flight; the latest state is always what gets sent
   // last. (Fire-and-forget POSTs otherwise race — last writer wins by arrival.)
@@ -271,7 +369,7 @@
   function pushPenalty(submitted) {
     if (!URLS || currentRunId == null || confirmedPost == null) return;
     queued = Object.assign(
-      { post: Number(confirmedPost), run_id: currentRunId, submitted },
+      { post: Number(confirmedPost), run_id: currentRunId, submitted, detail: detailObject() },
       aggregate()
     );
     flushPenalty();
@@ -304,15 +402,28 @@
     if (!data || data.run_id == null) {
       if (currentRunId !== null) {
         currentRunId = null;
+        locked = false;
         buildBoard();
       }
       setStarter(null);
       return;
     }
+    const penalty = data.penalty || {};
     if (data.run_id !== currentRunId) {
+      // New competitor: hydrate the board from any stored detail and lock state.
       currentRunId = data.run_id;
-      buildBoard();   // fresh board for the new competitor
+      locked = !!penalty.submitted;
+      buildBoard(penalty.detail);
       setStarter({ bib: data.bib, name: data.name, club: data.club });
+      return;
+    }
+    // Same competitor: only react when the lock state flips (a timekeeper
+    // unlocked it, or our submit was confirmed) — otherwise leave in-progress
+    // taps untouched.
+    if (!!penalty.submitted !== locked) {
+      locked = !!penalty.submitted;
+      buildBoard(penalty.detail);   // restore the submitted detail for editing
+      applyEnabled();
     }
   }
 

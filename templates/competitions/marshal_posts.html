@@ -34,6 +34,7 @@
 
         <div class="marshal-footer">
           <span class="marshal-total" data-total></span>
+          <span class="marshal-lock" data-lock hidden>🔒 Submitted — locked</span>
           <button type="button" class="button button--big" data-submit>Submit</button>
         </div>
       </div>
@@ -45,6 +46,9 @@
       window.MARSHAL_URLS = {
         state: "{% url 'timing:marshal-state' %}",
         submit: "{% url 'timing:marshal-submit' %}",
+        claim: "{% url 'timing:marshal-claim' %}",
+        release: "{% url 'timing:marshal-release' %}",
+        claims: "{% url 'timing:marshal-claims' %}",
       };
       window.MARSHAL_CSRF = "{{ csrf_token }}";
     </script>
