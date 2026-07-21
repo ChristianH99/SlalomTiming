@@ -157,6 +157,7 @@ class ParticipantForm(forms.ModelForm):
             "address_street": "Street address",
             "address_zip_code": "ZIP code",
             "address_city": "City",
+            "email": "E-Mail",
         }
 
 

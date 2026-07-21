@@ -1,7 +1,10 @@
+import json
+
 from django.db.models import F, OuterRef, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
+from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.common import safe_next
@@ -80,6 +83,41 @@ def known_clubs():
     )
 
 
+def _format_address(participant):
+    line2 = " ".join(
+        part for part in (participant.address_zip_code, participant.address_city) if part
+    )
+    return ", ".join(part for part in (participant.address_street, line2) if part)
+
+
+# The detail groups shown in the participant list's expandable detail panel:
+# (PARTICIPANT_INFO setting, label, value function). Bib, name, date of birth and
+# class are already in the main row; club and licence get their own columns when
+# collected — so the panel carries the rest of what the edit view collects.
+DETAIL_FIELDS = [
+    ("requires_co_driver", "Co-driver",
+     lambda p: f"{p.co_driver_first_name} {p.co_driver_last_name}".strip()),
+    ("requires_vehicle", "Vehicle", lambda p: p.vehicle),
+    ("requires_address", "Address", _format_address),
+    ("requires_email", "E-Mail", lambda p: p.email),
+    ("requires_phone", "Phone", lambda p: p.phone_number),
+]
+
+
+def participant_detail_rows(participant, collected_info):
+    """Label/value pairs for a participant's detail panel: the details the active
+    type collects (``collected_info``) that actually hold a value — everything the
+    edit view would show that isn't already a column in the list."""
+    rows = []
+    for setting, label, value_fn in DETAIL_FIELDS:
+        if setting not in collected_info:
+            continue
+        value = (value_fn(participant) or "").strip()
+        if value:
+            rows.append({"label": label, "value": value})
+    return rows
+
+
 class ParticipantListView(ListView):
     model = Participant
     context_object_name = "participants"
@@ -138,6 +176,10 @@ class ParticipantListView(ListView):
         context["collected_info"] = collected
         # Fixed columns (bib, name, dob, class, actions) plus the shown optional ones.
         context["column_count"] = 5 + ("requires_club" in collected) + ("requires_license" in collected)
+        # Attach each participant's detail-panel rows for the expandable view.
+        for participant in context["participants"]:
+            participant.detail_rows = participant_detail_rows(participant, collected)
+        context["set_bib_url"] = reverse("participants:set-bib")
         return context
 
 
@@ -227,6 +269,51 @@ class ParticipantDeleteView(DeleteView):
             )
         context["orphaned_run_count"] = orphaned
         return context
+
+
+@require_POST
+def participant_set_bib(request):
+    """Assign / change / clear a participant's bib for the active competition,
+    straight from the participant list's expandable detail (no full edit needed).
+    Enforces the same per-competition uniqueness the edit form does."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No competition is selected."}, status=400)
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "Malformed request."}, status=400)
+
+    participant = Participant.objects.filter(
+        pk=payload.get("participant"), competition_type=competition.competition_type
+    ).first()
+    if participant is None:
+        return JsonResponse({"ok": False, "error": "Unknown participant."}, status=404)
+
+    entry = EventEntry.objects.filter(participant=participant, competition=competition).first()
+    raw = str(payload.get("bib", "")).strip()
+    if raw == "":
+        # Clearing the bib removes the registration (its run status goes with it).
+        if entry is not None:
+            entry.delete()
+        return JsonResponse({"ok": True, "bib": None})
+
+    if not raw.isdigit() or int(raw) < 1:
+        return JsonResponse({"ok": False, "error": "Bib must be a positive number."})
+    bib = int(raw)
+
+    conflict = EventEntry.objects.filter(competition=competition, bib_number=bib)
+    if entry is not None:
+        conflict = conflict.exclude(pk=entry.pk)
+    if conflict.exists():
+        return JsonResponse({"ok": False, "error": f"Bib {bib} is already taken."})
+
+    if entry is None:
+        EventEntry.objects.create(participant=participant, competition=competition, bib_number=bib)
+    elif entry.bib_number != bib:
+        entry.bib_number = bib
+        entry.save(update_fields=["bib_number"])
+    return JsonResponse({"ok": True, "bib": bib})
 
 
 def participant_check(request):

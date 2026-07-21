@@ -91,7 +91,7 @@ class CompetitionType(models.Model):
         ),
         "requires_club": ("Club", True, ["club"]),
         "requires_license": ("Licence number", True, ["license_number"]),
-        "requires_email": ("E-mail", True, ["email"]),
+        "requires_email": ("E-Mail", True, ["email"]),
         "requires_phone": ("Phone", False, ["phone_number"]),
     }
 
