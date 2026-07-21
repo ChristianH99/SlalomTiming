@@ -1031,6 +1031,23 @@ def test_clearing_a_time_on_a_slot_with_no_run_is_a_noop(client):
     assert not TimedRun.objects.filter(competition=comp).exists()   # nothing created
 
 
+def test_dragging_a_time_onto_an_upcoming_competitor_creates_their_run(client):
+    comp, cls = auto_scenario(bibs=(1, 2))
+    d_start = signal_in(comp, 1, "10:00:00.000", running=1)
+    run1 = run_of(d_start)
+    slot2 = autotiming.serialize(comp)["items"][1]
+    assert slot2["bib"] == 2 and slot2["run_id"] is None   # bib 2 upcoming, no run
+
+    # Drag bib 1's start onto bib 2's (run-less) start slot.
+    resp = post_json(client, "timing:pair", signal_id=d_start.id, slot="start",
+                     slot_key=slot2["key"]).json()
+    assert resp["ok"] is True
+    run2 = TimedRun.objects.get(competition=comp, bib_number=2)
+    assert run2.start_signal_id == d_start.id   # the time moved to the next competitor
+    run1.refresh_from_db()
+    assert run1.start_signal_id is None         # and left the one it came from
+
+
 def test_rejected_pairing_leaves_the_dragged_time_on_the_rail(client):
     comp, cls = auto_scenario(bibs=(1,))
     start = signal_in(comp, 1, "10:00:10.000", running=1)

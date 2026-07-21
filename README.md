@@ -135,7 +135,9 @@ Run order, Penalties, Results) in the sidebar. The sub-pages always act on the *
    Start, Finish or Run time; do it on an upcoming competitor (one who hasn't started) and keying their
    start makes them the current one. **Scroll** the tiles with the mouse wheel (one competitor per notch)
    or **click** a start-order tile on the left to browse the field without changing who is current — the
-   centred tile frames blue and reads *Next up* / *Previous* while you browse. Beside the times, one box per marshal post shows its pylon/task/stop-line
+   centred tile frames blue and reads *Next up* / *Previous* while you browse. You can also **drag** a
+   time chip from the current competitor onto another tile's Start/Finish slot — including an upcoming
+   competitor who has no run yet — to move a mis-attributed time onto the right starter. Beside the times, one box per marshal post shows its pylon/task/stop-line
    counts (*2 P · 1 T · SL*), turning green with a 🔒 once submitted. A 🔒 button locks every post at once;
    clicking a box opens a pop-up — a locked post gets **+/-** steppers to correct each task's pylons (and
    toggle the stop line) plus **Unlock**, an unlocked post shows the read-only breakdown and a **Lock**

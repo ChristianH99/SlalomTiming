@@ -172,10 +172,10 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
   forms.py               TimingSettingsForm (IP required only for the TP540).
   views.py               Settings page; standalone Simulator; live Manual timing view + a JSON
                          arrangement endpoint and mutate endpoints (run-update by run id — marks
-                         the run manual_entry —, ignore, pair, set-time [type a start/finish by hand,
-                         displaced device time kept on the rail], set-runtime [type a run time]; both
-                         take a slot_key so a time can be keyed onto an upcoming Auto competitor with
-                         no run yet, creating it via _run_from_slot).
+                         the run manual_entry —, ignore, pair [also takes a slot_key, so a time can be
+                         dragged onto an upcoming Auto competitor with no run yet], set-time [type a
+                         start/finish by hand, displaced device time kept on the rail], set-runtime
+                         [type a run time]; the slot_key path creates the run via _run_from_slot).
                          serialize_arrangement()/timing_signal both run sync_bindings so the two
                          views stay in step. timing_signal ingests device posts (csrf-exempt, since a
                          real device can't send a token) and nudges live views to refresh.
@@ -284,7 +284,9 @@ templates/results/       results_class.html (ranked table + configured columns +
   speech-bubble pop-up under it: a locked post shows +/-
   steppers to edit each task's pylons (and toggle the stop line) plus an **Unlock** button; an unlocked
   post shows the read-only breakdown and a **Lock** button. Ignore a wrong time by dragging it to the
-  Ignored list, and drag it back onto a slot to re-pair.
+  Ignored list, and drag it back onto a slot to re-pair. A time chip can also be dragged from the current
+  competitor onto another tile's Start/Finish slot — including an *upcoming* competitor with no run yet
+  (their run is made from the slot key), moving a mis-attributed time onto the right starter.
 - **Marshal Posts** is a top-level sidebar item (below Timing) — the marshal's phone surface (see the
   competitions app). It reads the current competitor from Auto timing over the timing WebSocket and
   pushes every tap and the final submit back (with the per-task detail) so the boxes above fill and go

@@ -501,14 +501,18 @@ def timing_ignore(request):
 @require_POST
 def timing_pair(request):
     """Drag a time into a run's start/finish slot. Rejects (so the client wiggles)
-    a pairing that would put a start after its finish."""
+    a pairing that would put a start after its finish. Dropping onto an upcoming
+    Auto competitor with no run yet (only a slot_key) makes their run first, so a
+    time can be moved from the current competitor onto the next one."""
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
     signal = TimingSignal.objects.filter(id=payload.get("signal_id"), competition=competition).first()
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
     slot = payload.get("slot")
+    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    if run is None and payload.get("slot_key"):
+        run = _run_from_slot(competition, payload.get("slot_key"))
     if signal is None or run is None or slot not in ("start", "finish"):
         return JsonResponse({"ok": False, "error": "Bad pairing request."}, status=400)
     ok = arrangement.assign(signal, run, slot)

@@ -107,7 +107,8 @@
     return res.json().catch(() => ({ ok: false }));
   }
   const ignore = (id, ig) => postJSON(URLS.ignore, { signal_id: id, ignored: ig });
-  const pair = (id, runId, slot) => postJSON(URLS.pair, { signal_id: id, run_id: runId, slot });
+  const pair = (id, runId, slot, slotKey) =>
+    postJSON(URLS.pair, { signal_id: id, run_id: runId, slot, slot_key: slotKey });
   const setTime = (runId, slot, time, slotKey) =>
     postJSON(URLS.setTime, { run_id: runId, slot, time, slot_key: slotKey });
   const setRuntime = (runId, runTime, slotKey) =>
@@ -306,6 +307,9 @@
     const slot = el("div", "time-slot");
     slot.dataset.role = role;
     slot.dataset.runId = item.run_id || "";
+    // The slot key lets a time be dropped onto an upcoming competitor with no run
+    // yet (their run is made from it), so a time can be moved onto the next starter.
+    slot.dataset.slotKey = item.key || "";
     // Double-click a slot to type a time by hand (device failed, or an upcoming
     // starter); ignoring a wrong time is a drag to the Ignored list.
     if (editable(item)) {
@@ -685,9 +689,16 @@
     setTimeout(() => node.classList.remove("time-slot--reject"), 450);
   }
 
+  // A slot accepts a dragged time if the role matches and it maps to a competitor —
+  // one with a run, or an upcoming one we can make a run for (drop the current's
+  // time onto the next starter).
+  const dropTarget = (slot) =>
+    slot && timeDrag && timeDrag.role === slot.dataset.role &&
+    (slot.dataset.runId || slot.dataset.slotKey);
+
   tilesEl.addEventListener("dragover", (e) => {
     const slot = e.target.closest(".time-slot");
-    if (slot && timeDrag && timeDrag.role === slot.dataset.role && slot.dataset.runId) {
+    if (dropTarget(slot)) {
       e.preventDefault();
       slot.classList.add("time-slot--drop");
     }
@@ -698,17 +709,19 @@
   });
   tilesEl.addEventListener("drop", (e) => {
     const slot = e.target.closest(".time-slot");
-    if (!slot || !timeDrag || timeDrag.role !== slot.dataset.role || !slot.dataset.runId) return;
+    if (!dropTarget(slot)) return;
     e.preventDefault();
     slot.classList.remove("time-slot--drop");
-    if (!pairingValid(slot.dataset.role, slot.dataset.runId)) {
+    const runId = slot.dataset.runId;
+    if (runId && !pairingValid(slot.dataset.role, runId)) {
       wiggle(slot);
       return;
     }
-    pair(timeDrag.id, Number(slot.dataset.runId), slot.dataset.role).then((resp) => {
-      if (resp && resp.rejected) wiggle(slot);
-      else refresh();
-    });
+    pair(timeDrag.id, runId ? Number(runId) : null, slot.dataset.role, slot.dataset.slotKey)
+      .then((resp) => {
+        if (resp && resp.rejected) wiggle(slot);
+        else refresh();
+      });
   });
 
   ignoredEl.addEventListener("dragover", (e) => {
