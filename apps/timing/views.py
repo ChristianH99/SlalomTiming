@@ -10,14 +10,14 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from django.views.generic import ListView, TemplateView, UpdateView
+from django.views.generic import TemplateView, UpdateView
 
 from apps.competitions.models import Competition, CompetitionClass
 from apps.participants.models import EventEntry
 
-from . import arrangement, autotiming, calc
+from . import arrangement, autotiming, calc, dashboard
 from .forms import TimingSettingsForm
-from .models import MarshalPenalty, TimedRun, TimingEvent, TimingSettings, TimingSignal
+from .models import MarshalPenalty, TimedRun, TimingSettings, TimingSignal
 from .services import LIVE_GROUP
 
 
@@ -28,11 +28,31 @@ def broadcast_live():
         async_to_sync(layer.group_send)(LIVE_GROUP, {"type": "timing.refresh"})
 
 
-class DashboardView(ListView):
-    model = TimingEvent
-    context_object_name = "events"
+class DashboardView(TemplateView):
+    """The organiser overview: a live, read-only status view of the whole event
+    (overall run progress, per-class state, the competitor on course, headline
+    counts). Read-only and derived from the same data the timing views use."""
+
     template_name = "timing/dashboard.html"
-    paginate_by = 50
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        competition = Competition.get_current()
+        context["competition"] = competition
+        if competition is not None:
+            context["overview"] = dashboard.serialize(competition)
+        return context
+
+
+def dashboard_state(request):
+    """The organiser overview as JSON — fetched on load and on every WebSocket
+    nudge so the dashboard updates live as times land."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"competition": False})
+    data = dashboard.serialize(competition)
+    data["competition"] = True
+    return JsonResponse(data)
 
 
 class TimingSettingsView(UpdateView):

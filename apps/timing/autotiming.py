@@ -329,6 +329,16 @@ def penalty_seconds(run, competition):
     return _penalty_seconds(_penalty_lines(run, marshal_mode), ctype)
 
 
+def penalty_counts(run, competition):
+    """The run's grand ``(pylons, tasks, stop_line)`` penalty counts, resolved the
+    same canonical way as ``penalty_seconds`` — for callers that show the tallies
+    rather than the seconds (e.g. the Dashboard's current-competitor chips)."""
+    ctype = competition.competition_type
+    marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
+    lines = _penalty_lines(run, marshal_mode)
+    return lines[0]["total"], lines[1]["total"], lines[2]["total"]
+
+
 def _marshals(run, posts, stored):
     """One box per post for this run: its pylon/task counts, whether it hit the
     stop line, its submitted (locked) state, and the per-task breakdown the

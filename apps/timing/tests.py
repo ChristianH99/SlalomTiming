@@ -92,10 +92,72 @@ def test_simulator_emits_pulses():
         assert 1 <= pulse.bib_number <= 3
 
 
-def test_dashboard_view_renders(client):
+def test_dashboard_view_without_competition(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert b"Live timing feed" in response.content
+    assert b"No competition is selected" in response.content
+
+
+def test_dashboard_view_renders_overview(client):
+    make_active_competition()
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b"Event overview" in response.content
+    assert b"dash-data" in response.content
+
+
+def test_dashboard_state_reports_progress(client):
+    comp = make_active_competition()
+    comp.start_pattern = [{"window": None, "chips": ["counted"]}]
+    comp.save()
+    cclass = comp.classes.create(name="A", is_running=True, run_position=1,
+                                 practice_runs=0, counted_runs=1)
+    participant = make_participant(comp.competition_type, 1, comp)
+    ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+
+    response = client.get(reverse("timing:dashboard-state"))
+    data = response.json()
+    assert data["competition"] is True
+    # One starter, one counted run expected, nothing finished yet.
+    assert data["progress"]["expected"] == 1
+    assert data["progress"]["finished"] == 0
+    assert data["stats"]["participants"] == 1
+    names = [c["name"] for c in data["classes"]]
+    assert "A" in names
+
+
+def test_dashboard_state_without_competition(client):
+    response = client.get(reverse("timing:dashboard-state"))
+    assert response.json() == {"competition": False}
+
+
+def test_dashboard_progress_without_start_pattern(client):
+    # No start pattern: competitors turn up in any order, but the expected run
+    # total is still known from the entries and their classes.
+    comp = make_active_competition()
+    assert comp.start_pattern == []
+    cclass = comp.classes.create(name="A", is_running=True, run_position=1,
+                                 practice_runs=1, counted_runs=2)
+    participant = make_participant(comp.competition_type, 1, comp)
+    ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+
+    data = client.get(reverse("timing:dashboard-state")).json()
+    # 1 practice + 2 counted = 3 expected runs, none finished, with no pattern.
+    assert data["progress"]["expected"] == 3
+    assert data["progress"]["finished"] == 0
+    klass = next(c for c in data["classes"] if c["name"] == "A")
+    assert klass["total"] == 3 and klass["status"] == "not_started"
+
+    # A finished counted run recorded free-order (no start order) still counts.
+    TimedRun.objects.create(
+        competition=comp, bib_number=1, competition_class=cclass,
+        class_occurrence=0, run_type=TimedRun.RunType.COUNTED, run_number=1,
+        manual_run_time=Decimal("12.34"), manual_entry=True,
+    )
+    data = client.get(reverse("timing:dashboard-state")).json()
+    assert data["progress"]["finished"] == 1
+    klass = next(c for c in data["classes"] if c["name"] == "A")
+    assert klass["finished"] == 1 and klass["status"] == "running"
 
 
 # ----- timing settings -----

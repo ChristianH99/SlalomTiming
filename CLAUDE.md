@@ -169,8 +169,16 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
   calc.py                Run time (integer-microsecond truncation to the type's precision, never
                          rounded); resolved_run_time() prefers a run's manual_run_time override;
                          total penalty; fixed-decimal formatting.
+  dashboard.py           The organiser Dashboard's read-only overview (at "/"). serialize()
+                         reuses autotiming.serialize() so its numbers always match the timing
+                         views: overall run progress (finished vs the start order's expected
+                         slots), per-class done/running/not-started state with a completion
+                         percent, the competitor on course now (bib/name/class/run + times and
+                         penalties once finished), and headline counts (participants, classes
+                         done, runs remaining, non-starters, marshal posts).
   forms.py               TimingSettingsForm (IP required only for the TP540).
-  views.py               Settings page; standalone Simulator; live Manual timing view + a JSON
+  views.py               DashboardView (organiser overview) + dashboard-state JSON endpoint;
+                         Settings page; standalone Simulator; live Manual timing view + a JSON
                          arrangement endpoint and mutate endpoints (run-update by run id — marks
                          the run manual_entry —, ignore, pair [also takes a slot_key, so a time can be
                          dragged onto an upcoming Auto competitor with no run yet], set-time [type a
@@ -196,9 +204,12 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
   consumers.py           TimingConsumer (legacy dashboard) + TimingLiveConsumer (pushes refresh
                          nudges to open live views, group "timing_live").
   management/commands/run_timing_connector.py   [legacy] runs the connector loop
-templates/timing/        settings.html, simulator.html (standalone, no app shell), live.html
-                         (Manual timing), auto.html (Auto timing)
-static/js/               dashboard.js (legacy) + timing_live.js (Manual timing view: render, edits,
+templates/timing/        dashboard.html (organiser overview), settings.html, simulator.html
+                         (standalone, no app shell), live.html (Manual timing), auto.html (Auto timing)
+static/js/               dashboard_overview.js (organiser Dashboard: renders the stat tiles,
+                         progress ring, per-class board and current-competitor card from the
+                         dashboard-state JSON, re-fetching on each timing_live WebSocket nudge) +
+                         dashboard.js (legacy) + timing_live.js (Manual timing view: render, edits,
                          drag-to-pair, drag-to-rail-to-ignore, double-click a Start/Finish/Run-time
                          to type it by hand [entered times highlighted], WebSocket refresh) +
                          auto_timing.js (Auto timing: draggable start order, prev/current/next tiles,
@@ -314,18 +325,21 @@ uv run python manage.py createsuperuser
 uv run pytest                            # tests (pytest-django)
 ```
 
-Run `runserver` and `run_timing_connector` in separate terminals — the dashboard at `/` needs both to see
-live data (the app itself works with just `runserver`, it just won't receive device events).
+`runserver` alone drives the whole app, including the Dashboard at `/` and the Manual/Auto timing views
+(they read `TimingSignal` -> `TimedRun` and update live over the `timing_live` WebSocket group). The
+legacy `run_timing_connector` loop is only needed to feed the *old* `TimingEvent` connector-loop path.
 
 ## Notes
 
 - `CHANNEL_LAYERS` uses `InMemoryChannelLayer` — fine for a single local process. Switch to
   `channels_redis` only if this ever needs to run multi-process/multi-host.
-- The three `TimingEvent` bullets below describe the **legacy** dashboard/connector-loop path,
-  kept working but slated to be redone; the current operator surface is the Manual timing and Auto
-  timing views built on `TimingSignal` -> `TimedRun`.
+- The Dashboard at `/` is the **organiser overview** (apps/timing/dashboard.py + dashboard_overview.js):
+  a read-only live status view derived from the same start order and runs the timing views use.
+- The three `TimingEvent` bullets below describe the **legacy** connector-loop path (the old
+  connector-loop *feed*, not the current Dashboard), kept working but slated to be redone; the current
+  operator surfaces are the Manual timing and Auto timing views built on `TimingSignal` -> `TimedRun`.
 - Every timing pulse is written to the DB (`TimingEvent`) before/as it's broadcast, so a dropped
-  WebSocket or crashed dashboard never loses data.
+  WebSocket or crashed view never loses data.
 - `TimingEvent.bib_number` is matched against the current competition's `EventEntry.bib_number` at
   ingestion time to resolve a display name (bibs live on `EventEntry`, scoped per competition, not on
   `Participant`); the participant FK is nullable since a pulse may arrive before a bib is registered.

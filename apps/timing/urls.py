@@ -6,6 +6,7 @@ app_name = "timing"
 
 urlpatterns = [
     path("", views.DashboardView.as_view(), name="dashboard"),
+    path("dashboard/state/", views.dashboard_state, name="dashboard-state"),
     path("timing/settings/", views.TimingSettingsView.as_view(), name="settings"),
     path("timing/simulator/", views.SimulatorView.as_view(), name="simulator"),
     path("timing/signal/", views.timing_signal, name="signal"),

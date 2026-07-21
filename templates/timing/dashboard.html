@@ -3,31 +3,46 @@
 {% block title %}Dashboard – Slalom Timing{% endblock %}
 {% block topbar_title %}Dashboard{% endblock %}
 {% block content %}
-  <h1><span id="live-dot" class="live-dot"></span>Live timing feed</h1>
-  <div class="table-card">
-  <table>
-    <thead>
-      <tr>
-        <th>Received</th>
-        <th>Channel</th>
-        <th>Bib</th>
-        <th>Participant</th>
-      </tr>
-    </thead>
-    <tbody id="events-body">
-      {% for event in events %}
-        <tr>
-          <td>{{ event.received_at|date:"H:i:s" }}</td>
-          <td>{{ event.get_channel_display }}</td>
-          <td>{{ event.bib_number|default:"–" }}</td>
-          <td>{{ event.participant|default:"–" }}</td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="4">No timing events yet.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
+  {% if not competition %}
+    <div class="notice">
+      <p>No competition is selected. The dashboard shows the status of the active
+        competition, so <a href="{% url 'competitions:list' %}">pick a competition</a>
+        to follow it.</p>
+    </div>
+  {% else %}
+    <div class="dash" id="dash">
+      <div class="dash-head">
+        <h1><span id="live-dot" class="live-dot"></span>Event overview</h1>
+        <span class="dash-updated" id="dash-updated" aria-live="polite"></span>
+      </div>
 
-  <script src="{% static 'js/dashboard.js' %}"></script>
+      {% comment %}Stat tiles, the progress ring, per-class board and current
+        competitor are all rendered from the JSON below by dashboard_overview.js,
+        and re-rendered on every live nudge.{% endcomment %}
+      <section class="dash-stats" id="dash-stats" aria-label="Event statistics"></section>
+
+      <div class="dash-grid">
+        <section class="dash-panel dash-progress-panel" aria-label="Overall progress">
+          <h2 class="dash-panel-title">Overall progress</h2>
+          <div class="dash-progress" id="dash-progress"></div>
+        </section>
+
+        <section class="dash-panel dash-current-panel" aria-label="On course now">
+          <h2 class="dash-panel-title">On course now</h2>
+          <div class="dash-current" id="dash-current"></div>
+        </section>
+      </div>
+
+      <section class="dash-panel" aria-label="Classes">
+        <h2 class="dash-panel-title">Classes</h2>
+        <div class="dash-classes" id="dash-classes"></div>
+      </section>
+    </div>
+
+    {{ overview|json_script:"dash-data" }}
+    <script>
+      window.DASH_URLS = { state: "{% url 'timing:dashboard-state' %}" };
+    </script>
+    <script src="{% static 'js/dashboard_overview.js' %}"></script>
+  {% endif %}
 {% endblock %}
