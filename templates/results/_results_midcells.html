@@ -1,0 +1,9 @@
+{% comment %}The shared middle cells (class, info blocks, run columns) — same for the
+ranked and unranked tables. Expects `row` and `layout`.{% endcomment %}
+{% if layout.include_class %}<td class="rt-class"><div class="rt-line">{{ row.class_name }}{% if row.occurrence %} <span class="result-occurrence">({{ row.occurrence|add:1 }})</span>{% endif %}</div></td>{% endif %}
+{% if layout.name_keys %}<td class="rt-block rt-name">{% for line in row.name_lines %}<div class="rt-line{% if line.bold %} rt-bold{% endif %}">{{ line.text }}</div>{% endfor %}</td>{% endif %}
+{% if layout.address_keys %}<td class="rt-block">{% for line in row.address_lines %}<div class="rt-line">{{ line.text }}</div>{% endfor %}</td>{% endif %}
+{% if layout.has_vehicle %}<td class="rt-vehicle"><div class="rt-line">{{ row.vehicle }}</div></td>{% endif %}
+{% if layout.licence_keys %}<td class="rt-block">{% for line in row.licence_lines %}<div class="rt-line">{{ line.text }}</div>{% endfor %}</td>{% endif %}
+{% for cell in row.training %}<td class="rt-run rt-training"><div class="rt-line">{{ cell.time }}</div><div class="rt-line rt-pen">{{ cell.penalty }}</div></td>{% endfor %}
+{% for cell in row.counted %}<td class="rt-run"><div class="rt-line">{{ cell.time }}</div><div class="rt-line rt-pen">{{ cell.penalty }}</div></td>{% endfor %}

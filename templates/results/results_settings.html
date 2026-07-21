@@ -4,45 +4,36 @@
 {% block content %}
   <h1 class="page-heading">Results</h1>
   <p class="hint">Which participant details appear in the results tables for
-    <strong>{{ object.name }}</strong>. Rank, bib and name are always shown.</p>
+    <strong>{{ object.name }}</strong>. Rank and bib are always shown.</p>
 
-  {% if not has_columns %}
-    <div class="empty-state">
-      This competition's type collects no optional participant details, so there is
-      nothing extra to show. Results tables will show rank, bib and name.
-    </div>
-  {% else %}
   <form method="post" class="settings-form" data-unsaved-guard id="results-form">
     {% csrf_token %}
     <input type="hidden" name="next" value="">
 
-    <h2 class="form-section">General</h2>
+    <h2 class="form-section">Overall results</h2>
     <div class="settings-section">
-      <p class="hint">The default columns for every class.</p>
-      <div class="settings-checks">
-        {% for col in general_columns %}
-          <label class="switch">
-            <input type="checkbox" name="general-{{ col.key }}" {% if col.checked %}checked{% endif %}>
-            <span class="switch-track"><span class="switch-thumb"></span></span>
-            <span class="switch-text">{{ col.label }}</span>
-          </label>
-        {% endfor %}
-      </div>
+      <p class="hint">Show the cross-class Overall pages (one per scoring method and
+        counted-run count).</p>
+      <label class="switch">
+        <input type="checkbox" name="show-overall" {% if show_overall %}checked{% endif %}>
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+        <span class="switch-text">Show Overall results</span>
+      </label>
     </div>
 
-    {% for row in class_rows %}
-      <div class="settings-section" data-class-block>
-        <h2 class="form-section">{{ row.cclass.name }}</h2>
-        <label class="switch">
-          <input type="checkbox" name="class-{{ row.cclass.pk }}-inherit" data-inherit
-                 {% if row.inherit %}checked{% endif %}>
-          <span class="switch-track"><span class="switch-thumb"></span></span>
-          <span class="switch-text">Same as General</span>
-        </label>
-        <div class="settings-checks" data-class-columns>
-          {% for col in row.columns %}
+    {% if not has_columns %}
+      <div class="empty-state">
+        This competition's type collects no optional participant details, so there is
+        nothing extra to show. Results tables will show rank, bib and the run times.
+      </div>
+    {% else %}
+      <h2 class="form-section">General</h2>
+      <div class="settings-section">
+        <p class="hint">The default columns for every class.</p>
+        <div class="settings-checks">
+          {% for col in general_columns %}
             <label class="switch">
-              <input type="checkbox" name="class-{{ row.cclass.pk }}-{{ col.key }}"
+              <input type="checkbox" name="general-{{ col.key }}" data-general-key="{{ col.key }}"
                      {% if col.checked %}checked{% endif %}>
               <span class="switch-track"><span class="switch-thumb"></span></span>
               <span class="switch-text">{{ col.label }}</span>
@@ -50,7 +41,26 @@
           {% endfor %}
         </div>
       </div>
-    {% endfor %}
+
+      {% for row in class_rows %}
+        <div class="settings-section" data-class-block>
+          <h2 class="form-section">{{ row.cclass.name }}</h2>
+          <p class="hint">Extra columns for this class, on top of General.</p>
+          <div class="settings-checks">
+            {% for col in row.columns %}
+              <label class="switch" data-col-key="{{ col.key }}">
+                <input type="checkbox" name="class-{{ row.cclass.pk }}-{{ col.key }}"
+                       {% if col.checked %}checked{% endif %}>
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+                <span class="switch-text">{{ col.label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          <p class="hint settings-empty-note" hidden>All available columns are already
+            shown by General.</p>
+        </div>
+      {% endfor %}
+    {% endif %}
 
     <div class="actions">
       <button class="button" type="submit">Save</button>
@@ -59,20 +69,26 @@
 
   <script>
     (function () {
-      // "Same as General" greys out and ignores a class's own column checkboxes.
-      document.querySelectorAll("[data-class-block]").forEach((block) => {
-        const inherit = block.querySelector("[data-inherit]");
-        const columns = block.querySelector("[data-class-columns]");
-        if (!inherit || !columns) return;
-        const apply = () => {
-          const off = inherit.checked;
-          columns.classList.toggle("settings-checks--off", off);
-          columns.querySelectorAll("input").forEach((box) => { box.disabled = off; });
-        };
-        inherit.addEventListener("change", apply);
-        apply();
-      });
+      // A class can only *add* columns General doesn't already show: hide each
+      // class checkbox whose General counterpart is on, live as General changes.
+      const generals = document.querySelectorAll("[data-general-key]");
+      if (!generals.length) return;
+      const apply = () => {
+        const on = new Set();
+        generals.forEach((g) => { if (g.checked) on.add(g.dataset.generalKey); });
+        document.querySelectorAll("[data-class-block]").forEach((block) => {
+          let visible = 0;
+          block.querySelectorAll("[data-col-key]").forEach((label) => {
+            const hide = on.has(label.dataset.colKey);
+            label.hidden = hide;
+            if (!hide) visible += 1;
+          });
+          const note = block.querySelector(".settings-empty-note");
+          if (note) note.hidden = visible !== 0;
+        });
+      };
+      generals.forEach((g) => g.addEventListener("change", apply));
+      apply();
     })();
   </script>
-  {% endif %}
 {% endblock %}

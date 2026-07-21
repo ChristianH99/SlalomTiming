@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Results – Slalom Timing{% endblock %}
+{% block topbar_title %}Results{% endblock %}
+{% block content %}
+  <h1 class="page-heading">Results</h1>
+  <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }}</p>
+
+  {% if overall_groups %}
+    <h2 class="form-section">Overall</h2>
+    <div class="results-index">
+      {% for g in overall_groups %}
+        <a class="results-index-card" href="{% url 'results:overall' g.method g.counted_runs %}">
+          <span class="results-index-name">Overall · {{ g.method_label }}</span>
+          <span class="results-index-meta">{{ g.counted_runs }} Runs · {{ g.classes|length }} class{{ g.classes|length|pluralize:"es" }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <h2 class="form-section">Classes</h2>
+  <div class="results-index">
+    {% for cc in classes %}
+      <a class="results-index-card" href="{% url 'results:class' cc.pk %}">
+        <span class="results-index-name">Class {{ cc.name }}</span>
+        <span class="results-index-meta">{{ cc.get_scoring_method_display }}</span>
+      </a>
+    {% empty %}
+      <p class="empty-state">No running classes yet.</p>
+    {% endfor %}
+  </div>
+{% endblock %}

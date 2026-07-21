@@ -39,8 +39,11 @@
           <a class="shell-nav-subitem{% if url_name == 'settings' %} active{% endif %}" href="{% url 'timing:settings' %}">Settings</a>
         </div>
         <a class="shell-nav-item{% if url_name == 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">Marshal Posts</a>
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'results' and url_name == 'class' %} active{% endif %}" href="{% if results_classes %}{% url 'results:class' results_classes.0.pk %}{% else %}{% url 'results:settings' %}{% endif %}">Results</a>
+        <a class="shell-nav-item shell-nav-parent{% if app_name == 'results' and url_name != 'settings' %} active{% endif %}" href="{% url 'results:index' %}">Results</a>
         <div class="shell-nav-sub">
+          {% for g in results_overall %}
+            <a class="shell-nav-subitem{% if url_name == 'overall' and request.resolver_match.kwargs.method == g.method and request.resolver_match.kwargs.runs == g.counted_runs %} active{% endif %}" href="{% url 'results:overall' g.method g.counted_runs %}">Overall · {{ g.method_label }} · {{ g.counted_runs }} Runs</a>
+          {% endfor %}
           {% for cc in results_classes %}
             <a class="shell-nav-subitem{% if url_name == 'class' and request.resolver_match.kwargs.pk == cc.pk %} active{% endif %}" href="{% url 'results:class' cc.pk %}">{{ cc.name }}</a>
           {% empty %}

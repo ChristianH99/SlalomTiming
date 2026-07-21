@@ -2299,31 +2299,120 @@ textarea:focus-visible,
   border-radius: var(--radius-sm);
 }
 
-.results-table td, .results-table th { white-space: nowrap; }
-.results-table .col-rank { width: 3.5rem; text-align: right; font-weight: 600; }
-.results-table .col-bib { width: 4rem; }
-.results-table .col-run,
-.results-table .col-score {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+/* Multi-line race-book layout. Info columns stack fixed-height lines (one per
+   enabled field) so rows align; long name/club text wraps rather than overflowing,
+   keeping the table free of a horizontal scrollbar. */
+.results-card { overflow-x: auto; }
+.results-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.results-table th {
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-mid);
+  padding: 0.45rem 0.55rem;
+  border-bottom: 2px solid var(--border);
+  vertical-align: bottom;
 }
-.results-table .col-score { font-weight: 600; color: var(--text-dark); }
-.results-table tbody tr:first-child:not(.empty-row) .col-rank { color: var(--flame); }
+.results-table td {
+  padding: 0.4rem 0.55rem;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;  /* centre each cell's lines within the (uniform) row height */
+}
+.results-table .rt-rank { width: 2.4rem; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.results-table .rt-bib { width: 3rem; font-variant-numeric: tabular-nums; }
+.results-table .rt-class { width: 3.5rem; }
+.results-table .rt-run,
+.results-table .rt-total { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.results-table th.rt-run, .results-table th.rt-total { text-align: right; }
+
+/* Every line reserves its height even when empty, so a blank field (missing
+   co-driver, no penalty, no gap) still takes a line and all rows stay the same
+   height. Run/total cells always render two lines; the info blocks render one line
+   per enabled field — both centred within the row by the cell's middle alignment. */
+.rt-line { line-height: 1.3; min-height: 1.3em; }
+.rt-block .rt-line, .rt-name .rt-line { overflow-wrap: anywhere; }
+.rt-bold { font-weight: 700; color: var(--text-dark); }
+.rt-training .rt-line { color: var(--text-mid); }
+.rt-pen { color: var(--flame); font-size: 0.72rem; }
+.rt-total-time { font-weight: 700; color: var(--text-dark); }
+.rt-gap { color: var(--text-mid); font-size: 0.72rem; }
+.rt-status { font-weight: 600; color: var(--text-mid); }
 
 /* A tie awaiting a manual decision. */
 .results-table .result-inspect td { background: var(--flame-bg); }
-.result-flag {
-  margin-left: 0.4rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--flame-hover);
-  white-space: nowrap;
-}
+.result-flag { font-size: 0.72rem; font-weight: 600; color: var(--flame-hover); white-space: nowrap; }
 /* A participant's lower repeat entry — shown but not ranked. */
 .results-table .result-skipped td { color: var(--text-light); }
 .result-occurrence { color: var(--text-light); font-weight: 400; }
 .result-dash { color: var(--text-muted); }
 .results-table--muted td { color: var(--text-mid); }
+
+/* Results landing page: cards linking to each class / Overall table. */
+.results-index {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin: 0.5rem 0 1.5rem;
+}
+.results-index-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.results-index-card:hover { border-color: var(--glacier); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.results-index-name { font-weight: 600; color: var(--text-dark); }
+.results-index-meta { font-size: 0.78rem; color: var(--text-mid); }
+
+/* Tie flags + inline manual-ranking editor. */
+.rt-rank { position: relative; }
+.tie-flag {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0 0 0 0.15rem;
+  vertical-align: baseline;
+}
+.tie-flag--pending { color: var(--flame); }
+.tie-flag--auto, .tie-flag--manual { color: #1F9D5B; }
+.tie-flag:hover { filter: brightness(0.85); }
+
+.results-table tr.tie-editing td { background: var(--frost-bg); }
+.results-table tr.tie-editing { cursor: grab; }
+.tie-drag { cursor: grab; color: var(--text-muted); margin-right: 0.25rem; user-select: none; }
+.tie-rank-input {
+  width: 3.4rem;  /* wide enough that two digits stay visible beside the spinner */
+  padding: 0.1rem 0.3rem;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+  text-align: left;
+}
+.results-table tr.tie-editing.tie-drop-before td { box-shadow: inset 0 2px 0 var(--flame); }
+.results-table tr.tie-editing.tie-drop-after td { box-shadow: inset 0 -2px 0 var(--flame); }
+
+.tie-toolbar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  background: var(--frost-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.tie-toolbar-msg { font-size: 0.85rem; color: var(--text-mid); margin-right: auto; }
+.tie-toolbar-msg--error { color: var(--flame-hover); font-weight: 600; }
 
 .settings-checks--off { opacity: 0.5; pointer-events: none; }
 .shell-nav-subitem--muted { color: var(--text-muted); font-style: italic; cursor: default; }

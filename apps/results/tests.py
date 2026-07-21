@@ -276,29 +276,200 @@ def test_sync_identities_binds_positional_runs(monkeypatch):
 
 # ----- config model + pages -----
 
-def test_columns_for_defaults_to_available_then_honours_override():
+def test_columns_for_defaults_to_available_then_adds_class_columns():
     _, competition, cclass = make_setup()
-    # Type collects club/licence/address/email by default (requires_* defaults).
+    # Type collects club/licence/address/email by default; name + dob always.
     available = ResultColumnSettings.available_keys(competition)
-    assert "requires_club" in available
+    assert "club" in available and "driver_name" in available and "birthday" in available
     # No rows yet -> general defaults to all available.
     assert set(ResultColumnSettings.columns_for(competition, cclass)) == set(available)
-    # A class override that drops everything but club.
+    # A General set of just club; the class *adds* city on top (additive, no override).
     ResultColumnSettings.objects.create(
-        competition=competition, competition_class=cclass,
-        columns=["requires_club"], inherit_general=False,
+        competition=competition, competition_class=None, columns=["club"],
     )
-    assert ResultColumnSettings.columns_for(competition, cclass) == ["requires_club"]
+    assert ResultColumnSettings.columns_for(competition, cclass) == ["club"]
+    ResultColumnSettings.objects.create(
+        competition=competition, competition_class=cclass, columns=["city"],
+    )
+    # Canonical order: club before city.
+    assert ResultColumnSettings.columns_for(competition, cclass) == ["club", "city"]
 
 
 def test_results_settings_page_saves(client):
     _, competition, cclass = make_setup()
     response = client.post(reverse("results:settings"), {
-        "general-requires_club": "on",
-        f"class-{cclass.pk}-inherit": "on",
+        "general-club": "on",
+        "show-overall": "on",
+        # A class addition that's already in General is ignored (additive only).
+        f"class-{cclass.pk}-club": "on",
+        f"class-{cclass.pk}-city": "on",
     })
     assert response.status_code == 302
-    assert ResultColumnSettings.general_columns(competition) == ["requires_club"]
+    assert ResultColumnSettings.general_columns(competition) == ["club"]
+    assert ResultColumnSettings.overall_enabled(competition) is True
+    assert ResultColumnSettings.class_additions(competition, cclass) == ["city"]
+
+
+def test_overall_page_ranks_across_classes(client):
+    ctype, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE, counted_runs=2)
+    other = CompetitionClass.objects.create(
+        competition=competition, name="T2", is_running=True,
+        practice_runs=0, counted_runs=2,
+        scoring_method=CompetitionClass.Scoring.AGGREGATE, position=100,
+    )
+    make_competitor(competition, cclass, 1)
+    make_competitor(competition, other, 2)
+    add_run(competition, cclass, 1, 1, 30)
+    add_run(competition, cclass, 1, 2, 30)   # total 60
+    add_run(competition, other, 2, 1, 25)
+    add_run(competition, other, 2, 2, 25)    # total 50 -> bib 2 wins overall
+
+    results = resultscalc.compute_overall_results(
+        competition, CompetitionClass.Scoring.AGGREGATE, 2
+    )
+    assert [(r.bib, r.rank, r.class_name) for r in results.ranked] == [
+        (2, 1, "T2"), (1, 2, "T1"),
+    ]
+    response = client.get(reverse(
+        "results:overall", args=[CompetitionClass.Scoring.AGGREGATE, 2]
+    ))
+    assert response.status_code == 200
+
+
+def test_results_index_lists_classes(client):
+    _, competition, cclass = make_setup()
+    response = client.get(reverse("results:index"))
+    assert response.status_code == 200
+    assert b"Class T1" in response.content
+
+
+# ----- time formatting -----
+
+def test_format_clock_mm_ss():
+    from apps.timing import calc
+    assert calc.format_clock(Decimal("30.00"), 2) == "00:30.00"
+    assert calc.format_clock(Decimal("62.50"), 2) == "01:02.50"
+    assert calc.format_clock(Decimal("5.123"), 3) == "00:05.123"
+    assert calc.format_clock(None, 2) == ""
+
+
+def test_skipped_repeat_entry_shows_gap_to_winner(client):
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1, occurrences=2)
+    make_competitor(competition, cclass, 2)
+    add_run(competition, cclass, 1, 1, 20, occurrence=1)  # best occurrence -> 40 (winner)
+    add_run(competition, cclass, 1, 2, 20, occurrence=1)
+    add_run(competition, cclass, 1, 1, 30, occurrence=0)  # skipped repeat -> 60
+    add_run(competition, cclass, 1, 2, 30, occurrence=0)
+    add_run(competition, cclass, 2, 1, 50)
+    add_run(competition, cclass, 2, 2, 50)  # -> 100
+    response = client.get(reverse("results:class", args=[cclass.pk]))
+    # The skipped repeat (60) is 20s behind the winner (40): its gap is still shown.
+    assert b"+00:20.00" in response.content
+
+
+def test_class_page_shows_clock_times(client):
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1)
+    add_run(competition, cclass, 1, 1, 30)
+    add_run(competition, cclass, 1, 2, 30)  # total 60 -> 01:00.00
+    response = client.get(reverse("results:class", args=[cclass.pk]))
+    assert b"01:00.00" in response.content and b"00:30.00" in response.content
+
+
+def test_regularity_column_shows_difference(client):
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.REGULARITY)
+    make_competitor(competition, cclass, 1)
+    add_run(competition, cclass, 1, 1, 30)
+    add_run(competition, cclass, 1, 2, 33)  # spread 3 -> 00:03.00
+    response = client.get(reverse("results:class", args=[cclass.pk]))
+    assert b"Difference" in response.content and b"00:03.00" in response.content
+
+
+def test_best_run_column_heading(client):
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.BEST_RUN)
+    make_competitor(competition, cclass, 1)
+    add_run(competition, cclass, 1, 1, 40)
+    add_run(competition, cclass, 1, 2, 25)  # best 25 -> 00:25.00
+    response = client.get(reverse("results:class", args=[cclass.pk]))
+    assert b"Best run" in response.content and b"00:25.00" in response.content
+
+
+# ----- tie states -----
+
+def test_auto_resolved_tie_is_green_not_inspect():
+    _, competition, cclass = make_setup(tie_break=CompetitionType.TieBreak.FASTEST_RUN)
+    make_competitor(competition, cclass, 1)
+    make_competitor(competition, cclass, 2)
+    # Equal aggregate (60) but different fastest run -> rule resolves the tie.
+    add_run(competition, cclass, 1, 1, 20)
+    add_run(competition, cclass, 1, 2, 40)
+    add_run(competition, cclass, 2, 1, 29)
+    add_run(competition, cclass, 2, 2, 31)
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [r.tie_state for r in results.ranked] == ["auto", "auto"]
+    assert not any(r.inspect for r in results.ranked)
+
+
+def _tie_setup():
+    ctype, competition, cclass = make_setup(tie_break=CompetitionType.TieBreak.FASTEST_RUN)
+    make_competitor(competition, cclass, 1)
+    make_competitor(competition, cclass, 2)
+    # Identical runs -> unbreakable tie (pending) at ranks 1 & 1.
+    for bib in (1, 2):
+        add_run(competition, cclass, bib, 1, 30)
+        add_run(competition, cclass, bib, 2, 30)
+    return competition, cclass
+
+
+def test_unbreakable_tie_pending_until_manual():
+    competition, cclass = _tie_setup()
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [r.tie_state for r in results.ranked] == ["pending", "pending"]
+    assert {r.rank for r in results.ranked} == {1}
+    assert all(r.tie_start == 1 and r.tie_size == 2 for r in results.ranked)
+
+
+def test_tie_resolve_endpoint_orders_and_greens(client):
+    competition, cclass = _tie_setup()
+    e1 = EventEntry.objects.get(competition=competition, bib_number=1)
+    e2 = EventEntry.objects.get(competition=competition, bib_number=2)
+    response = client.post(
+        reverse("results:tie-resolve"),
+        data={"scope": f"class:{cclass.pk}", "members": [
+            {"entry_pk": e1.pk, "occurrence": 0, "rank": 1},
+            {"entry_pk": e2.pk, "occurrence": 0, "rank": 2},
+        ]},
+        content_type="application/json",
+    )
+    assert response.status_code == 200 and response.json()["ok"]
+    results = resultscalc.compute_class_results(competition, cclass)
+    by_bib = {r.bib: r for r in results.ranked}
+    assert by_bib[1].rank == 1 and by_bib[2].rank == 2
+    assert by_bib[1].tie_state == "manual" and by_bib[2].tie_state == "manual"
+
+
+def test_tie_resolve_allows_shared_but_rejects_out_of_order(client):
+    competition, cclass = _tie_setup()
+    e1 = EventEntry.objects.get(competition=competition, bib_number=1)
+    e2 = EventEntry.objects.get(competition=competition, bib_number=2)
+    url = reverse("results:tie-resolve")
+    scope = f"class:{cclass.pk}"
+    # 2,1 is not a legal ranking.
+    bad = client.post(url, data={"scope": scope, "members": [
+        {"entry_pk": e1.pk, "occurrence": 0, "rank": 2},
+        {"entry_pk": e2.pk, "occurrence": 0, "rank": 1},
+    ]}, content_type="application/json")
+    assert bad.status_code == 400 and not bad.json()["ok"]
+    # 1,1 (an intentional shared placing) is allowed.
+    ok = client.post(url, data={"scope": scope, "members": [
+        {"entry_pk": e1.pk, "occurrence": 0, "rank": 1},
+        {"entry_pk": e2.pk, "occurrence": 0, "rank": 1},
+    ]}, content_type="application/json")
+    assert ok.status_code == 200 and ok.json()["ok"]
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert {r.rank for r in results.ranked} == {1}
+    assert all(r.tie_state == "manual" for r in results.ranked)
 
 
 def test_class_results_page_renders(client):

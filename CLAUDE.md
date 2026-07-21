@@ -168,7 +168,8 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          channel alternates start/finish/start/…
   calc.py                Run time (integer-microsecond truncation to the type's precision, never
                          rounded); resolved_run_time() prefers a run's manual_run_time override;
-                         total penalty; fixed-decimal formatting.
+                         total penalty; fixed-decimal formatting (format_precision) plus
+                         format_clock() which renders a time as mm:ss.xxx (used by the results tables).
   dashboard.py           The organiser Dashboard's read-only overview (at "/"). serialize()
                          reuses autotiming.serialize() so its numbers always match the timing
                          views: overall run progress (finished vs the start order's expected
@@ -217,32 +218,78 @@ static/js/               dashboard_overview.js (organiser Dashboard: renders the
                          marshal_posts.js pushes taps/submit to timing:marshal-submit and pulls the
                          current competitor via timing:marshal-state, single-flight so rapid taps
                          can't land out of order.
-apps/results/           Ranked per-class results (top-level "Results" sidebar section) plus a
-                        Competition-Setup "Results" sub-page that picks which participant-info
-                        columns the tables show.
-  models.py              ResultColumnSettings: which optional columns a competition's results
-                         tables show — one General row (competition_class null) plus optional
-                         per-class overrides (inherit_general falls back to General). The
-                         column vocabulary reuses CompetitionType.PARTICIPANT_INFO (only the
-                         details the type collects are offered; Bib/Name are always shown).
+apps/results/           A "Results" landing page (index) listing every running class + the
+                        Overall pages, per-class ranked tables, cross-class Overall tables, and a
+                        Competition-Setup "Results" sub-page that configures the columns.
+  models.py              RESULT_COLUMNS: the results column vocabulary — key -> (label,
+                         availability, group). availability gates a column on a CompetitionType
+                         flag (co_driver/club/email/phone/street+city[requires_address]/vehicle/
+                         license), or is always-on (driver_name, birthday, birth_year), or the
+                         special "any class has practice runs" for the training column; group is
+                         which fixed layout column it renders into (name / address / vehicle /
+                         licence blocks, or the runs region). ResultColumnSettings: one General
+                         row (competition_class null) holds the default columns + the show_overall
+                         toggle; a per-class row holds *additions only* (a class can only add
+                         columns General doesn't already show — no inherit/override). columns_for()
+                         = general ∪ class additions; available_keys() filters the vocabulary to
+                         what the type collects; overall_enabled() reads show_overall.
+                         ManualTieResolution: a timekeeper's saved ordering of a tie group, keyed by
+                         scope ("class:<pk>" / "overall:<method>:<runs>") + the member set — an
+                         ordered [entry_pk, occurrence, rank] list that applies only while the same
+                         competitors are still tied (else ignored).
   resultscalc.py         The scoring/ranking engine. sync_identities() delegates to
                          autotiming.sync_bindings() (the same routine the timing views run), so
                          results read one representation. run_penalty_seconds() is the single penalty
                          source (marshal-post totals + timekeeper adjust when penalties_by_marshal_posts,
-                         else the run's own counts). compute_class_results() gathers each competitor's
-                         counted runs (total = resolved run time + penalties), scores by
+                         else the run's own counts). _competitor() gathers a competitor's counted and
+                         practice (training) runs and their total_time (run + penalties). scores by
                          CompetitionClass.Scoring (aggregate sum / best-run min / regularity
-                         spread — lower wins), then ranks: a participant's repeat entries after
-                         their first ranked one are skipped, and equal scores the type's
-                         tie_break can't separate share a rank + are flagged for inspection.
-                         Rankable = a live status with every counted run recorded — except best-run,
-                         which places on a single completed run. Incomplete / DNS / DNF / DSQ
-                         competitors are returned unranked.
-  views.py               ResultsClassView (a class's ranked table; syncs identities then
-                         computes) + ResultsSettingsView (the General + per-class column config).
-                         Both reuse competitions.ActiveCompetitionMixin.
-templates/results/       results_class.html (ranked table + configured columns + unranked block)
-                         and results_settings.html (General + per-class column toggles).
+                         spread — lower wins), then _rank() (dedup_key-parameterised) assigns ranks:
+                         a competitor's repeat entries after their first ranked one are skipped, and
+                         equal scores the type's tie_break can't separate share a rank + are flagged
+                         for inspection. Competitors sharing a score form a tie group (_rank_group):
+                         a rule that fully separates them ranks them distinctly, tie_state "auto"
+                         (green flag); a rule that can't (or Manual tie-break) leaves them sharing a
+                         rank, tie_state "pending" (red, inspect) until a stored ManualTieResolution
+                         orders them (tie_state "manual", green). tie_start/tie_size expose the group's
+                         first rank + size so an edit knows the legal ranks. validate_resolution()
+                         checks a posted order is a legal ranking (start fixed; each rank ties the
+                         previous or takes its own position — 1,2 or 1,1 but never 2,1).
+                         compute_class_results() ranks one class; overall_groups()
+                         lists the distinct (scoring_method, counted_runs) groups (one Overall page
+                         each) and compute_overall_results() ranks across a group's classes (dedup by
+                         participant *and* class, so one competitor shows once per class). Rankable =
+                         a live status with every counted run recorded — except best-run, one run.
+                         Incomplete / DNS / DNF / DSQ competitors are returned unranked, and a
+                         skipped repeat entry still shows its gap to the winner.
+  views.py               build_table() assembles the shared layout + per-row lines both the class
+                         and Overall tables render (a column group renders only when a field in it
+                         is enabled; each enabled field is one line so rows align; _value() renders
+                         each field, e.g. driver_name -> "Last, First"). ResultsIndexView (the
+                         landing list), ResultsClassView (one class), ResultsOverallView
+                         (a scoring-method × counted-run group, with an extra Class column and the
+                         General columns) all sync identities then compute. ResultsSettingsView: the
+                         show_overall toggle, General columns, and per-class additions.
+                         ResultsTieResolveView (JSON endpoint results:tie-resolve): recomputes the
+                         table, validates a posted manual ordering, saves the ManualTieResolution.
+                         All reuse competitions.ActiveCompetitionMixin.
+templates/results/       index.html (class + Overall cards), results_class.html, results_overall.html
+                         (both include _results_table.html, which renders the ranked + unranked
+                         tables from _results_head.html and _results_midcells.html — the fixed
+                         multi-line layout: Rank | Bib | [Class] | Name block (driver+co-driver bold,
+                         club, e-mail, phone) | Street/City | Vehicle | Licence/Birthday/Birth-year |
+                         Training + counted run cells (time as mm:ss.xxx over "+N s" penalty) | the
+                         scoring value (mm:ss.xxx over +gap to 1st)), and results_settings.html. The
+                         last column shows the value competitors are ranked by, headed per method:
+                         "Total" (aggregate sum), "Best run" (best-run min), "Difference" (regularity
+                         spread). All rows are the same height (each line reserves its height, run and
+                         total cells always render two lines) and vertically centred. A tied
+                         competitor's rank cell
+                         carries a flag (red pending / green resolved); clicking it opens the inline
+                         editor (static/js/results_tie.js) — the tied rows become draggable and their
+                         ranks editable, and Save posts to results:tie-resolve. Overall pages split by
+                         scoring method AND counted-run count; the sidebar lists them above the
+                         per-class pages.
 ```
 
 ### Timing UI (under the sidebar "Timing" menu)

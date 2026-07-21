@@ -63,3 +63,20 @@ def format_precision(value, precision):
     if value is None:
         return ""
     return f"{Decimal(value):.{precision}f}"
+
+
+def format_clock(value, precision):
+    """A run/total time as ``mm:ss.xxx`` (fractional digits at `precision`), blank
+    for None. The value is assumed already truncated. Minutes are zero-padded and
+    unbounded (a 75s time is ``01:15``). A negative value keeps its sign."""
+    if value is None:
+        return ""
+    v = Decimal(value)
+    sign = "-" if v < 0 else ""
+    v = abs(v)
+    whole = int(v)
+    minutes, seconds = divmod(whole, 60)
+    if precision > 0:
+        frac = f"{(v - whole):.{precision}f}"[2:]  # drop the leading "0."
+        return f"{sign}{minutes:02d}:{seconds:02d}.{frac}"
+    return f"{sign}{minutes:02d}:{seconds:02d}"

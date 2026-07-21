@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Overall results – Slalom Timing{% endblock %}
+{% block topbar_title %}Results{% endblock %}
+{% block content %}
+  <div class="results-header">
+    <h1 class="page-heading">Overall · {{ scoring_label }}</h1>
+    <span class="results-method">{{ results.counted_runs }} Runs</span>
+  </div>
+  <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }} · all classes combined</p>
+
+  {% include "results/_results_table.html" %}
+{% endblock %}
