@@ -1575,8 +1575,23 @@ textarea:focus-visible,
 }
 /* A manual trigger reads warm (amber) vs the cool light-barrier blue. */
 .time-chip--manual { background: #FBEBD8; color: #8A4B12; }
+/* A time typed in by hand (device failed): green with a dashed edge, so it never
+   reads as a measured time. */
+.time-chip--entered { background: #E4F3E9; color: #1E6B3A; border: 1px dashed #4FA06C; }
 .time-chip:active { cursor: grabbing; }
 .time-empty { color: var(--text-muted); }
+.run-time--entered,
+.auto-runtime--entered { color: #1E6B3A; font-weight: 700; text-decoration: underline dotted 1.5px; }
+
+/* Inline number box for typing a Start / Finish / Run time by hand. */
+.time-edit {
+  width: 6.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding: 0.2rem 0.4rem;
+  border: 1.5px solid var(--glacier);
+  border-radius: var(--radius-sm);
+}
 
 /* Bib + name stacked. The column is a fixed width and the name clips with an
    ellipsis, so a long name changes neither the row height nor the column width. */
@@ -2108,3 +2123,46 @@ textarea:focus-visible,
 .auto-scroll-cue--up { top: 5.75rem; }
 .auto-scroll-cue--down { bottom: 0.6rem; }
 .auto-scroll-cue:hover { background: var(--ink-hover); }
+
+/* ===== RESULTS ===== */
+.results-header { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.results-header .page-heading { margin-bottom: 0; }
+.results-method {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--glacier);
+  background: var(--frost-bg);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-sm);
+}
+
+.results-table td, .results-table th { white-space: nowrap; }
+.results-table .col-rank { width: 3.5rem; text-align: right; font-weight: 600; }
+.results-table .col-bib { width: 4rem; }
+.results-table .col-run,
+.results-table .col-score {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.results-table .col-score { font-weight: 600; color: var(--text-dark); }
+.results-table tbody tr:first-child:not(.empty-row) .col-rank { color: var(--flame); }
+
+/* A tie awaiting a manual decision. */
+.results-table .result-inspect td { background: var(--flame-bg); }
+.result-flag {
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--flame-hover);
+  white-space: nowrap;
+}
+/* A participant's lower repeat entry — shown but not ranked. */
+.results-table .result-skipped td { color: var(--text-light); }
+.result-occurrence { color: var(--text-light); font-weight: 400; }
+.result-dash { color: var(--text-muted); }
+.results-table--muted td { color: var(--text-mid); }
+
+.settings-checks--off { opacity: 0.5; pointer-events: none; }
+.shell-nav-subitem--muted { color: var(--text-muted); font-style: italic; cursor: default; }

@@ -43,6 +43,13 @@ def computed_slots(competition):
                 "bib": slot.starter.bib,
                 "name": slot.starter.name,
                 "class_name": slot.starter.class_name,
+                # The unpacked identity of the run this slot stands for, so callers
+                # (e.g. results) can bind a positionally-timed run back to its
+                # competitor/class/run without re-parsing the packed key.
+                "class_pk": class_pk,
+                "occurrence": occurrence,
+                "run_type": slot.run_type,
+                "run_number": slot.run_number,
                 "run_label": startpattern.RUN_TYPE_SHORT[slot.run_type] + str(slot.run_number),
                 "group_index": group_index,
                 "group_label": group_label,
@@ -77,55 +84,166 @@ def started_runs(competition):
     return runs
 
 
-def current_run(competition):
-    """The competitor being timed now — the last to have started — with the slot
-    it maps to. ``(None, None)`` before anyone has started."""
-    runs = started_runs(competition)
-    if not runs:
-        return None, None
-    index = len(runs) - 1
+def _signal_activity(run):
+    """The run's most recent signal time (start or finish), or None. Used to pick
+    the current competitor by *latest activity* rather than start order, so a
+    finish arriving for an earlier starter still surfaces that run."""
+    times = []
+    if run.start_signal_id:
+        times.append((run.start_signal.device_time, run.start_signal.received_at))
+    if run.finish_signal_id:
+        times.append((run.finish_signal.device_time, run.finish_signal.received_at))
+    return max(times) if times else None
+
+
+def current_index(runs):
+    """Index (into ``runs``) of the run with the most recent timing activity — the
+    latest start or finish. This is what the right-hand tiles centre on: when
+    runners are timed one at a time it is simply the last to start, but if a finish
+    comes in for a runner who started earlier (staggered / batched starts) the
+    current tile follows that finish instead of staying stuck on the last starter.
+    ``-1`` when nothing has a signal yet."""
+    best_i, best = -1, None
+    for i, run in enumerate(runs):
+        if run is None:
+            continue
+        activity = _signal_activity(run)
+        if activity is not None and (best is None or activity > best):
+            best, best_i = activity, i
+    return best_i
+
+
+# ----- binding runs to the start order ------------------------------------
+
+def _run_identity(run):
+    """A run's competitor-and-run identity, or None when it hasn't got one — the
+    key a slot is matched by."""
+    if run.competition_class_id and run.run_type and run.run_number is not None:
+        return (run.bib_number, run.competition_class_id, run.class_occurrence,
+                run.run_type, run.run_number)
+    return None
+
+
+def _slot_identity(slot):
+    return (slot["bib"], slot["class_pk"], slot["occurrence"],
+            slot["run_type"], slot["run_number"])
+
+
+def bind_runs(competition):
+    """Align recorded runs to the start order. Returns ``(slots, aligned,
+    orphans)`` where ``aligned[i]`` is the run occupying ``slots[i]`` (or None),
+    and ``orphans`` are started runs the order has no place for.
+
+    A *manual* run (operator-owned identity) claims the slot its identity matches —
+    so a run pre-entered on Manual timing shows up pre-filled in its place and the
+    positional binding steps over it. The remaining *auto* runs (started, not
+    operator-owned) fill the still-empty slots in start order."""
     slots = ordered_slots(competition)
+    all_runs = list(
+        TimedRun.objects.filter(competition=competition)
+        .select_related("start_signal", "finish_signal")
+        .prefetch_related("marshal_penalties")
+    )
+    aligned = [None] * len(slots)
+
+    slots_by_key = {}
+    for i, slot in enumerate(slots):
+        slots_by_key.setdefault(_slot_identity(slot), []).append(i)
+
+    for run in all_runs:
+        if not run.manual_entry:
+            continue
+        for i in slots_by_key.get(_run_identity(run), []):
+            if aligned[i] is None:
+                aligned[i] = run
+                break
+
+    placed_ids = {run.id for run in aligned if run is not None}
+    auto_started = sorted(
+        (r for r in all_runs if r.start_signal_id and r.id not in placed_ids),
+        key=lambda r: (r.start_signal.device_time, r.start_signal.received_at, r.id),
+    )
+    pool = iter(auto_started)
+    for i in range(len(slots)):
+        if aligned[i] is None:
+            aligned[i] = next(pool, None)
+    orphans = list(pool)
+    return slots, aligned, orphans
+
+
+def sync_bindings(competition):
+    """Persist each auto run's bound-slot identity (bib / class / run) onto the run
+    so the Manual timing view reads the same competitor the Auto view derives.
+    Penalties are *not* copied — both views compute them the one canonical way from
+    the posts + the run's own counts (see penalty_seconds), so nothing to cache.
+    Manual (operator-owned) runs are left untouched — their identity is authored."""
+    slots, aligned, _ = bind_runs(competition)
+    for i, run in enumerate(aligned):
+        if run is None or run.manual_entry:
+            continue
+        slot = slots[i]
+        wanted = {
+            "bib_number": slot["bib"],
+            "competition_class_id": slot["class_pk"],
+            "class_occurrence": slot["occurrence"],
+            "run_type": slot["run_type"],
+            "run_number": slot["run_number"],
+        }
+        changed = [f for f, v in wanted.items() if getattr(run, f) != v]
+        if changed:
+            for f in changed:
+                setattr(run, f, wanted[f])
+            run.save(update_fields=[*changed, "updated_at"])
+
+
+def current_run(competition):
+    """The competitor being timed now — the bound run with the latest timing
+    activity — with its slot. ``(None, None)`` before anyone has started."""
+    slots, aligned, orphans = bind_runs(competition)
+    runs_in_order = aligned + orphans
+    index = current_index(runs_in_order)
+    if index < 0:
+        return None, None
     slot = slots[index] if index < len(slots) else None
-    return runs[-1], slot
+    return runs_in_order[index], slot
 
 
 def serialize(competition):
     """The whole Auto timing state: the ordered items (slot + its bound run), the
     current index, the ignored times, and the marshal posts."""
+    sync_bindings(competition)
     ctype = competition.competition_type
     precision = ctype.timing_precision
-    slots = ordered_slots(competition)
-    runs = started_runs(competition)
+    marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
+    slots, aligned, orphans = bind_runs(competition)
     posts = list(competition.marshal_posts.all())
-    count = max(len(slots), len(runs))
+    runs_in_order = aligned + orphans  # index lines up with the items below
     items = [
-        _item(precision, ctype, index,
+        _item(precision, ctype, marshal_mode, index,
               slots[index] if index < len(slots) else None,
-              runs[index] if index < len(runs) else None,
+              runs_in_order[index],
               posts)
-        for index in range(count)
+        for index in range(len(runs_in_order))
     ]
     return {
         "precision": precision,
         "penalties_enabled": ctype.penalties_enabled,
         "items": items,
-        # The just-started run stays centred until the next one starts.
-        "current_index": len(runs) - 1,
+        # Centre on the run with the latest timing activity (last start, or a
+        # finish that just came in for an earlier starter).
+        "current_index": current_index(runs_in_order),
         "ignored": _ignored(competition, precision),
         "posts": [{"number": post.number} for post in posts],
     }
 
 
-def _item(precision, ctype, index, slot, run, posts):
+def _item(precision, ctype, marshal_mode, index, slot, run, posts):
     start = run.start_signal if run else None
     finish = run.finish_signal if run else None
-    rt = calc.run_time(
-        start.device_time if start else None,
-        finish.device_time if finish else None,
-        precision,
-    )
+    rt = calc.resolved_run_time(run, precision) if run else None
     stored = {mp.marshal_post_id: mp for mp in run.marshal_penalties.all()} if run else {}
-    pylons, tasks, stop, seconds = _totals(run, stored, ctype)
+    lines = _penalty_lines(run, marshal_mode)
+    seconds = _penalty_seconds(lines, ctype)
     total_time = calc.format_precision(rt + seconds, precision) if rt is not None else ""
     return {
         "index": index,
@@ -140,14 +258,15 @@ def _item(precision, ctype, index, slot, run, posts):
         "start": _signal(start, precision),
         "finish": _signal(finish, precision),
         "run_time": calc.format_precision(rt, precision),
+        "run_time_manual": bool(run and run.manual_run_time is not None),
         "total_time": total_time,
-        # Grand totals (marshal posts + timekeeper adjustment) and the raw
-        # adjustment, so the timekeeper's +/- can read and change it.
-        "total_pylons": pylons,
-        "total_tasks": tasks,
-        "total_stop": stop,
-        "pylon_adjust": run.pylon_adjust if run else 0,
-        "task_adjust": run.task_adjust if run else 0,
+        # One line per penalty type: its non-editable base, the run field the Auto
+        # stepper edits, its value, and the grand count. Drives the +/- steppers.
+        "penalties": lines,
+        # Grand counts (for the boxes / callers that just want the totals).
+        "total_pylons": lines[0]["total"],
+        "total_tasks": lines[1]["total"],
+        "total_stop": lines[2]["total"],
         "started": start is not None,
         "finished": finish is not None,
         "marshals": _marshals(run, posts, stored),
@@ -156,24 +275,58 @@ def _item(precision, ctype, index, slot, run, posts):
     }
 
 
-def _totals(run, stored, ctype):
-    """Grand pylon/task/stop-line counts for a run: the marshal posts summed, then
-    the timekeeper's signed adjustment applied to pylons/tasks (clamped at zero).
-    Returns the counts plus the penalty seconds they add."""
-    pylons = sum(mp.pylon_count for mp in stored.values())
-    tasks = sum(mp.task_count for mp in stored.values())
-    stop = sum(mp.stopline_count for mp in stored.values())
-    if run is not None:
-        pylons = max(0, pylons + run.pylon_adjust)
-        tasks = max(0, tasks + run.task_adjust)
-    seconds = 0
-    if ctype.penalties_enabled:
-        seconds = (
-            pylons * (ctype.pylon_penalty or 0)
-            + tasks * (ctype.task_penalty or 0)
-            + stop * (ctype.stop_line_penalty or 0)
-        )
-    return pylons, tasks, stop, seconds
+# Per penalty type: (label, the TimedRun/MarshalPenalty count field, the adjust field).
+PENALTY_TYPES = (
+    ("Pylons", "pylon_count", "pylon_adjust"),
+    ("Task", "task_count", "task_adjust"),
+    ("Stop line", "stopline_count", "stopline_adjust"),
+)
+
+
+def _penalty_lines(run, marshal_mode):
+    """Per penalty type: the non-editable ``base``, the run ``field`` the Auto
+    stepper edits, its ``value``, and the grand ``total`` (``max(0, base+value)``).
+
+    Penalties are additive from their real sources so every surface agrees:
+      * marshal mode → base = marshal-post sum **plus** any direct counts the
+        operator keyed onto a run they own (a purely auto-bound run's own counts
+        are a stale cache and ignored); the Auto stepper nudges an ``*_adjust`` on
+        top. So marshal penalties on an operator-selected run still add up.
+      * otherwise (non-marshal timing) → base = 0 and the stepper edits the run's
+        own ``*_count``, shared with the Manual view."""
+    stored = list(run.marshal_penalties.all()) if (run is not None and marshal_mode) else []
+    owns = run is not None and run.manual_entry
+    lines = []
+    for label, count_field, adjust_field in PENALTY_TYPES:
+        own = getattr(run, count_field) if run is not None else 0
+        if marshal_mode:
+            marshal_sum = sum(getattr(mp, count_field) for mp in stored)
+            base = marshal_sum + (own if owns else 0)
+            field, value = adjust_field, (getattr(run, adjust_field) if run is not None else 0)
+        else:
+            base = 0
+            field, value = count_field, own
+        lines.append({
+            "label": label, "base": base, "field": field, "value": value,
+            "total": max(0, base + value),
+        })
+    return lines
+
+
+def _penalty_seconds(lines, ctype):
+    if not ctype.penalties_enabled:
+        return 0
+    amounts = (ctype.pylon_penalty, ctype.task_penalty, ctype.stop_line_penalty)
+    return sum(line["total"] * (amount or 0) for line, amount in zip(lines, amounts))
+
+
+def penalty_seconds(run, competition):
+    """The whole penalty seconds a run adds, resolved the one canonical way (marshal
+    posts + adjust for a marshal-driven run, else the run's own counts). Shared by
+    the Auto view, the Manual view total and the results engine."""
+    ctype = competition.competition_type
+    marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
+    return _penalty_seconds(_penalty_lines(run, marshal_mode), ctype)
 
 
 def _marshals(run, posts, stored):
@@ -219,7 +372,7 @@ def _signal(signal, precision):
     if signal is None:
         return None
     return {"id": signal.id, "time": format_device_time(signal.device_time, precision),
-            "manual": signal.is_manual}
+            "manual": signal.is_manual, "entered": signal.entered}
 
 
 def _ignored(competition, precision):

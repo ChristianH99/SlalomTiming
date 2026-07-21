@@ -35,22 +35,23 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          amounts (mandatory only while penalties are on — the form clears
                          them when it's off), tie-break rule, timing-device precision
                          (format_time() renders a time at it), and which participant details
-                         the discipline collects. Only the settings are stored so far; the
-                         penalties screen and the tie-break/scoring calculations belong to
-                         the timing and results features and aren't written yet.
+                         the discipline collects. The tie-break rule now drives results ranking
+                         (apps/results/resultscalc.py); the timing penalties screen consumes the
+                         penalty amounts.
                          CompetitionType.PARTICIPANT_INFO is the single source of truth for
                          the last of those: setting -> (label, mandatory, Participant fields),
                          which both the settings page and the participant form build from.
                          CompetitionClass is fully dynamic (editable name, not a
                          fixed enum): is_running, age range, practice_runs, counted_runs,
                          scoring_method (CompetitionClass.Scoring: aggregate times, best run
-                         only, or regularity test — recorded per class, the calculation belongs
-                         to the results feature and isn't written yet),
+                         only, or regularity test — recorded per class and computed by
+                         apps/results/resultscalc.py),
                          plus position (list order) and run_position (which run it starts in;
                          classes sharing a run_position start together). Competition.run_groups()
                          returns the ordered runs. Setup UI is a section: a tile list
-                         ("Manage competitions") + General / Classes / Run order / Penalties
-                         sub-pages that all edit the *active* competition (no pk in the URL).
+                         ("Manage competitions") + General / Classes / Run order / Penalties /
+                         Results sub-pages that all edit the *active* competition (no pk in the
+                         URL; the Results sub-page lives in apps/results).
                          MarshalPost (competition FK, 1-based number, tasks spec, one
                          handles_stop_line per competition, plus claim_token/claim_seen — a
                          heartbeated soft lock so only one device edits a post at a time)
@@ -110,46 +111,68 @@ apps/participants/
                          that type collects (club, licence); with no competition selected it
                          prompts to pick one and shows nothing, and adding is blocked.
 apps/timing/            The current timing path is TimingSignal -> arrangement -> TimedRun,
-                        surfaced on the live Times view. The old TimingEvent + connector-loop
-                        dashboard is legacy and slated to be redone.
+                        surfaced on the live Manual timing view (`timing/manual/`, name `manual`) and the
+                        Auto timing view — which share the same runs (see the sync below). The old
+                        TimingEvent + connector-loop dashboard is legacy and slated to be redone.
   models.py              TimingSettings (singleton: device [Tag Heuer TP540 / Simulator],
                          single-digit start/finish channel, IP), TimingSignal (the raw device
                          inbox — running number, port, is_manual, device_time; stamped with the
-                         active competition; `ignored`), TimedRun (one run: a start_signal
-                         paired with a finish_signal, each OneToOne so a time is used once, plus
-                         the operator's bib/class/run/penalty entry, plus pylon_adjust/task_adjust
-                         — the Auto-timing timekeeper's signed +/- to the totals), MarshalPenalty
-                         (one per run×marshal-post: aggregate counts, a per-task `detail` JSON, and
-                         a `submitted` flag == locked, written from the Marshal Posts page and shown
-                         on Auto timing), and legacy TimingEvent.
+                         active competition; `ignored`; `entered` == operator typed the time by
+                         hand, device failed — distinct from is_manual), TimedRun (one run: a
+                         start_signal paired with a finish_signal, each OneToOne so a time is used
+                         once, plus the operator's bib/class/run/penalty entry, pylon_adjust/
+                         task_adjust/stopline_adjust — the Auto-timing timekeeper's signed +/- to
+                         the totals in marshal mode (a Pylons/Task/Stop line stepper each),
+                         `manual_run_time` [operator-typed run time, overrides the computed elapsed
+                         when the device gave no usable pair] and `manual_entry` [the operator owns
+                         this run's identity: it claims its slot in the Auto order and the auto
+                         binding won't reassign it]), MarshalPenalty (one per run×marshal-post:
+                         aggregate counts, a per-task `detail` JSON, and a `submitted` flag ==
+                         locked, written from the Marshal Posts page and shown on Auto timing), and
+                         legacy TimingEvent.
   autotiming.py          The Auto timing view's logic. The start order (Competition.start_lists()
                          = run order × start pattern) is a flat list of slots; a saved override
-                         (Competition.auto_timing_order, a list of slot keys) reorders it. Times
-                         still arrive as TimingSignal -> arrangement -> TimedRun, but bind to
-                         slots *positionally* (n-th started run = n-th slot) so no bib is typed —
-                         identity is the order. Each slot carries its run-group index/label (the
-                         classes starting together) for the list dividers. current_run() is the last
-                         to have started (the one marshals judge). serialize() builds the page: per
-                         run the grand pylon/task/stop-line totals (marshal posts + timekeeper
-                         adjust, clamped ≥0), the total time (run + penalty seconds), and per post a
-                         box with counts, submitted/locked state and per-task detail for the pop-up.
-                         marshal_state() returns the current competitor + the post's detail so the
-                         marshal board resumes after an unlock.
+                         (Competition.auto_timing_order, a list of slot keys) reorders it. bind_runs()
+                         aligns runs to that order: a *manual* run (manual_entry) claims the slot its
+                         identity matches — so a run pre-entered on Manual timing shows pre-filled and
+                         incoming device times step over it — and the remaining *auto* runs bind to
+                         the still-empty slots positionally (n-th started auto run = n-th free slot).
+                         sync_bindings() then persists each auto run's slot identity (bib/class/run)
+                         back onto the TimedRun, so the Manual view reads the same competitor — the
+                         Auto→Manual half of the sync. Penalties aren't cached: they're computed live
+                         from the posts + the run's own counts (penalty_seconds), so both views agree.
+                         current_run()/current_index() pick the run with the latest timing
+                         activity (last start, or a finish that just came in for an earlier starter),
+                         not merely the last to start. penalty_seconds()/_penalty_lines() are the one
+                         penalty source shared with the Manual view and results, additive from real
+                         sources: in marshal mode a run's total = the marshal-post counts + the counts
+                         the operator keyed directly onto a run they own + the signed timekeeper adjust
+                         (an auto-bound run's own counts are a stale cache, ignored); otherwise it is
+                         the run's own counts. So a marshal penalty on an operator-selected run, or a
+                         penalty typed on Manual timing, shows in both views. serialize() builds the
+                         page: per run the grand penalty totals, the
+                         total time (run + penalty seconds), and per post a box with counts,
+                         submitted/locked state and per-task detail. marshal_state() returns the
+                         current competitor + the post's detail.
   arrangement.py         Causal pairing of signals into runs: a finish joins the oldest open
                          start that began before it; a start never adopts an earlier orphan
                          finish. A start first fills the oldest empty *placeholder* row (one
-                         pre-entered by the operator) before opening a new run. ignore keeps a
-                         row that still carries a bib/run (placeholder) rather than deleting it.
-                         ingest()/detach()/assign()/rows(); rows() is newest-first with
-                         placeholders on top. effective_role() handles a single light barrier
-                         (start_channel == finish_channel): the one channel alternates
-                         start/finish/start/…
+                         pre-entered by the operator, no times *and no typed run time* yet) before
+                         opening a new run. ignore keeps a row that still carries a bib/run/typed
+                         time (placeholder) rather than deleting it. ingest()/detach()/assign()/
+                         rows(); rows() is newest-first with placeholders on top. effective_role()
+                         handles a single light barrier (start_channel == finish_channel): the one
+                         channel alternates start/finish/start/…
   calc.py                Run time (integer-microsecond truncation to the type's precision, never
-                         rounded), total penalty, fixed-decimal formatting.
+                         rounded); resolved_run_time() prefers a run's manual_run_time override;
+                         total penalty; fixed-decimal formatting.
   forms.py               TimingSettingsForm (IP required only for the TP540).
-  views.py               Settings page; standalone Simulator; live Times view + a JSON
-                         arrangement endpoint and mutate endpoints (run-update by run id,
-                         ignore, pair). timing_signal ingests device posts (csrf-exempt, since a
+  views.py               Settings page; standalone Simulator; live Manual timing view + a JSON
+                         arrangement endpoint and mutate endpoints (run-update by run id — marks
+                         the run manual_entry —, ignore, pair, set-time [type a start/finish by hand,
+                         displaced device time kept on the rail], set-runtime [type a run time]).
+                         serialize_arrangement()/timing_signal both run sync_bindings so the two
+                         views stay in step. timing_signal ingests device posts (csrf-exempt, since a
                          real device can't send a token) and nudges live views to refresh.
                          AutoTimingView + auto-state/reorder/reset-order endpoints; auto-adjust
                          (timekeeper +/- to a run's totals); marshal-state (the current competitor
@@ -166,16 +189,44 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
   services.py            run_ingestion() [legacy] + Channels group names (timing_updates,
                          timing_live).
   consumers.py           TimingConsumer (legacy dashboard) + TimingLiveConsumer (pushes refresh
-                         nudges to open Times views, group "timing_live").
+                         nudges to open live views, group "timing_live").
   management/commands/run_timing_connector.py   [legacy] runs the connector loop
-templates/timing/        settings.html, simulator.html (standalone, no app shell), live.html,
-                         auto.html (Auto timing)
-static/js/               dashboard.js (legacy) + timing_live.js (Times view: render, edits,
-                         double-click-to-ignore, drag-to-pair, WebSocket refresh) + auto_timing.js
-                         (Auto timing: draggable start order, prev/current/next tiles, marshal
-                         boxes, ignore/re-pair, WS refresh). marshal_posts.js pushes taps/submit
-                         to timing:marshal-submit and pulls the current competitor via
-                         timing:marshal-state, single-flight so rapid taps can't land out of order.
+templates/timing/        settings.html, simulator.html (standalone, no app shell), live.html
+                         (Manual timing), auto.html (Auto timing)
+static/js/               dashboard.js (legacy) + timing_live.js (Manual timing view: render, edits,
+                         drag-to-pair, drag-to-rail-to-ignore, double-click a Start/Finish/Run-time
+                         to type it by hand [entered times highlighted], WebSocket refresh) +
+                         auto_timing.js (Auto timing: draggable start order, prev/current/next tiles,
+                         marshal boxes, re-pair, same double-click manual time entry, WS refresh).
+                         marshal_posts.js pushes taps/submit to timing:marshal-submit and pulls the
+                         current competitor via timing:marshal-state, single-flight so rapid taps
+                         can't land out of order.
+apps/results/           Ranked per-class results (top-level "Results" sidebar section) plus a
+                        Competition-Setup "Results" sub-page that picks which participant-info
+                        columns the tables show.
+  models.py              ResultColumnSettings: which optional columns a competition's results
+                         tables show — one General row (competition_class null) plus optional
+                         per-class overrides (inherit_general falls back to General). The
+                         column vocabulary reuses CompetitionType.PARTICIPANT_INFO (only the
+                         details the type collects are offered; Bib/Name are always shown).
+  resultscalc.py         The scoring/ranking engine. sync_identities() delegates to
+                         autotiming.sync_bindings() (the same routine the timing views run), so
+                         results read one representation. run_penalty_seconds() is the single penalty
+                         source (marshal-post totals + timekeeper adjust when penalties_by_marshal_posts,
+                         else the run's own counts). compute_class_results() gathers each competitor's
+                         counted runs (total = resolved run time + penalties), scores by
+                         CompetitionClass.Scoring (aggregate sum / best-run min / regularity
+                         spread — lower wins), then ranks: a participant's repeat entries after
+                         their first ranked one are skipped, and equal scores the type's
+                         tie_break can't separate share a rank + are flagged for inspection.
+                         Rankable = a live status with every counted run recorded — except best-run,
+                         which places on a single completed run. Incomplete / DNS / DNF / DSQ
+                         competitors are returned unranked.
+  views.py               ResultsClassView (a class's ranked table; syncs identities then
+                         computes) + ResultsSettingsView (the General + per-class column config).
+                         Both reuse competitions.ActiveCompetitionMixin.
+templates/results/       results_class.html (ranked table + configured columns + unranked block)
+                         and results_settings.html (General + per-class column toggles).
 ```
 
 ### Timing UI (under the sidebar "Timing" menu)
@@ -185,7 +236,8 @@ static/js/               dashboard.js (legacy) + timing_live.js (Times view: ren
 - **Simulator** (`timing/simulator/`) — a standalone new-tab device emulator: a running clock, an
   auto-incrementing running number (with reset), a 2×4 pad (ports 1–4 light barrier, M1–M4 manual
   → same port, is_manual), and an on-page log. Each press POSTs a signal to `timing:signal`.
-- **Times** (`timing/times/`) — the operator's live view for the active competition: start/finish
+- **Manual timing** (`timing/manual/`, sidebar label "Manual timing", URL name `manual`) — the
+  operator's live view for the active competition: start/finish
   times (shown at the type's precision, truncated) paired into runs (newest first), with bib, class,
   run, and penalty entry (−/+ steppers, out of the tab order), live over a WebSocket. Entering a bib
   looks up the name, sets the class (updating it if the bib changes, clearing it if the bib is cleared),
@@ -197,24 +249,33 @@ static/js/               dashboard.js (legacy) + timing_live.js (Times view: ren
   completed. Manual times are tinted vs light-barrier ones.
   Hover between the header and the top row for a **+** to pre-enter an upcoming starter (an empty
   placeholder row); incoming starts fill placeholders oldest-first, so times populate bottom-to-top.
-  Double-click a time to ignore it — ignored starts and finishes each get a rail column on the right,
-  floated beside where they fall; drag one back onto a run's slot to use it (rejected with a wiggle if
-  it would put a start after its finish). Column widths are fixed so entering a bib never shifts them.
+  **Double-click** a Start, Finish or Run time (or an empty slot) to type it in by hand when the device
+  didn't fire — a keyed-in time is a green "entered" chip (run time green + underlined), distinct from a
+  measured one, and the run's total honours it. Ignoring is a **drag** to a rail on the right — ignored
+  starts and finishes each get a rail column, floated beside where they fall; drag one back onto a run's
+  slot (or double-click the rail chip) to use it (rejected with a wiggle if it would put a start after
+  its finish). A time keyed in over a measured one keeps the measured one on the rail. Column widths are
+  fixed so entering a bib never shifts them.
 - **Auto timing** (`timing/auto/`) — the order-driven live view. The start order (run order × start
   pattern) runs down the left as draggable tiles ("#3 C1"), grouped by run with a "Run · <classes>"
   divider that sticks to the top of the list and is replaced by the next run's as it scrolls up (so the
   header names the run shown at the top, not the running one). Each tile shows the total time (run +
   penalties), and dragging saves a persisted override (Reset order re-derives it). The list follows the
   current starter automatically until the operator scrolls away; a "▲/▼ current" cue re-engages it.
-  Incoming times bind to the order positionally — no bib typing — and the right shows the previous /
-  current / next competitor with start, finish, run time and **total time**. The current (last to start)
-  stays centred until the next one starts, then the tiles shift up. Beside the times, one box per marshal
+  Incoming device times bind to the order positionally — no bib typing — while a run pre-entered on
+  Manual timing claims its own slot (shown pre-filled) and incoming times step over it. The right shows
+  the previous / current / next competitor with start, finish, run time and **total time**; **current**
+  is the run with the latest timing activity (a fresh finish for an earlier starter surfaces it, not just
+  the last to start). Double-click a Start/Finish/Run time here too to key one in by hand (entered times
+  highlighted). Beside the times, one box per marshal
   post shows its pylon/task/stop-line counts ("2 P · 1 T · SL"), turning green with a 🔒 once submitted;
-  a 🔒 button to their left locks every post at once, and the timekeeper can +/- the run's total
-  pylon/task counts. Clicking a box opens a speech-bubble pop-up under it: a locked post shows +/-
+  a 🔒 button to their left locks every post at once, and the timekeeper can +/- the run's Pylons, Task
+  and Stop line counts (a marshal-driven run nudges an adjust on top of the posts; an operator-owned or
+  non-marshal run's steppers edit its own counts, shared with Manual timing). Clicking a box opens a
+  speech-bubble pop-up under it: a locked post shows +/-
   steppers to edit each task's pylons (and toggle the stop line) plus an **Unlock** button; an unlocked
-  post shows the read-only breakdown and a **Lock** button. Double-click a time to ignore it (listed on
-  the right), drag it back onto a slot to re-pair.
+  post shows the read-only breakdown and a **Lock** button. Ignore a wrong time by dragging it to the
+  Ignored list, and drag it back onto a slot to re-pair.
 - **Marshal Posts** is a top-level sidebar item (below Timing) — the marshal's phone surface (see the
   competitions app). It reads the current competitor from Auto timing over the timing WebSocket and
   pushes every tap and the final submit back (with the per-task detail) so the boxes above fill and go
@@ -250,8 +311,8 @@ live data (the app itself works with just `runserver`, it just won't receive dev
 - `CHANNEL_LAYERS` uses `InMemoryChannelLayer` — fine for a single local process. Switch to
   `channels_redis` only if this ever needs to run multi-process/multi-host.
 - The three `TimingEvent` bullets below describe the **legacy** dashboard/connector-loop path,
-  kept working but slated to be redone; the current operator surface is the live Times view built
-  on `TimingSignal` -> `TimedRun`.
+  kept working but slated to be redone; the current operator surface is the Manual timing and Auto
+  timing views built on `TimingSignal` -> `TimedRun`.
 - Every timing pulse is written to the DB (`TimingEvent`) before/as it's broadcast, so a dropped
   WebSocket or crashed dashboard never loses data.
 - `TimingEvent.bib_number` is matched against the current competition's `EventEntry.bib_number` at

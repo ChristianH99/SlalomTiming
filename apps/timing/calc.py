@@ -5,7 +5,7 @@ rounded** — a run is only ever as fast as the device fully resolved, so extra
 digits are cut rather than rounded up or down.
 """
 
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 
 def _micros(t):
@@ -29,6 +29,20 @@ def truncate_seconds(micros, precision):
     """Integer microseconds -> Decimal seconds truncated to `precision` places."""
     kept_units = micros // (10 ** (6 - precision))  # count of smallest kept unit
     return Decimal(kept_units).scaleb(-precision)
+
+
+def resolved_run_time(run, precision):
+    """A run's elapsed time at `precision`: the operator's typed `manual_run_time`
+    when set (used if the device gave no usable start/finish), otherwise computed
+    from the paired start/finish signals. Both are truncated, never rounded."""
+    manual = getattr(run, "manual_run_time", None)
+    if manual is not None:
+        return Decimal(manual).quantize(Decimal(1).scaleb(-precision), rounding=ROUND_DOWN)
+    return run_time(
+        run.start_signal.device_time if run.start_signal_id else None,
+        run.finish_signal.device_time if run.finish_signal_id else None,
+        precision,
+    )
 
 
 def total_penalty(run, competition_type):

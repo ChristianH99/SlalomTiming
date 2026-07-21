@@ -77,6 +77,11 @@ class TimingSignal(models.Model):
     # A wrong measurement (someone walked through a beam): kept, but removed from
     # its run and listed separately, greyed out.
     ignored = models.BooleanField(default=False)
+    # Operator typed this time in by hand (device failed), rather than it arriving
+    # from a device/simulator. Shown with a distinct highlight so a keyed-in time
+    # is never mistaken for a measured one. Distinct from is_manual, which marks a
+    # manual *trigger* (hand button) that the device still measured.
+    entered = models.BooleanField(default=False)
     received_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -128,14 +133,27 @@ class TimedRun(models.Model):
     class_occurrence = models.PositiveSmallIntegerField(default=0)
     run_type = models.CharField(max_length=10, choices=RunType.choices, blank=True)
     run_number = models.PositiveIntegerField(null=True, blank=True)
+    # The operator owns this run's identity (entered/edited it on the Manual timing
+    # view). Such a run claims its matching slot in the Auto timing order and is
+    # skipped by the positional binding, instead of being an auto-bound row whose
+    # identity is (re)derived from the start order.
+    manual_entry = models.BooleanField(default=False)
+    # Operator-typed run time (seconds) used when the device gave no usable
+    # start/finish pair; overrides the computed elapsed time. Null = compute it.
+    manual_run_time = models.DecimalField(
+        max_digits=9, decimal_places=3, null=True, blank=True
+    )
     pylon_count = models.PositiveSmallIntegerField(default=0)
     task_count = models.PositiveSmallIntegerField(default=0)
     stopline_count = models.PositiveSmallIntegerField(default=0)
-    # Auto timing only: the timekeeper's manual +/- to the total pylon/task counts
-    # (signed — can pull the marshal-post totals up or down). Applied on top of the
-    # summed MarshalPenalty counts; the grand total is clamped at zero.
+    # Auto timing (marshal mode only): the timekeeper's manual +/- to the total
+    # pylon/task/stop-line counts (signed — can pull the marshal-post totals up or
+    # down). Applied on top of the summed MarshalPenalty counts; the grand total is
+    # clamped at zero. In non-marshal mode (or on an operator-owned run) the Auto
+    # steppers edit the run's own counts directly, so these stay zero.
     pylon_adjust = models.IntegerField(default=0)
     task_adjust = models.IntegerField(default=0)
+    stopline_adjust = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

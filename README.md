@@ -9,8 +9,10 @@ managed with [uv](https://docs.astral.sh/uv/)) that runs locally in the browser 
   participants take their runs within a run)
 - manages race **participants** (CRUD + Django admin) and their bib/entry per competition
 - ingests **live timing events** from a timing device through a pluggable connector
-  interface, persists every event, and pushes it to a live dashboard over WebSockets
-  (Django Channels)
+  interface, persists every event, and pushes it to live timing views over WebSockets
+  (Django Channels) — a manual table and an order-driven view that share the same runs
+- scores each class into ranked **results** by its scoring method (aggregate / best run /
+  regularity), with penalties folded in and ties flagged for inspection
 
 The same app is the intended target for later network exposure to additional clients
 (other people editing participants / entering penalties) — no rewrite planned, just
@@ -47,8 +49,8 @@ the pipeline and dashboard work without any hardware. The app itself runs fine w
 
 ## Typical workflow
 
-Competition Setup is a section with a landing page plus four sub-pages (General, Classes,
-Run order, Penalties) in the sidebar. The sub-pages always act on the **current** competition:
+Competition Setup is a section with a landing page plus five sub-pages (General, Classes,
+Run order, Penalties, Results) in the sidebar. The sub-pages always act on the **current** competition:
 
 1. **Competition Setup → Manage competition types** — add a discipline (e.g. Motorcycle,
    Go-Cart). Types can be expanded to list their competitions, and deleted while unused.
@@ -56,10 +58,11 @@ Run order, Penalties) in the sidebar. The sub-pages always act on the **current*
    - **Penalties** — whether penalties are entered during the race, and the whole-second
      amounts for a pylon, a task, the stop line, and the most a single task can add. The
      amounts are required while penalties are on, and cleared if you switch them off. The
-     penalties screen that will read them is not built yet.
+     timing views and the results ranking read these amounts.
    - **Evaluation** — the **tie break** rule (*Fastest run time* or *Manual*) and the
-     **timing precision** the device resolves to (1/10, 1/100 or 1/1000 s). Recorded here;
-     the results calculation that reads them isn't built yet.
+     **timing precision** the device resolves to (1/10, 1/100 or 1/1000 s). The tie break
+     separates equal results in the class tables; the precision is how every time is shown
+     and truncated.
    - **Required participant info** — which details the participant form asks for in this
      discipline: co-driver, vehicle, address, club, e-mail, phone. A `*` marks the ones that
      are mandatory once collected. Name, date of birth and licence number are always asked for.
@@ -71,9 +74,9 @@ Run order, Penalties) in the sidebar. The sub-pages always act on the **current*
 4. **General** — the current competition's name, type and date.
 5. **Classes** — pick the **assignment method** (how participants get their class) at the top,
    then edit each class as a tile: rename, Running, practice / counted runs, scoring, delete.
-   **Scoring** picks how the class's counted runs become a result — *Aggregate times*,
-   *Best run only*, or *Regularity test*. It is recorded per class; the results feature that
-   reads it isn't built yet.
+   **Scoring** picks how the class's counted runs become a result — *Aggregate times* (sum of
+   every counted run), *Best run only* (the single fastest), or *Regularity test* (the smallest
+   spread between runs). Each class's Results page ranks its competitors by this method (step 12).
    - **Manual**: you assign participants to classes by hand on the participant form. A top switch
      allows a participant in several *different* classes; a per-class switch allows entering the
      same class more than once.
@@ -96,12 +99,15 @@ Run order, Penalties) in the sidebar. The sub-pages always act on the **current*
    runs a class grants that the pattern never plays; toggle **Dummy participants** (on by
    default) to check a pattern against a made-up field before anyone is registered.
 7. **Penalties** — how penalties are entered for the current competition. **Penalties set by
-   marshal posts** off leaves the timekeeper entering every penalty on the Times view; on, each
+   marshal posts** off leaves the timekeeper entering every penalty on the Manual timing view; on, each
    marshal post enters the penalties for its own area. When on, set the **number of posts**, then
    for each post type the **tasks it watches** as a free-text list (`1, 5, 9, 11-15, 20`) and tick
    which single post is **responsible for the stop line** (ticking one locks it out on the others).
    A confirmation under General combines every post's tasks into e.g. *Tasks 1-35 assigned*.
-8. **Marshal Posts** (top-level) — the operator surface a marshal drives on their phone. Pick your
+8. **Results** — which participant details (club, address, licence, …) the class result tables show:
+   a **General** default plus optional **per-class** overrides (a class can inherit General or set its
+   own). Only the details this competition's type collects are offered; rank, bib and name are always shown.
+9. **Marshal Posts** (top-level) — the operator surface a marshal drives on their phone. Pick your
    post from the dropdown and press **Confirm** (it locks in as a red **Change post** button so it
    isn't nudged by accident, and claims the post so no other device can pick it — taken posts show
    *— in use*). Below, each task the post watches is a big touch button: tap to add a
@@ -110,30 +116,46 @@ Run order, Penalties) in the sidebar. The sub-pages always act on the **current*
    **Submit** finalises the current bib and **locks** the board (a 🔒 shows); there's no way back until a
    timekeeper unlocks it from Auto timing. The current competitor and each post's penalty are exchanged
    live with **Auto timing** (below).
-9. **Timing → Auto timing** — the order-driven live view. The start order (run order × start pattern)
+10. **Timing → Manual timing** — the operator's live table for the current competition: start/finish times
+   paired into runs (newest first), with bib, class, run and penalty entry, live over a WebSocket. Entering
+   a bib fills the name, sets the class and picks the next run; a multi-class participant gets a class
+   dropdown. Hover the gap under the header for a **+** to pre-enter an upcoming starter. When the device
+   misses a time, **double-click** a Start, Finish or Run time (or an empty slot) to type it in by hand —
+   keyed-in times are highlighted green, and the run's total honours them. Drag a wrong time to a rail on
+   the right to ignore it (drag it back, or double-click the rail chip, to reuse it).
+11. **Timing → Auto timing** — the order-driven live view. The start order (run order × start pattern)
    runs down the left as draggable tiles, grouped by run with a header (e.g. *Run · Klasse 5, Klasse 6*
    for combined classes) that sticks to the top and is replaced by the next run's as you scroll; each tile
    carries its total time (run + penalties). The list follows the current starter automatically until you
-   scroll away, and a *▲/▼ current* cue brings it back. Incoming start/finish times attach to the order
-   automatically — no bib typing — and the right shows the previous / current / next competitor with their
-   start, finish, run time and **total time**. The current competitor stays centred until the next one
-   starts, then the tiles shift up. Beside the times, one box per marshal post shows its pylon/task/stop-line
-   counts (*2 P · 1 T · SL*), turning green with a 🔒 once submitted — so the timekeeper sees all-green when
-   a competitor is fully judged. A 🔒 button locks every post at once; clicking a box opens a pop-up under
-   it — a locked post gets **+/-** steppers to correct each task's pylons (and toggle the stop line) plus
-   **Unlock**, an unlocked post shows the read-only breakdown and a **Lock** button. The timekeeper can
-   also **+/-** the total pylon and task counts. Double-click a time to ignore it (listed on the right),
-   drag it back onto a slot to re-pair.
-10. **Participants → Add participant** — register a competitor and optionally assign a bib
+   scroll away, and a *▲/▼ current* cue brings it back. Incoming times attach to the order automatically —
+   no bib typing — while a run you pre-entered on Manual timing shows pre-filled in its place and new times
+   step over it. The right shows the previous / current / next competitor with their start, finish, run time
+   and **total time**; the **current** tile follows the latest timing activity (a fresh finish for an earlier
+   starter surfaces it, not just the last to start). You can key a time in here by hand too — double-click a
+   Start, Finish or Run time. Beside the times, one box per marshal post shows its pylon/task/stop-line
+   counts (*2 P · 1 T · SL*), turning green with a 🔒 once submitted. A 🔒 button locks every post at once;
+   clicking a box opens a pop-up — a locked post gets **+/-** steppers to correct each task's pylons (and
+   toggle the stop line) plus **Unlock**, an unlocked post shows the read-only breakdown and a **Lock**
+   button. The timekeeper can also **+/-** the run's Pylons, Task and Stop line counts. Drag a wrong time to
+   the Ignored list to ignore it, and back onto a slot to re-pair. Manual timing and Auto timing share the
+   same runs: a bib, time or penalty entered on either — including a marshal-post penalty on a run you
+   selected manually — shows up and adds into the total on both.
+12. **Results** (top-level) — one sub-page per running class, each a table ranked by the class's scoring
+   method (aggregate / best run / regularity; lower is better, penalties folded into every run's time). A
+   participant entered into a class more than once keeps only their best result ranked; equal scores the
+   type's tie break can't separate share a rank and are flagged **⚑ inspect**. Competitors missing a run
+   (best run needs just one) or marked DNS/DNF/DSQ are listed below, unranked. The columns follow the
+   Competition-Setup → Results settings (step 8).
+13. **Participants → Add participant** — register a competitor and optionally assign a bib
    for the current competition right away. The form asks only for the details the selected
    **competition type** collects (see step 1) — pick a different type and the fields follow
    immediately. The **Class** line follows the competition's assignment method: Manual shows a
    class picker (one or several, with repeats where allowed), Age based shows the class derived
    live from the date of birth. The form autocompletes known clubs and common email domains and
    warns about likely duplicates (name or licence) before saving.
-11. **Dashboard** — watch live timing events resolve to participant names by bib.
+14. **Dashboard** — watch live timing events resolve to participant names by bib.
 
-Leaving General, Classes, Run order, Penalties or the participant form with unsaved edits pops a styled
+Leaving General, Classes, Run order, Penalties, Results settings or the participant form with unsaved edits pops a styled
 confirmation (Save / Discard / Cancel) rather than losing the changes. **Save changes** carries
 on to wherever you were heading; view-only controls (such as the start pattern's preview
 switches) don't count as changes.
@@ -167,9 +189,13 @@ apps/competitions/       Competition, CompetitionType (discipline + its rules, e
                          the top-level Marshal Posts operator page
 apps/participants/       Participant + EventEntry models, CRUD views, admin. The form is
                          built from the selected type's "required participant info".
-apps/timing/             TimingSignal -> arrangement -> TimedRun timing path, the live Times
-                         and Auto timing views, MarshalPenalty, WebSocket consumers (plus the
-                         legacy TimingEvent connector/dashboard path)
+apps/timing/             TimingSignal -> arrangement -> TimedRun timing path, the live Manual
+                         timing and Auto timing views (which share runs and sync bidirectionally),
+                         MarshalPenalty, WebSocket consumers (plus the legacy TimingEvent
+                         connector/dashboard path)
+apps/results/            Ranked per-class results (top-level "Results" section) computed from the
+                         runs by each class's scoring method, plus a Competition-Setup sub-page
+                         choosing which participant-info columns the tables show
 templates/, static/      shared base template + per-app templates, plain CSS/JS
 ```
 

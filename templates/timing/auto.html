@@ -13,8 +13,9 @@
     <div class="autotiming" id="autotiming">
       <p class="hint auto-help">The start order comes from <strong>Run order</strong> and the
         <strong>start pattern</strong>; times attach to it automatically. Drag a tile in the list to
-        reorder, <strong>double-click</strong> a time to ignore it, and drag an ignored time back onto a
-        slot to re-pair it.</p>
+        reorder, and drag an ignored time back onto a slot to re-pair it.
+        <strong>Double-click</strong> a Start, Finish or Run time to type it in by hand when the device
+        didn't fire — keyed-in times are highlighted.</p>
 
       <div class="auto-layout">
         <aside class="auto-order">
@@ -47,6 +48,8 @@
         resetOrder: "{% url 'timing:auto-reset-order' %}",
         ignore: "{% url 'timing:ignore' %}",
         pair: "{% url 'timing:pair' %}",
+        setTime: "{% url 'timing:set-time' %}",
+        setRuntime: "{% url 'timing:set-runtime' %}",
         adjust: "{% url 'timing:auto-adjust' %}",
         unlock: "{% url 'timing:marshal-unlock' %}",
         lock: "{% url 'timing:marshal-lock' %}",

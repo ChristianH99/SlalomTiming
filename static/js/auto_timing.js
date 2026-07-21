@@ -61,6 +61,8 @@
   }
   const ignore = (id, ig) => postJSON(URLS.ignore, { signal_id: id, ignored: ig });
   const pair = (id, runId, slot) => postJSON(URLS.pair, { signal_id: id, run_id: runId, slot });
+  const setTime = (runId, slot, time) => postJSON(URLS.setTime, { run_id: runId, slot, time });
+  const setRuntime = (runId, runTime) => postJSON(URLS.setRuntime, { run_id: runId, run_time: runTime });
   const reorder = (order) => postJSON(URLS.reorder, { order });
   const resetOrder = () => postJSON(URLS.resetOrder, {});
   const adjust = (runId, field, value) => postJSON(URLS.adjust, { run_id: runId, [field]: value });
@@ -169,7 +171,7 @@
     const times = el("div", "auto-tile-times");
     times.append(timeBlock("Start", item.start, item.run_id, "start"));
     times.append(timeBlock("Finish", item.finish, item.run_id, "finish"));
-    times.append(figure("Run time", item.run_time || "–"));
+    times.append(runTimeFigure(item));
     times.append(figure("Total", item.total_time || "–", "auto-runtime--total"));
     div.append(times);
 
@@ -205,22 +207,46 @@
     return wrap;
   }
 
+  // Run time (not Total): editable by double-click, highlighted when typed in.
+  function runTimeFigure(item) {
+    const wrap = el("div", "auto-time");
+    wrap.append(el("span", "auto-time-label", "Run time"));
+    const val = el("span", "auto-runtime" + (item.run_time_manual ? " auto-runtime--entered" : ""),
+      item.run_time || "–");
+    wrap.append(val);
+    if (item.run_id) {
+      wrap.title = "Double-click to type a run time";
+      wrap.addEventListener("dblclick", () =>
+        enterRuntimeEdit(val, item.run_id, item.run_time_manual ? item.run_time : ""));
+    }
+    return wrap;
+  }
+
   function timeBlock(label, sig, runId, role) {
     const wrap = el("div", "auto-time");
     wrap.append(el("span", "auto-time-label", label));
     const slot = el("div", "time-slot");
     slot.dataset.role = role;
     slot.dataset.runId = runId || "";
+    // Double-click a slot to type a time by hand (device failed); ignoring a wrong
+    // time is a drag to the Ignored list.
+    if (runId) {
+      slot.addEventListener("dblclick", () =>
+        enterTimeEdit(slot, role, runId, sig ? sig.time : ""));
+    }
     if (sig) {
-      const chip = el("span", "time-chip" + (sig.manual ? " time-chip--manual" : ""), sig.time);
+      let cls = "time-chip";
+      if (sig.entered) cls += " time-chip--entered";
+      else if (sig.manual) cls += " time-chip--manual";
+      const chip = el("span", cls, sig.time);
       chip.draggable = true;
       chip.dataset.signalId = sig.id;
       chip.dataset.role = role;
       chip.dataset.time = sig.time;
-      chip.title = "Drag to re-pair · double-click to ignore";
+      chip.title = (sig.entered ? "Typed in by hand" : "Drag to re-pair or to Ignored") +
+        " · double-click to edit";
       chip.addEventListener("dragstart", (e) => onTimeDragStart(e, sig.id, role, sig.time));
       chip.addEventListener("dragend", clearTimeDrag);
-      chip.addEventListener("dblclick", () => ignore(sig.id, true).then(refresh));
       slot.append(chip);
     } else {
       slot.classList.add("time-slot--empty");
@@ -230,52 +256,80 @@
     return wrap;
   }
 
+  // Swap a node for a text input pre-filled with its value; Enter/blur commits,
+  // Escape cancels; the reply is a full re-fetch that redraws the tile.
+  function inlineEdit(host, current, placeholder, onCommit) {
+    if (host.querySelector && host.querySelector(".time-edit")) return;
+    const input = el("input", "time-edit");
+    input.type = "text";
+    input.value = current || "";
+    input.placeholder = placeholder;
+    input.spellcheck = false;
+    host.replaceChildren(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = (commit) => {
+      if (done) return;
+      done = true;
+      if (commit) onCommit(input.value.trim());
+      else refresh();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener("blur", () => finish(true));
+  }
+
+  function enterTimeEdit(slot, role, runId, current) {
+    inlineEdit(slot, current, "hh:mm:ss.xx", (value) => setTime(runId, role, value).then(refresh));
+  }
+
+  function enterRuntimeEdit(host, runId, current) {
+    inlineEdit(host, current, "s.xx", (value) => setRuntime(runId, value).then(refresh));
+  }
+
   function adjustRow(item) {
     const row = el("div", "auto-adjust");
-    row.append(stepper("Pylons", item, "pylon_adjust", item.total_pylons));
-    row.append(stepper("Task", item, "task_adjust", item.total_tasks));
+    // One stepper per penalty type (Pylons / Task / Stop line). Each line carries
+    // the field it edits and its non-editable base (marshal-post sum, or 0).
+    item.penalties.forEach((line) => row.append(stepper(item, line)));
     return row;
   }
 
-  function stepper(label, item, field, total) {
+  function stepper(item, line) {
     // While a burst of clicks is settling, show the optimistic total.
-    const key = item.run_id + ":" + field;
+    const key = item.run_id + ":" + line.field;
     const ctrl = adjustCtrl.get(key);
-    if (ctrl) total = marshalSum(item, field) + ctrl.value;
+    const total = ctrl ? line.base + ctrl.value : line.total;
 
     const box = el("div", "auto-adjust-field");
-    box.append(el("span", "auto-adjust-label", label));
+    box.append(el("span", "auto-adjust-label", line.label));
     const controls = el("div", "auto-adjust-controls");
-    const value = el("span", "auto-adjust-value", String(total));
+    const value = el("span", "auto-adjust-value", String(Math.max(0, total)));
     const minus = el("button", "pen-btn", "−");
     minus.type = "button";
-    minus.addEventListener("click", () => stepAdjust(item, field, -1, value));
+    minus.addEventListener("click", () => stepAdjust(item, line, -1, value));
     const plus = el("button", "pen-btn", "+");
     plus.type = "button";
-    plus.addEventListener("click", () => stepAdjust(item, field, 1, value));
+    plus.addEventListener("click", () => stepAdjust(item, line, 1, value));
     controls.append(minus, value, plus);
     box.append(controls);
     return box;
   }
 
-  // The marshal-post sum for a field, which stays put while the timekeeper clicks.
-  function marshalSum(item, field) {
-    const posted = field === "pylon_adjust" ? item.total_pylons : item.total_tasks;
-    return posted - item[field];
-  }
-
-  function stepAdjust(item, field, delta, valueEl) {
-    const key = item.run_id + ":" + field;
-    const sum = marshalSum(item, field);
-    const ctrl = adjustCtrl.get(key) || { value: item[field], queued: null, sending: false };
+  function stepAdjust(item, line, delta, valueEl) {
+    const key = item.run_id + ":" + line.field;
+    const ctrl = adjustCtrl.get(key) || { value: line.value, queued: null, sending: false };
     let next = ctrl.value + delta;
-    if (sum + next < 0) next = -sum;          // the total can't go below zero
+    if (line.base + next < 0) next = -line.base;   // the total can't go below zero
     if (next === ctrl.value) return;
     ctrl.value = next;
     ctrl.queued = next;
     adjustCtrl.set(key, ctrl);
-    valueEl.textContent = String(sum + next); // optimistic — no wait for a re-fetch
-    flushAdjust(key, item.run_id, field);
+    valueEl.textContent = String(line.base + next); // optimistic — no wait for a re-fetch
+    flushAdjust(key, item.run_id, line.field);
   }
 
   function flushAdjust(key, runId, field) {

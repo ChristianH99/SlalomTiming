@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Results settings – Slalom Timing{% endblock %}
+{% block topbar_title %}Results settings{% endblock %}
+{% block content %}
+  <h1 class="page-heading">Results</h1>
+  <p class="hint">Which participant details appear in the results tables for
+    <strong>{{ object.name }}</strong>. Rank, bib and name are always shown.</p>
+
+  {% if not has_columns %}
+    <div class="empty-state">
+      This competition's type collects no optional participant details, so there is
+      nothing extra to show. Results tables will show rank, bib and name.
+    </div>
+  {% else %}
+  <form method="post" class="settings-form" data-unsaved-guard id="results-form">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="">
+
+    <h2 class="form-section">General</h2>
+    <div class="settings-section">
+      <p class="hint">The default columns for every class.</p>
+      <div class="settings-checks">
+        {% for col in general_columns %}
+          <label class="switch">
+            <input type="checkbox" name="general-{{ col.key }}" {% if col.checked %}checked{% endif %}>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+            <span class="switch-text">{{ col.label }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% for row in class_rows %}
+      <div class="settings-section" data-class-block>
+        <h2 class="form-section">{{ row.cclass.name }}</h2>
+        <label class="switch">
+          <input type="checkbox" name="class-{{ row.cclass.pk }}-inherit" data-inherit
+                 {% if row.inherit %}checked{% endif %}>
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+          <span class="switch-text">Same as General</span>
+        </label>
+        <div class="settings-checks" data-class-columns>
+          {% for col in row.columns %}
+            <label class="switch">
+              <input type="checkbox" name="class-{{ row.cclass.pk }}-{{ col.key }}"
+                     {% if col.checked %}checked{% endif %}>
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+              <span class="switch-text">{{ col.label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="actions">
+      <button class="button" type="submit">Save</button>
+    </div>
+  </form>
+
+  <script>
+    (function () {
+      // "Same as General" greys out and ignores a class's own column checkboxes.
+      document.querySelectorAll("[data-class-block]").forEach((block) => {
+        const inherit = block.querySelector("[data-inherit]");
+        const columns = block.querySelector("[data-class-columns]");
+        if (!inherit || !columns) return;
+        const apply = () => {
+          const off = inherit.checked;
+          columns.classList.toggle("settings-checks--off", off);
+          columns.querySelectorAll("input").forEach((box) => { box.disabled = off; });
+        };
+        inherit.addEventListener("change", apply);
+        apply();
+      });
+    })();
+  </script>
+  {% endif %}
+{% endblock %}

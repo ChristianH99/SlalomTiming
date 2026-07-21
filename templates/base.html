@@ -27,17 +27,26 @@
           <a class="shell-nav-subitem{% if url_name == 'classes' %} active{% endif %}" href="{% url 'competitions:classes' %}">Classes</a>
           <a class="shell-nav-subitem{% if url_name == 'runorder' %} active{% endif %}" href="{% url 'competitions:runorder' %}">Run order</a>
           <a class="shell-nav-subitem{% if url_name == 'penalties' %} active{% endif %}" href="{% url 'competitions:penalties' %}">Penalties</a>
+          <a class="shell-nav-subitem{% if app_name == 'results' and url_name == 'settings' %} active{% endif %}" href="{% url 'results:settings' %}">Results</a>
         </div>
         <a class="shell-nav-item{% if request.resolver_match.app_name == 'participants' %} active{% endif %}" href="{% url 'participants:list' %}">Participants</a>
         {% comment %}Timing sub-pages will grow; Settings is kept last (future
         pages go above it).{% endcomment %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'timing' and url_name != 'dashboard' %} active{% endif %}" href="{% url 'timing:times' %}">Timing</a>
+        <a class="shell-nav-item shell-nav-parent{% if app_name == 'timing' and url_name != 'dashboard' %} active{% endif %}" href="{% url 'timing:manual' %}">Timing</a>
         <div class="shell-nav-sub">
-          <a class="shell-nav-subitem{% if url_name == 'times' %} active{% endif %}" href="{% url 'timing:times' %}">Times</a>
+          <a class="shell-nav-subitem{% if url_name == 'manual' %} active{% endif %}" href="{% url 'timing:manual' %}">Manual timing</a>
           <a class="shell-nav-subitem{% if url_name == 'auto' %} active{% endif %}" href="{% url 'timing:auto' %}">Auto timing</a>
           <a class="shell-nav-subitem{% if url_name == 'settings' %} active{% endif %}" href="{% url 'timing:settings' %}">Settings</a>
         </div>
         <a class="shell-nav-item{% if url_name == 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">Marshal Posts</a>
+        <a class="shell-nav-item shell-nav-parent{% if app_name == 'results' and url_name == 'class' %} active{% endif %}" href="{% if results_classes %}{% url 'results:class' results_classes.0.pk %}{% else %}{% url 'results:settings' %}{% endif %}">Results</a>
+        <div class="shell-nav-sub">
+          {% for cc in results_classes %}
+            <a class="shell-nav-subitem{% if url_name == 'class' and request.resolver_match.kwargs.pk == cc.pk %} active{% endif %}" href="{% url 'results:class' cc.pk %}">{{ cc.name }}</a>
+          {% empty %}
+            <span class="shell-nav-subitem shell-nav-subitem--muted">No running classes</span>
+          {% endfor %}
+        </div>
         {% endwith %}
       </nav>
       <div class="shell-sidebar-footer">

@@ -32,6 +32,8 @@
   const deleteRun = (runId) => postJSON(URLS.runDelete, { run_id: runId });
   const setIgnored = (signalId, ignored) => postJSON(URLS.ignore, { signal_id: signalId, ignored });
   const pair = (signalId, runId, slot) => postJSON(URLS.pair, { signal_id: signalId, run_id: runId, slot });
+  const setTime = (runId, slot, time) => postJSON(URLS.setTime, { run_id: runId, slot, time });
+  const setRuntime = (runId, runTime) => postJSON(URLS.setRuntime, { run_id: runId, run_time: runTime });
 
   // ---- small DOM helpers --------------------------------------------------
   function el(tag, className, text) {
@@ -77,7 +79,7 @@
 
     tr.append(cell("tt-time", timeSlot(row.start, "start", run.id)));
     tr.append(cell("tt-time", timeSlot(row.finish, "finish", run.id)));
-    tr.append(cell("tt-run", el("span", "run-time", row.run_time || "–")));
+    tr.append(runTimeCell(row));
     tr.append(cell("tt-bib", bibField(run)));
     tr.append(cell("tt-class", classField(run)));
     tr.append(cell("tt-run-sel", runField(run)));
@@ -105,23 +107,84 @@
     const wrap = el("div", "time-slot");
     wrap.dataset.role = role;
     wrap.dataset.runId = runId;
+    // Double-click the slot (whether it holds a time or not) to type a time in by
+    // hand — for when the device didn't fire. Ignoring a wrong time is a drag to
+    // the rail.
+    wrap.addEventListener("dblclick", () =>
+      enterTimeEdit(wrap, role, runId, sig ? sig.time : ""));
     if (!sig) {
       wrap.classList.add("time-slot--empty");
       wrap.append(el("span", "time-empty", "–"));
+      wrap.title = "Double-click to type a time";
       return wrap;
     }
     wrap.dataset.time = sig.time;
-    const chip = el("span", "time-chip" + (sig.manual ? " time-chip--manual" : ""), sig.time);
+    let cls = "time-chip";
+    if (sig.entered) cls += " time-chip--entered";
+    else if (sig.manual) cls += " time-chip--manual";
+    const chip = el("span", cls, sig.time);
     chip.draggable = true;
     chip.dataset.signalId = sig.id;
     chip.dataset.role = role;
     chip.dataset.time = sig.time;
-    chip.title = (sig.manual ? "Manual" : "Light barrier") + " · drag to pair · double-click to ignore";
+    const kind = sig.entered ? "Typed in by hand" : sig.manual ? "Manual" : "Light barrier";
+    chip.title = kind + " · drag to pair or to the rail to ignore · double-click to edit";
     chip.addEventListener("dragstart", (e) => onDragStart(e, sig.id, role, sig.time));
     chip.addEventListener("dragend", clearDrag);
-    chip.addEventListener("dblclick", () => setIgnored(sig.id, true).then(refresh));
     wrap.append(chip);
     return wrap;
+  }
+
+  // The Run time cell (not Total): editable by double-click, and highlighted when
+  // the value was typed in rather than measured.
+  function runTimeCell(row) {
+    const span = el("span", "run-time" + (row.run_time_manual ? " run-time--entered" : ""),
+      row.run_time || "–");
+    const td = cell("tt-run", span);
+    td.title = "Double-click to type a run time";
+    td.addEventListener("dblclick", () =>
+      enterRuntimeEdit(td, row.run.id, row.run_time_manual ? row.run_time : ""));
+    return td;
+  }
+
+  // Swap a slot/cell for a text input pre-filled with the current value; Enter (or
+  // blur) commits, Escape cancels. The reply re-renders the row, clearing the box.
+  function inlineEdit(host, current, placeholder, onCommit) {
+    if (host.querySelector(".time-edit")) return;
+    const input = el("input", "time-edit");
+    input.type = "text";
+    input.value = current || "";
+    input.placeholder = placeholder;
+    input.spellcheck = false;
+    host.replaceChildren(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = (commit) => {
+      if (done) return;
+      done = true;
+      if (commit) onCommit(input.value.trim());
+      else refresh();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener("blur", () => finish(true));
+  }
+
+  function enterTimeEdit(wrap, role, runId, current) {
+    inlineEdit(wrap, current, "hh:mm:ss.xx", (value) =>
+      setTime(runId, role, value).then((resp) => {
+        // A rejected time (start after its finish) leaves the row unchanged — just
+        // re-render to drop the edit box.
+        if (!resp || !resp.ok) refresh();
+        else applyRow(resp);
+      }));
+  }
+
+  function enterRuntimeEdit(td, runId, current) {
+    inlineEdit(td, current, "s.xx", (value) => setRuntime(runId, value).then(applyRow));
   }
 
   function bibField(run) {

@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'apps.competitions',
     'apps.participants',
     'apps.timing',
+    'apps.results',
 ]
 
 MIDDLEWARE = [

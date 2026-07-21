@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ cclass.name }} results – Slalom Timing{% endblock %}
+{% block topbar_title %}Results{% endblock %}
+{% block content %}
+  <div class="results-header">
+    <h1 class="page-heading">Class {{ cclass.name }}</h1>
+    <span class="results-method">{{ scoring_label }}</span>
+  </div>
+  <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }}</p>
+
+  <div class="table-card">
+  <table class="results-table">
+    <thead>
+      <tr>
+        <th class="col-rank">#</th>
+        <th class="col-bib">Bib</th>
+        <th class="col-name">Name</th>
+        {% for col in columns %}<th>{{ col.label }}</th>{% endfor %}
+        {% for label in run_labels %}<th class="col-run">{{ label }}</th>{% endfor %}
+        <th class="col-score">{{ score_heading }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in ranked %}
+        <tr class="{% if row.skipped %}result-skipped{% endif %}{% if row.inspect %} result-inspect{% endif %}">
+          <td class="col-rank">
+            {% if row.rank %}{{ row.rank }}{% else %}<span class="result-dash" title="Lower repeat entry — not ranked">–</span>{% endif %}
+          </td>
+          <td class="col-bib">{{ row.bib }}</td>
+          <td class="col-name">{{ row.name }}{% if row.occurrence %} <span class="result-occurrence">({{ row.occurrence|add:1 }})</span>{% endif %}
+            {% if row.inspect %}<span class="result-flag" title="Tied — marked for inspection">⚑ inspect</span>{% endif %}
+          </td>
+          {% for cell in row.cells %}<td>{{ cell|default:"–" }}</td>{% endfor %}
+          {% for run in row.runs %}<td class="col-run">{{ run|default:"–" }}</td>{% endfor %}
+          <td class="col-score">{{ row.score }}</td>
+        </tr>
+      {% empty %}
+        <tr class="empty-row"><td colspan="{{ column_count }}">No complete results yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  {% if unranked %}
+    <h2 class="form-section">Not yet ranked</h2>
+    <p class="hint">Competitors missing a counted run, or marked did-not-start / did-not-finish /
+      disqualified.</p>
+    <div class="table-card">
+    <table class="results-table results-table--muted">
+      <thead>
+        <tr>
+          <th class="col-rank"></th>
+          <th class="col-bib">Bib</th>
+          <th class="col-name">Name</th>
+          {% for col in columns %}<th>{{ col.label }}</th>{% endfor %}
+          {% for label in run_labels %}<th class="col-run">{{ label }}</th>{% endfor %}
+          <th class="col-score">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in unranked %}
+          <tr>
+            <td class="col-rank">–</td>
+            <td class="col-bib">{{ row.bib }}</td>
+            <td class="col-name">{{ row.name }}{% if row.occurrence %} <span class="result-occurrence">({{ row.occurrence|add:1 }})</span>{% endif %}</td>
+            {% for cell in row.cells %}<td>{{ cell|default:"–" }}</td>{% endfor %}
+            {% for run in row.runs %}<td class="col-run">{{ run|default:"–" }}</td>{% endfor %}
+            <td class="col-score">{{ row.status|upper }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% endif %}
+{% endblock %}

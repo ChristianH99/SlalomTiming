@@ -332,9 +332,16 @@ def marshal_claims(request):
     return JsonResponse({"taken": taken})
 
 
+AUTO_ADJUST_SIGNED = ("pylon_adjust", "task_adjust", "stopline_adjust")
+AUTO_ADJUST_COUNTS = ("pylon_count", "task_count", "stopline_count")
+
+
 @require_POST
 def auto_penalty_adjust(request):
-    """Timekeeper's manual +/- to a run's total pylon/task counts (signed)."""
+    """Timekeeper's manual +/- to a run's penalties from the Auto view. In marshal
+    mode a non-owned run's stepper nudges a signed ``*_adjust`` on top of the post
+    totals; otherwise it sets the run's own ``*_count`` directly (shared with the
+    Manual view)."""
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
@@ -343,12 +350,14 @@ def auto_penalty_adjust(request):
     if run is None:
         return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
     fields = []
-    if "pylon_adjust" in payload:
-        run.pylon_adjust = _as_signed(payload.get("pylon_adjust"))
-        fields.append("pylon_adjust")
-    if "task_adjust" in payload:
-        run.task_adjust = _as_signed(payload.get("task_adjust"))
-        fields.append("task_adjust")
+    for field in AUTO_ADJUST_SIGNED:
+        if field in payload:
+            setattr(run, field, _as_signed(payload.get(field)))
+            fields.append(field)
+    for field in AUTO_ADJUST_COUNTS:
+        if field in payload:
+            setattr(run, field, _as_count(payload.get(field)))
+            fields.append(field)
     if fields:
         run.save(update_fields=[*fields, "updated_at"])
         broadcast_live()
@@ -391,6 +400,9 @@ def timing_signal(request):
     )
     if competition is not None:
         arrangement.ingest(signal, TimingSettings.load())
+        # Fold the new time into the start order so both timing views agree on the
+        # run's bib/class/run (and marshal penalties) immediately.
+        autotiming.sync_bindings(competition)
         broadcast_live()
 
     return JsonResponse({"ok": True, "id": signal.id})
@@ -457,6 +469,9 @@ def timing_run_update(request):
     for field in ("pylon_count", "task_count", "stopline_count"):
         if field in payload:
             setattr(run, field, _as_count(payload.get(field)))
+    # The operator now owns this run's identity: it claims its slot in the Auto
+    # timing order and the auto binding won't reassign it.
+    run.manual_entry = True
     run.save()
     broadcast_live()
     return JsonResponse({"ok": True, "row": _serialize_run(run, competition, competition.competition_type)})
@@ -512,7 +527,9 @@ def timing_add_run(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
-    TimedRun.objects.create(competition=competition)
+    # An operator-created row: owned from the start so the Auto view treats it as
+    # a pre-entry rather than an auto-bound slot.
+    TimedRun.objects.create(competition=competition, manual_entry=True)
     broadcast_live()
     return JsonResponse({"ok": True})
 
@@ -533,9 +550,130 @@ def timing_delete_run(request):
     return JsonResponse({"ok": True})
 
 
+# ----- manually keyed-in times (device failed) -----
+
+@require_POST
+def timing_set_time(request):
+    """Operator types a start/finish time by hand. Replaces the run's start/finish
+    with an *entered* signal (kept distinct from a measured one), or clears it when
+    blank. A device signal it displaces is ignored (kept on the rail), an entered
+    one is removed. Rejected (start after finish) like a drag pairing."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    payload = _json_body(request)
+    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    slot = payload.get("slot")
+    if run is None or slot not in ("start", "finish"):
+        return JsonResponse({"ok": False, "error": "Bad request."}, status=400)
+
+    field = "start_signal" if slot == "start" else "finish_signal"
+    occupant = getattr(run, field)
+    raw = payload.get("time")
+    if raw is None or str(raw).strip() == "":
+        setattr(run, field, None)
+        run.manual_entry = True
+        run.save(update_fields=[field, "manual_entry", "updated_at"])
+        _discard_displaced(occupant)
+        broadcast_live()
+        return JsonResponse({"ok": True, "row": _serialize_run(run, competition, competition.competition_type)})
+
+    device_time = _parse_device_time(str(raw).strip())
+    if device_time is None:
+        return JsonResponse({"ok": False, "error": "time must be hh:mm:ss.mmm."}, status=400)
+    other = run.finish_signal if slot == "start" else run.start_signal
+    if other is not None:
+        if slot == "start" and device_time > other.device_time:
+            return JsonResponse({"ok": False, "rejected": True})
+        if slot == "finish" and device_time < other.device_time:
+            return JsonResponse({"ok": False, "rejected": True})
+
+    settings = TimingSettings.load()
+    signal = TimingSignal.objects.create(
+        competition=competition,
+        running_number=occupant.running_number if occupant else 0,
+        port=settings.start_channel if slot == "start" else settings.finish_channel,
+        device_time=device_time,
+        entered=True,
+        source="operator",
+    )
+    setattr(run, field, signal)
+    run.manual_entry = True
+    run.save(update_fields=[field, "manual_entry", "updated_at"])
+    _discard_displaced(occupant, keep_id=signal.id)
+    broadcast_live()
+    return JsonResponse({"ok": True, "row": _serialize_run(run, competition, competition.competition_type)})
+
+
+def _discard_displaced(signal, keep_id=None):
+    """A signal knocked out of a slot by a keyed-in time: delete it if it was
+    itself keyed in (operator-created, safe to drop); otherwise keep the measured
+    time but ignore it so it lands on the rail rather than vanishing."""
+    if signal is None or signal.id == keep_id:
+        return
+    if signal.entered:
+        signal.delete()
+    elif not signal.ignored:
+        signal.ignored = True
+        signal.save(update_fields=["ignored"])
+
+
+@require_POST
+def timing_set_runtime(request):
+    """Operator types a run time directly, for when the device gave no usable
+    start/finish pair. Sets/clears ``TimedRun.manual_run_time`` (seconds, or an
+    hh:mm:ss.mmm duration) and marks the run operator-owned."""
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    payload = _json_body(request)
+    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    if run is None:
+        return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
+    raw = payload.get("run_time")
+    if raw is None or str(raw).strip() == "":
+        run.manual_run_time = None
+    else:
+        seconds = _parse_duration(str(raw).strip())
+        if seconds is None:
+            return JsonResponse({"ok": False, "error": "run time must be seconds or hh:mm:ss.mmm."}, status=400)
+        run.manual_run_time = seconds
+    run.manual_entry = True
+    run.save(update_fields=["manual_run_time", "manual_entry", "updated_at"])
+    broadcast_live()
+    return JsonResponse({"ok": True, "row": _serialize_run(run, competition, competition.competition_type)})
+
+
+def _parse_duration(raw):
+    """A typed run time -> Decimal seconds, or None. Accepts plain seconds
+    ("30.25") or an hh:mm:ss.mmm / mm:ss.mmm clock duration."""
+    from decimal import Decimal, InvalidOperation
+
+    if ":" in raw:
+        parts = raw.split(":")
+        if len(parts) > 3:
+            return None
+        try:
+            values = [Decimal(p) for p in parts]
+        except InvalidOperation:
+            return None
+        total = Decimal(0)
+        for value in values:
+            total = total * 60 + value
+        return total if total >= 0 else None
+    try:
+        value = Decimal(raw)
+    except InvalidOperation:
+        return None
+    return value if value >= 0 else None
+
+
 # ----- serialization -----
 
 def serialize_arrangement(competition):
+    # Keep the Manual view in step with the Auto order: bibs/classes/runs (and
+    # marshal penalties) an auto-bound run picked up show here too.
+    autotiming.sync_bindings(competition)
     ctype = competition.competition_type
     ignored = (
         competition.timing_signals.filter(ignored=True).order_by("-received_at")
@@ -561,11 +699,7 @@ def serialize_arrangement(competition):
 def _serialize_run(run, competition, ctype):
     precision = ctype.timing_precision
     start, finish = run.start_signal, run.finish_signal
-    rt = calc.run_time(
-        start.device_time if start else None,
-        finish.device_time if finish else None,
-        precision,
-    )
+    rt = calc.resolved_run_time(run, precision)
     entry = _resolve_entry(competition, run.bib_number)
     participant = entry.participant if entry else None
     slots = _class_slots(competition, participant, run)
@@ -574,15 +708,20 @@ def _serialize_run(run, competition, ctype):
         (slot["label"] for slot in slots if slot["value"] == class_key),
         run.competition_class.name if run.competition_class else "",
     )
-    penalty = calc.total_penalty(run, ctype)
+    # The one canonical penalty (marshal posts + the run's own counts + adjust), so
+    # a penalty a marshal added to an operator-selected run adds up here too.
+    penalty = autotiming.penalty_seconds(run, competition)
     total = calc.format_precision(rt + penalty, precision) if rt is not None else ""
     return {
         "id": run.id,
         "start": _signal_ref(start, precision),
         "finish": _signal_ref(finish, precision),
-        # A row with neither time is a placeholder awaiting a starter.
-        "placeholder": start is None and finish is None,
+        # A row with neither time (and no typed run time) is a placeholder awaiting
+        # a starter.
+        "placeholder": start is None and finish is None and run.manual_run_time is None,
         "run_time": calc.format_precision(rt, precision),
+        # The run time was typed in by hand, not measured — highlighted apart.
+        "run_time_manual": run.manual_run_time is not None,
         "run": {
             "id": run.id,
             "bib_number": run.bib_number,
@@ -611,6 +750,9 @@ def _signal_ref(signal, precision):
         "id": signal.id,
         "time": _format_device_time(signal.device_time, precision),
         "manual": signal.is_manual,
+        # Operator typed this time in (device failed) — highlighted apart from a
+        # measured time and never re-paired against a device signal automatically.
+        "entered": signal.entered,
     }
 
 

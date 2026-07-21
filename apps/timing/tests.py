@@ -333,9 +333,9 @@ def test_run_update_rejects_without_active_competition(client):
 
 def test_live_view_renders_and_prompts_without_competition(client):
     make_active_competition()
-    assert client.get(reverse("timing:times")).status_code == 200
+    assert client.get(reverse("timing:manual")).status_code == 200
     Competition.objects.update(is_active=False)
-    body = client.get(reverse("timing:times")).content.decode()
+    body = client.get(reverse("timing:manual")).content.decode()
     assert "pick a competition" in body.lower()
 
 
@@ -618,6 +618,8 @@ def test_marshal_submit_shows_counts_and_detail_on_auto(client):
 
 def test_total_time_includes_penalties(client):
     comp, _ = auto_scenario()
+    comp.penalties_by_marshal_posts = True
+    comp.save(update_fields=["penalties_by_marshal_posts"])
     MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
     sig = signal_in(comp, 1, "10:00:00.000", running=1)
     signal_in(comp, 2, "10:00:10.000", running=1)   # finish → run time 10.000
@@ -723,6 +725,8 @@ def test_stale_claim_is_free(client):
 
 def test_timekeeper_adjust_changes_the_total(client):
     comp, _ = auto_scenario()
+    comp.penalties_by_marshal_posts = True
+    comp.save(update_fields=["penalties_by_marshal_posts"])
     MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
     run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
     submit_penalty(client, run, pylons=2)
@@ -733,6 +737,73 @@ def test_timekeeper_adjust_changes_the_total(client):
     # A negative adjustment can't push the total below zero.
     post_json(client, "timing:auto-adjust", run_id=run.id, pylon_adjust=-9)
     assert autotiming.serialize(comp)["items"][0]["total_pylons"] == 0
+
+
+def test_non_marshal_penalties_show_in_auto(client):
+    # Penalties entered on the run's own counts (Manual timing / non-marshal mode)
+    # must show in the Auto view too — the stepper edits the counts directly.
+    comp, _ = auto_scenario()  # penalties_by_marshal_posts stays off
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    run.pylon_count, run.task_count, run.stopline_count = 2, 1, 1
+    run.save()
+    item = autotiming.serialize(comp)["items"][0]
+    assert (item["total_pylons"], item["total_tasks"], item["total_stop"]) == (2, 1, 1)
+    lines = {line["label"]: line for line in item["penalties"]}
+    assert lines["Pylons"]["field"] == "pylon_count"   # stepper edits the count, not an adjust
+    assert lines["Stop line"]["total"] == 1
+
+
+def test_operator_owned_run_shows_its_own_penalties_in_marshal_mode(client):
+    # The reported bug: in marshal mode a run the operator gave penalties to on the
+    # Manual view (manual_entry) must still show them in Auto timing.
+    comp, cls = auto_scenario()
+    comp.penalties_by_marshal_posts = True
+    comp.save(update_fields=["penalties_by_marshal_posts"])
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    post_json(client, "timing:run-update", run_id=run.id, task_count=1, stopline_count=1)
+    run.refresh_from_db()
+    assert run.manual_entry is True
+    item = autotiming.serialize(comp)["items"][0]
+    assert (item["total_tasks"], item["total_stop"]) == (1, 1)
+    # And a later sync (marshal posts have nothing) must not wipe the operator's entry.
+    autotiming.sync_bindings(comp)
+    run.refresh_from_db()
+    assert (run.task_count, run.stopline_count) == (1, 1)
+
+
+def test_marshal_penalties_add_up_on_an_operator_selected_run(client):
+    # The reported edge case: on a run the operator manually selected (manual_entry)
+    # in marshal mode, penalties added from the Marshal Posts page must add into the
+    # total — in the Auto view *and* the Manual view — not just show in the boxes.
+    comp, cls = auto_scenario()
+    comp.penalties_by_marshal_posts = True
+    comp.save(update_fields=["penalties_by_marshal_posts"])
+    post = MarshalPost.objects.create(competition=comp, number=1, tasks="1")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    # Operator selects the participant on the Manual view (owns the run) …
+    post_json(client, "timing:run-update", run_id=run.id, bib_number="1")
+    run.refresh_from_db()
+    assert run.manual_entry is True
+    # … then a marshal post records 2 pylons for it.
+    submit_penalty(client, run, pylons=2)
+    item = autotiming.serialize(comp)["items"][0]
+    assert item["total_pylons"] == 2                      # Auto total now counts them
+    row = next(r for r in serialize_arrangement(comp)["rows"] if r["run"]["id"] == run.id)
+    assert row["run"]["penalty"] == 4                     # Manual total too (2 × 2s)
+
+
+def test_stop_line_adjust_in_marshal_mode(client):
+    comp, _ = auto_scenario()
+    comp.penalties_by_marshal_posts = True
+    comp.save(update_fields=["penalties_by_marshal_posts"])
+    post = MarshalPost.objects.create(competition=comp, number=1, tasks="1", handles_stop_line=True)
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    submit_penalty(client, run, stopline=1)   # post recorded a stop-line miss
+    post_json(client, "timing:auto-adjust", run_id=run.id, stopline_adjust=1)
+    item = autotiming.serialize(comp)["items"][0]
+    assert item["total_stop"] == 2   # 1 from the post + 1 timekeeper adjust
+    stop_line = next(l for l in item["penalties"] if l["label"] == "Stop line")
+    assert stop_line["field"] == "stopline_adjust" and stop_line["base"] == 1
 
 
 def test_marshal_state_returns_detail_for_resume(client):
@@ -777,3 +848,125 @@ def test_auto_page_needs_an_active_competition(client):
     Competition.objects.update(is_active=False)
     data = client.get(reverse("timing:auto-state")).json()
     assert data["competition"] is False
+
+
+# ----- current follows latest activity -----
+
+def test_current_follows_latest_finish_not_last_start():
+    comp, _ = auto_scenario(bibs=(1, 2))
+    # Both start (bib 2 last), then bib 1 finishes — current must jump to bib 1.
+    signal_in(comp, 1, "10:00:00.000", running=1)
+    signal_in(comp, 1, "10:00:05.000", running=2)
+    signal_in(comp, 2, "10:00:35.000", running=1)  # finish closes the oldest open (bib 1)
+    data = autotiming.serialize(comp)
+    assert data["items"][data["current_index"]]["bib"] == 1
+    assert data["items"][data["current_index"]]["finish"]["time"] == "10:00:35.000"
+
+
+# ----- Auto -> Manual sync (identities persisted onto the runs) -----
+
+def test_sync_bindings_persists_identity_onto_auto_runs():
+    comp, cls = auto_scenario(bibs=(1, 2))
+    s1 = signal_in(comp, 1, "10:00:00.000", running=1)
+    s2 = signal_in(comp, 1, "10:00:05.000", running=2)
+    autotiming.sync_bindings(comp)
+    r1, r2 = run_of(s1), run_of(s2)
+    assert (r1.bib_number, r1.competition_class_id, r1.run_type, r1.run_number) == \
+        (1, cls.pk, "counted", 1)
+    assert (r2.bib_number, r2.run_type, r2.run_number) == (2, "counted", 1)
+    # And now the Manual view shows those bibs/run.
+    rows = serialize_arrangement(comp)["rows"]
+    bibs = {row["run"]["bib_number"] for row in rows}
+    assert bibs == {1, 2}
+
+
+def test_marshal_penalties_show_in_manual_view_without_caching_counts():
+    comp, cls = auto_scenario(bibs=(1,))
+    comp.penalties_by_marshal_posts = True
+    comp.save(update_fields=["penalties_by_marshal_posts"])
+    post = MarshalPost.objects.create(competition=comp, number=1, tasks="1")
+    s1 = signal_in(comp, 1, "10:00:00.000", running=1)
+    run = run_of(s1)
+    from .models import MarshalPenalty
+    MarshalPenalty.objects.create(timed_run=run, marshal_post=post, pylon_count=3, task_count=1)
+    # The Manual view total reflects the marshal penalties (3×2 + 1×10 = 16s) …
+    row = next(r for r in serialize_arrangement(comp)["rows"] if r["run"]["id"] == run.id)
+    assert row["run"]["penalty"] == 16
+    # … computed live, not cached onto the auto-bound run's own counts.
+    run.refresh_from_db()
+    assert (run.pylon_count, run.task_count) == (0, 0)
+
+
+# ----- Manual -> Auto (a pre-entered run claims its slot, times skip it) -----
+
+def test_manual_run_claims_slot_and_new_time_skips_it(client):
+    comp, cls = auto_scenario(bibs=(1, 2))
+    # Operator keys in bib 1's run on the Manual view (device missed it): bib +
+    # run + a typed run time, which completes it.
+    run = TimedRun.objects.create(competition=comp)
+    post_json(client, "timing:run-update", run_id=run.id, bib_number="1",
+              class_key=f"{cls.pk}:0", run_value="counted-1")
+    post_json(client, "timing:set-runtime", run_id=run.id, run_time="30.00")
+    run.refresh_from_db()
+    assert run.manual_entry is True
+    # A device start arrives: bib 1 is already complete (its slot is claimed), so
+    # the time must skip to bib 2 rather than fill the manual run.
+    s = signal_in(comp, 1, "10:00:00.000", running=9)
+    data = autotiming.serialize(comp)
+    slot0, slot1 = data["items"][0], data["items"][1]
+    assert slot0["bib"] == 1 and slot0["run_id"] == run.id      # manual pre-entry, in place
+    assert slot1["bib"] == 2 and slot1["run_id"] == run_of(s).id  # device time skipped to bib 2
+    run.refresh_from_db()
+    assert run.start_signal_id is None   # the manual run was not given the device start
+
+
+# ----- manual run time + resolved_run_time -----
+
+def test_resolved_run_time_prefers_manual_override():
+    comp = make_active_competition()
+    run = TimedRun.objects.create(competition=comp, manual_run_time=Decimal("12.500"))
+    assert calc.resolved_run_time(run, 2) == Decimal("12.50")
+
+
+def test_set_runtime_endpoint_sets_manual_run_time(client):
+    comp, cls = auto_scenario(bibs=(1,))
+    run = TimedRun.objects.create(competition=comp)
+    resp = post_json(client, "timing:set-runtime", run_id=run.id, run_time="30.25").json()
+    run.refresh_from_db()
+    assert run.manual_run_time == Decimal("30.250")
+    assert run.manual_entry is True
+    assert resp["row"]["run_time_manual"] is True
+    # Clearing it removes the override.
+    post_json(client, "timing:set-runtime", run_id=run.id, run_time="")
+    run.refresh_from_db()
+    assert run.manual_run_time is None
+
+
+def test_set_time_endpoint_keys_in_a_time_and_rails_the_device_one(client):
+    comp, cls = auto_scenario(bibs=(1,))
+    device = signal_in(comp, 1, "10:00:00.000", running=1)
+    run = run_of(device)
+    resp = post_json(client, "timing:set-time", run_id=run.id, slot="start",
+                     time="10:00:02.000").json()
+    run.refresh_from_db()
+    assert run.start_signal.entered is True
+    assert run.start_signal.device_time == _t("10:00:02.000")
+    assert run.manual_entry is True
+    assert resp["row"]["start"]["entered"] is True
+    device.refresh_from_db()
+    assert device.ignored is True   # the displaced measured time is kept on the rail
+
+
+def test_set_time_endpoint_rejects_start_after_finish(client):
+    comp, cls = auto_scenario(bibs=(1,))
+    start = signal_in(comp, 1, "10:00:00.000", running=1)
+    run = run_of(start)
+    finish = TimingSignal.objects.create(competition=comp, running_number=1, port=2,
+                                         device_time=_t("10:00:10.000"))
+    run.finish_signal = finish
+    run.save(update_fields=["finish_signal"])
+    resp = post_json(client, "timing:set-time", run_id=run.id, slot="start",
+                     time="10:00:20.000").json()
+    assert resp["rejected"] is True
+    run.refresh_from_db()
+    assert run.start_signal_id == start.id   # unchanged
