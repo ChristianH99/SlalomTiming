@@ -24,6 +24,12 @@
   const adjustCtrl = new Map();
   // Same, for per-task pylon edits in the pop-up: "runId:post:task" -> {...}.
   const taskCtrl = new Map();
+  // Browsing the tiles with the mouse wheel: a signed offset from the real current
+  // (0 = the real current is centred). Purely a view — it doesn't change who is
+  // current; keying a start time onto a browsed competitor is what does that.
+  let browseOffset = 0;
+  let lastCurrentIndex = state.current_index;
+  let wheelAccum = 0;
 
   const orderCol = document.querySelector(".auto-order");
   const listEl = document.getElementById("auto-order-list");
@@ -45,9 +51,50 @@
   listEl.addEventListener("wheel", () => { following = false; }, { passive: true });
   listEl.addEventListener("touchmove", () => { following = false; }, { passive: true });
 
+  // The mouse wheel over the tiles browses the field one competitor per notch
+  // (deltaMode 1 is lines, so normalise to pixels), without changing who is
+  // current — so an upcoming starter can be brought in to key a start time onto.
+  tilesEl.addEventListener("wheel", (e) => {
+    if (state.items.length === 0) return;
+    e.preventDefault();
+    wheelAccum += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+    while (Math.abs(wheelAccum) >= 100) {
+      const dir = wheelAccum > 0 ? 1 : -1;
+      setBrowse(browseOffset + dir);
+      wheelAccum -= dir * 100;
+    }
+  }, { passive: false });
+
+  function setBrowse(offset) {
+    const n = state.items.length;
+    if (n === 0) { browseOffset = 0; return; }
+    const base = state.current_index >= 0 ? state.current_index : 0;
+    browseOffset = Math.max(-base, Math.min(offset, n - 1 - base));  // keep centre in range
+    renderTiles();
+    updateFocusHighlight();
+  }
+
+  // Bring a competitor (by item index) into the centre tile — used by the wheel
+  // and by clicking a start-order tile on the left.
+  function focusItem(index) {
+    const base = state.current_index >= 0 ? state.current_index : 0;
+    setBrowse(index - base);
+  }
+
+  function updateFocusHighlight() {
+    const f = focusedIndex();
+    listEl.querySelectorAll(".auto-order-item").forEach((li) => {
+      li.classList.toggle("auto-order-item--focused",
+        browseOffset !== 0 && Number(li.dataset.index) === f);
+    });
+  }
+
   function returnToCurrent() {
     following = true;
+    browseOffset = 0;
     scrollToCurrent(true);
+    renderTiles();
+    updateFocusHighlight();
   }
 
   // ---- server calls -------------------------------------------------------
@@ -61,8 +108,10 @@
   }
   const ignore = (id, ig) => postJSON(URLS.ignore, { signal_id: id, ignored: ig });
   const pair = (id, runId, slot) => postJSON(URLS.pair, { signal_id: id, run_id: runId, slot });
-  const setTime = (runId, slot, time) => postJSON(URLS.setTime, { run_id: runId, slot, time });
-  const setRuntime = (runId, runTime) => postJSON(URLS.setRuntime, { run_id: runId, run_time: runTime });
+  const setTime = (runId, slot, time, slotKey) =>
+    postJSON(URLS.setTime, { run_id: runId, slot, time, slot_key: slotKey });
+  const setRuntime = (runId, runTime, slotKey) =>
+    postJSON(URLS.setRuntime, { run_id: runId, run_time: runTime, slot_key: slotKey });
   const reorder = (order) => postJSON(URLS.reorder, { order });
   const resetOrder = () => postJSON(URLS.resetOrder, {});
   const adjust = (runId, field, value) => postJSON(URLS.adjust, { run_id: runId, [field]: value });
@@ -108,7 +157,10 @@
     const li = el("li", "auto-order-item");
     li.draggable = true;
     li.dataset.key = item.key || "";
+    li.dataset.index = item.index;
     if (item.index === state.current_index) li.classList.add("auto-order-item--current");
+    if (item.index === focusedIndex() && browseOffset !== 0)
+      li.classList.add("auto-order-item--focused");
     if (item.finished) li.classList.add("auto-order-item--done");
     else if (item.started) li.classList.add("auto-order-item--running");
     li.append(el("span", "auto-order-bib", "#" + (item.bib == null ? "?" : item.bib)));
@@ -116,6 +168,9 @@
     li.append(el("span", "auto-order-name", item.name || (item.orphan ? "(extra start)" : "")));
     // The total (run + penalties) is the meaningful figure here.
     if (item.total_time) li.append(el("span", "auto-order-time", item.total_time));
+    li.title = "Click to bring this competitor into the tiles";
+    // A plain click focuses this competitor in the tiles (dragging still reorders).
+    li.addEventListener("click", () => focusItem(item.index));
     li.addEventListener("dragstart", onOrderDragStart);
     li.addEventListener("dragover", onOrderDragOver);
     li.addEventListener("drop", onOrderDrop);
@@ -123,14 +178,32 @@
     return li;
   }
 
+  // The tile index currently centred: the real current shifted by the browse
+  // offset, clamped to the list. -1 only when the list is empty.
+  function focusedIndex() {
+    const n = state.items.length;
+    if (n === 0) return -1;
+    const base = state.current_index >= 0 ? state.current_index : 0;
+    return Math.max(0, Math.min(base + browseOffset, n - 1));
+  }
+
   function renderTiles() {
     const ci = state.current_index;
+    const focused = focusedIndex();
     const at = (i) => (i >= 0 && i < state.items.length ? state.items[i] : null);
+    // Labels track the *real* current, not the browsed centre: whatever is above
+    // the current reads "Previous", the current "Current", everything below (the
+    // ones a scroll-down brings up) "Next up".
+    const labelFor = (i) =>
+      i === ci ? "Current" : ci >= 0 && i < ci ? "Previous" : "Next up";
     tilesEl.replaceChildren(
-      tile(at(ci - 1), "prev", "Previous"),
-      tile(ci >= 0 ? at(ci) : null, "current", "Current"),
-      tile(at(ci + 1), "next", "Next up")
+      tile(at(focused - 1), "prev", labelFor(focused - 1)),
+      tile(focused >= 0 ? at(focused) : null, "current", labelFor(focused)),
+      tile(at(focused + 1), "next", labelFor(focused + 1))
     );
+    // While browsing, the centre tile isn't the running current — tone its frame
+    // down so it doesn't read as one.
+    tilesEl.classList.toggle("auto-tiles--browsing", browseOffset !== 0);
     positionPopup();
   }
 
@@ -169,8 +242,8 @@
     div.append(head);
 
     const times = el("div", "auto-tile-times");
-    times.append(timeBlock("Start", item.start, item.run_id, "start"));
-    times.append(timeBlock("Finish", item.finish, item.run_id, "finish"));
+    times.append(timeBlock("Start", item.start, item, "start"));
+    times.append(timeBlock("Finish", item.finish, item, "finish"));
     times.append(runTimeFigure(item));
     times.append(figure("Total", item.total_time || "–", "auto-runtime--total"));
     div.append(times);
@@ -207,6 +280,11 @@
     return wrap;
   }
 
+  // A slot maps to a competitor we can edit when it has a run, or an upcoming
+  // start-order slot we can make a run for (so a time can be keyed onto the next
+  // starter before they've begun).
+  const editable = (item) => Boolean(item.run_id || item.key);
+
   // Run time (not Total): editable by double-click, highlighted when typed in.
   function runTimeFigure(item) {
     const wrap = el("div", "auto-time");
@@ -214,25 +292,25 @@
     const val = el("span", "auto-runtime" + (item.run_time_manual ? " auto-runtime--entered" : ""),
       item.run_time || "–");
     wrap.append(val);
-    if (item.run_id) {
+    if (editable(item)) {
       wrap.title = "Double-click to type a run time";
       wrap.addEventListener("dblclick", () =>
-        enterRuntimeEdit(val, item.run_id, item.run_time_manual ? item.run_time : ""));
+        enterRuntimeEdit(val, item, item.run_time_manual ? item.run_time : ""));
     }
     return wrap;
   }
 
-  function timeBlock(label, sig, runId, role) {
+  function timeBlock(label, sig, item, role) {
     const wrap = el("div", "auto-time");
     wrap.append(el("span", "auto-time-label", label));
     const slot = el("div", "time-slot");
     slot.dataset.role = role;
-    slot.dataset.runId = runId || "";
-    // Double-click a slot to type a time by hand (device failed); ignoring a wrong
-    // time is a drag to the Ignored list.
-    if (runId) {
+    slot.dataset.runId = item.run_id || "";
+    // Double-click a slot to type a time by hand (device failed, or an upcoming
+    // starter); ignoring a wrong time is a drag to the Ignored list.
+    if (editable(item)) {
       slot.addEventListener("dblclick", () =>
-        enterTimeEdit(slot, role, runId, sig ? sig.time : ""));
+        enterTimeEdit(slot, role, item, sig ? sig.time : ""));
     }
     if (sig) {
       let cls = "time-chip";
@@ -282,12 +360,14 @@
     input.addEventListener("blur", () => finish(true));
   }
 
-  function enterTimeEdit(slot, role, runId, current) {
-    inlineEdit(slot, current, "hh:mm:ss.xx", (value) => setTime(runId, role, value).then(refresh));
+  function enterTimeEdit(slot, role, item, current) {
+    inlineEdit(slot, current, "hh:mm:ss.xx",
+      (value) => setTime(item.run_id, role, value, item.key).then(refresh));
   }
 
-  function enterRuntimeEdit(host, runId, current) {
-    inlineEdit(host, current, "s.xx", (value) => setRuntime(runId, value).then(refresh));
+  function enterRuntimeEdit(host, item, current) {
+    inlineEdit(host, current, "s.xx",
+      (value) => setRuntime(item.run_id, value, item.key).then(refresh));
   }
 
   function adjustRow(item) {
@@ -656,6 +736,12 @@
       window.location.reload();
       return;
     }
+    // When a new competitor becomes current (e.g. a start time was just keyed in),
+    // snap the browsed view back to them.
+    if (lastCurrentIndex !== null && data.current_index !== lastCurrentIndex) {
+      browseOffset = 0;
+    }
+    lastCurrentIndex = data.current_index;
     state = data;
     render();
   }

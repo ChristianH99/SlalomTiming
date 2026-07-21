@@ -1922,6 +1922,13 @@ textarea:focus-visible,
 .auto-order-item--dragging { opacity: 0.4; }
 .auto-order-item--drop-before { box-shadow: inset 0 3px 0 var(--glacier); }
 .auto-order-item--drop-after { box-shadow: inset 0 -3px 0 var(--glacier); }
+.auto-order-item:hover { border-color: var(--glacier-light); }
+/* The competitor currently browsed into the tiles (wheel / click), when it isn't
+   the running one. */
+.auto-order-item--focused {
+  border-color: var(--glacier);
+  box-shadow: 0 0 0 2px var(--frost-bg), var(--shadow-sm);
+}
 .auto-order-bib { font-family: 'Manrope', sans-serif; font-weight: 800; color: var(--ink); }
 .auto-order-run {
   font-weight: 700; font-size: 0.8rem; color: var(--glacier);
@@ -1948,6 +1955,13 @@ textarea:focus-visible,
 }
 .auto-tile--prev, .auto-tile--next { opacity: 0.85; }
 .auto-tile--empty { opacity: 0.6; }
+/* Browsing the field: the centred tile isn't the running current, so frame it in
+   the cool browse colour instead of the flame current colour. */
+.auto-tiles--browsing .auto-tile--current {
+  border-color: var(--glacier);
+  box-shadow: 0 6px 20px rgba(62, 142, 222, 0.16);
+}
+.auto-tiles--browsing .auto-tile--current .auto-tile-label { color: var(--glacier); }
 .auto-tile-label {
   font-family: 'Manrope', sans-serif;
   font-size: 0.68rem;

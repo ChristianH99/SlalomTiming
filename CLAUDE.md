@@ -173,7 +173,9 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
   views.py               Settings page; standalone Simulator; live Manual timing view + a JSON
                          arrangement endpoint and mutate endpoints (run-update by run id — marks
                          the run manual_entry —, ignore, pair, set-time [type a start/finish by hand,
-                         displaced device time kept on the rail], set-runtime [type a run time]).
+                         displaced device time kept on the rail], set-runtime [type a run time]; both
+                         take a slot_key so a time can be keyed onto an upcoming Auto competitor with
+                         no run yet, creating it via _run_from_slot).
                          serialize_arrangement()/timing_signal both run sync_bindings so the two
                          views stay in step. timing_signal ingests device posts (csrf-exempt, since a
                          real device can't send a token) and nudges live views to refresh.
@@ -270,7 +272,11 @@ templates/results/       results_class.html (ranked table + configured columns +
   the previous / current / next competitor with start, finish, run time and **total time**; **current**
   is the run with the latest timing activity (a fresh finish for an earlier starter surfaces it, not just
   the last to start). Double-click a Start/Finish/Run time here too to key one in by hand (entered times
-  highlighted). Beside the times, one box per marshal
+  highlighted) — on an *upcoming* competitor with no run yet too: the slot's key creates the run
+  (_run_from_slot), and keying a start makes them current. Scrolling the tiles (mouse wheel, one
+  competitor per notch) or clicking a start-order tile browses the field without changing the current —
+  a browse offset from the real current; the centred tile frames blue and reads "Next up"/"Previous", and
+  the browse snaps back when a new starter becomes current. Beside the times, one box per marshal
   post shows its pylon/task/stop-line counts ("2 P · 1 T · SL"), turning green with a 🔒 once submitted;
   a 🔒 button to their left locks every post at once, and the timekeeper can +/- the run's Pylons, Task
   and Stop line counts (a marshal-driven run nudges an adjust on top of the posts; an operator-owned or

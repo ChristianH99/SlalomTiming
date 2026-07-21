@@ -132,7 +132,10 @@ Run order, Penalties, Results) in the sidebar. The sub-pages always act on the *
    step over it. The right shows the previous / current / next competitor with their start, finish, run time
    and **total time**; the **current** tile follows the latest timing activity (a fresh finish for an earlier
    starter surfaces it, not just the last to start). You can key a time in here by hand too — double-click a
-   Start, Finish or Run time. Beside the times, one box per marshal post shows its pylon/task/stop-line
+   Start, Finish or Run time; do it on an upcoming competitor (one who hasn't started) and keying their
+   start makes them the current one. **Scroll** the tiles with the mouse wheel (one competitor per notch)
+   or **click** a start-order tile on the left to browse the field without changing who is current — the
+   centred tile frames blue and reads *Next up* / *Previous* while you browse. Beside the times, one box per marshal post shows its pylon/task/stop-line
    counts (*2 P · 1 T · SL*), turning green with a 🔒 once submitted. A 🔒 button locks every post at once;
    clicking a box opens a pop-up — a locked post gets **+/-** steppers to correct each task's pylons (and
    toggle the stop line) plus **Unlock**, an unlocked post shows the read-only breakdown and a **Lock**

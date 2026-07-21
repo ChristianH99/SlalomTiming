@@ -564,15 +564,25 @@ def timing_set_time(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
     slot = payload.get("slot")
-    if run is None or slot not in ("start", "finish"):
+    if slot not in ("start", "finish"):
         return JsonResponse({"ok": False, "error": "Bad request."}, status=400)
+    raw = payload.get("time")
+    clearing = raw is None or str(raw).strip() == ""
+    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    if run is None:
+        # An upcoming competitor in the Auto order has no run yet — make one from
+        # their start-order slot so a time can be keyed onto them. Nothing to clear
+        # if they still have no run.
+        if clearing:
+            return JsonResponse({"ok": True})
+        run = _run_from_slot(competition, payload.get("slot_key"))
+        if run is None:
+            return JsonResponse({"ok": False, "error": "Bad request."}, status=400)
 
     field = "start_signal" if slot == "start" else "finish_signal"
     occupant = getattr(run, field)
-    raw = payload.get("time")
-    if raw is None or str(raw).strip() == "":
+    if clearing:
         setattr(run, field, None)
         run.manual_entry = True
         run.save(update_fields=[field, "manual_entry", "updated_at"])
@@ -607,6 +617,35 @@ def timing_set_time(request):
     return JsonResponse({"ok": True, "row": _serialize_run(run, competition, competition.competition_type)})
 
 
+def _run_from_slot(competition, slot_key):
+    """Find (or create) the run for an Auto-timing start-order slot, so a time can
+    be keyed onto an upcoming competitor who has no run yet. The slot key is
+    ``entry:class:occurrence:run_type:run_number`` (see autotiming.slot_key). A
+    created run is operator-owned so it claims its slot and device times skip it."""
+    parts = str(slot_key or "").split(":")
+    if len(parts) != 5:
+        return None
+    entry_pk, class_pk, occurrence, run_type, run_number = parts
+    if run_type not in (TimedRun.RunType.PRACTICE, TimedRun.RunType.COUNTED):
+        return None
+    try:
+        occurrence, run_number = int(occurrence), int(run_number)
+    except (TypeError, ValueError):
+        return None
+    entry = EventEntry.objects.filter(competition=competition, pk=entry_pk).first()
+    cclass = CompetitionClass.objects.filter(competition=competition, pk=class_pk).first()
+    if entry is None or cclass is None:
+        return None
+    identity = dict(
+        bib_number=entry.bib_number, competition_class=cclass,
+        class_occurrence=occurrence, run_type=run_type, run_number=run_number,
+    )
+    return (
+        TimedRun.objects.filter(competition=competition, **identity).first()
+        or TimedRun.objects.create(competition=competition, manual_entry=True, **identity)
+    )
+
+
 def _discard_displaced(signal, keep_id=None):
     """A signal knocked out of a slot by a keyed-in time: delete it if it was
     itself keyed in (operator-created, safe to drop); otherwise keep the measured
@@ -629,11 +668,16 @@ def timing_set_runtime(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
+    raw = payload.get("run_time")
+    clearing = raw is None or str(raw).strip() == ""
     run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
     if run is None:
-        return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
-    raw = payload.get("run_time")
-    if raw is None or str(raw).strip() == "":
+        if clearing:
+            return JsonResponse({"ok": True})
+        run = _run_from_slot(competition, payload.get("slot_key"))
+        if run is None:
+            return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
+    if clearing:
         run.manual_run_time = None
     else:
         seconds = _parse_duration(str(raw).strip())

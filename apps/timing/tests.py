@@ -1001,6 +1001,36 @@ def test_dragging_the_original_time_back_over_an_override_restores_it(client):
     assert d_finish.ignored is True
 
 
+def test_keying_a_start_time_onto_an_upcoming_slot_makes_them_current(client):
+    comp, cls = auto_scenario(bibs=(1, 2))
+    # bib 1 ran; bib 2 hasn't started, so their slot has no run yet.
+    signal_in(comp, 1, "10:00:00.000", running=1)
+    signal_in(comp, 2, "10:00:30.000", running=1)
+    slot2 = autotiming.serialize(comp)["items"][1]
+    assert slot2["bib"] == 2 and slot2["run_id"] is None
+
+    # Key a start time onto bib 2's start-order slot (no run_id — only the slot key).
+    resp = post_json(client, "timing:set-time", slot="start", time="10:00:40.000",
+                     slot_key=slot2["key"]).json()
+    assert resp["ok"] is True
+    data = autotiming.serialize(comp)
+    assert data["items"][1]["run_id"] is not None
+    assert data["items"][1]["start"]["entered"] is True
+    assert data["current_index"] == 1   # keying a start makes them current
+    run2 = TimedRun.objects.get(competition=comp, bib_number=2)
+    assert run2.manual_entry is True
+    assert (run2.run_type, run2.run_number) == ("counted", 1)
+
+
+def test_clearing_a_time_on_a_slot_with_no_run_is_a_noop(client):
+    comp, cls = auto_scenario(bibs=(1,))
+    slot = autotiming.serialize(comp)["items"][0]
+    assert slot["run_id"] is None
+    resp = post_json(client, "timing:set-time", slot="start", time="", slot_key=slot["key"]).json()
+    assert resp["ok"] is True
+    assert not TimedRun.objects.filter(competition=comp).exists()   # nothing created
+
+
 def test_rejected_pairing_leaves_the_dragged_time_on_the_rail(client):
     comp, cls = auto_scenario(bibs=(1,))
     start = signal_in(comp, 1, "10:00:10.000", running=1)
