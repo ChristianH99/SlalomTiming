@@ -48,6 +48,14 @@ Expects `layout`, `ranked`, `unranked`, `scope`.{% endcomment %}
   </div>
 {% endif %}
 
+<div class="results-summary">
+  <span><strong>Starters:</strong> {{ layout.summary.starters }}</span>
+  <span class="results-summary-sep">·</span>
+  <span><strong>Classified:</strong> {{ layout.summary.classified }}</span>
+  <span class="results-summary-sep">·</span>
+  <span><strong>Not Classified:</strong> {{ layout.summary.not_classified }}</span>
+</div>
+
 <div id="tie-editor" data-scope="{{ scope }}" data-resolve-url="{% url 'results:tie-resolve' %}" hidden>{% csrf_token %}</div>
 <div class="tie-toolbar" id="tie-toolbar" hidden>
   <span class="tie-toolbar-msg" id="tie-toolbar-msg">Drag the tied competitors into order and set their ranks.</span>

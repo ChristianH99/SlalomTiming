@@ -2370,6 +2370,18 @@ textarea:focus-visible,
 .results-index-name { font-weight: 600; color: var(--text-dark); }
 .results-index-meta { font-size: 0.78rem; color: var(--text-mid); }
 
+/* Starters / Classified / Not Classified tally under a results table. */
+.results-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--text-mid);
+}
+.results-summary strong { color: var(--text-dark); font-weight: 600; }
+.results-summary-sep { color: var(--text-muted); }
+
 /* Tie flags + inline manual-ranking editor. */
 .rt-rank { position: relative; }
 .tie-flag {

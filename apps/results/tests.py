@@ -386,6 +386,24 @@ def test_regularity_column_shows_difference(client):
     assert b"Difference" in response.content and b"00:03.00" in response.content
 
 
+def test_results_summary_counts(client):
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1)                     # classified
+    make_competitor(competition, cclass, 2)                     # incomplete (no runs)
+    make_competitor(competition, cclass, 3, status="dns")       # not classified
+    make_competitor(competition, cclass, 4, status="dsq")       # not classified
+    add_run(competition, cclass, 1, 1, 30)
+    add_run(competition, cclass, 1, 2, 30)
+    response = client.get(reverse("results:class", args=[cclass.pk]))
+    body = response.content
+    assert b"Starters:" in body and b"4" in body
+    assert b"Classified:" in body
+    assert b"Not Classified:" in body
+    # 4 starters, 1 classified, 2 not classified (dns + dsq).
+    layout = response.context["layout"]["summary"]
+    assert layout == {"starters": 4, "classified": 1, "not_classified": 2}
+
+
 def test_best_run_column_heading(client):
     _, competition, cclass = make_setup(CompetitionClass.Scoring.BEST_RUN)
     make_competitor(competition, cclass, 1)

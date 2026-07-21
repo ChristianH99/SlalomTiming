@@ -18,6 +18,11 @@ from .models import RESULT_COLUMNS, ManualTieResolution, ResultColumnSettings
 # Name-block lines rendered in bold (the competitor's and co-driver's names).
 BOLD_KEYS = {"driver_name", "co_driver"}
 
+# Starters counted as "not classified" in the results summary: those who did not
+# start or were disqualified. (DNF is neither classified nor counted here yet — a
+# DSQ checkbox in timing is still to come.)
+NOT_CLASSIFIED_STATUSES = {"dns", "dsq"}
+
 
 def _value(participant, key):
     """The participant's display value for a result-column key."""
@@ -117,6 +122,15 @@ def build_table(competition, enabled, ranked, unranked, precision,
         + 1  # total
     )
     layout["column_count"] = column_count
+
+    # Summary tallies from the competitors: every starter, those with a final time
+    # (classified), and those who did not start or were disqualified.
+    everyone = list(ranked) + list(unranked)
+    layout["summary"] = {
+        "starters": len(everyone),
+        "classified": sum(1 for c in everyone if c.score is not None),
+        "not_classified": sum(1 for c in everyone if c.status in NOT_CLASSIFIED_STATUSES),
+    }
 
     first_score = None
     for c in ranked:
