@@ -114,9 +114,9 @@ def _run_holding(signal):
 def assign(signal, target_run, slot):
     """Drag ``signal`` into ``target_run``'s ``slot`` ('start' or 'finish').
     Returns False (caller shows an error wiggle) if it would put a start after
-    its finish or a finish before its start. Whatever occupied the slot, and the
-    row the signal came from, are preserved by giving displaced signals their own
-    rows — nothing is lost."""
+    its finish or a finish before its start. A *measured* time the slot held is
+    preserved on its own row; a *keyed-in* override (TimingSignal.entered) it held
+    is discarded — it was deliberately replaced by the real time being dropped in."""
     if slot == "start" and target_run.finish_signal:
         if signal.device_time > target_run.finish_signal.device_time:
             return False
@@ -133,19 +133,24 @@ def assign(signal, target_run, slot):
     if target_run is None:  # its only content was the dragged signal — recreate
         target_run = TimedRun(competition=signal.competition)
 
-    if occupant_id and occupant_id != signal.id:
-        occupant = TimingSignal.objects.filter(pk=occupant_id).first()
-        if occupant is not None:
-            if slot == "start":
-                TimedRun.objects.create(competition=occupant.competition, start_signal=occupant)
-            else:
-                TimedRun.objects.create(competition=occupant.competition, finish_signal=occupant)
-
+    # Put the dragged signal into the slot first — this frees the previous occupant
+    # from the OneToOne, so re-homing it below can't hit the unique constraint (which
+    # it did when the slot held a keyed-in override).
     if slot == "start":
         target_run.start_signal = signal
     else:
         target_run.finish_signal = signal
     target_run.save()
+
+    if occupant_id and occupant_id != signal.id:
+        occupant = TimingSignal.objects.filter(pk=occupant_id).first()
+        if occupant is not None:
+            if occupant.entered:
+                occupant.delete()  # a replaced override isn't kept
+            elif slot == "start":
+                TimedRun.objects.create(competition=occupant.competition, start_signal=occupant)
+            else:
+                TimedRun.objects.create(competition=occupant.competition, finish_signal=occupant)
     return True
 
 

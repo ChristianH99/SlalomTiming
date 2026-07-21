@@ -511,11 +511,13 @@ def timing_pair(request):
     slot = payload.get("slot")
     if signal is None or run is None or slot not in ("start", "finish"):
         return JsonResponse({"ok": False, "error": "Bad pairing request."}, status=400)
-    if signal.ignored:
-        signal.ignored = False
-        signal.save(update_fields=["ignored"])
     ok = arrangement.assign(signal, run, slot)
     if ok:
+        # Only clear the ignored flag once the signal is actually in a slot — a
+        # rejected pairing must leave it on the rail, not strand it off both.
+        if signal.ignored:
+            signal.ignored = False
+            signal.save(update_fields=["ignored"])
         broadcast_live()
     return JsonResponse({"ok": ok, "rejected": not ok})
 

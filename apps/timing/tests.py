@@ -970,3 +970,47 @@ def test_set_time_endpoint_rejects_start_after_finish(client):
     assert resp["rejected"] is True
     run.refresh_from_db()
     assert run.start_signal_id == start.id   # unchanged
+
+
+def test_dragging_the_original_time_back_over_an_override_restores_it(client):
+    comp, cls = auto_scenario(bibs=(1,))
+    d_start = signal_in(comp, 1, "10:00:00.000", running=1)
+    d_finish = signal_in(comp, 2, "10:00:30.000", running=1)
+    run = run_of(d_start)
+    # Override the finish: a keyed-in signal takes the slot, the device time is railed.
+    post_json(client, "timing:set-time", run_id=run.id, slot="finish", time="10:00:35.000")
+    run.refresh_from_db()
+    assert run.finish_signal.entered is True
+    d_finish.refresh_from_db()
+    assert d_finish.ignored is True
+
+    # Drag the original measured time back onto that slot.
+    resp = post_json(client, "timing:pair", signal_id=d_finish.id, run_id=run.id, slot="finish").json()
+    assert resp["ok"] is True
+    run.refresh_from_db()
+    assert run.finish_signal_id == d_finish.id        # the measured time is back …
+    assert run.finish_signal.entered is False         # … as a normal (not keyed-in) time
+    d_finish.refresh_from_db()
+    assert d_finish.ignored is False
+    # The replaced override is discarded, not left as a stray signal/row.
+    assert not TimingSignal.objects.filter(competition=comp, entered=True).exists()
+
+    # Overriding again rails the original so it can be recovered a second time.
+    post_json(client, "timing:set-time", run_id=run.id, slot="finish", time="10:00:40.000")
+    d_finish.refresh_from_db()
+    assert d_finish.ignored is True
+
+
+def test_rejected_pairing_leaves_the_dragged_time_on_the_rail(client):
+    comp, cls = auto_scenario(bibs=(1,))
+    start = signal_in(comp, 1, "10:00:10.000", running=1)
+    run = run_of(start)
+    # An ignored finish that is *before* the start — dropping it on the finish slot
+    # must be rejected, and it must stay ignored (not vanish off the rail).
+    early = TimingSignal.objects.create(
+        competition=comp, running_number=1, port=2, device_time=_t("10:00:05.000"), ignored=True
+    )
+    resp = post_json(client, "timing:pair", signal_id=early.id, run_id=run.id, slot="finish").json()
+    assert resp["rejected"] is True
+    early.refresh_from_db()
+    assert early.ignored is True

@@ -159,7 +159,10 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          finish. A start first fills the oldest empty *placeholder* row (one
                          pre-entered by the operator, no times *and no typed run time* yet) before
                          opening a new run. ignore keeps a row that still carries a bib/run/typed
-                         time (placeholder) rather than deleting it. ingest()/detach()/assign()/
+                         time (placeholder) rather than deleting it. assign() (drag a time onto a
+                         slot) drops the dragged signal in first so re-homing the previous occupant
+                         can't break the OneToOne; a measured occupant it displaces keeps its own
+                         row, a keyed-in override (entered) is discarded. ingest()/detach()/assign()/
                          rows(); rows() is newest-first with placeholders on top. effective_role()
                          handles a single light barrier (start_channel == finish_channel): the one
                          channel alternates start/finish/start/…
