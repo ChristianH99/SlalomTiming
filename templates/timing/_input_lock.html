@@ -1,0 +1,9 @@
+{% comment %}The red operator "Lock" switch: while on, every incoming time is sent
+straight to the ignore list. Wired up by timing_live.js / auto_timing.js from the
+serialized `input_locked` state, so it stays in sync across open views.{% endcomment %}
+<label class="input-lock" id="input-lock"
+       title="Send all incoming times straight to the ignore list">
+  <span class="input-lock-text" id="input-lock-text">Lock</span>
+  <input type="checkbox" class="input-lock-check" id="input-lock-check">
+  <span class="input-lock-switch" aria-hidden="true"><span class="input-lock-knob"></span></span>
+</label>

@@ -1,9 +1,8 @@
 // Live timing view. Renders runs (a start time paired with a finish time) newest
 // first, with pre-enterable placeholder rows at the top; lets the operator enter
-// bib/class/run/penalties, double-click a time to ignore it (ignored starts and
-// finishes each get their own rail column on the right, beside where they fall),
-// and drag a time onto a run's slot to pair it. State lives on the server; edits
-// POST and the view is nudged over a WebSocket to re-fetch.
+// bib/class/run/penalties, and drag a time to the Ignored panel (two columns,
+// start and finish) to ignore it or back onto a run's slot to pair it. State lives
+// on the server; edits POST and the view is nudged over a WebSocket to re-fetch.
 (function () {
   "use strict";
 
@@ -16,7 +15,10 @@
 
   const rowsEl = document.getElementById("timing-rows");
   const emptyEl = document.getElementById("timing-empty");
-  const rail = document.getElementById("ignored-rail");
+  const ignoredBox = document.getElementById("ignored-box");
+  const lockLabel = document.getElementById("input-lock");
+  const lockCheck = document.getElementById("input-lock-check");
+  const lockText = document.getElementById("input-lock-text");
 
   // ---- server calls -------------------------------------------------------
   async function postJSON(url, body) {
@@ -34,6 +36,7 @@
   const pair = (signalId, runId, slot) => postJSON(URLS.pair, { signal_id: signalId, run_id: runId, slot });
   const setTime = (runId, slot, time) => postJSON(URLS.setTime, { run_id: runId, slot, time });
   const setRuntime = (runId, runTime) => postJSON(URLS.setRuntime, { run_id: runId, run_time: runTime });
+  const setInputLock = (locked) => postJSON(URLS.inputLock, { locked });
 
   // ---- small DOM helpers --------------------------------------------------
   function el(tag, className, text) {
@@ -54,6 +57,16 @@
     rowsEl.replaceChildren(addStrip(), ...state.rows.map(renderRow));
     emptyEl.hidden = state.rows.length > 0;
     renderIgnored();
+    renderLock();
+  }
+
+  // The red operator lock: while on, incoming times go straight to the ignore list.
+  function renderLock() {
+    if (!lockCheck) return;
+    const on = !!state.input_locked;
+    lockCheck.checked = on;
+    if (lockLabel) lockLabel.classList.toggle("input-lock--on", on);
+    if (lockText) lockText.textContent = on ? "Locked" : "Lock";
   }
 
   // A thin strip below the header; hover reveals a + to add a placeholder row.
@@ -109,7 +122,7 @@
     wrap.dataset.runId = runId;
     // Double-click the slot (whether it holds a time or not) to type a time in by
     // hand — for when the device didn't fire. Ignoring a wrong time is a drag to
-    // the rail.
+    // the Ignored panel.
     wrap.addEventListener("dblclick", () =>
       enterTimeEdit(wrap, role, runId, sig ? sig.time : ""));
     if (!sig) {
@@ -128,7 +141,7 @@
     chip.dataset.role = role;
     chip.dataset.time = sig.time;
     const kind = sig.entered ? "Typed in by hand" : sig.manual ? "Manual" : "Light barrier";
-    chip.title = kind + " · drag to pair or to the rail to ignore · double-click to edit";
+    chip.title = kind + " · drag to pair or to the Ignored panel · double-click to edit";
     chip.addEventListener("dragstart", (e) => onDragStart(e, sig.id, role, sig.time));
     chip.addEventListener("dragend", clearDrag);
     wrap.append(chip);
@@ -294,16 +307,14 @@
 
   const secs = (n) => (n ? `${n}s` : "0s");
 
-  // ---- ignored times: start and finish rails, each beside where it falls ----
+  // ---- ignored times: two columns (start, finish), chips stacked newest first --
   function renderIgnored() {
-    rail.querySelectorAll(".ignored-col").forEach((col) => {
-      col.querySelectorAll(".ignored-chip").forEach((c) => c.remove());
+    ignoredBox.querySelectorAll(".ignored-col").forEach((col) => {
       const role = col.dataset.role;
       const chips = state.ignored.filter((s) => s.role === role);
       col.classList.toggle("ignored-col--empty", chips.length === 0);
-      chips.forEach((s) => col.append(ignoredChip(s)));
+      col.querySelector(".ignored-col-list").replaceChildren(...chips.map(ignoredChip));
     });
-    positionIgnored();
   }
 
   function ignoredChip(sig) {
@@ -319,35 +330,6 @@
     return chip;
   }
 
-  // Float each ignored chip vertically at the boundary between the two rows its
-  // time falls between (rows never move); stack within a column to avoid overlaps.
-  function positionIgnored() {
-    const railTop = rail.getBoundingClientRect().top;
-    const rowInfo = [...rowsEl.querySelectorAll("tr[data-run-id]")].map((tr) => {
-      const rect = tr.getBoundingClientRect();
-      const row = state.rows.find((r) => String(r.id) === tr.dataset.runId);
-      const time = (row.start && row.start.time) || (row.finish && row.finish.time) || "";
-      return { top: rect.top - railTop, bottom: rect.bottom - railTop, time };
-    });
-    rail.querySelectorAll(".ignored-col").forEach((col) => {
-      let lastBottom = -Infinity;
-      col.querySelectorAll(".ignored-chip").forEach((chip) => {
-        const t = chip.dataset.time;
-        let y = 0;
-        if (rowInfo.length) {
-          const idx = rowInfo.findIndex((ri) => ri.time && ri.time < t);
-          if (idx === -1) y = rowInfo[rowInfo.length - 1].bottom;
-          else if (idx === 0) y = rowInfo[0].top;
-          else y = rowInfo[idx].top;
-        }
-        let top = y - chip.offsetHeight / 2;
-        if (top < lastBottom + 4) top = lastBottom + 4;
-        chip.style.top = `${Math.max(0, top)}px`;
-        lastBottom = top + chip.offsetHeight;
-      });
-    });
-  }
-
   // ---- apply a single updated row (edit reply) ----------------------------
   function applyRow(resp) {
     if (!resp || !resp.ok || !resp.row) return;
@@ -355,7 +337,6 @@
     if (i !== -1) state.rows[i] = resp.row;
     const tr = rowsEl.querySelector(`tr[data-run-id="${resp.row.id}"]`);
     if (tr) tr.replaceWith(renderRow(resp.row));
-    positionIgnored();
   }
 
   // ---- drag and drop ------------------------------------------------------
@@ -411,16 +392,16 @@
     });
   });
 
-  // Dropping a run's time onto the rail ignores it.
-  rail.addEventListener("dragover", (e) => {
+  // Dropping a run's time onto the Ignored panel ignores it.
+  ignoredBox.addEventListener("dragover", (e) => {
     if (dragged && !state.ignored.some((s) => s.id === dragged.id)) {
       e.preventDefault();
-      rail.classList.add("ignored-rail--drop");
+      ignoredBox.classList.add("ignored-box--drop");
     }
   });
-  rail.addEventListener("dragleave", () => rail.classList.remove("ignored-rail--drop"));
-  rail.addEventListener("drop", (e) => {
-    rail.classList.remove("ignored-rail--drop");
+  ignoredBox.addEventListener("dragleave", () => ignoredBox.classList.remove("ignored-box--drop"));
+  ignoredBox.addEventListener("drop", (e) => {
+    ignoredBox.classList.remove("ignored-box--drop");
     if (dragged && !state.ignored.some((s) => s.id === dragged.id)) {
       e.preventDefault();
       setIgnored(dragged.id, true).then(refresh);
@@ -470,7 +451,14 @@
     ws.addEventListener("close", () => setTimeout(connect, 2000));
   }
 
-  window.addEventListener("resize", positionIgnored);
+  if (lockCheck) {
+    lockCheck.addEventListener("change", () => {
+      state.input_locked = lockCheck.checked;   // optimistic; the nudge confirms
+      renderLock();
+      setInputLock(lockCheck.checked).then(refresh);
+    });
+  }
+
   render();
   connect();
 })();

@@ -94,6 +94,18 @@ def cp540_status(request):
     return JsonResponse(cp540.reader.snapshot())
 
 
+@require_POST
+def timing_input_lock(request):
+    """Toggle the timing input lock (the red switch on the Auto/Manual pages): while
+    on, every incoming time is sent straight to the ignore list. Persisted on the
+    timing rig so it applies to every device and both views."""
+    settings = TimingSettings.load()
+    settings.ignore_incoming = bool(_json_body(request).get("locked"))
+    settings.save(update_fields=["ignore_incoming"])
+    broadcast_live()
+    return JsonResponse({"ok": True, "locked": settings.ignore_incoming})
+
+
 class SimulatorView(TemplateView):
     """Standalone timing-device emulator, opened in its own tab — no app shell."""
 
@@ -767,6 +779,8 @@ def serialize_arrangement(competition):
     return {
         "penalties_enabled": ctype.penalties_enabled,
         "precision": ctype.timing_precision,
+        # The red operator lock: incoming times go straight to the ignore list.
+        "input_locked": settings.ignore_incoming,
         "multi_class": competition.allows_multiple_classes_effective(),
         "rows": [_serialize_run(run, competition, ctype) for run in arrangement.rows(competition)],
         "ignored": [

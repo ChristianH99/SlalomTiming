@@ -36,6 +36,10 @@ class TimingSettings(models.Model):
         null=True, blank=True, default=7000, validators=[MaxValueValidator(65535)],
         help_text="TCP port of the Tag Heuer CP540.",
     )
+    # Operator "lock" toggled from the timing pages: while on, every incoming time
+    # (from any device or the simulator) is sent straight to the ignore list rather
+    # than into a run — a way to pause capture without disconnecting. Off = normal.
+    ignore_incoming = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "timing settings"

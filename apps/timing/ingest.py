@@ -68,6 +68,9 @@ def record_signal(running_number, port, is_manual, device_time, source="device")
     from .views import broadcast_live
 
     competition = Competition.get_current()
+    # Operator lock: when on, the time is still captured (never lost) but goes
+    # straight to the ignore list instead of into a run.
+    locked = TimingSettings.load().ignore_incoming
 
     # 1) Capture the time itself first — this is what must never be lost.
     try:
@@ -78,6 +81,7 @@ def record_signal(running_number, port, is_manual, device_time, source="device")
             is_manual=is_manual,
             device_time=device_time,
             source=str(source)[:20],
+            ignored=locked,
         ))
     except OperationalError as exc:
         _capture_unrecorded(
@@ -90,13 +94,15 @@ def record_signal(running_number, port, is_manual, device_time, source="device")
         )
         return None
 
-    # 2) Place it into a run. The time is already saved, so a failure here can't
-    #    lose it — it (and any earlier orphan) is re-placed on the next signal.
+    # 2) Place it into a run — unless the input is locked, in which case it stays on
+    #    the ignore list. The time is already saved, so a placement failure can't
+    #    lose it: it (and any earlier orphan) is re-placed on the next signal.
     if competition is not None:
-        try:
-            _retry(lambda: _place(competition, signal))
-        except OperationalError:
-            logger.exception("Signal %s saved but not yet placed into a run", signal.id)
+        if not locked:
+            try:
+                _retry(lambda: _place(competition, signal))
+            except OperationalError:
+                logger.exception("Signal %s saved but not yet placed into a run", signal.id)
         broadcast_live()
 
     return signal

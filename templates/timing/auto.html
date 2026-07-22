@@ -2,6 +2,28 @@
 {% load static %}
 {% block title %}Auto timing – Slalom Timing{% endblock %}
 {% block topbar_title %}Auto timing{% endblock %}
+{% block topbar_actions %}
+  <button type="button" class="topbar-help" data-help-open title="How Auto timing works" aria-label="How Auto timing works">?</button>
+{% endblock %}
+{% block help_modal %}
+  <div class="modal-overlay help-modal" id="help-modal" hidden data-help-modal>
+    <div class="modal help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <button type="button" class="modal-close" data-help-close aria-label="Close">×</button>
+      <h2 class="modal-title" id="help-title">Auto timing</h2>
+      <div class="modal-body">
+        <p>The start order comes from <strong>Run order</strong> and the <strong>start pattern</strong>;
+          times attach to it automatically. Drag a tile in the list to reorder, and drag an ignored time
+          back onto a slot to re-pair it.</p>
+        <p><strong>Double-click</strong> a Start, Finish or Run time to type it in by hand when the device
+          didn't fire — keyed-in times are highlighted. <strong>Scroll</strong> the tiles (or click a tile
+          in the list) to browse the field without changing the current starter; keying a start time onto
+          an upcoming competitor makes them the current one.</p>
+        <p>The red <strong>Lock</strong> switch sends every incoming time straight to the Ignored list —
+          a way to pause capture without disconnecting the device.</p>
+      </div>
+    </div>
+  </div>
+{% endblock %}
 {% block content %}
   <style>.content { max-width: none; }</style>
   {% if not competition %}
@@ -11,14 +33,6 @@
     </div>
   {% else %}
     <div class="autotiming" id="autotiming">
-      <p class="hint auto-help">The start order comes from <strong>Run order</strong> and the
-        <strong>start pattern</strong>; times attach to it automatically. Drag a tile in the list to
-        reorder, and drag an ignored time back onto a slot to re-pair it.
-        <strong>Double-click</strong> a Start, Finish or Run time to type it in by hand when the device
-        didn't fire — keyed-in times are highlighted. <strong>Scroll</strong> the tiles (or click a tile
-        in the list) to browse the field without changing the current starter; keying a start time onto
-        an upcoming competitor makes them the current one.</p>
-
       <div class="auto-layout">
         <aside class="auto-order">
           <div class="auto-order-head">
@@ -35,9 +49,7 @@
         </section>
 
         <aside class="auto-ignored">
-          <h2 class="auto-col-title">Ignored times</h2>
-          <div class="auto-ignored-list" id="auto-ignored-list" aria-label="Ignored times"></div>
-          <p class="auto-ignored-empty hint" id="auto-ignored-empty">None.</p>
+          {% include "timing/_ignored.html" %}
         </aside>
       </div>
     </div>
@@ -57,6 +69,7 @@
         lock: "{% url 'timing:marshal-lock' %}",
         lockAll: "{% url 'timing:marshal-lock-all' %}",
         taskEdit: "{% url 'timing:marshal-task-edit' %}",
+        inputLock: "{% url 'timing:input-lock' %}",
       };
       window.AUTO_CSRF = "{{ csrf_token }}";
     </script>

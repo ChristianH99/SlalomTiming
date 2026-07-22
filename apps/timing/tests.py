@@ -347,6 +347,36 @@ def test_record_signal_captures_to_recovery_file_when_db_locked(tmp_path, monkey
     assert '"running_number": 3' in captured and '"source": "cp540"' in captured  # …but not lost
 
 
+def test_input_lock_toggle_endpoint_persists(client):
+    resp = post_json(client, "timing:input-lock", locked=True).json()
+    assert resp["ok"] is True and resp["locked"] is True
+    assert TimingSettings.load().ignore_incoming is True
+    post_json(client, "timing:input-lock", locked=False)
+    assert TimingSettings.load().ignore_incoming is False
+
+
+def test_locked_input_sends_incoming_time_straight_to_ignore(client):
+    comp = make_active_competition()
+    TimingSettings.objects.create(device="simulator", ignore_incoming=True)
+    _post_signal(client, running_number=1, port=1, is_manual=False, time="10:00:00.000")
+    # The time is captured but ignored (not placed into a run).
+    signal = TimingSignal.objects.get()
+    assert signal.ignored is True
+    assert not TimedRun.objects.filter(start_signal=signal).exists()
+    data = serialize_arrangement(comp)
+    assert data["input_locked"] is True
+    assert data["rows"] == [] and [ig["id"] for ig in data["ignored"]] == [signal.id]
+
+
+def test_unlocked_input_still_places_times(client):
+    comp = make_active_competition()
+    _post_signal(client, running_number=1, port=1, is_manual=False, time="10:00:00.000")
+    signal = TimingSignal.objects.get()
+    assert signal.ignored is False
+    assert TimedRun.objects.filter(start_signal=signal).exists()
+    assert serialize_arrangement(comp)["input_locked"] is False
+
+
 # ----- live timing view: calc, causal pairing, endpoints -----
 
 def _t(text):

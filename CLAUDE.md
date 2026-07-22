@@ -115,7 +115,10 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                         Auto timing view — which share the same runs (see the sync below). The old
                         TimingEvent + connector-loop dashboard is legacy and slated to be redone.
   models.py              TimingSettings (singleton: device [Tag Heuer CP540 / Simulator],
-                         single-digit start/finish channel, IP + TCP port for the CP540),
+                         single-digit start/finish channel, IP + TCP port for the CP540, plus
+                         ignore_incoming — the red operator "Lock" switch on the timing pages: while
+                         on, every incoming signal is stored ignored [straight to the ignore list]
+                         instead of placed into a run, applying to every device/simulator),
                          TimingSignal (the raw device
                          inbox — running number, port, is_manual, device_time; stamped with the
                          active competition; `ignored`; `entered` == operator typed the time by
@@ -197,7 +200,9 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          still fails the signal is appended to a durable recovery file
                          (timing_unrecorded.log) and record_signal returns None. Placement is a
                          second retried step — if it loses a lock race the signal is already saved
-                         and gets re-placed by arrangement.reconcile() on the next signal.
+                         and gets re-placed by arrangement.reconcile() on the next signal. When the
+                         operator Lock (TimingSettings.ignore_incoming) is on, the signal is still
+                         captured but stored ignored and *not* placed — it lands on the ignore list.
   cp540.py               Tag Heuer CP540 driver: a daemon reader thread (module-level `reader`)
                          holding a plain-TCP line socket, started/stopped from the Settings page.
                          Parses only `TN` lines (running number, input 1–4 or M1–M4 → port +
@@ -350,11 +355,17 @@ templates/results/       index.html (class + Overall cards), results_class.html,
   placeholder row); incoming starts fill placeholders oldest-first, so times populate bottom-to-top.
   **Double-click** a Start, Finish or Run time (or an empty slot) to type it in by hand when the device
   didn't fire — a keyed-in time is a green "entered" chip (run time green + underlined), distinct from a
-  measured one, and the run's total honours it. Ignoring is a **drag** to a rail on the right — ignored
-  starts and finishes each get a rail column, floated beside where they fall; drag one back onto a run's
-  slot (or double-click the rail chip) to use it (rejected with a wiggle if it would put a start after
-  its finish). A time keyed in over a measured one keeps the measured one on the rail. Column widths are
-  fixed so entering a bib never shifts them.
+  measured one, and the run's total honours it. Ignoring is a **drag** to the Ignored-times panel on the
+  right (a shared two-column Start/Finish list, `templates/timing/_ignored.html`, used on both timing
+  pages); drag a chip back onto a run's slot (or double-click it) to use it (rejected with a wiggle if it
+  would put a start after its finish). A time keyed in over a measured one keeps the measured one on the
+  list. Column widths are fixed so entering a bib never shifts them, and the run table + Ignored panel are
+  centred on the page. Above the Ignored panel is a red **Lock** switch (`_input_lock.html`, fixed width
+  so toggling never resizes it; shared with Auto timing via `timing:input-lock`): while on it sends every
+  incoming time straight to the ignore list — a pause without disconnecting — pulsing red and syncing
+  across open views over the WebSocket. The page intro moved into a **help pop-up**: the topbar "?"
+  (base.html `topbar_actions` block) opens a page-internal modal (`help_modal` block); reusable by any
+  page.
 - **Auto timing** (`timing/auto/`) — the order-driven live view. The start order (run order × start
   pattern) runs down the left as draggable tiles ("#3 C1"), grouped by run with a "Run · <classes>"
   divider that sticks to the top of the list and is replaced by the next run's as it scrolls up (so the
@@ -378,9 +389,11 @@ templates/results/       index.html (class + Overall cards), results_class.html,
   speech-bubble pop-up under it: a locked post shows +/-
   steppers to edit each task's pylons (and toggle the stop line) plus an **Unlock** button; an unlocked
   post shows the read-only breakdown and a **Lock** button. Ignore a wrong time by dragging it to the
-  Ignored list, and drag it back onto a slot to re-pair. A time chip can also be dragged from the current
-  competitor onto another tile's Start/Finish slot — including an *upcoming* competitor with no run yet
-  (their run is made from the slot key), moving a mis-attributed time onto the right starter.
+  Ignored-times panel (the same two-column Start/Finish list as Manual timing, with the red **Lock**
+  switch above it), and drag it back onto a slot to re-pair. A time chip can also be dragged from the
+  current competitor onto another tile's Start/Finish slot — including an *upcoming* competitor with no
+  run yet (their run is made from the slot key), moving a mis-attributed time onto the right starter.
+  The page intro is behind the topbar "?" help pop-up.
 - **Marshal Posts** is a top-level sidebar item (below Timing) — the marshal's phone surface (see the
   competitions app). It reads the current competitor from Auto timing over the timing WebSocket and
   pushes every tap and the final submit back (with the per-task detail) so the boxes above fill and go

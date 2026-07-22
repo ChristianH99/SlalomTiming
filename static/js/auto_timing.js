@@ -34,10 +34,12 @@
   const orderCol = document.querySelector(".auto-order");
   const listEl = document.getElementById("auto-order-list");
   const tilesEl = document.getElementById("auto-tiles");
-  const ignoredEl = document.getElementById("auto-ignored-list");
+  const ignoredBox = document.getElementById("ignored-box");
   const emptyEl = document.getElementById("auto-empty");
-  const ignoredEmptyEl = document.getElementById("auto-ignored-empty");
   const resetBtn = document.querySelector("[data-reset]");
+  const lockLabel = document.getElementById("input-lock");
+  const lockCheck = document.getElementById("input-lock-check");
+  const lockText = document.getElementById("input-lock-text");
 
   // Scroll-to-current affordances, floated over the top/bottom of the list.
   const scrollUp = el("button", "auto-scroll-cue auto-scroll-cue--up", "▲ current");
@@ -120,6 +122,7 @@
   const lockAll = (runId) => postJSON(URLS.lockAll, { run_id: runId });
   const lockPost = (runId, post) => postJSON(URLS.lock, { run_id: runId, post });
   const taskEdit = (body) => postJSON(URLS.taskEdit, body);
+  const setInputLock = (locked) => postJSON(URLS.inputLock, { locked });
 
   // ---- DOM helpers --------------------------------------------------------
   function el(tag, className, text) {
@@ -134,11 +137,21 @@
     renderList();
     renderTiles();
     renderIgnored();
+    renderLock();
     emptyEl.hidden = state.items.length > 0;
     // Keep the current starter in view as the field advances, unless the
     // operator has scrolled away.
     if (following) scrollToCurrent(false);
     updateScrollCues();
+  }
+
+  // The red operator lock: while on, incoming times go straight to the ignore list.
+  function renderLock() {
+    if (!lockCheck) return;
+    const on = !!state.input_locked;
+    lockCheck.checked = on;
+    if (lockLabel) lockLabel.classList.toggle("input-lock--on", on);
+    if (lockText) lockText.textContent = on ? "Locked" : "Lock";
   }
 
   function renderList() {
@@ -575,16 +588,18 @@
     renderTiles();
   });
 
+  // Two columns (start, finish), chips stacked newest first — same as Manual timing.
   function renderIgnored() {
-    ignoredEl.replaceChildren(...state.ignored.map(ignoredChip));
-    ignoredEmptyEl.hidden = state.ignored.length > 0;
+    ignoredBox.querySelectorAll(".ignored-col").forEach((col) => {
+      const role = col.dataset.role;
+      const chips = state.ignored.filter((s) => s.role === role);
+      col.classList.toggle("ignored-col--empty", chips.length === 0);
+      col.querySelector(".ignored-col-list").replaceChildren(...chips.map(ignoredChip));
+    });
   }
 
   function ignoredChip(sig) {
-    const chip = el("div", "ignored-chip" + (sig.manual ? " ignored-chip--manual" : ""));
-    const tag = sig.role === "start" ? "S" : sig.role === "finish" ? "F" : "·";
-    chip.append(el("span", "ignored-chip-tag", tag));
-    chip.append(el("span", null, sig.time));
+    const chip = el("div", "ignored-chip" + (sig.manual ? " ignored-chip--manual" : ""), sig.time);
     chip.draggable = true;
     chip.dataset.signalId = sig.id;
     chip.dataset.role = sig.role;
@@ -724,16 +739,16 @@
       });
   });
 
-  ignoredEl.addEventListener("dragover", (e) => {
+  ignoredBox.addEventListener("dragover", (e) => {
     if (timeDrag && !state.ignored.some((s) => s.id === timeDrag.id)) {
       e.preventDefault();
-      ignoredEl.classList.add("auto-ignored-list--drop");
+      ignoredBox.classList.add("ignored-box--drop");
     }
   });
-  ignoredEl.addEventListener("dragleave", () =>
-    ignoredEl.classList.remove("auto-ignored-list--drop"));
-  ignoredEl.addEventListener("drop", (e) => {
-    ignoredEl.classList.remove("auto-ignored-list--drop");
+  ignoredBox.addEventListener("dragleave", () =>
+    ignoredBox.classList.remove("ignored-box--drop"));
+  ignoredBox.addEventListener("drop", (e) => {
+    ignoredBox.classList.remove("ignored-box--drop");
     if (timeDrag && !state.ignored.some((s) => s.id === timeDrag.id)) {
       e.preventDefault();
       ignore(timeDrag.id, true).then(refresh);
@@ -772,6 +787,14 @@
       if (msg.event === "refresh") refresh();
     });
     ws.addEventListener("close", () => setTimeout(connect, 2000));
+  }
+
+  if (lockCheck) {
+    lockCheck.addEventListener("change", () => {
+      state.input_locked = lockCheck.checked;   // optimistic; the nudge confirms
+      renderLock();
+      setInputLock(lockCheck.checked).then(refresh);
+    });
   }
 
   window.addEventListener("resize", updateScrollCues);

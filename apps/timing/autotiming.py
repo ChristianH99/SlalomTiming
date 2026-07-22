@@ -213,6 +213,8 @@ def current_run(competition):
 def serialize(competition):
     """The whole Auto timing state: the ordered items (slot + its bound run), the
     current index, the ignored times, and the marshal posts."""
+    from .models import TimingSettings
+
     sync_bindings(competition)
     ctype = competition.competition_type
     precision = ctype.timing_precision
@@ -230,6 +232,8 @@ def serialize(competition):
     return {
         "precision": precision,
         "penalties_enabled": ctype.penalties_enabled,
+        # The red operator lock: incoming times go straight to the ignore list.
+        "input_locked": TimingSettings.load().ignore_incoming,
         "items": items,
         # Centre on the run with the latest timing activity (last start, or a
         # finish that just came in for an earlier starter).

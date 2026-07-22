@@ -1,0 +1,19 @@
+{% comment %}Shared Ignored-times panel for Manual and Auto timing: the red Lock
+switch on top, then a two-column (Start / Finish) list of ignored time chips.
+Filled by timing_live.js / auto_timing.js (`#ignored-box`, `.ignored-col-list`).{% endcomment %}
+<div class="ignored-side">
+  {% include "timing/_input_lock.html" %}
+  <div class="ignored-panel">
+    <h2 class="ignored-title">Ignored times</h2>
+    <div class="ignored-box" id="ignored-box" aria-label="Ignored times">
+      <div class="ignored-col" data-role="start">
+        <span class="ignored-cap">Start</span>
+        <div class="ignored-col-list"></div>
+      </div>
+      <div class="ignored-col" data-role="finish">
+        <span class="ignored-cap">Finish</span>
+        <div class="ignored-col-list"></div>
+      </div>
+    </div>
+  </div>
+</div>

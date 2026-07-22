@@ -9,6 +9,7 @@ urlpatterns = [
     path("dashboard/state/", views.dashboard_state, name="dashboard-state"),
     path("timing/settings/", views.TimingSettingsView.as_view(), name="settings"),
     path("timing/cp540/status/", views.cp540_status, name="cp540-status"),
+    path("timing/input-lock/", views.timing_input_lock, name="input-lock"),
     path("timing/simulator/", views.SimulatorView.as_view(), name="simulator"),
     path("timing/signal/", views.timing_signal, name="signal"),
     path("timing/manual/", views.TimingLiveView.as_view(), name="manual"),

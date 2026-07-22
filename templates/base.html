@@ -72,6 +72,9 @@
             {% endif %}
           </span>
         </div>
+        <div class="topbar-actions">
+          {% block topbar_actions %}{% endblock %}
+        </div>
       </header>
       <main class="content" id="main-content">
         {% if messages %}
@@ -98,6 +101,9 @@
       </div>
     </div>
   </div>
+
+  {# Page help: the "?" in the topbar (block topbar_actions) opens this modal. #}
+  {% block help_modal %}{% endblock %}
 
   <script>
     // Guard against leaving a page with unsaved form changes. Opt in by putting
@@ -155,6 +161,25 @@
         const next = form.querySelector('input[name="next"]');
         if (next && pendingUrl) next.value = pendingUrl;  // return here after saving
         form.submit();
+      });
+    })();
+  </script>
+
+  <script>
+    // Page help: any [data-help-open] button opens the page's [data-help-modal];
+    // click the ×/backdrop or press Escape to close. A page-internal pop-up.
+    (function () {
+      const openers = document.querySelectorAll("[data-help-open]");
+      const modal = document.querySelector("[data-help-modal]");
+      if (!openers.length || !modal) return;
+      const open = () => { modal.hidden = false; document.body.classList.add("modal-open"); };
+      const close = () => { modal.hidden = true; document.body.classList.remove("modal-open"); };
+      openers.forEach((btn) => btn.addEventListener("click", open));
+      modal.addEventListener("click", (event) => {
+        if (event.target === modal || event.target.closest("[data-help-close]")) close();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !modal.hidden) close();
       });
     })();
   </script>

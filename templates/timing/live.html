@@ -2,6 +2,26 @@
 {% load static %}
 {% block title %}Manual timing – Slalom Timing{% endblock %}
 {% block topbar_title %}Manual timing{% endblock %}
+{% block topbar_actions %}
+  <button type="button" class="topbar-help" data-help-open title="How Manual timing works" aria-label="How Manual timing works">?</button>
+{% endblock %}
+{% block help_modal %}
+  <div class="modal-overlay help-modal" id="help-modal" hidden data-help-modal>
+    <div class="modal help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <button type="button" class="modal-close" data-help-close aria-label="Close">×</button>
+      <h2 class="modal-title" id="help-title">Manual timing</h2>
+      <div class="modal-body">
+        <p>Hover between the header and the top row for a <strong>+</strong> to pre-enter an upcoming
+          starter. <strong>Double-click</strong> a Start, Finish or Run time (or an empty slot) to type it
+          in by hand when the device didn't fire — keyed-in times are highlighted.</p>
+        <p><strong>Drag</strong> a wrong time to the Ignored list on the right to ignore it; drag it back
+          onto a slot (or double-click the chip) to use it again.</p>
+        <p>The red <strong>Lock</strong> switch sends every incoming time straight to the Ignored list —
+          a way to pause capture without disconnecting the device.</p>
+      </div>
+    </div>
+  </div>
+{% endblock %}
 {% block content %}
   {# The run table is wide (up to 11 columns) — let this page use the full width. #}
   <style>.content { max-width: none; }</style>
@@ -12,11 +32,6 @@
     </div>
   {% else %}
     <div class="timing-live" id="timing-live">
-      <p class="hint timing-help">Hover between the header and the top row for a <strong>+</strong> to
-        pre-enter an upcoming starter. <strong>Double-click</strong> a Start, Finish or Run time (or an empty
-        slot) to type it in by hand when the device didn't fire — keyed-in times are highlighted.
-        <strong>Drag</strong> a wrong time to a rail on the right to ignore it; drag it back onto a slot (or
-        double-click the rail chip) to use it again.</p>
       <div class="timing-live-body" id="timing-live-body">
         <div class="table-card">
           <table class="timing-table">
@@ -40,10 +55,7 @@
             <tbody id="timing-rows"></tbody>
           </table>
         </div>
-        <div class="ignored-rail" id="ignored-rail" aria-label="Ignored times">
-          <div class="ignored-col" data-role="start"><span class="ignored-cap">Ign. start</span></div>
-          <div class="ignored-col" data-role="finish"><span class="ignored-cap">Ign. finish</span></div>
-        </div>
+        {% include "timing/_ignored.html" %}
       </div>
       <p class="timing-empty hint" id="timing-empty" hidden>Waiting for the first start signal…</p>
     </div>
@@ -59,6 +71,7 @@
         pair: "{% url 'timing:pair' %}",
         setTime: "{% url 'timing:set-time' %}",
         setRuntime: "{% url 'timing:set-runtime' %}",
+        inputLock: "{% url 'timing:input-lock' %}",
       };
       window.TIMING_CSRF = "{{ csrf_token }}";
     </script>
