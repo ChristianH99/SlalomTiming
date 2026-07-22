@@ -133,6 +133,55 @@ class ResultColumnSettings(models.Model):
         return row.show_overall if row is not None else True
 
 
+def _logo_upload_to(instance, filename):
+    """Store each competition's logos under media/results_logos/<competition_pk>/."""
+    return f"results_logos/{instance.competition_id}/{filename}"
+
+
+class ResultsPdfLayout(models.Model):
+    """The header/footer layout for a competition's exported results PDFs.
+
+    ``header_html`` / ``footer_html`` hold the editor's limited rich text (only
+    ``<b>``, ``<br>`` and size ``<span class="pdf-sz-...">`` survive sanitising —
+    the footer has no sizes). Both may contain wildcard tokens (``#date``, ``#name``,
+    ``#increment`` …) resolved at export time. ``increment_start_year`` is the year
+    the ``#increment`` counter starts from (competition year − start year + 1). The
+    two optional logos render top-left / top-right on every page."""
+
+    class Orientation(models.TextChoices):
+        PORTRAIT = "portrait", "Portrait"
+        LANDSCAPE = "landscape", "Landscape"
+        AUTO = "auto", "Auto (fit the table)"
+
+    # Default rendered height of each logo, in millimetres.
+    DEFAULT_LOGO_HEIGHT_MM = 18
+
+    competition = models.OneToOneField(
+        "competitions.Competition", on_delete=models.CASCADE, related_name="pdf_layout"
+    )
+    header_html = models.TextField(blank=True, default="")
+    footer_html = models.TextField(blank=True, default="")
+    increment_start_year = models.PositiveIntegerField(null=True, blank=True)
+    orientation = models.CharField(
+        max_length=10, choices=Orientation.choices, default=Orientation.PORTRAIT
+    )
+    image_left = models.ImageField(upload_to=_logo_upload_to, blank=True, null=True)
+    image_right = models.ImageField(upload_to=_logo_upload_to, blank=True, null=True)
+    image_left_height = models.PositiveSmallIntegerField(default=DEFAULT_LOGO_HEIGHT_MM)
+    image_right_height = models.PositiveSmallIntegerField(default=DEFAULT_LOGO_HEIGHT_MM)
+
+    def __str__(self):
+        return f"{self.competition} – results PDF layout"
+
+    @classmethod
+    def for_competition(cls, competition):
+        """The saved layout for a competition, or a transient blank one."""
+        return (
+            cls.objects.filter(competition=competition).first()
+            or cls(competition=competition)
+        )
+
+
 class ManualTieResolution(models.Model):
     """A timekeeper's manual ordering of an otherwise-unbreakable tie group.
 

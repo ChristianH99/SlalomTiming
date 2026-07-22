@@ -5,6 +5,7 @@
   <div class="results-header">
     <h1 class="page-heading">Class {{ cclass.name }}</h1>
     <span class="results-method">{{ scoring_label }}</span>
+    <a class="button button--small results-export" href="{{ export_url }}" target="_blank" rel="noopener">Export PDF</a>
   </div>
   <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }}</p>
 

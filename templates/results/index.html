@@ -2,7 +2,10 @@
 {% block title %}Results – Slalom Timing{% endblock %}
 {% block topbar_title %}Results{% endblock %}
 {% block content %}
-  <h1 class="page-heading">Results</h1>
+  <div class="results-header">
+    <h1 class="page-heading">Results</h1>
+    <a class="button button--small results-export" href="{% url 'results:export-all' %}" target="_blank" rel="noopener">Export all to PDF</a>
+  </div>
   <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }}</p>
 
   {% if overall_groups %}

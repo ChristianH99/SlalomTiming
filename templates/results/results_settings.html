@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Results settings – Slalom Timing{% endblock %}
 {% block topbar_title %}Results settings{% endblock %}
 {% block content %}
@@ -6,7 +7,7 @@
   <p class="hint">Which participant details appear in the results tables for
     <strong>{{ object.name }}</strong>. Rank and bib are always shown.</p>
 
-  <form method="post" class="settings-form" data-unsaved-guard id="results-form">
+  <form method="post" enctype="multipart/form-data" class="settings-form" data-unsaved-guard id="results-form">
     {% csrf_token %}
     <input type="hidden" name="next" value="">
 
@@ -62,10 +63,130 @@
       {% endfor %}
     {% endif %}
 
+    <h2 class="form-section">PDF layout</h2>
+    <div class="settings-section pdf-layout"
+         data-competition-year="{{ object.date|date:'Y' }}"
+         data-sample-url="{{ pdf_sample_url }}">
+      <p class="hint">The header, footer and logos on exported results PDFs (A4). The
+        table itself matches the corresponding results page and always spans the full
+        page width.
+        <a href="{{ pdf_export_all_url }}" target="_blank" rel="noopener">Export all results now</a>.</p>
+
+      {# Synced from the editors on submit / sample export. #}
+      <input type="hidden" name="header_html" id="pdf-header-input">
+      <input type="hidden" name="footer_html" id="pdf-footer-input">
+
+      <div class="pdf-field">
+        <span class="pdf-label">Page orientation</span>
+        <div class="pdf-orientation">
+          {% for o in pdf_orientations %}
+            <label class="pdf-radio">
+              <input type="radio" name="orientation" value="{{ o.value }}" {% if o.checked %}checked{% endif %}>
+              <span>{{ o.label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="pdf-field">
+        <span class="pdf-label">Header text <span class="hint">— centered, top of every page</span></span>
+        <div class="pdf-toolbar" data-editor="pdf-header">
+          <button type="button" class="pdf-tool" data-cmd="bold" title="Bold"><b>B</b></button>
+          {% for s in pdf_sizes %}
+            <button type="button" class="pdf-tool" data-size="{{ s.cls }}" title="{{ s.label }} text">{{ s.label }}</button>
+          {% endfor %}
+        </div>
+        <div class="pdf-editor" id="pdf-header" contenteditable="true"
+             data-target="pdf-header-input"
+             data-placeholder="e.g. #increment. #name">{{ pdf_layout.header_html|safe }}</div>
+      </div>
+
+      <div class="pdf-field">
+        <span class="pdf-label">Footer text <span class="hint">— centered, bottom of every page (no sizes)</span></span>
+        <div class="pdf-toolbar" data-editor="pdf-footer">
+          <button type="button" class="pdf-tool" data-cmd="bold" title="Bold"><b>B</b></button>
+        </div>
+        <div class="pdf-editor" id="pdf-footer" contenteditable="true"
+             data-target="pdf-footer-input"
+             data-placeholder="e.g. Timed with Slalom Timing">{{ pdf_layout.footer_html|safe }}</div>
+      </div>
+
+      <div class="pdf-wildcards">
+        <span class="pdf-label">Wildcards <span class="hint">— click to insert where the cursor is</span></span>
+        <div class="pdf-chips">
+          {% for w in pdf_wildcards %}
+            <button type="button" class="pdf-chip" data-token="{{ w.token }}" title="{{ w.label }}">{{ w.token }}</button>
+          {% endfor %}
+        </div>
+        <ul class="pdf-values">
+          {% for w in pdf_wildcards %}
+            <li>
+              <code>{{ w.token }}</code> <span class="pdf-arrow">→</span>
+              {% if w.token == '#class' %}
+                <em class="pdf-value">the results table on the page</em>
+              {% else %}
+                <span class="pdf-value" data-token="{{ w.token }}">{{ w.value|default:'—' }}</span>
+              {% endif %}
+              <span class="hint pdf-value-label">{{ w.label }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="pdf-field">
+        <label class="pdf-label" for="increment_start_year">Increment start year</label>
+        <p class="hint">The year <code>#increment</code> counts up from — start year 1979
+          makes the 2026 edition <strong>48</strong> (“48. Motorcycle Race”). Leave blank
+          to disable.</p>
+        <input type="number" name="increment_start_year" id="increment_start_year"
+               class="text-input pdf-year" min="1900" max="2999" placeholder="e.g. 1979"
+               value="{{ pdf_layout.increment_start_year|default:'' }}">
+      </div>
+
+      <div class="pdf-field">
+        <span class="pdf-label">Logos <span class="hint">— optional, one top-left and one top-right (PNG/JPG). Height is in millimetres; the width follows automatically (aspect ratio fixed). Default {{ pdf_default_logo_height }} mm.</span></span>
+        <div class="pdf-logo-grid" data-remove-url="{{ pdf_logo_remove_url }}">
+          <div class="pdf-logo" data-side="left">
+            <span class="pdf-logo-title">Top-left</span>
+            <div class="pdf-logo-preview-wrap" {% if not pdf_layout.image_left %}hidden{% endif %}>
+              {% if pdf_layout.image_left %}<img class="pdf-logo-preview" src="{{ pdf_layout.image_left.url }}" alt="Top-left logo">{% endif %}
+              <button type="button" class="pdf-logo-remove" data-side="left" title="Remove this logo">Remove</button>
+            </div>
+            <input type="file" name="image_left" accept="image/*" class="pdf-file">
+            <label class="pdf-height">Height
+              <input type="number" name="image_left_height" min="5" max="60"
+                     value="{{ pdf_layout.image_left_height }}"> mm
+              <span class="hint">(default {{ pdf_default_logo_height }})</span>
+            </label>
+          </div>
+          <div class="pdf-logo" data-side="right">
+            <span class="pdf-logo-title">Top-right</span>
+            <div class="pdf-logo-preview-wrap" {% if not pdf_layout.image_right %}hidden{% endif %}>
+              {% if pdf_layout.image_right %}<img class="pdf-logo-preview" src="{{ pdf_layout.image_right.url }}" alt="Top-right logo">{% endif %}
+              <button type="button" class="pdf-logo-remove" data-side="right" title="Remove this logo">Remove</button>
+            </div>
+            <input type="file" name="image_right" accept="image/*" class="pdf-file">
+            <label class="pdf-height">Height
+              <input type="number" name="image_right_height" min="5" max="60"
+                     value="{{ pdf_layout.image_right_height }}"> mm
+              <span class="hint">(default {{ pdf_default_logo_height }})</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="pdf-sample" data-no-dirty>
+        <button type="button" class="button button--secondary" id="pdf-sample-btn">Export sample PDF</button>
+        <span class="hint">About 1½ pages of dummy results, using the settings above
+          (even before saving) — check the layout and page breaks.</span>
+      </div>
+    </div>
+
     <div class="actions">
       <button class="button" type="submit">Save</button>
     </div>
   </form>
+  <script src="{% static 'js/results_pdf_editor.js' %}"></script>
 
   <script>
     (function () {

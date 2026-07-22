@@ -137,6 +137,11 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
+# Uploaded media (results-PDF header/footer logos). Stored locally; served by
+# Django in this single-process dev/local deployment (see config/urls.py).
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 

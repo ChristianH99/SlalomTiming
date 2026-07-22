@@ -5,6 +5,7 @@
   <div class="results-header">
     <h1 class="page-heading">Overall · {{ scoring_label }}</h1>
     <span class="results-method">{{ results.counted_runs }} Runs</span>
+    <a class="button button--small results-export" href="{{ export_url }}" target="_blank" rel="noopener">Export PDF</a>
   </div>
   <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }} · all classes combined</p>
 
