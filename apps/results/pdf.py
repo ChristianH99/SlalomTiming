@@ -402,15 +402,18 @@ def _draw_page(canv, doc, geom, header_markup, footer_markup, export_dt):
     centred footer text, and the bottom-left export date/time (the page number is
     drawn by NumberedCanvas)."""
     w, h = geom["pagesize"]
-    band_center = h - geom["top_pad"] - geom["band_h"] / 2
+    band_top = h - geom["top_pad"]
+    band_center = band_top - geom["band_h"] / 2
 
     left = geom["left"]
     right = geom["right"]
+    # Logos hang from the top of the header band (top-aligned), whatever their
+    # height, rather than floating centred in it.
     if left:
-        canv.drawImage(left["reader"], _MARGIN_X, band_center - left["h"] / 2,
+        canv.drawImage(left["reader"], _MARGIN_X, band_top - left["h"],
                        width=left["w"], height=left["h"], preserveAspectRatio=True, mask="auto")
     if right:
-        canv.drawImage(right["reader"], w - _MARGIN_X - right["w"], band_center - right["h"] / 2,
+        canv.drawImage(right["reader"], w - _MARGIN_X - right["w"], band_top - right["h"],
                        width=right["w"], height=right["h"], preserveAspectRatio=True, mask="auto")
 
     if header_markup:
