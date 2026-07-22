@@ -1,6 +1,8 @@
+import asyncio
+
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
-from .services import LIVE_GROUP, TIMING_GROUP
+from .services import LIVE_GROUP, TIMING_GROUP, register_server_loop
 
 
 class TimingConsumer(AsyncJsonWebsocketConsumer):
@@ -20,6 +22,9 @@ class TimingLiveConsumer(AsyncJsonWebsocketConsumer):
     or run assignments change; the client then re-fetches the arrangement."""
 
     async def connect(self):
+        # Record the server's event loop so background threads (the CP540 reader)
+        # can hand their refresh nudges to the loop the channel layer lives on.
+        register_server_loop(asyncio.get_running_loop())
         await self.channel_layer.group_add(LIVE_GROUP, self.channel_name)
         await self.accept()
 

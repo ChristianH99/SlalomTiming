@@ -8,7 +8,7 @@ class TimingSettings(models.Model):
     reach it. A single row — there is one timing rig per installation."""
 
     class Device(models.TextChoices):
-        TP540 = "tp540", "Tag Heuer TP540"
+        CP540 = "cp540", "Tag Heuer CP540"
         SIMULATOR = "simulator", "Simulator"
 
     device = models.CharField(
@@ -25,10 +25,16 @@ class TimingSettings(models.Model):
         default=2, validators=[MaxValueValidator(9)],
         help_text="Device channel that carries the finish signal (0–9).",
     )
-    # Only meaningful for a networked device (the TP540); blank for the simulator.
+    # Where to reach the CP540. Kept even while another device is selected, so the
+    # address doesn't have to be re-typed when switching back (default 192.168.1.50).
     ip_address = models.GenericIPAddressField(
-        null=True, blank=True,
-        help_text="Network address of the Tag Heuer TP540.",
+        null=True, blank=True, default="192.168.1.50",
+        help_text="Network address of the Tag Heuer CP540.",
+    )
+    # TCP port the CP540 streams its time lines on (default 7000).
+    port = models.PositiveIntegerField(
+        null=True, blank=True, default=7000, validators=[MaxValueValidator(65535)],
+        help_text="TCP port of the Tag Heuer CP540.",
     )
 
     class Meta:

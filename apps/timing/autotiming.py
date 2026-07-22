@@ -72,7 +72,8 @@ def ordered_slots(competition):
 
 
 def started_runs(competition):
-    """Runs that have a start signal, in the order they actually started."""
+    """Runs that have a start signal, in the order they actually started — by
+    *arrival* (received_at/id), not the device's clock (see arrangement.py)."""
     runs = [
         run
         for run in TimedRun.objects.filter(competition=competition)
@@ -80,19 +81,20 @@ def started_runs(competition):
         .prefetch_related("marshal_penalties")
         if run.start_signal_id
     ]
-    runs.sort(key=lambda run: (run.start_signal.device_time, run.start_signal.received_at, run.id))
+    runs.sort(key=lambda run: (run.start_signal.received_at, run.start_signal.id))
     return runs
 
 
 def _signal_activity(run):
-    """The run's most recent signal time (start or finish), or None. Used to pick
-    the current competitor by *latest activity* rather than start order, so a
-    finish arriving for an earlier starter still surfaces that run."""
+    """The run's most recent signal *arrival* (start or finish), or None. Used to
+    pick the current competitor by latest activity rather than start order, so a
+    finish arriving for an earlier starter still surfaces that run. Arrival, not
+    the device clock, so a device whose clock isn't wall-clock still orders right."""
     times = []
     if run.start_signal_id:
-        times.append((run.start_signal.device_time, run.start_signal.received_at))
+        times.append((run.start_signal.received_at, run.start_signal.id))
     if run.finish_signal_id:
-        times.append((run.finish_signal.device_time, run.finish_signal.received_at))
+        times.append((run.finish_signal.received_at, run.finish_signal.id))
     return max(times) if times else None
 
 
@@ -161,7 +163,7 @@ def bind_runs(competition):
     placed_ids = {run.id for run in aligned if run is not None}
     auto_started = sorted(
         (r for r in all_runs if r.start_signal_id and r.id not in placed_ids),
-        key=lambda r: (r.start_signal.device_time, r.start_signal.received_at, r.id),
+        key=lambda r: (r.start_signal.received_at, r.start_signal.id),
     )
     pool = iter(auto_started)
     for i in range(len(slots)):

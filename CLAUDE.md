@@ -114,8 +114,9 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                         surfaced on the live Manual timing view (`timing/manual/`, name `manual`) and the
                         Auto timing view — which share the same runs (see the sync below). The old
                         TimingEvent + connector-loop dashboard is legacy and slated to be redone.
-  models.py              TimingSettings (singleton: device [Tag Heuer TP540 / Simulator],
-                         single-digit start/finish channel, IP), TimingSignal (the raw device
+  models.py              TimingSettings (singleton: device [Tag Heuer CP540 / Simulator],
+                         single-digit start/finish channel, IP + TCP port for the CP540),
+                         TimingSignal (the raw device
                          inbox — running number, port, is_manual, device_time; stamped with the
                          active competition; `ignored`; `entered` == operator typed the time by
                          hand, device failed — distinct from is_manual), TimedRun (one run: a
@@ -156,7 +157,14 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          current competitor + the post's detail.
   arrangement.py         Causal pairing of signals into runs: a finish joins the oldest open
                          start that began before it; a start never adopts an earlier orphan
-                         finish. A start first fills the oldest empty *placeholder* row (one
+                         finish. Ordering (which run is newest, which open start is oldest) is by
+                         *arrival* — received_at/id — NOT the device's own clock: a real device
+                         runs on its internal clock (often not wall-clock, e.g. 00:40:xx), so
+                         device_time would sort fresh times below older data. device_time is used
+                         only to compute a run's elapsed (finish − start, a correct delta whatever
+                         the clock reads) and to reject a backwards pairing. Same rule in
+                         autotiming (started_runs/_signal_activity/bind_runs) and results.
+                         A start first fills the oldest empty *placeholder* row (one
                          pre-entered by the operator, no times *and no typed run time* yet) before
                          opening a new run. ignore keeps a row that still carries a bib/run/typed
                          time (placeholder) rather than deleting it. assign() (drag a time onto a
@@ -177,7 +185,26 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          percent, the competitor on course now (bib/name/class/run + times and
                          penalties once finished), and headline counts (participants, classes
                          done, runs remaining, non-starters, marshal posts).
-  forms.py               TimingSettingsForm (IP required only for the TP540).
+  forms.py               TimingSettingsForm (IP + TCP port required only for the CP540, but
+                         kept — not cleared — when another device is selected; defaults
+                         192.168.1.50:7000).
+  ingest.py              record_signal(): the one door every raw signal comes through — the
+                         HTTP endpoint and the CP540 reader thread both call it. Persists the
+                         TimingSignal *first* (independently of any browser — a closed tab loses
+                         nothing; a reopened view reads it back), then folds it into the
+                         arrangement, syncs bindings, broadcasts. A time is never lost: a locked DB
+                         is waited out (WAL + busy timeout, apps.py) and the insert retried; if it
+                         still fails the signal is appended to a durable recovery file
+                         (timing_unrecorded.log) and record_signal returns None. Placement is a
+                         second retried step — if it loses a lock race the signal is already saved
+                         and gets re-placed by arrangement.reconcile() on the next signal.
+  cp540.py               Tag Heuer CP540 driver: a daemon reader thread (module-level `reader`)
+                         holding a plain-TCP line socket, started/stopped from the Settings page.
+                         Parses only `TN` lines (running number, input 1–4 or M1–M4 → port +
+                         is_manual, and the mm:ss.fffff time; the net-time form's extra leading
+                         column is handled by locating the input/number relative to the time
+                         token) into record_signal(); every wire line is kept in a ring buffer the
+                         Settings page polls (timing:cp540-status) to show a live debug log.
   views.py               DashboardView (organiser overview) + dashboard-state JSON endpoint;
                          Settings page; standalone Simulator; live Manual timing view + a JSON
                          arrangement endpoint and mutate endpoints (run-update by run id — marks
@@ -187,7 +214,10 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          [type a run time]; the slot_key path creates the run via _run_from_slot).
                          serialize_arrangement()/timing_signal both run sync_bindings so the two
                          views stay in step. timing_signal ingests device posts (csrf-exempt, since a
-                         real device can't send a token) and nudges live views to refresh.
+                         real device can't send a token) and nudges live views to refresh — but it is
+                         the *simulator's* door and is refused (409) unless the simulator is the
+                         selected device, so only one source ever writes at a time (the CP540 reader
+                         is likewise stopped when any other device is selected).
                          AutoTimingView + auto-state/reorder/reset-order endpoints; auto-adjust
                          (timekeeper +/- to a run's totals); marshal-state (the current competitor
                          for a post) + marshal-submit (a post's penalty + per-task detail, refused
@@ -294,8 +324,14 @@ templates/results/       index.html (class + Overall cards), results_class.html,
 
 ### Timing UI (under the sidebar "Timing" menu)
 
-- **Settings** (`timing/settings/`) — pick the device and channels. "Start" opens the Simulator
-  in a new tab (Simulator) or connects to the device (TP540; the driver is a stub for now).
+- **Settings** (`timing/settings/`) — device + start/finish channel (Save is right there, next to
+  the channels). Selecting the CP540 reveals a "CP540 connection" block (IP + TCP port, defaults
+  192.168.1.50:7000, kept across device switches) with Connect/Disconnect: Connect starts the
+  CP540 reader thread (apps/timing/cp540.py), Disconnect stops it, and each button greys out when it
+  doesn't apply (already connected / already idle). IP/port are read-only while connected. Selecting
+  any device other than the CP540 stops the reader (only one source writes at a time). "Start
+  simulator" opens the Simulator in a new tab. A live status pill + raw-line log below the form
+  (polling timing:cp540-status) shows the device stream verbatim for debugging.
 - **Simulator** (`timing/simulator/`) — a standalone new-tab device emulator: a running clock, an
   auto-incrementing running number (with reset), a 2×4 pad (ports 1–4 light barrier, M1–M4 manual
   → same port, is_manual), and an on-page log. Each press POSTs a signal to `timing:signal`.
@@ -355,7 +391,13 @@ templates/results/       index.html (class + Overall cards), results_class.html,
 
 ### Adding a real device connector
 
-Implement `TimingDeviceConnector` (apps/timing/connectors/base.py) — `connect()`, `disconnect()`,
+The **current** path (TimingSignal → TimedRun) has one real driver, the CP540 (apps/timing/cp540.py):
+a reader thread that parses device lines and calls `ingest.record_signal()`. A new real device that
+feeds the current timing views is the same shape — read/parse its stream, hand each signal to
+`record_signal(running_number, port, is_manual, device_time)` — not the `TimingDeviceConnector` ABC.
+
+The ABC below is the **legacy** connector-loop path (old `TimingEvent` feed), kept for reference:
+implement `TimingDeviceConnector` (apps/timing/connectors/base.py) — `connect()`, `disconnect()`,
 `pulses()` (async generator yielding `TimingPulse`). Point `TIMING_CONNECTOR` in `config/settings.py` at
 the new class's dotted path. Nothing else changes — ingestion, persistence, and the dashboard are written
 against the abstract interface only.
@@ -379,7 +421,13 @@ legacy `run_timing_connector` loop is only needed to feed the *old* `TimingEvent
 ## Notes
 
 - `CHANNEL_LAYERS` uses `InMemoryChannelLayer` — fine for a single local process. Switch to
-  `channels_redis` only if this ever needs to run multi-process/multi-host.
+  `channels_redis` only if this ever needs to run multi-process/multi-host. Its queues are bound to
+  the server's event loop, so a background thread (the CP540 reader) can't `group_send` directly — a
+  live consumer records the loop and `services.notify_live` schedules nudges onto it.
+- SQLite runs in **WAL mode** with a 30 s busy timeout (`OPTIONS['timeout']` in settings +
+  per-connection PRAGMAs in `apps/timing/apps.py`), so the CP540 reader thread and web requests
+  writing at once don't collide into "database is locked" and drop a time. A time that still can't be
+  written lands in `timing_unrecorded.log` (see ingest.py) — never silently lost.
 - The Dashboard at `/` is the **organiser overview** (apps/timing/dashboard.py + dashboard_overview.js):
   a read-only live status view derived from the same start order and runs the timing views use.
 - The three `TimingEvent` bullets below describe the **legacy** connector-loop path (the old

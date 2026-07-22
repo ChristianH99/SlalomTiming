@@ -7,6 +7,13 @@ before it — those orphan finishes keep their own lines. The operator can overr
 a pairing by dragging a time onto a run's slot (``assign``), which is rejected if
 it would put a start after its finish.
 
+Ordering (which run is "newest", which open start is "oldest") is by *arrival* —
+``received_at``/``id`` — not by the device's own clock. A real timing device runs
+on its internal clock (often not wall-clock: e.g. 00:40:xx), so ordering by that
+would sort fresh times below older data. ``device_time`` is used only to measure a
+single run's elapsed time (finish − start), which is a correct delta whatever the
+device clock reads, and to reject a pairing that would run backwards.
+
 Each signal is referenced by at most one run (OneToOne on both slots), so a time
 is never used twice. Ignoring a signal removes it from its run.
 """
@@ -46,6 +53,28 @@ def ingest(signal, settings):
             TimedRun.objects.create(competition=signal.competition, finish_signal=signal)
 
 
+def reconcile(competition, settings):
+    """Place any saved signal that isn't in a run yet — a self-heal for the rare
+    case where a signal's own INSERT succeeded but placing it into a run lost a
+    DB-lock race. Ignored signals (deliberately on the rail) are left alone.
+    Idempotent: a signal already in a run is skipped, so this is safe to call
+    often."""
+    placed = set(
+        TimedRun.objects.filter(competition=competition, start_signal__isnull=False)
+        .values_list("start_signal_id", flat=True)
+    ) | set(
+        TimedRun.objects.filter(competition=competition, finish_signal__isnull=False)
+        .values_list("finish_signal_id", flat=True)
+    )
+    orphans = (
+        TimingSignal.objects.filter(competition=competition, ignored=False)
+        .exclude(id__in=placed)
+        .order_by("received_at", "id")
+    )
+    for signal in orphans:
+        ingest(signal, settings)
+
+
 def effective_role(signal, settings):
     """The role a signal plays. With distinct start/finish channels it is fixed by
     port. With a single light barrier (start_channel == finish_channel) the one
@@ -64,8 +93,9 @@ def effective_role(signal, settings):
 
 
 def _oldest_open_run(finish_signal):
-    """The open run (has a start, no finish) whose start is earliest and no later
-    than this finish — the one this finish closes."""
+    """The open run (has a start, no finish) this finish closes: the earliest to
+    have *arrived* whose measured start time is no later than the finish's (so the
+    run time can't be negative)."""
     candidates = [
         run
         for run in TimedRun.objects.filter(
@@ -75,7 +105,7 @@ def _oldest_open_run(finish_signal):
         ).select_related("start_signal")
         if run.start_signal.device_time <= finish_signal.device_time
     ]
-    candidates.sort(key=lambda run: (run.start_signal.device_time, run.start_signal_id))
+    candidates.sort(key=lambda run: (run.start_signal.received_at, run.start_signal_id))
     return candidates[0] if candidates else None
 
 
@@ -155,9 +185,9 @@ def assign(signal, target_run, slot):
 
 
 def rows(competition):
-    """Every run for the competition, newest first (by the run's earliest time),
-    so fresh times appear at the top without scrolling. Placeholders (no times
-    yet) sort above all timed rows, newest-added first."""
+    """Every run for the competition, newest first (by arrival of its anchor
+    signal), so fresh times appear at the top without scrolling. Placeholders (no
+    times yet) sort above all timed rows, newest-added first."""
     runs = list(
         TimedRun.objects.filter(competition=competition).select_related(
             "start_signal", "finish_signal", "competition_class"
@@ -172,5 +202,5 @@ def _sort_key(run):
     if signal is None:
         # Placeholder: bucket 1 (above timed rows), newest-added (created_at) first.
         return (1, run.created_at, run.id)
-    # Timed: bucket 0, newest time first.
-    return (0, signal.device_time, signal.received_at, signal.id)
+    # Timed: bucket 0, most recently *arrived* first (not by the device clock).
+    return (0, signal.received_at, signal.id)

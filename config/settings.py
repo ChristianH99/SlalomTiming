@@ -96,6 +96,11 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        # A blocked writer (the CP540 reader vs. a web request) waits for the lock
+        # up to this long instead of failing immediately with "database is locked",
+        # so an incoming timing signal isn't dropped under contention. WAL mode
+        # (set per-connection in apps/timing/apps.py) lets readers not block it.
+        'OPTIONS': {'timeout': 30},
     }
 }
 

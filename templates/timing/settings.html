@@ -29,25 +29,50 @@
         </label>
       </div>
 
-      {# Networked-device only: shown when the TP540 is selected. #}
-      <div class="settings-field settings-field--wide" data-device-group="tp540" hidden>
-        <span class="settings-label">{{ form.ip_address.label }}</span>
-        <span class="settings-control">{{ form.ip_address }}</span>
-        <span class="field-error">{{ form.ip_address.errors|join:" " }}</span>
+      {# Save persists the device and channel mapping. IP/port are saved with them,
+         but the CP540 is actually reached with Connect below. #}
+      <div class="actions actions--start">
+        <button class="button button--secondary" type="submit" name="action" value="save">Save</button>
+        <a class="button" href="{% url 'timing:simulator' %}" target="_blank" rel="noopener"
+           data-start="simulator" hidden>Start simulator ↗</a>
       </div>
     </div>
 
-    <div class="actions">
-      <button class="button button--secondary" type="submit" name="action" value="save">Save</button>
+    {# Networked-device only: shown when the CP540 is selected. #}
+    <div class="settings-section" data-device-group="cp540" hidden>
+      <h2 class="settings-subheading">CP540 connection</h2>
+      <div class="settings-row">
+        <label class="settings-field" for="{{ form.ip_address.id_for_label }}">
+          <span class="settings-label">{{ form.ip_address.label }}</span>
+          <span class="settings-control">{{ form.ip_address }}</span>
+          <span class="field-error">{{ form.ip_address.errors|join:" " }}</span>
+        </label>
+        <label class="settings-field" for="{{ form.port.id_for_label }}">
+          <span class="settings-label">{{ form.port.label }}</span>
+          <span class="settings-control">{{ form.port }}</span>
+          <span class="field-error">{{ form.port.errors|join:" " }}</span>
+        </label>
+      </div>
+      <p class="hint" id="cp540-locked-hint" hidden>Disconnect to change the address or port.</p>
 
-      {% comment %}The Start control depends on the device: the simulator opens in
-      a new tab; a real device initialises its connection (not built yet).{% endcomment %}
-      <a class="button" href="{% url 'timing:simulator' %}" target="_blank" rel="noopener"
-         data-start="simulator" hidden>Start simulator ↗</a>
-      <button class="button" type="submit" name="action" value="connect"
-              data-start="tp540" hidden>Start</button>
+      <div class="actions actions--start">
+        <button class="button" type="submit" name="action" value="connect" id="cp540-connect">Connect</button>
+        <button class="button button--secondary" type="submit" name="action" value="disconnect" id="cp540-disconnect">Disconnect</button>
+      </div>
     </div>
   </form>
+
+  {# CP540 live link status + raw stream, for debugging the connection. #}
+  <section class="settings-section device-log" data-device-group="cp540" hidden>
+    <div class="device-log-head">
+      <h2 class="settings-subheading">Device stream</h2>
+      <span class="device-status" id="cp540-status" data-state="idle">Idle</span>
+    </div>
+    <p class="hint">Every line the CP540 sends is shown here. Only <code>TN</code> lines (a running
+      number, an input 1–4 or M1–M4, and a time) become timing signals — those are highlighted.</p>
+    <ul class="device-log-lines" id="cp540-log" aria-live="polite"></ul>
+    <p class="device-log-empty" id="cp540-log-empty">No lines received yet.</p>
+  </section>
 
   <script>
     (function () {
@@ -60,8 +85,72 @@
         const device = select.value;
         groups.forEach((el) => { el.hidden = el.dataset.deviceGroup !== device; });
         starts.forEach((el) => { el.hidden = el.dataset.start !== device; });
+        pollIfCp540();
       }
       select.addEventListener("change", apply);
+
+      // ----- CP540 live status/log poll -----
+      const STATUS_URL = "{% url 'timing:cp540-status' %}";
+      const statusEl = document.getElementById("cp540-status");
+      const logEl = document.getElementById("cp540-log");
+      const logEmptyEl = document.getElementById("cp540-log-empty");
+      const connectBtn = document.getElementById("cp540-connect");
+      const disconnectBtn = document.getElementById("cp540-disconnect");
+      const ipInput = document.getElementById("{{ form.ip_address.id_for_label }}");
+      const portInput = document.getElementById("{{ form.port.id_for_label }}");
+      const lockedHint = document.getElementById("cp540-locked-hint");
+      const STATUS_TEXT = {
+        idle: "Idle", connecting: "Connecting…", connected: "Connected",
+        error: "Connection error", stopped: "Disconnected",
+      };
+      let timer = null;
+
+      function applyLink(running) {
+        // Connect makes no sense while connected; Disconnect none while idle.
+        if (connectBtn) connectBtn.disabled = running;
+        if (disconnectBtn) disconnectBtn.disabled = !running;
+        // The address/port can't change on a live connection.
+        [ipInput, portInput].forEach((el) => {
+          if (el) el.readOnly = running;
+        });
+        if (lockedHint) lockedHint.hidden = !running;
+      }
+
+      async function refresh() {
+        try {
+          const res = await fetch(STATUS_URL, { headers: { "Accept": "application/json" } });
+          const data = await res.json();
+          const state = data.status || "idle";
+          statusEl.dataset.state = data.error ? "error" : state;
+          statusEl.textContent = (STATUS_TEXT[state] || state)
+            + (data.error ? ` — ${data.error}` : "")
+            + (data.running && data.signals ? ` · ${data.signals} signal${data.signals === 1 ? "" : "s"}` : "");
+          applyLink(!!data.running);
+          renderLog(data.log || []);
+        } catch (err) { /* transient; try again next tick */ }
+      }
+
+      function renderLog(lines) {
+        logEmptyEl.hidden = lines.length > 0;
+        logEl.replaceChildren(...lines.map((line) => {
+          const li = document.createElement("li");
+          li.className = "device-log-line device-log-line--" + (line.kind || "other");
+          li.textContent = line.text || "";
+          return li;
+        }));
+      }
+
+      function pollIfCp540() {
+        const on = select.value === "cp540";
+        if (on && timer === null) {
+          refresh();
+          timer = setInterval(refresh, 1000);
+        } else if (!on && timer !== null) {
+          clearInterval(timer);
+          timer = null;
+        }
+      }
+
       apply();
     })();
   </script>

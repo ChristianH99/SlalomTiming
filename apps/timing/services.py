@@ -1,6 +1,7 @@
+import asyncio
 import logging
 
-from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync, sync_to_async
 from channels.layers import get_channel_layer
 
 from apps.competitions.models import Competition
@@ -14,6 +15,36 @@ logger = logging.getLogger(__name__)
 TIMING_GROUP = "timing_updates"
 # Live timing view: a nudge channel telling open views to re-fetch the arrangement.
 LIVE_GROUP = "timing_live"
+
+# The event loop the ASGI server (and thus the channel layer) runs on. The
+# in-memory channel layer's queues are bound to it, so a nudge raised on any
+# other loop — e.g. the CP540 reader thread's — never reaches open consumers.
+# A live consumer records the loop when it connects; notify_live() then hands
+# background-thread nudges to that loop via run_coroutine_threadsafe.
+_server_loop = None
+
+
+def register_server_loop(loop):
+    global _server_loop
+    _server_loop = loop
+
+
+def notify_live():
+    """Nudge every open live-timing view to re-fetch — safe to call from a
+    request handler *or* a background thread (the CP540 reader)."""
+    layer = get_channel_layer()
+    if layer is None:
+        return
+    message = {"type": "timing.refresh"}
+    loop = _server_loop
+    if loop is not None and loop.is_running():
+        # Deliver on the loop the channel layer lives on, whichever thread we're
+        # called from. We don't wait on the result (would deadlock on-loop).
+        asyncio.run_coroutine_threadsafe(layer.group_send(LIVE_GROUP, message), loop)
+    else:
+        # No consumer has connected yet (nothing to notify), or no server loop —
+        # fall back to the in-request path.
+        async_to_sync(layer.group_send)(LIVE_GROUP, message)
 
 
 @sync_to_async

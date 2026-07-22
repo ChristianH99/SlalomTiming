@@ -440,6 +440,14 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(232,73,29,0.3);
 }
+.button:disabled,
+.button[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+  pointer-events: none;
+}
 
 .button--secondary {
   background: transparent;
@@ -1061,6 +1069,70 @@ body.modal-open { overflow: hidden; }
 }
 /* Penalties off: the amounts stay readable but clearly don't apply. */
 .settings-row--off { opacity: 0.45; }
+
+/* CP540 device stream: a live status pill + a scrolling raw-line log for
+   debugging the connection on the Timing settings page. */
+/* A live connection locks the address/port; show them read-only rather than
+   editable so a value can't be typed over an active link. */
+.settings-control input[readonly] {
+  background: var(--border-light);
+  color: var(--text-mid);
+  cursor: not-allowed;
+}
+.actions--start { justify-content: flex-start; }
+
+.device-log { margin-top: 1.75rem; }
+.device-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.settings-subheading {
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+  font-size: 1rem;
+  color: var(--text-dark);
+}
+.device-status {
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--border-light);
+  color: var(--text-mid);
+  white-space: nowrap;
+}
+.device-status[data-state="connecting"] { background: var(--frost-bg); color: var(--glacier); }
+.device-status[data-state="connected"] { background: #E7F6EC; color: #1E8E4A; }
+.device-status[data-state="error"] { background: var(--flame-bg); color: var(--flame-hover); }
+
+.device-log-lines {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0.4rem 0;
+  max-height: 18rem;
+  overflow-y: auto;
+  background: var(--snow);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+}
+.device-log-line {
+  padding: 0.2rem 0.85rem;
+  border-left: 3px solid transparent;
+  white-space: pre;            /* keep the device's column spacing */
+  overflow-x: auto;
+  color: var(--text-mid);
+}
+.device-log-line--signal { border-left-color: var(--glacier); color: var(--text-dark); }
+.device-log-line--status { border-left-color: #1E8E4A; }
+.device-log-line--error { border-left-color: var(--flame); color: var(--flame-hover); }
+.device-log-empty { color: var(--text-light); font-size: 0.88rem; font-style: italic; margin: 0.75rem 0 0; }
 
 .settings-field {
   display: flex;

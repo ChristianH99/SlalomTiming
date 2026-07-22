@@ -181,20 +181,76 @@ def test_settings_page_saves_simulator(client):
     assert settings.ip_address is None
 
 
-def test_settings_requires_ip_for_tp540(client):
+def test_settings_requires_ip_and_port_for_cp540(client):
     response = client.post(reverse("timing:settings"), {
-        "device": "tp540", "start_channel": "1", "finish_channel": "2", "ip_address": "",
+        "device": "cp540", "start_channel": "1", "finish_channel": "2", "ip_address": "", "port": "",
     })
     assert response.status_code == 200
     assert "ip_address" in response.context["form"].errors
+    assert "port" in response.context["form"].errors
 
 
-def test_settings_clears_ip_when_not_tp540(client):
-    TimingSettings.objects.create(device="tp540", ip_address="192.168.0.9")
+def test_settings_keeps_ip_and_port_when_not_cp540(client):
+    # The address/port survive a switch away from the CP540, so they don't have to
+    # be re-typed on switching back.
+    TimingSettings.objects.create(device="cp540", ip_address="192.168.0.9", port=4001)
     client.post(reverse("timing:settings"), {
-        "device": "simulator", "start_channel": "1", "finish_channel": "2", "ip_address": "192.168.0.9",
+        "device": "simulator", "start_channel": "1", "finish_channel": "2",
+        "ip_address": "192.168.0.9", "port": "4001",
     })
-    assert TimingSettings.load().ip_address is None
+    settings = TimingSettings.load()
+    assert settings.ip_address == "192.168.0.9"
+    assert settings.port == 4001
+
+
+# ----- CP540 line parsing -----
+
+def test_cp540_parses_plain_tn_line():
+    from . import cp540
+    assert cp540.parse_tn("TN         1 M1     1:59.48100     0") == (
+        1, 1, True, datetime.time(0, 1, 59, 481000)
+    )
+    assert cp540.parse_tn("TN         2  1     2:16.39900     0") == (
+        2, 1, False, datetime.time(0, 2, 16, 399000)
+    )
+    assert cp540.parse_tn("TN         1 M4     2:21.55800     0") == (
+        1, 4, True, datetime.time(0, 2, 21, 558000)
+    )
+
+
+def test_cp540_parses_net_time_tn_line_with_extra_column():
+    from . import cp540
+    # Net-time mode prepends a column; the running number is still the one just
+    # before the input, and the input just before the time.
+    assert cp540.parse_tn("TN    1    1 M1     3:32.93800     0") == (
+        1, 1, True, datetime.time(0, 3, 32, 938000)
+    )
+    assert cp540.parse_tn("TN    3    3  1     3:44.84800     0") == (
+        3, 1, False, datetime.time(0, 3, 44, 848000)
+    )
+
+
+def test_cp540_parses_full_clock_tn_line():
+    from . import cp540
+    # The device normally sends a full hh:mm:ss.fffff time of day.
+    assert cp540.parse_tn("TN         1 M1     00:40:12.34500     0") == (
+        1, 1, True, datetime.time(0, 40, 12, 345000)
+    )
+    assert cp540.parse_tn("TN    2    2  4     01:02:03.10000     0") == (
+        2, 4, False, datetime.time(1, 2, 3, 100000)
+    )
+
+
+def test_cp540_ignores_non_tn_lines():
+    from . import cp540
+    for line in ("OP 01  00 PTB SEQUENTIAL 1-4", "CL 01", "RR    1    1           2.55000", ""):
+        assert cp540.parse_tn(line) is None
+
+
+def test_cp540_time_normalises_minutes_over_an_hour():
+    from . import cp540
+    # 75 minutes rolls into the hour field rather than staying an illegal minute.
+    assert cp540.parse_time("75:30.50000") == datetime.time(1, 15, 30, 500000)
 
 
 def test_channel_rejects_two_digits(client):
@@ -248,6 +304,47 @@ def test_signal_endpoint_rejects_bad_input(client, payload):
     assert response.status_code == 400
     assert response.json()["ok"] is False
     assert not TimingSignal.objects.exists()
+
+
+def test_signal_endpoint_refused_when_device_is_cp540(client):
+    # Only one source writes at a time: a stray simulator tab can't inject times
+    # while the CP540 is the selected device.
+    TimingSettings.objects.create(device="cp540", ip_address="1.2.3.4", port=7000)
+    response = _post_signal(client, running_number=1, port=1, is_manual=False, time="10:00:00.000")
+    assert response.status_code == 409 and response.json()["ok"] is False
+    assert not TimingSignal.objects.exists()
+
+
+def test_reconcile_places_saved_but_unplaced_signals():
+    # A time persisted but never placed into a run (a lost placement race) is
+    # self-healed by reconcile, so it is never left invisible.
+    comp = make_active_competition()
+    sig = TimingSignal.objects.create(
+        competition=comp, running_number=1, port=1, device_time=_t("10:00:00.000")
+    )
+    assert not TimedRun.objects.filter(start_signal=sig).exists()
+    arrangement.reconcile(comp, TimingSettings.load())
+    assert TimedRun.objects.filter(start_signal=sig).exists()
+
+
+def test_record_signal_captures_to_recovery_file_when_db_locked(tmp_path, monkeypatch):
+    from django.db import OperationalError
+
+    from apps.timing import ingest
+
+    make_active_competition()
+    monkeypatch.setattr(ingest, "UNRECORDED_LOG", tmp_path / "unrecorded.log")
+    monkeypatch.setattr(ingest.time, "sleep", lambda *a, **k: None)  # no real waiting
+
+    def locked(*args, **kwargs):
+        raise OperationalError("database is locked")
+
+    monkeypatch.setattr(ingest.TimingSignal.objects, "create", locked)
+
+    result = ingest.record_signal(3, 1, True, _t("10:00:00.000"), source="cp540")
+    assert result is None  # DB write failed…
+    captured = (tmp_path / "unrecorded.log").read_text().strip()
+    assert '"running_number": 3' in captured and '"source": "cp540"' in captured  # …but not lost
 
 
 # ----- live timing view: calc, causal pairing, endpoints -----
@@ -321,6 +418,18 @@ def test_start_does_not_adopt_earlier_orphan_finish():
     rows = serialize_arrangement(comp)["rows"]
     assert rows[0]["start"]["time"] == "10:00:05.000" and rows[0]["finish"] is None
     assert rows[1]["start"] is None and rows[1]["finish"]["time"] == "10:00:00.000"
+
+
+def test_rows_order_by_arrival_not_the_device_clock():
+    # A real device runs on its own clock (often not wall-clock). A freshly
+    # arrived start whose device time is *earlier* than existing data must still
+    # appear on top — ordering is by arrival, not the device clock.
+    comp = make_active_competition()
+    signal_in(comp, 1, "14:00:00.000", running=1)   # older data, later clock
+    signal_in(comp, 1, "00:40:00.000", running=2)   # newer arrival, earlier clock
+    rows = serialize_arrangement(comp)["rows"]
+    assert rows[0]["start"]["time"] == "00:40:00.000"
+    assert rows[1]["start"]["time"] == "14:00:00.000"
 
 
 def test_ignore_removes_time_from_its_run(client):

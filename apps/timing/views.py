@@ -2,8 +2,6 @@ import datetime
 import json
 from collections import Counter
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.contrib import messages
 from django.http import JsonResponse
 from django.urls import reverse_lazy
@@ -15,17 +13,17 @@ from django.views.generic import TemplateView, UpdateView
 from apps.competitions.models import Competition, CompetitionClass
 from apps.participants.models import EventEntry
 
-from . import arrangement, autotiming, calc, dashboard
+from . import arrangement, autotiming, calc, cp540, dashboard
 from .forms import TimingSettingsForm
+from .ingest import record_signal
 from .models import MarshalPenalty, TimedRun, TimingSettings, TimingSignal
-from .services import LIVE_GROUP
+from .services import notify_live
 
 
 def broadcast_live():
-    """Nudge every open live-timing view to re-fetch the arrangement."""
-    layer = get_channel_layer()
-    if layer is not None:
-        async_to_sync(layer.group_send)(LIVE_GROUP, {"type": "timing.refresh"})
+    """Nudge every open live-timing view to re-fetch the arrangement. Works from a
+    request handler or a background thread (see services.notify_live)."""
+    notify_live()
 
 
 class DashboardView(TemplateView):
@@ -57,8 +55,8 @@ def dashboard_state(request):
 
 class TimingSettingsView(UpdateView):
     """The single timing-rig settings row. 'Save' persists the settings; the
-    device-specific 'Start' control (opening the simulator, or connecting to a
-    real device) lives in the template — connecting to hardware isn't built yet."""
+    device-specific 'Start' control opens the simulator, or connects/disconnects
+    the CP540 reader thread (apps/timing/cp540.py)."""
 
     form_class = TimingSettingsForm
     template_name = "timing/settings.html"
@@ -69,14 +67,31 @@ class TimingSettingsView(UpdateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        if self.request.POST.get("action") == "connect":
+        action = self.request.POST.get("action")
+        settings = self.object
+        # Only one source may feed the database at a time: selecting any device
+        # other than the CP540 stops its reader.
+        if settings.device != TimingSettings.Device.CP540:
+            cp540.reader.stop()
+
+        if action == "connect" and settings.device == TimingSettings.Device.CP540:
+            cp540.reader.start(settings.ip_address, settings.port)
             messages.info(
                 self.request,
-                "Settings saved. Connecting to the Tag Heuer TP540 isn’t implemented yet.",
+                f"Connecting to the Tag Heuer CP540 at {settings.ip_address}:{settings.port}…",
             )
+        elif action == "disconnect":
+            cp540.reader.stop()
+            messages.info(self.request, "Disconnected from the timing device.")
         else:
             messages.success(self.request, "Timing settings saved.")
         return response
+
+
+def cp540_status(request):
+    """Live CP540 connection state + recent raw lines, polled by the settings
+    page so the operator can see the device stream and debug the link."""
+    return JsonResponse(cp540.reader.snapshot())
 
 
 class SimulatorView(TemplateView):
@@ -390,7 +405,17 @@ def auto_penalty_adjust(request):
 @require_POST
 def timing_signal(request):
     """Receive one raw timing signal (running number, port, time), record it
-    stamped with the active competition, and place it into the run arrangement."""
+    stamped with the active competition, and place it into the run arrangement.
+
+    This is the simulator's door. Only one source feeds the database at a time, so
+    it is refused unless the simulator is the selected device — otherwise a stray
+    simulator tab left open could inject times while the CP540 is live."""
+    if TimingSettings.load().device != TimingSettings.Device.SIMULATOR:
+        return JsonResponse(
+            {"ok": False, "error": "The timing device isn’t the simulator; these signals are ignored."},
+            status=409,
+        )
+
     try:
         payload = json.loads(request.body or "{}")
     except json.JSONDecodeError:
@@ -409,23 +434,13 @@ def timing_signal(request):
     if device_time is None:
         return JsonResponse({"ok": False, "error": "time must be hh:mm:ss.mmm."}, status=400)
 
-    competition = Competition.get_current()
-    signal = TimingSignal.objects.create(
-        competition=competition,
-        running_number=running_number,
-        port=port,
-        is_manual=bool(payload.get("is_manual")),
-        device_time=device_time,
-        source=str(payload.get("source", "simulator"))[:20],
+    signal = record_signal(
+        running_number, port, bool(payload.get("is_manual")), device_time,
+        source=str(payload.get("source", "simulator")),
     )
-    if competition is not None:
-        arrangement.ingest(signal, TimingSettings.load())
-        # Fold the new time into the start order so both timing views agree on the
-        # run's bib/class/run (and marshal penalties) immediately.
-        autotiming.sync_bindings(competition)
-        broadcast_live()
-
-    return JsonResponse({"ok": True, "id": signal.id})
+    # signal is None when the DB was busy and the time went to the recovery file;
+    # it wasn't lost, so still report success.
+    return JsonResponse({"ok": True, "id": signal.id if signal else None, "captured": signal is None})
 
 
 def _parse_device_time(raw):
