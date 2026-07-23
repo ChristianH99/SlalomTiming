@@ -1,4 +1,5 @@
 from django import forms
+from django.utils.translation import gettext_lazy as _
 
 from .models import TimingSettings
 
@@ -25,7 +26,7 @@ class TimingSettingsForm(forms.ModelForm):
         # kept regardless so they survive a switch away and back.
         if cleaned.get("device") == TimingSettings.Device.CP540:
             if not cleaned.get("ip_address"):
-                self.add_error("ip_address", "Required to reach the Tag Heuer CP540.")
+                self.add_error("ip_address", _("Required to reach the Tag Heuer CP540."))
             if not cleaned.get("port"):
-                self.add_error("port", "Required to reach the Tag Heuer CP540.")
+                self.add_error("port", _("Required to reach the Tag Heuer CP540."))
         return cleaned

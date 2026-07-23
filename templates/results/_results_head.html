@@ -1,10 +1,10 @@
-<tr>
+{% load i18n %}<tr>
   <th class="rt-rank">#</th>
-  <th class="rt-bib">Bib</th>
-  {% if layout.include_class %}<th class="rt-class">Class</th>{% endif %}
+  <th class="rt-bib">{% trans "Bib" %}</th>
+  {% if layout.include_class %}<th class="rt-class">{% trans "Class" %}</th>{% endif %}
   {% if layout.name_keys %}<th>{{ layout.name_header }}</th>{% endif %}
   {% if layout.address_keys %}<th>{{ layout.address_header }}</th>{% endif %}
-  {% if layout.has_vehicle %}<th>Vehicle</th>{% endif %}
+  {% if layout.has_vehicle %}<th>{% trans "Vehicle" %}</th>{% endif %}
   {% if layout.licence_keys %}<th>{{ layout.licence_header }}</th>{% endif %}
   {% for t in layout.training_labels %}<th class="rt-run">{{ t }}</th>{% endfor %}
   {% for c in layout.counted_labels %}<th class="rt-run">{{ c }}</th>{% endfor %}

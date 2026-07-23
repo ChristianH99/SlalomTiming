@@ -156,7 +156,8 @@
       activeIndex = index;
       if (hint && suggestions[index]) {
         hint.hidden = false;
-        hint.textContent = "Press Tab to complete " + localPart() + "@" + suggestions[index];
+        hint.textContent = interpolate(gettext("Press Tab to complete %(email)s"),
+          { email: localPart() + "@" + suggestions[index] }, true);
       }
     }
 
@@ -236,15 +237,21 @@
       const rows = matches
         .map(
           (m) =>
-            `<li>Matches <strong>${escapeHtml(m.name)}</strong>` +
-            (m.club ? ` (${escapeHtml(m.club)})` : "") +
-            ` on ${escapeHtml(m.reason)} — licence ${escapeHtml(m.license_number)}. ` +
-            `<a href="${m.edit_url}">Jump to this participant</a></li>`
+            "<li>" +
+            interpolate(
+              gettext("Matches <strong>%(name)s</strong>%(club)s on %(reason)s — licence %(license)s. <a href=\"%(url)s\">Jump to this participant</a>"),
+              {
+                name: escapeHtml(m.name),
+                club: m.club ? ` (${escapeHtml(m.club)})` : "",
+                reason: escapeHtml(m.reason),
+                license: escapeHtml(m.license_number),
+                url: m.edit_url,
+              }, true) +
+            "</li>"
         )
         .join("");
       box.innerHTML =
-        "<strong>Possible duplicate.</strong> This looks like someone already registered. " +
-        "You can continue anyway, cancel, or open the existing record:" +
+        gettext("<strong>Possible duplicate.</strong> This looks like someone already registered. You can continue anyway, cancel, or open the existing record:") +
         `<ul class="notice-list">${rows}</ul>`;
       box.hidden = false;
     }

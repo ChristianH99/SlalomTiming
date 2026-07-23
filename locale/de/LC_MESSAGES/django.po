@@ -1,0 +1,1788 @@
+# German translation for Slalom Timing.
+# This file is distributed under the same license as the Slalom Timing package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Slalom Timing\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-23 20:57+0200\n"
+"PO-Revision-Date: 2026-07-23 09:20+0200\n"
+"Last-Translator: \n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Dashboard"
+msgstr "Dashboard"
+
+msgid "Competition Setup"
+msgstr "Wettbewerb einrichten"
+
+msgid "Participants"
+msgstr "Teilnehmer"
+
+msgid "Timing"
+msgstr "Zeitmessung"
+
+msgid "Marshal Posts"
+msgstr "Streckenposten"
+
+msgid "Results"
+msgstr "Ergebnisse"
+
+msgid "A role needs a name."
+msgstr "Eine Rolle braucht einen Namen."
+
+#, python-format
+msgid "A role named “%(name)s” already exists."
+msgstr "Eine Rolle mit dem Namen „%(name)s“ existiert bereits."
+
+#, python-format
+msgid "Role “%(name)s” created."
+msgstr "Rolle „%(name)s“ erstellt."
+
+#, python-format
+msgid "Access for “%(name)s” updated."
+msgstr "Zugriff für „%(name)s“ aktualisiert."
+
+#, python-format
+msgid "Role “%(name)s” deleted."
+msgstr "Rolle „%(name)s“ gelöscht."
+
+msgid "A username is required."
+msgstr "Ein Benutzername ist erforderlich."
+
+#, python-format
+msgid "A user named “%(name)s” already exists."
+msgstr "Ein Benutzer mit dem Namen „%(name)s“ existiert bereits."
+
+#, python-format
+msgid "User “%(name)s” created."
+msgstr "Benutzer „%(name)s“ erstellt."
+
+#, python-format
+msgid "Password for “%(name)s” reset."
+msgstr "Passwort für „%(name)s“ zurückgesetzt."
+
+#, python-format
+msgid "Roles for “%(name)s” updated."
+msgstr "Rollen für „%(name)s“ aktualisiert."
+
+msgid "You can’t delete your own account."
+msgstr "Sie können Ihr eigenes Konto nicht löschen."
+
+msgid "Can’t delete the last superuser."
+msgstr "Der letzte Superuser kann nicht gelöscht werden."
+
+#, python-format
+msgid "User “%(name)s” deleted."
+msgstr "Benutzer „%(name)s“ gelöscht."
+
+msgid "Manual"
+msgstr "Manuell"
+
+msgid "Based on age"
+msgstr "Nach Alter"
+
+msgid "Select a type…"
+msgstr "Typ auswählen…"
+
+msgid "Pylon"
+msgstr "Pylone"
+
+msgid "Task"
+msgstr "Aufgabe"
+
+msgid "Stop line"
+msgstr "Stopplinie"
+
+msgid "Max per task"
+msgstr "Max. pro Aufgabe"
+
+msgid "Required when penalties are enabled."
+msgstr "Erforderlich, wenn Strafen aktiviert sind."
+
+msgid "Fastest run time"
+msgstr "Schnellste Laufzeit"
+
+msgid ""
+"Show the penalties screen during timing so penalties can be entered per run."
+msgstr ""
+"Den Strafen-Bildschirm während der Zeitmessung anzeigen, damit Strafen pro "
+"Lauf eingegeben werden können."
+
+msgid "Seconds added per pylon hit."
+msgstr "Sekunden pro Pylonenberührung."
+
+msgid "Seconds added for a failed task."
+msgstr "Sekunden für eine nicht bestandene Aufgabe."
+
+msgid "Seconds added for missing the stop line."
+msgstr "Sekunden für das Verpassen der Stopplinie."
+
+msgid "Upper bound on the seconds a single task can add."
+msgstr "Obergrenze der Sekunden, die eine einzelne Aufgabe hinzufügen kann."
+
+msgid "How equal results are separated."
+msgstr "Wie gleiche Ergebnisse getrennt werden."
+
+msgid "Resolution of the timing device."
+msgstr "Auflösung des Zeitmessgeräts."
+
+msgid "Co-driver"
+msgstr "Beifahrer"
+
+msgid "Vehicle"
+msgstr "Fahrzeug"
+
+msgid "Address"
+msgstr "Adresse"
+
+msgid "Club"
+msgstr "Verein"
+
+msgid "Licence number"
+msgstr "Lizenznummer"
+
+msgid "E-Mail"
+msgstr "E-Mail"
+
+msgid "Phone"
+msgstr "Telefon"
+
+msgid "The competition currently being run."
+msgstr "Der aktuell laufende Wettbewerb."
+
+msgid "How participants are assigned to classes."
+msgstr "Wie Teilnehmer den Klassen zugeordnet werden."
+
+msgid "Manual assignment only: may a participant be in more than one class."
+msgstr ""
+"Nur bei manueller Zuordnung: darf ein Teilnehmer in mehr als einer Klasse "
+"sein."
+
+msgid ""
+"Marshal posts enter penalties for their own area, instead of the timekeeper "
+"entering every penalty."
+msgstr ""
+"Streckenposten geben Strafen für ihren eigenen Bereich ein, statt dass der "
+"Zeitnehmer jede Strafe einträgt."
+
+msgid "Aggregate times"
+msgstr "Zeiten summiert"
+
+msgid "Best run only"
+msgstr "Nur bester Lauf"
+
+msgid "Regularity test"
+msgstr "Gleichmäßigkeitsprüfung"
+
+msgid "Display order in the classes list."
+msgstr "Anzeigereihenfolge in der Klassenliste."
+
+msgid "Starting age, e.g. 6"
+msgstr "Startalter, z. B. 6"
+
+msgid "Ending age, e.g. 7"
+msgstr "Endalter, z. B. 7"
+
+msgid "How this class's counted runs are turned into a result."
+msgstr "Wie die Wertungsläufe dieser Klasse zu einem Ergebnis werden."
+
+msgid ""
+"Manual assignment only: may a participant be entered into this class more "
+"than once."
+msgstr ""
+"Nur bei manueller Zuordnung: darf ein Teilnehmer mehr als einmal in diese "
+"Klasse eingetragen werden."
+
+msgid ""
+"The run this class belongs to. Classes sharing a run_position start "
+"together; runs execute in ascending order. Null when not placed."
+msgstr ""
+"Der Lauf, zu dem diese Klasse gehört. Klassen mit derselben run_position "
+"starten gemeinsam; Läufe werden in aufsteigender Reihenfolge ausgeführt. "
+"Null, wenn nicht zugeordnet."
+
+msgid "1-based post number, in setup order."
+msgstr "1-basierte Postennummer, in Einrichtungsreihenfolge."
+
+msgid "Task numbers this post watches, e.g. “1, 5, 11-15”."
+msgstr "Aufgabennummern, die dieser Posten überwacht, z. B. „1, 5, 11-15“."
+
+msgid ""
+"This post also judges the stop line (at most one post per competition)."
+msgstr ""
+"Dieser Posten bewertet auch die Stopplinie (höchstens ein Posten pro "
+"Wettbewerb)."
+
+#, python-format
+msgid "Removed %(count)s registration(s) that didn't belong to “%(type)s”."
+msgstr "%(count)s Nennung(en) entfernt, die nicht zu „%(type)s“ gehörten."
+
+msgid "General settings saved."
+msgstr "Allgemeine Einstellungen gespeichert."
+
+msgid "Classes saved."
+msgstr "Klassen gespeichert."
+
+msgid "Run order saved."
+msgstr "Laufreihenfolge gespeichert."
+
+msgid "Penalties settings saved."
+msgstr "Strafen-Einstellungen gespeichert."
+
+msgid "Some task lists couldn't be read — fix them and save again."
+msgstr ""
+"Einige Aufgabenlisten konnten nicht gelesen werden — korrigieren Sie sie und"
+" speichern Sie erneut."
+
+#, python-format
+msgid "Settings for “%(name)s” saved."
+msgstr "Einstellungen für „%(name)s“ gespeichert."
+
+msgid "That type is still in use and can't be deleted."
+msgstr "Dieser Typ wird noch verwendet und kann nicht gelöscht werden."
+
+#, python-format
+msgid "“%(name)s” can’t be added more than once."
+msgstr "„%(name)s“ kann nicht mehr als einmal hinzugefügt werden."
+
+msgid "Only one class can be assigned to this participant."
+msgstr "Diesem Teilnehmer kann nur eine Klasse zugewiesen werden."
+
+msgid "Co-driver first name"
+msgstr "Vorname Beifahrer"
+
+msgid "Co-driver last name"
+msgstr "Nachname Beifahrer"
+
+msgid "Street address"
+msgstr "Straße"
+
+msgid "ZIP code"
+msgstr "PLZ"
+
+msgid "City"
+msgstr "Ort"
+
+msgid "Bib number"
+msgstr "Startnummer"
+
+msgid ""
+"Optional — assigns this participant a bib for the current competition right "
+"away."
+msgstr ""
+"Optional — weist diesem Teilnehmer sofort eine Startnummer für den aktuellen"
+" Wettbewerb zu."
+
+msgid "No competition is currently selected, so a bib can't be assigned yet."
+msgstr ""
+"Derzeit ist kein Wettbewerb ausgewählt, daher kann noch keine Startnummer "
+"zugewiesen werden."
+
+msgid "This bib number is already taken in the current competition."
+msgstr "Diese Startnummer ist im aktuellen Wettbewerb bereits vergeben."
+
+msgid "No competition is currently selected, so a bib can't be assigned."
+msgstr ""
+"Derzeit ist kein Wettbewerb ausgewählt, daher kann keine Startnummer "
+"zugewiesen werden."
+
+msgid ""
+"This participant's type doesn't match the current competition, so a bib "
+"can't be assigned."
+msgstr ""
+"Der Typ dieses Teilnehmers passt nicht zum aktuellen Wettbewerb, daher kann "
+"keine Startnummer zugewiesen werden."
+
+msgid ""
+"Discipline this participant is registered under (e.g. Motorcycle, Go-Cart). "
+"A participant can only ever belong to one type."
+msgstr ""
+"Disziplin, unter der dieser Teilnehmer registriert ist (z. B. Motorrad, Go-"
+"Kart). Ein Teilnehmer kann immer nur zu einem Typ gehören."
+
+msgid "Registered"
+msgstr "Gemeldet"
+
+msgid "Did Not Start"
+msgstr "Nicht angetreten"
+
+msgid "Did Not Finish"
+msgstr "Nicht beendet"
+
+msgid "Disqualified"
+msgstr "Disqualifiziert"
+
+msgid "Finished"
+msgstr "Beendet"
+
+msgid "No competition is selected."
+msgstr "Es ist kein Wettbewerb ausgewählt."
+
+msgid "Malformed request."
+msgstr "Fehlerhafte Anfrage."
+
+msgid "Unknown participant."
+msgstr "Unbekannter Teilnehmer."
+
+msgid "Bib must be a positive number."
+msgstr "Die Startnummer muss eine positive Zahl sein."
+
+#, python-format
+msgid "Bib %(bib)s is already taken."
+msgstr "Startnummer %(bib)s ist bereits vergeben."
+
+#| msgid "Licence number"
+msgid "licence number"
+msgstr "Lizenznummer"
+
+#| msgid "Licence number"
+msgid "name and licence number"
+msgstr "Name und Lizenznummer"
+
+#| msgid "Username"
+msgid "name"
+msgstr "Name"
+
+msgid "Driver name"
+msgstr "Fahrername"
+
+msgid "Street"
+msgstr "Straße"
+
+msgid "Birthday"
+msgstr "Geburtstag"
+
+msgid "Birth year"
+msgstr "Geburtsjahr"
+
+msgid "Training runs"
+msgstr "Trainingsläufe"
+
+msgid "Portrait"
+msgstr "Hochformat"
+
+msgid "Landscape"
+msgstr "Querformat"
+
+msgid "Auto (fit the table)"
+msgstr "Automatisch (an Tabelle anpassen)"
+
+msgid "Best run"
+msgstr "Bester Lauf"
+
+msgid "Difference"
+msgstr "Differenz"
+
+msgid "Total"
+msgstr "Gesamt"
+
+msgid "Results settings saved."
+msgstr "Ergebnis-Einstellungen gespeichert."
+
+#| msgid "Pylon"
+msgid "Pylons"
+msgstr "Pylonen"
+
+msgid "Required to reach the Tag Heuer CP540."
+msgstr "Erforderlich, um den Tag Heuer CP540 zu erreichen."
+
+msgid "Simulator"
+msgstr "Simulator"
+
+msgid "Device"
+msgstr "Gerät"
+
+msgid "Which timing device signals are received from."
+msgstr "Von welchem Zeitmessgerät Signale empfangen werden."
+
+msgid "Device channel that carries the start signal (0–9)."
+msgstr "Gerätekanal, der das Startsignal überträgt (0–9)."
+
+msgid "Device channel that carries the finish signal (0–9)."
+msgstr "Gerätekanal, der das Zielsignal überträgt (0–9)."
+
+msgid "IP address"
+msgstr "IP-Adresse"
+
+msgid "Network address of the Tag Heuer CP540."
+msgstr "Netzwerkadresse des Tag Heuer CP540."
+
+msgid "Port"
+msgstr "Port"
+
+msgid "TCP port of the Tag Heuer CP540."
+msgstr "TCP-Port des Tag Heuer CP540."
+
+msgid "Start"
+msgstr "Start"
+
+msgid "Finish"
+msgstr "Ziel"
+
+msgid "Physical channel the signal came in on (1–4)."
+msgstr "Physischer Kanal, über den das Signal eingegangen ist (1–4)."
+
+msgid "Wall-clock time the signal fired (hh:mm:ss.mmm)."
+msgstr "Uhrzeit, zu der das Signal ausgelöst wurde (hh:mm:ss.mmm)."
+
+msgid "Practice"
+msgstr "Training"
+
+msgid "Counted"
+msgstr "Wertung"
+
+msgid "Intermediate"
+msgstr "Zwischenzeit"
+
+#, python-format
+msgid "Connecting to the Tag Heuer CP540 at %(ip)s:%(port)s…"
+msgstr "Verbinde mit dem Tag Heuer CP540 unter %(ip)s:%(port)s…"
+
+msgid "Disconnected from the timing device."
+msgstr "Verbindung zum Zeitmessgerät getrennt."
+
+msgid "Timing settings saved."
+msgstr "Zeitmess-Einstellungen gespeichert."
+
+msgid "German"
+msgstr "Deutsch"
+
+msgid "English"
+msgstr "Englisch"
+
+msgid "Language"
+msgstr "Sprache"
+
+msgid "No access"
+msgstr "Kein Zugriff"
+
+msgid "You don’t have access to this page"
+msgstr "Sie haben keinen Zugriff auf diese Seite"
+
+msgid ""
+"Your account’s roles don’t include this area. If you need it, ask an "
+"administrator to grant your role access on the User Access page."
+msgstr ""
+"Die Rollen Ihres Kontos umfassen diesen Bereich nicht. Falls Sie ihn "
+"benötigen, bitten Sie einen Administrator, Ihrer Rolle auf der Seite "
+"„Benutzerzugriff“ Zugriff zu gewähren."
+
+msgid "Back to Dashboard"
+msgstr "Zurück zum Dashboard"
+
+msgid "Sign in"
+msgstr "Anmelden"
+
+msgid "Wrong username or password. Please try again."
+msgstr ""
+"Falscher Benutzername oder falsches Passwort. Bitte versuchen Sie es erneut."
+
+msgid "Username"
+msgstr "Benutzername"
+
+msgid "Password"
+msgstr "Passwort"
+
+msgid "Show password (hold)"
+msgstr "Passwort anzeigen (halten)"
+
+msgid "User Access"
+msgstr "Benutzerzugriff"
+
+msgid ""
+"Roles decide which pages an account can open. A role grants a set of pages; "
+"a user gets the combined access of all their roles. Superusers always have "
+"full access."
+msgstr ""
+"Rollen bestimmen, welche Seiten ein Konto öffnen kann. Eine Rolle gewährt "
+"eine Reihe von Seiten; ein Benutzer erhält den kombinierten Zugriff aller "
+"seiner Rollen. Superuser haben immer vollen Zugriff."
+
+msgid "Open Django Admin →"
+msgstr "Django-Administration öffnen →"
+
+msgid "— low-level data administration (superusers only)."
+msgstr "— systemnahe Datenverwaltung (nur Superuser)."
+
+msgid "Roles"
+msgstr "Rollen"
+
+msgid "Tick the pages each role may open, then Save."
+msgstr ""
+"Markieren Sie die Seiten, die jede Rolle öffnen darf, und speichern Sie."
+
+#, python-format
+msgid "Delete the role “%(name)s”? Users lose the access it grants."
+msgstr ""
+"Die Rolle „%(name)s“ löschen? Benutzer verlieren den damit gewährten "
+"Zugriff."
+
+msgid "Delete"
+msgstr "Löschen"
+
+msgid "Save pages"
+msgstr "Seiten speichern"
+
+msgid "No roles yet. Create one below."
+msgstr "Noch keine Rollen. Erstellen Sie unten eine."
+
+msgid "New role"
+msgstr "Neue Rolle"
+
+msgid "e.g. Marshals"
+msgstr "z. B. Streckenposten"
+
+msgid "Create role"
+msgstr "Rolle erstellen"
+
+msgid "Users"
+msgstr "Benutzer"
+
+msgid ""
+"Assign each account to one or more roles. Leave the password blank when "
+"editing to keep the current one."
+msgstr ""
+"Weisen Sie jedem Konto eine oder mehrere Rollen zu. Lassen Sie das Passwort "
+"beim Bearbeiten leer, um das aktuelle beizubehalten."
+
+msgid "superuser"
+msgstr "Superuser"
+
+#, python-format
+msgid "Delete the user “%(name)s”?"
+msgstr "Den Benutzer „%(name)s“ löschen?"
+
+msgid "You can’t delete your own account"
+msgstr "Sie können Ihr eigenes Konto nicht löschen"
+
+msgid "Full access (superuser). Roles don’t affect this account."
+msgstr ""
+"Voller Zugriff (Superuser). Rollen wirken sich auf dieses Konto nicht aus."
+
+msgid "No roles defined."
+msgstr "Keine Rollen definiert."
+
+msgid "Reset password"
+msgstr "Passwort zurücksetzen"
+
+msgid "leave blank to keep"
+msgstr "leer lassen zum Beibehalten"
+
+msgid "Save"
+msgstr "Speichern"
+
+msgid "Add a user"
+msgstr "Benutzer hinzufügen"
+
+msgid "No roles defined yet — create one above first."
+msgstr "Noch keine Rollen definiert — erstellen Sie zuerst oben eine."
+
+msgid "Create user"
+msgstr "Benutzer erstellen"
+
+msgid "Slalom Timing"
+msgstr "Slalom Timing"
+
+msgid "Skip to content"
+msgstr "Zum Inhalt springen"
+
+msgid "Manage competitions"
+msgstr "Wettbewerbe verwalten"
+
+msgid "General"
+msgstr "Allgemein"
+
+msgid "Classes"
+msgstr "Klassen"
+
+msgid "Run order"
+msgstr "Laufreihenfolge"
+
+msgid "Penalties"
+msgstr "Strafen"
+
+msgid "Manual timing"
+msgstr "Manuelle Zeitmessung"
+
+msgid "Auto timing"
+msgstr "Automatische Zeitmessung"
+
+msgid "Settings"
+msgstr "Einstellungen"
+
+#, python-format
+msgid "Overall · %(label)s · %(runs)s Runs"
+msgstr "Gesamt · %(label)s · %(runs)s Läufe"
+
+msgid "No running classes"
+msgstr "Keine laufenden Klassen"
+
+msgid "Log out"
+msgstr "Abmelden"
+
+msgid "Toggle navigation"
+msgstr "Navigation umschalten"
+
+msgid "No event selected"
+msgstr "Keine Veranstaltung ausgewählt"
+
+msgid "choose one"
+msgstr "auswählen"
+
+msgid "Unsaved changes"
+msgstr "Nicht gespeicherte Änderungen"
+
+msgid ""
+"You have unsaved changes on this page. Do you want to save them before "
+"leaving?"
+msgstr ""
+"Sie haben nicht gespeicherte Änderungen auf dieser Seite. Möchten Sie sie "
+"vor dem Verlassen speichern?"
+
+msgid "Save changes"
+msgstr "Änderungen speichern"
+
+msgid "Discard"
+msgstr "Verwerfen"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "Running"
+msgstr "Läuft"
+
+msgid "Practice runs"
+msgstr "Trainingsläufe"
+
+msgid "Counted runs"
+msgstr "Wertungsläufe"
+
+msgid "Scoring"
+msgstr "Wertung"
+
+msgid "Age from"
+msgstr "Alter von"
+
+msgid "Age to"
+msgstr "Alter bis"
+
+msgid "Birth years"
+msgstr "Geburtsjahre"
+
+msgid "Allow multiple entries per participant"
+msgstr "Mehrfachnennungen pro Teilnehmer erlauben"
+
+msgid "Remove class"
+msgstr "Klasse entfernen"
+
+msgid "New competition"
+msgstr "Neuer Wettbewerb"
+
+msgid "← Back to Competition Setup"
+msgstr "← Zurück zu „Wettbewerb einrichten“"
+
+msgid ""
+"Create a competition, then configure its classes and run order. The new "
+"competition becomes the current one."
+msgstr ""
+"Erstellen Sie einen Wettbewerb und konfigurieren Sie anschließend seine "
+"Klassen und die Laufreihenfolge. Der neue Wettbewerb wird zum aktuellen."
+
+msgid "+ add new type"
+msgstr "+ neuen Typ hinzufügen"
+
+msgid "Create"
+msgstr "Erstellen"
+
+#, python-format
+msgid ""
+"Classes for <strong>%(name)s</strong>. Choose how participants are assigned "
+"to classes, then edit each class below."
+msgstr ""
+"Klassen für <strong>%(name)s</strong>. Wählen Sie, wie Teilnehmer den "
+"Klassen zugeordnet werden, und bearbeiten Sie dann unten jede Klasse."
+
+#, python-format
+msgid ""
+"Group them into runs on the <a href=\"%(runorder_url)s\">Run order</a> page."
+msgstr ""
+"Gruppieren Sie sie auf der Seite <a "
+"href=\"%(runorder_url)s\">Laufreihenfolge</a> zu Läufen."
+
+msgid "Assignment method"
+msgstr "Zuordnungsmethode"
+
+msgid "Allow participation in multiple classes"
+msgstr "Teilnahme in mehreren Klassen erlauben"
+
+msgid "+ Add class"
+msgstr "+ Klasse hinzufügen"
+
+msgid "Delete class?"
+msgstr "Klasse löschen?"
+
+msgid "Delete class"
+msgstr "Klasse löschen"
+
+msgid "This class"
+msgstr "Diese Klasse"
+
+msgid "recorded run(s) — the times are kept but lose their class"
+msgstr ""
+"erfasste(r) Lauf/Läufe — die Zeiten bleiben erhalten, verlieren aber ihre "
+"Klasse"
+
+msgid "participant assignment(s) — removed"
+msgstr "Teilnehmerzuordnung(en) — entfernt"
+
+msgid "has:"
+msgstr "hat:"
+
+msgid "It will be deleted when you press Save."
+msgstr "Sie wird gelöscht, wenn Sie auf Speichern drücken."
+
+msgid "Delete competition"
+msgstr "Wettbewerb löschen"
+
+#, python-format
+msgid "Delete %(name)s?"
+msgstr "%(name)s löschen?"
+
+#, python-format
+msgid ""
+"The competition on %(date)s will be <strong>permanently removed</strong>."
+msgstr "Der Wettbewerb am %(date)s wird <strong>dauerhaft entfernt</strong>."
+
+msgid "Deleting it also permanently deletes, with no way to recover:"
+msgstr "Beim Löschen werden zudem dauerhaft und unwiderruflich entfernt:"
+
+#, python-format
+msgid "<strong>%(count)s</strong> bib registration"
+msgid_plural "<strong>%(count)s</strong> bib registrations"
+msgstr[0] "<strong>%(count)s</strong> Startnummern-Nennung"
+msgstr[1] "<strong>%(count)s</strong> Startnummern-Nennungen"
+
+#, python-format
+msgid "<strong>%(count)s</strong> recorded run (timed results)"
+msgid_plural "<strong>%(count)s</strong> recorded runs (timed results)"
+msgstr[0] "<strong>%(count)s</strong> erfasster Lauf (gemessene Ergebnisse)"
+msgstr[1] "<strong>%(count)s</strong> erfasste Läufe (gemessene Ergebnisse)"
+
+#, python-format
+msgid "<strong>%(count)s</strong> raw timing signal"
+msgid_plural "<strong>%(count)s</strong> raw timing signals"
+msgstr[0] "<strong>%(count)s</strong> Roh-Zeitsignal"
+msgstr[1] "<strong>%(count)s</strong> Roh-Zeitsignale"
+
+#, python-format
+msgid "<strong>%(count)s</strong> class"
+msgid_plural "<strong>%(count)s</strong> classes"
+msgstr[0] "<strong>%(count)s</strong> Klasse"
+msgstr[1] "<strong>%(count)s</strong> Klassen"
+
+#, python-format
+msgid "<strong>%(count)s</strong> participant class assignment"
+msgid_plural "<strong>%(count)s</strong> participant class assignments"
+msgstr[0] "<strong>%(count)s</strong> Teilnehmer-Klassenzuordnung"
+msgstr[1] "<strong>%(count)s</strong> Teilnehmer-Klassenzuordnungen"
+
+msgid ""
+"<strong>This includes timed results.</strong> The participant records "
+"themselves are kept — only this competition's registrations, classes and "
+"timing data are removed."
+msgstr ""
+"<strong>Dies umfasst gemessene Ergebnisse.</strong> Die Teilnehmerdatensätze"
+" selbst bleiben erhalten — nur die Nennungen, Klassen und Zeitmessdaten "
+"dieses Wettbewerbs werden entfernt."
+
+msgid ""
+"The participant records themselves are kept — only this competition's "
+"registrations and classes are removed."
+msgstr ""
+"Die Teilnehmerdatensätze selbst bleiben erhalten — nur die Nennungen und "
+"Klassen dieses Wettbewerbs werden entfernt."
+
+msgid "Confirm delete"
+msgstr "Löschen bestätigen"
+
+#, python-format
+msgid "Basic details for <strong>%(name)s</strong>."
+msgstr "Grunddaten für <strong>%(name)s</strong>."
+
+msgid "Search by name or type…"
+msgstr "Nach Name oder Typ suchen…"
+
+msgid "Search"
+msgstr "Suchen"
+
+msgid "+ New competition"
+msgstr "+ Neuer Wettbewerb"
+
+msgid "Manage competition types"
+msgstr "Wettbewerbstypen verwalten"
+
+msgid "Current"
+msgstr "Aktuell"
+
+msgid "No classes running"
+msgstr "Keine Klassen aktiv"
+
+msgid "Configure"
+msgstr "Konfigurieren"
+
+msgid "Set as current"
+msgstr "Als aktuell festlegen"
+
+msgid "Duplicate"
+msgstr "Duplizieren"
+
+msgid "No competitions yet."
+msgstr "Noch keine Wettbewerbe."
+
+msgid "Create your first one."
+msgstr "Erstellen Sie Ihren ersten."
+
+msgid "No competitions match your search."
+msgstr "Keine Wettbewerbe entsprechen Ihrer Suche."
+
+#, python-format
+msgid "How penalties are entered for <strong>%(name)s</strong>."
+msgstr "Wie Strafen für <strong>%(name)s</strong> eingegeben werden."
+
+msgid "Penalties set by marshal posts"
+msgstr "Strafen von Streckenposten vergeben"
+
+msgid ""
+"Off: the timekeeper enters every penalty on the Manual timing view. On: each"
+" marshal post enters the penalties for the tasks in its own area."
+msgstr ""
+"Aus: Der Zeitnehmer gibt jede Strafe in der manuellen Zeitmessung ein. An: "
+"Jeder Streckenposten gibt die Strafen für die Aufgaben in seinem eigenen "
+"Bereich ein."
+
+msgid "Number of posts"
+msgstr "Anzahl der Posten"
+
+#, python-format
+msgid "Marshal Post %(n)s"
+msgstr "Streckenposten %(n)s"
+
+msgid "Tasks watched"
+msgstr "Überwachte Aufgaben"
+
+msgid "e.g. 1, 5, 9, 11-15, 20"
+msgstr "z. B. 1, 5, 9, 11-15, 20"
+
+msgid "Responsible for the stop line"
+msgstr "Zuständig für die Stopplinie"
+
+msgid "Marshal Post"
+msgstr "Streckenposten"
+
+msgid "This task list can’t be read."
+msgstr "Diese Aufgabenliste kann nicht gelesen werden."
+
+#, python-brace-format
+msgid "Task {tasks} is on another post too."
+msgstr "Aufgabe {tasks} ist auch auf einem anderen Posten."
+
+msgid "Check the task lists — one can’t be read."
+msgstr "Überprüfen Sie die Aufgabenlisten — eine kann nicht gelesen werden."
+
+#, python-brace-format
+msgid "Task {tasks} assigned to more than one post."
+msgstr "Aufgabe {tasks} ist mehr als einem Posten zugewiesen."
+
+#, python-brace-format
+msgid "Tasks {tasks} assigned"
+msgstr "Aufgaben {tasks} zugewiesen"
+
+msgid "No tasks assigned yet"
+msgstr "Noch keine Aufgaben zugewiesen"
+
+#, python-format
+msgid ""
+"The order runs start for <strong>%(name)s</strong>. Drag classes between "
+"runs to start them together, drop a class in the gap between runs to split "
+"it into its own run, and drag a run's handle to reorder. Only classes marked"
+" <em>Running</em> on the <a href=\"%(classes_url)s\">Classes</a> page appear"
+" here."
+msgstr ""
+"Die Reihenfolge, in der die Läufe für <strong>%(name)s</strong> starten. "
+"Ziehen Sie Klassen zwischen Läufe, um sie gemeinsam starten zu lassen, legen"
+" Sie eine Klasse in die Lücke zwischen Läufen, um sie in einen eigenen Lauf "
+"aufzuteilen, und ziehen Sie den Griff eines Laufs, um die Reihenfolge zu "
+"ändern. Nur Klassen, die auf der Seite <a "
+"href=\"%(classes_url)s\">Klassen</a> als <em>Läuft</em> markiert sind, "
+"erscheinen hier."
+
+msgid "Start pattern"
+msgstr "Startmuster"
+
+msgid ""
+"The order participants take their runs inside a run. Each block plays its "
+"runs for a window of participants at a time — every participant in the "
+"window takes the first run, then the second, and so on — then slides on to "
+"the next window until everyone has been through it. Drag runs from the "
+"palette into a block, reorder them within a block, and drag a block's handle"
+" to move the whole block. Each participant's runs are used up in the order "
+"the blocks come, so a second <em>Counted</em> chip is their second counted "
+"run. The same pattern is replayed for every run above."
+msgstr ""
+"Die Reihenfolge, in der Teilnehmer ihre Läufe innerhalb eines Laufs "
+"absolvieren. Jeder Block spielt seine Läufe für ein Fenster von Teilnehmern "
+"nacheinander ab — jeder Teilnehmer im Fenster absolviert den ersten Lauf, "
+"dann den zweiten und so weiter — und rückt dann zum nächsten Fenster weiter,"
+" bis alle durch sind. Ziehen Sie Läufe aus der Palette in einen Block, "
+"ordnen Sie sie innerhalb eines Blocks neu an und ziehen Sie den Griff eines "
+"Blocks, um den gesamten Block zu verschieben. Die Läufe jedes Teilnehmers "
+"werden in der Reihenfolge der Blöcke verbraucht, sodass ein zweiter "
+"<em>Wertungslauf</em>-Chip sein zweiter Wertungslauf ist. Dasselbe Muster "
+"wird für jeden Lauf oben wiederholt."
+
+msgid "Drag in:"
+msgstr "Hineinziehen:"
+
+msgid "+ Add block"
+msgstr "+ Block hinzufügen"
+
+msgid "Preview"
+msgstr "Vorschau"
+
+msgid "Dummy participants"
+msgstr "Testteilnehmer"
+
+msgid "participants, bibs 1–n"
+msgstr "Teilnehmer, Startnummern 1–n"
+
+msgid "Drag to reorder run"
+msgstr "Ziehen, um den Lauf umzuordnen"
+
+msgid "Run"
+msgstr "Lauf"
+
+msgid "P"
+msgstr "T"
+
+msgid "C"
+msgstr "W"
+
+msgid "Dummy participant"
+msgstr "Testteilnehmer"
+
+msgid "Remove this run"
+msgstr "Diesen Lauf entfernen"
+
+msgid "Drag to reorder block"
+msgstr "Ziehen, um den Block umzuordnen"
+
+msgid "Participants per pass"
+msgstr "Teilnehmer pro Durchgang"
+
+msgid "Take every participant in one pass"
+msgstr "Alle Teilnehmer in einem Durchgang nehmen"
+
+msgid "all"
+msgstr "alle"
+
+msgid "at a time"
+msgstr "auf einmal"
+
+msgid "Remove this block"
+msgstr "Diesen Block entfernen"
+
+msgid "Block"
+msgstr "Block"
+
+msgid "Add a block to see the start order."
+msgstr "Fügen Sie einen Block hinzu, um die Startreihenfolge zu sehen."
+
+msgid "Dummy run"
+msgstr "Testlauf"
+
+#, python-brace-format
+msgid "{n} participants taking {cls}’s runs: {p} practice, {c} counted"
+msgstr ""
+"{n} Teilnehmer absolvieren die Läufe von {cls}: {p} Training, {c} Wertung"
+
+#, python-brace-format
+msgid "{n} participants taking 1 practice, 2 counted"
+msgstr "{n} Teilnehmer absolvieren 1 Training, 2 Wertung"
+
+msgid "No participants with a bib in this run yet."
+msgstr "Noch keine Teilnehmer mit Startnummer in diesem Lauf."
+
+msgid "nothing left to schedule — these participants have no such run left"
+msgstr ""
+"nichts mehr zu planen — diese Teilnehmer haben keinen solchen Lauf mehr"
+
+#, python-brace-format
+msgid "{name} — {cls}, {type} run {n}"
+msgstr "{name} — {cls}, {type} Lauf {n}"
+
+#, python-brace-format
+msgid "Not scheduled: {list}."
+msgstr "Nicht geplant: {list}."
+
+#, python-format
+msgid ""
+"No classes are running yet. Mark classes as <em>Running</em> on the <a "
+"href=\"%(classes_url)s\">Classes</a> page and they'll appear here."
+msgstr ""
+"Noch sind keine Klassen aktiv. Markieren Sie Klassen auf der Seite <a "
+"href=\"%(classes_url)s\">Klassen</a> als <em>Läuft</em>, dann erscheinen sie"
+" hier."
+
+msgid "New competition type"
+msgstr "Neuer Wettbewerbstyp"
+
+msgid "← Back to Competition Types"
+msgstr "← Zurück zu den Wettbewerbstypen"
+
+msgid "Competition Types"
+msgstr "Wettbewerbstypen"
+
+msgid "+ New type"
+msgstr "+ Neuer Typ"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Used in"
+msgstr "Verwendet in"
+
+msgid "Show competitions of this type"
+msgstr "Wettbewerbe dieses Typs anzeigen"
+
+#, python-format
+msgid "%(count)s competition"
+msgid_plural "%(count)s competitions"
+msgstr[0] "%(count)s Wettbewerb"
+msgstr[1] "%(count)s Wettbewerbe"
+
+#, python-format
+msgid "%(count)s participant"
+msgid_plural "%(count)s participants"
+msgstr[0] "%(count)s Teilnehmer"
+msgstr[1] "%(count)s Teilnehmer"
+
+msgid "This type is in use and can’t be deleted"
+msgstr "Dieser Typ wird verwendet und kann nicht gelöscht werden"
+
+msgid "No competition types yet."
+msgstr "Noch keine Wettbewerbstypen."
+
+#, python-format
+msgid "%(name)s settings"
+msgstr "Einstellungen für %(name)s"
+
+msgid "Competition type settings"
+msgstr "Einstellungen des Wettbewerbstyps"
+
+msgid "Rules every competition of this type is run and evaluated under."
+msgstr ""
+"Regeln, nach denen jeder Wettbewerb dieses Typs ausgetragen und ausgewertet "
+"wird."
+
+msgid "Enter penalties during the race"
+msgstr "Strafen während des Rennens eingeben"
+
+msgid ""
+"With this on, the timing screen shows the penalties entry for each run."
+msgstr ""
+"Wenn dies aktiviert ist, zeigt der Zeitmessbildschirm die Strafeneingabe für"
+" jeden Lauf."
+
+msgid "Evaluation"
+msgstr "Auswertung"
+
+msgid "Required participant info"
+msgstr "Erforderliche Teilnehmerangaben"
+
+msgid ""
+"Which details the participant form asks for in this competition type. Name "
+"and date of birth are always asked for."
+msgstr ""
+"Welche Angaben das Teilnehmerformular in diesem Wettbewerbstyp abfragt. Name"
+" und Geburtsdatum werden immer abgefragt."
+
+msgid ""
+"<span class=\"required-marker\">*</span> marks a detail that is mandatory "
+"once collected."
+msgstr ""
+"<span class=\"required-marker\">*</span> kennzeichnet eine Angabe, die – "
+"sofern erhoben – verpflichtend ist."
+
+msgid "Mandatory"
+msgstr "Pflichtangabe"
+
+#, python-format
+msgid ""
+"Marshal-post penalties aren't set up for <strong>%(name)s</strong> yet."
+msgstr ""
+"Streckenposten-Strafen sind für <strong>%(name)s</strong> noch nicht "
+"eingerichtet."
+
+#, python-format
+msgid ""
+"Turn on “Penalties set by marshal posts” and define the posts on the <a "
+"href=\"%(penalties_url)s\">Penalties</a> page first."
+msgstr ""
+"Aktivieren Sie zuerst „Strafen von Streckenposten vergeben“ und legen Sie "
+"die Posten auf der Seite <a href=\"%(penalties_url)s\">Strafen</a> fest."
+
+msgid "Your post"
+msgstr "Ihr Posten"
+
+msgid "Confirm"
+msgstr "Bestätigen"
+
+msgid "Change post"
+msgstr "Posten wechseln"
+
+msgid "Waiting for the next starter…"
+msgstr "Warten auf den nächsten Starter…"
+
+msgid "🔒 Submitted — locked"
+msgstr "🔒 Übermittelt — gesperrt"
+
+msgid "Submit"
+msgstr "Übermitteln"
+
+msgid "No competition is selected yet."
+msgstr "Es ist noch kein Wettbewerb ausgewählt."
+
+msgid "Go to Manage competitions"
+msgstr "Zu „Wettbewerbe verwalten“"
+
+msgid "to pick or create one."
+msgstr "um einen auszuwählen oder zu erstellen."
+
+msgid "Required"
+msgstr "Erforderlich"
+
+msgid "Delete participant"
+msgstr "Teilnehmer löschen"
+
+msgid "will be <strong>permanently removed</strong>."
+msgstr "wird <strong>dauerhaft entfernt</strong>."
+
+msgid "This also removes:"
+msgstr "Dies entfernt außerdem:"
+
+#, python-format
+msgid "<strong>%(count)s</strong> bib registration across all competitions"
+msgid_plural ""
+"<strong>%(count)s</strong> bib registrations across all competitions"
+msgstr[0] ""
+"<strong>%(count)s</strong> Startnummern-Nennung über alle Wettbewerbe"
+msgstr[1] ""
+"<strong>%(count)s</strong> Startnummern-Nennungen über alle Wettbewerbe"
+
+#, python-format
+msgid "<strong>%(count)s</strong> class assignment"
+msgid_plural "<strong>%(count)s</strong> class assignments"
+msgstr[0] "<strong>%(count)s</strong> Klassenzuordnung"
+msgstr[1] "<strong>%(count)s</strong> Klassenzuordnungen"
+
+#, python-format
+msgid ""
+"<strong>%(count)s recorded run</strong> under this participant's bib will "
+"<strong>not</strong> be deleted — the time stays in the timing data but will"
+" no longer show a name, and the bib may be reused by someone else. Delete "
+"anyway only if you're sure."
+msgid_plural ""
+"<strong>%(count)s recorded runs</strong> under this participant's bibs will "
+"<strong>not</strong> be deleted — the times stay in the timing data but will"
+" no longer show a name, and the bibs may be reused by someone else. Delete "
+"anyway only if you're sure."
+msgstr[0] ""
+"<strong>%(count)s erfasster Lauf</strong> unter der Startnummer dieses "
+"Teilnehmers wird <strong>nicht</strong> gelöscht — die Zeit bleibt in den "
+"Zeitmessdaten, zeigt aber keinen Namen mehr, und die Startnummer kann von "
+"jemand anderem wiederverwendet werden. Löschen Sie nur, wenn Sie sicher "
+"sind."
+msgstr[1] ""
+"<strong>%(count)s erfasste Läufe</strong> unter den Startnummern dieses "
+"Teilnehmers werden <strong>nicht</strong> gelöscht — die Zeiten bleiben in "
+"den Zeitmessdaten, zeigen aber keinen Namen mehr, und die Startnummern "
+"können von jemand anderem wiederverwendet werden. Löschen Sie nur, wenn Sie "
+"sicher sind."
+
+msgid "Edit participant"
+msgstr "Teilnehmer bearbeiten"
+
+msgid "Add participant"
+msgstr "Teilnehmer hinzufügen"
+
+#, python-format
+msgid "Edit %(name)s"
+msgstr "%(name)s bearbeiten"
+
+msgid "← Back to participants"
+msgstr "← Zurück zu den Teilnehmern"
+
+msgid "Bib"
+msgstr "Startnr."
+
+msgid "Class"
+msgstr "Klasse"
+
+msgid "(one or more)"
+msgstr "(eine oder mehrere)"
+
+#, python-format
+msgid "Automatically derived from age for %(name)s."
+msgstr "Automatisch aus dem Alter für %(name)s abgeleitet."
+
+msgid "No competition selected — class can't be computed."
+msgstr "Kein Wettbewerb ausgewählt — Klasse kann nicht berechnet werden."
+
+msgid "Remove"
+msgstr "Entfernen"
+
+msgid "Add class…"
+msgstr "Klasse hinzufügen…"
+
+msgid ""
+"No competition selected, or this participant's type doesn't match the "
+"current competition — no class can be assigned."
+msgstr ""
+"Kein Wettbewerb ausgewählt, oder der Typ dieses Teilnehmers passt nicht zum "
+"aktuellen Wettbewerb — es kann keine Klasse zugewiesen werden."
+
+msgid "Invalid date"
+msgstr "Ungültiges Datum"
+
+msgid ""
+"That’s not a valid date — please check the day exists in that month/year."
+msgstr ""
+"Das ist kein gültiges Datum — bitte prüfen Sie, ob der Tag in diesem "
+"Monat/Jahr existiert."
+
+#, python-format
+msgid ""
+"No competition is selected. Participants are registered under a "
+"competition's type, so <a href=\"%(list_url)s\">pick a competition</a> to "
+"see and manage its participants."
+msgstr ""
+"Es ist kein Wettbewerb ausgewählt. Teilnehmer werden unter dem Typ eines "
+"Wettbewerbs registriert — <a href=\"%(list_url)s\">wählen Sie einen "
+"Wettbewerb</a>, um seine Teilnehmer zu sehen und zu verwalten."
+
+msgid "Search by name, club or bib…"
+msgstr "Nach Name, Verein oder Startnummer suchen…"
+
+msgid "Clear search"
+msgstr "Suche zurücksetzen"
+
+msgid "+ Add participant"
+msgstr "+ Teilnehmer hinzufügen"
+
+msgid "showing active participants only."
+msgstr "es werden nur aktive Teilnehmer angezeigt."
+
+msgid "Show all"
+msgstr "Alle anzeigen"
+
+msgid "showing all registered participants."
+msgstr "es werden alle registrierten Teilnehmer angezeigt."
+
+msgid "Show active only"
+msgstr "Nur aktive anzeigen"
+
+msgid "Date of birth"
+msgstr "Geburtsdatum"
+
+msgid "Licence"
+msgstr "Lizenz"
+
+msgid "No further details recorded."
+msgstr "Keine weiteren Angaben erfasst."
+
+msgid "Edit full details"
+msgstr "Alle Details bearbeiten"
+
+msgid "No participants found."
+msgstr "Keine Teilnehmer gefunden."
+
+msgid "No participants match your search."
+msgstr "Keine Teilnehmer entsprechen Ihrer Suche."
+
+msgid "Could not save."
+msgstr "Konnte nicht gespeichert werden."
+
+msgid "Saved"
+msgstr "Gespeichert"
+
+msgid "Lower repeat entry — not ranked"
+msgstr "Niedrigere Mehrfachnennung — nicht platziert"
+
+msgid "Tied — click to rank manually"
+msgstr "Punktgleich — zum manuellen Platzieren klicken"
+
+msgid "Tie ranked manually — click to adjust"
+msgstr "Gleichstand manuell platziert — zum Anpassen klicken"
+
+msgid "Tie resolved automatically — click to adjust"
+msgstr "Gleichstand automatisch aufgelöst — zum Anpassen klicken"
+
+msgid "No complete results yet."
+msgstr "Noch keine vollständigen Ergebnisse."
+
+msgid "Not yet ranked"
+msgstr "Noch nicht platziert"
+
+msgid ""
+"Competitors missing a counted run, or marked did-not-start / did-not-finish "
+"/ disqualified."
+msgstr ""
+"Teilnehmer, denen ein Wertungslauf fehlt oder die als nicht angetreten / "
+"nicht beendet / disqualifiziert markiert sind."
+
+msgid "Starters:"
+msgstr "Starter:"
+
+msgid "Classified:"
+msgstr "Gewertet:"
+
+msgid "Not Classified:"
+msgstr "Nicht gewertet:"
+
+msgid "Drag the tied competitors into order and set their ranks."
+msgstr ""
+"Ziehen Sie die punktgleichen Teilnehmer in die richtige Reihenfolge und "
+"legen Sie ihre Plätze fest."
+
+msgid "Save order"
+msgstr "Reihenfolge speichern"
+
+msgid "Export all to PDF"
+msgstr "Alle als PDF exportieren"
+
+msgid "Overall"
+msgstr "Gesamt"
+
+#, python-format
+msgid "Overall · %(label)s"
+msgstr "Gesamt · %(label)s"
+
+#, python-format
+msgid "%(runs)s Runs · %(count)s class"
+msgid_plural "%(runs)s Runs · %(count)s classes"
+msgstr[0] "%(runs)s Läufe · %(count)s Klasse"
+msgstr[1] "%(runs)s Läufe · %(count)s Klassen"
+
+#, python-format
+msgid "Class %(name)s"
+msgstr "Klasse %(name)s"
+
+msgid "No running classes yet."
+msgstr "Noch keine laufenden Klassen."
+
+#, python-format
+msgid "%(name)s results"
+msgstr "Ergebnisse %(name)s"
+
+msgid "Export PDF"
+msgstr "PDF exportieren"
+
+msgid "Overall results"
+msgstr "Gesamtergebnisse"
+
+#, python-format
+msgid "%(runs)s Runs"
+msgstr "%(runs)s Läufe"
+
+msgid "all classes combined"
+msgstr "alle Klassen zusammen"
+
+msgid "Results settings"
+msgstr "Ergebnis-Einstellungen"
+
+#, python-format
+msgid ""
+"Which participant details appear in the results tables for "
+"<strong>%(name)s</strong>. Rank and bib are always shown."
+msgstr ""
+"Welche Teilnehmerangaben in den Ergebnistabellen für "
+"<strong>%(name)s</strong> erscheinen. Platz und Startnummer werden immer "
+"angezeigt."
+
+msgid ""
+"Show the cross-class Overall pages (one per scoring method and counted-run "
+"count)."
+msgstr ""
+"Die klassenübergreifenden Gesamtseiten anzeigen (eine je Wertungsmethode und"
+" Anzahl Wertungsläufe)."
+
+msgid "Show Overall results"
+msgstr "Gesamtergebnisse anzeigen"
+
+msgid ""
+"This competition's type collects no optional participant details, so there "
+"is nothing extra to show. Results tables will show rank, bib and the run "
+"times."
+msgstr ""
+"Der Typ dieses Wettbewerbs erhebt keine optionalen Teilnehmerangaben, daher "
+"gibt es nichts zusätzlich anzuzeigen. Die Ergebnistabellen zeigen Platz, "
+"Startnummer und die Laufzeiten."
+
+msgid "The default columns for every class."
+msgstr "Die Standardspalten für jede Klasse."
+
+msgid "Extra columns for this class, on top of General."
+msgstr "Zusätzliche Spalten für diese Klasse, ergänzend zu „Allgemein“."
+
+msgid "All available columns are already shown by General."
+msgstr "Alle verfügbaren Spalten werden bereits durch „Allgemein“ angezeigt."
+
+msgid "PDF layout"
+msgstr "PDF-Layout"
+
+#, python-format
+msgid ""
+"The header, footer and logos on exported results PDFs (A4). The table itself"
+" matches the corresponding results page and always spans the full page "
+"width. <a href=\"%(url)s\" target=\"_blank\" rel=\"noopener\">Export all "
+"results now</a>."
+msgstr ""
+"Kopfzeile, Fußzeile und Logos auf exportierten Ergebnis-PDFs (A4). Die "
+"Tabelle selbst entspricht der jeweiligen Ergebnisseite und nutzt stets die "
+"volle Seitenbreite. <a href=\"%(url)s\" target=\"_blank\" "
+"rel=\"noopener\">Jetzt alle Ergebnisse exportieren</a>."
+
+msgid "Page orientation"
+msgstr "Seitenausrichtung"
+
+msgid "Header text"
+msgstr "Kopfzeilentext"
+
+msgid "— centered, top of every page"
+msgstr "— zentriert, oben auf jeder Seite"
+
+msgid "Bold"
+msgstr "Fett"
+
+#, python-format
+msgid "%(label)s text"
+msgstr "Text %(label)s"
+
+msgid "e.g. #increment. #name"
+msgstr "z. B. #increment. #name"
+
+msgid "Footer text"
+msgstr "Fußzeilentext"
+
+msgid "— centered, bottom of every page (no sizes)"
+msgstr "— zentriert, unten auf jeder Seite (keine Größen)"
+
+msgid "e.g. Timed with Slalom Timing"
+msgstr "z. B. Zeitmessung mit Slalom Timing"
+
+msgid "Wildcards"
+msgstr "Platzhalter"
+
+msgid "— click to insert where the cursor is"
+msgstr "— klicken, um an der Cursorposition einzufügen"
+
+msgid "the results table on the page"
+msgstr "die Ergebnistabelle auf der Seite"
+
+msgid "Increment start year"
+msgstr "Startjahr für #increment"
+
+msgid ""
+"The year <code>#increment</code> counts up from — start year 1979 makes the "
+"2026 edition <strong>48</strong> (“48. Motorcycle Race”). Leave blank to "
+"disable."
+msgstr ""
+"Das Jahr, ab dem <code>#increment</code> hochzählt — Startjahr 1979 macht "
+"die Ausgabe 2026 zur <strong>48.</strong> („48. Motorradrennen“). Leer "
+"lassen zum Deaktivieren."
+
+msgid "e.g. 1979"
+msgstr "z. B. 1979"
+
+msgid "Logos"
+msgstr "Logos"
+
+#, python-format
+msgid ""
+"— optional, one top-left and one top-right (PNG/JPG). Height is in "
+"millimetres; the width follows automatically (aspect ratio fixed). Default "
+"%(height)s mm."
+msgstr ""
+"— optional, eines oben links und eines oben rechts (PNG/JPG). Die Höhe ist "
+"in Millimetern; die Breite folgt automatisch (Seitenverhältnis fest). "
+"Standard %(height)s mm."
+
+msgid "Top-left"
+msgstr "Oben links"
+
+msgid "Top-left logo"
+msgstr "Logo oben links"
+
+msgid "Remove this logo"
+msgstr "Dieses Logo entfernen"
+
+msgid "Height"
+msgstr "Höhe"
+
+#, python-format
+msgid "(default %(height)s)"
+msgstr "(Standard %(height)s)"
+
+msgid "Top-right"
+msgstr "Oben rechts"
+
+msgid "Top-right logo"
+msgstr "Logo oben rechts"
+
+msgid "Export sample PDF"
+msgstr "Beispiel-PDF exportieren"
+
+msgid ""
+"About 1½ pages of dummy results, using the settings above (even before "
+"saving) — check the layout and page breaks."
+msgstr ""
+"Etwa 1½ Seiten Beispielergebnisse mit den obigen Einstellungen (auch vor dem"
+" Speichern) — prüfen Sie Layout und Seitenumbrüche."
+
+msgid "Ignored times"
+msgstr "Ignorierte Zeiten"
+
+msgid "Send all incoming times straight to the ignore list"
+msgstr "Alle eingehenden Zeiten direkt auf die Ignorierliste senden"
+
+msgid "Lock"
+msgstr "Sperren"
+
+msgid "How Auto timing works"
+msgstr "So funktioniert die automatische Zeitmessung"
+
+msgid "Close"
+msgstr "Schließen"
+
+msgid ""
+"The start order comes from <strong>Run order</strong> and the <strong>start "
+"pattern</strong>; times attach to it automatically. Drag a tile in the list "
+"to reorder, and drag an ignored time back onto a slot to re-pair it."
+msgstr ""
+"Die Startreihenfolge ergibt sich aus <strong>Laufreihenfolge</strong> und "
+"<strong>Startmuster</strong>; Zeiten werden ihr automatisch zugeordnet. "
+"Ziehen Sie eine Kachel in der Liste, um sie umzuordnen, und ziehen Sie eine "
+"ignorierte Zeit zurück auf einen Platz, um sie erneut zuzuordnen."
+
+msgid ""
+"<strong>Double-click</strong> a Start, Finish or Run time to type it in by "
+"hand when the device didn't fire — keyed-in times are highlighted. "
+"<strong>Scroll</strong> the tiles (or click a tile in the list) to browse "
+"the field without changing the current starter; keying a start time onto an "
+"upcoming competitor makes them the current one."
+msgstr ""
+"<strong>Doppelklicken</strong> Sie eine Start-, Ziel- oder Laufzeit, um sie "
+"von Hand einzugeben, wenn das Gerät nicht ausgelöst hat — von Hand "
+"eingegebene Zeiten sind hervorgehoben. <strong>Scrollen</strong> Sie durch "
+"die Kacheln (oder klicken Sie eine Kachel in der Liste), um das Feld zu "
+"durchsehen, ohne den aktuellen Starter zu ändern; die Eingabe einer "
+"Startzeit bei einem kommenden Teilnehmer macht ihn zum aktuellen."
+
+msgid ""
+"The red <strong>Lock</strong> switch sends every incoming time straight to "
+"the Ignored list — a way to pause capture without disconnecting the device."
+msgstr ""
+"Der rote Schalter <strong>Sperren</strong> sendet jede eingehende Zeit "
+"direkt auf die Ignorierliste — eine Möglichkeit, die Erfassung zu pausieren,"
+" ohne das Gerät zu trennen."
+
+#, python-format
+msgid ""
+"No competition is selected. Timing runs against the active competition, so "
+"<a href=\"%(list_url)s\">pick a competition</a> to time it."
+msgstr ""
+"Es ist kein Wettbewerb ausgewählt. Die Zeitmessung läuft gegen den aktiven "
+"Wettbewerb — <a href=\"%(list_url)s\">wählen Sie einen Wettbewerb</a>, um "
+"ihn zu messen."
+
+msgid "Start order"
+msgstr "Startreihenfolge"
+
+msgid "Reset order"
+msgstr "Reihenfolge zurücksetzen"
+
+#, python-format
+msgid ""
+"No start order yet — set the <a href=\"%(runorder_url)s\">run order</a> and "
+"register starters."
+msgstr ""
+"Noch keine Startreihenfolge — legen Sie die <a "
+"href=\"%(runorder_url)s\">Laufreihenfolge</a> fest und registrieren Sie "
+"Starter."
+
+#, python-format
+msgid ""
+"No competition is selected. The dashboard shows the status of the active "
+"competition, so <a href=\"%(list_url)s\">pick a competition</a> to follow "
+"it."
+msgstr ""
+"Es ist kein Wettbewerb ausgewählt. Das Dashboard zeigt den Status des "
+"aktiven Wettbewerbs — <a href=\"%(list_url)s\">wählen Sie einen "
+"Wettbewerb</a>, um ihn zu verfolgen."
+
+msgid "Event overview"
+msgstr "Veranstaltungsübersicht"
+
+msgid "Event statistics"
+msgstr "Veranstaltungsstatistik"
+
+msgid "Overall progress"
+msgstr "Gesamtfortschritt"
+
+msgid "On course now"
+msgstr "Jetzt auf der Strecke"
+
+msgid "How Manual timing works"
+msgstr "So funktioniert die manuelle Zeitmessung"
+
+msgid ""
+"Hover between the header and the top row for a <strong>+</strong> to pre-"
+"enter an upcoming starter. <strong>Double-click</strong> a Start, Finish or "
+"Run time (or an empty slot) to type it in by hand when the device didn't "
+"fire — keyed-in times are highlighted."
+msgstr ""
+"Fahren Sie mit der Maus zwischen die Kopfzeile und die oberste Zeile, um "
+"über ein <strong>+</strong> einen kommenden Starter vorab einzugeben. "
+"<strong>Doppelklicken</strong> Sie eine Start-, Ziel- oder Laufzeit (oder "
+"einen leeren Platz), um sie von Hand einzugeben, wenn das Gerät nicht "
+"ausgelöst hat — von Hand eingegebene Zeiten sind hervorgehoben."
+
+msgid ""
+"<strong>Drag</strong> a wrong time to the Ignored list on the right to "
+"ignore it; drag it back onto a slot (or double-click the chip) to use it "
+"again."
+msgstr ""
+"<strong>Ziehen</strong> Sie eine falsche Zeit auf die Ignorierliste rechts, "
+"um sie zu ignorieren; ziehen Sie sie zurück auf einen Platz (oder "
+"doppelklicken Sie den Chip), um sie erneut zu verwenden."
+
+#, python-format
+msgid ""
+"No competition is selected. Timing runs against the active competition, so "
+"<a href=\"%(list_url)s\">pick a competition</a> to start timing it."
+msgstr ""
+"Es ist kein Wettbewerb ausgewählt. Die Zeitmessung läuft gegen den aktiven "
+"Wettbewerb — <a href=\"%(list_url)s\">wählen Sie einen Wettbewerb</a>, um "
+"mit der Messung zu beginnen."
+
+msgid "Run time"
+msgstr "Laufzeit"
+
+msgid "Penalty"
+msgstr "Strafe"
+
+msgid "Waiting for the first start signal…"
+msgstr "Warten auf das erste Startsignal…"
+
+msgid "Timing settings"
+msgstr "Zeitmess-Einstellungen"
+
+msgid ""
+"The timing device this machine receives signals from, and how its channels "
+"map to start and finish."
+msgstr ""
+"Das Zeitmessgerät, von dem dieser Rechner Signale empfängt, und wie seine "
+"Kanäle Start und Ziel zugeordnet sind."
+
+msgid "Start channel"
+msgstr "Startkanal"
+
+msgid "Finish channel"
+msgstr "Zielkanal"
+
+msgid "Start simulator ↗"
+msgstr "Simulator starten ↗"
+
+msgid "CP540 connection"
+msgstr "CP540-Verbindung"
+
+msgid "Disconnect to change the address or port."
+msgstr "Trennen Sie die Verbindung, um Adresse oder Port zu ändern."
+
+msgid "Connect"
+msgstr "Verbinden"
+
+msgid "Disconnect"
+msgstr "Trennen"
+
+msgid "Device stream"
+msgstr "Geräte-Datenstrom"
+
+msgid "Idle"
+msgstr "Bereit"
+
+msgid ""
+"Every line the CP540 sends is shown here. Only <code>TN</code> lines (a "
+"running number, an input 1–4 or M1–M4, and a time) become timing signals — "
+"those are highlighted."
+msgstr ""
+"Jede vom CP540 gesendete Zeile wird hier angezeigt. Nur "
+"<code>TN</code>-Zeilen (eine laufende Nummer, ein Eingang 1–4 oder M1–M4 und"
+" eine Zeit) werden zu Zeitsignalen — diese sind hervorgehoben."
+
+msgid "No lines received yet."
+msgstr "Noch keine Zeilen empfangen."
+
+msgid "Connecting…"
+msgstr "Verbinden…"
+
+msgid "Connected"
+msgstr "Verbunden"
+
+msgid "Connection error"
+msgstr "Verbindungsfehler"
+
+msgid "Disconnected"
+msgstr "Getrennt"
+
+#, python-brace-format
+msgid "{n} signal"
+msgstr "{n} Signal"
+
+#, python-brace-format
+msgid "{n} signals"
+msgstr "{n} Signale"
+
+msgid "Device time"
+msgstr "Gerätezeit"
+
+msgid "Next running number"
+msgstr "Nächste laufende Nummer"
+
+msgid "Reset to 1"
+msgstr "Auf 1 zurücksetzen"
+
+msgid "Light barrier"
+msgstr "Lichtschranke"
+
+msgid "Signal log"
+msgstr "Signalprotokoll"
+
+msgid "Clear"
+msgstr "Leeren"
+
+msgid "No signals sent yet."
+msgstr "Noch keine Signale gesendet."
+
+msgid "Signal rejected."
+msgstr "Signal abgelehnt."
+
+#, python-brace-format
+msgid "#{n} · {label} · {time} — failed: {err}"
+msgstr "#{n} · {label} · {time} — fehlgeschlagen: {err}"

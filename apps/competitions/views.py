@@ -7,6 +7,7 @@ from django.db.models import Count, Max, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views import View
+from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
@@ -88,10 +89,10 @@ class GeneralView(ActiveCompetitionMixin, View):
                 if removed:
                     messages.info(
                         request,
-                        f"Removed {removed} registration(s) that didn't belong to "
-                        f"“{competition.competition_type}”.",
+                        _("Removed %(count)s registration(s) that didn't belong to “%(type)s”.")
+                        % {"count": removed, "type": competition.competition_type},
                     )
-            messages.success(request, "General settings saved.")
+            messages.success(request, _("General settings saved."))
             return redirect(safe_next(request, reverse("competitions:general")))
         return render(request, self.template_name, {"object": competition, "form": form})
 
@@ -190,7 +191,7 @@ class ClassesView(ActiveCompetitionMixin, View):
                     obj.save()
                 for obj in formset.deleted_objects:
                     obj.delete()
-            messages.success(request, "Classes saved.")
+            messages.success(request, _("Classes saved."))
             return redirect(safe_next(request, reverse("competitions:classes")))
         return render(request, self.template_name,
                       self._context(competition, assignment_form, formset))
@@ -234,7 +235,7 @@ class RunOrderView(ActiveCompetitionMixin, View):
         with transaction.atomic():
             self._apply_run_order(request, competition)
             self._apply_start_pattern(request, competition)
-        messages.success(request, "Run order saved.")
+        messages.success(request, _("Run order saved."))
         return redirect(safe_next(request, reverse("competitions:runorder")))
 
     @staticmethod
@@ -334,12 +335,12 @@ class PenaltiesView(ActiveCompetitionMixin, View):
                 competition.penalties_by_marshal_posts = False
                 competition.save(update_fields=["penalties_by_marshal_posts"])
                 competition.marshal_posts.all().delete()
-            messages.success(request, "Penalties settings saved.")
+            messages.success(request, _("Penalties settings saved."))
             return redirect(safe_next(request, reverse("competitions:penalties")))
 
         rows, has_errors = self._rows_from_post(request)
         if has_errors:
-            messages.error(request, "Some task lists couldn't be read — fix them and save again.")
+            messages.error(request, _("Some task lists couldn't be read — fix them and save again."))
             return render(request, self.template_name, self._context(competition, True, rows))
         with transaction.atomic():
             competition.penalties_by_marshal_posts = True
@@ -565,12 +566,12 @@ class CompetitionTypeSettingsView(UpdateView):
         context["penalty_fields"] = [form[name] for name in CompetitionType.PENALTY_FIELDS]
         context["participant_info_fields"] = [
             (form[setting], mandatory)
-            for setting, (_, mandatory, _) in CompetitionType.PARTICIPANT_INFO.items()
+            for setting, (_label, mandatory, _fields) in CompetitionType.PARTICIPANT_INFO.items()
         ]
         return context
 
     def form_valid(self, form):
-        messages.success(self.request, f"Settings for “{form.instance.name}” saved.")
+        messages.success(self.request, _("Settings for “%(name)s” saved.") % {"name": form.instance.name})
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -627,7 +628,7 @@ def delete_competition_type(request, pk):
     # A type in use (by competitions or participants) can't be removed — the
     # FKs are PROTECT, and the UI disables the button, but guard here too.
     if competition_type.competitions.exists() or competition_type.participants.exists():
-        messages.error(request, "That type is still in use and can't be deleted.")
+        messages.error(request, _("That type is still in use and can't be deleted."))
     else:
         competition_type.delete()
     return redirect("competitions:type-list")

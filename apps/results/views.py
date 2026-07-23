@@ -5,6 +5,7 @@ from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.translation import gettext as _
 from django.views import View
 
 from apps.common import safe_next
@@ -65,10 +66,10 @@ def _group_keys(enabled, group):
 def _score_heading(method):
     """The last column's heading — the scoring value competitors are ranked by."""
     if method == CompetitionClass.Scoring.BEST_RUN:
-        return "Best run"
+        return _("Best run")
     if method == CompetitionClass.Scoring.REGULARITY:
-        return "Difference"
-    return "Total"
+        return _("Difference")
+    return _("Total")
 
 
 def _run_cell(run, precision):
@@ -638,7 +639,7 @@ class ResultsSettingsView(ActiveCompetitionMixin, View):
                     defaults={"columns": cols},
                 )
             self._save_pdf_layout(request, competition)
-        messages.success(request, "Results settings saved.")
+        messages.success(request, _("Results settings saved."))
         return redirect(safe_next(request, reverse("results:settings")))
 
     @staticmethod

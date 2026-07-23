@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Competition Setup – Slalom Timing{% endblock %}
-{% block topbar_title %}Competition Setup{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Competition Setup" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Competition Setup" %}{% endblock %}
 {% block content %}
   <div class="empty-state">
-    No competition is selected yet.
-    <a href="{% url 'competitions:list' %}">Go to Manage competitions</a> to pick or create one.
+    {% trans "No competition is selected yet." %}
+    <a href="{% url 'competitions:list' %}">{% trans "Go to Manage competitions" %}</a> {% trans "to pick or create one." %}
   </div>
 {% endblock %}

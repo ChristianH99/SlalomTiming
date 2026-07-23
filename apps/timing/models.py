@@ -1,5 +1,6 @@
 from django.core.validators import MaxValueValidator
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 
 class TimingSettings(models.Model):
@@ -9,32 +10,35 @@ class TimingSettings(models.Model):
 
     class Device(models.TextChoices):
         CP540 = "cp540", "Tag Heuer CP540"
-        SIMULATOR = "simulator", "Simulator"
+        SIMULATOR = "simulator", _("Simulator")
 
     device = models.CharField(
         max_length=20, choices=Device.choices, default=Device.SIMULATOR,
-        help_text="Which timing device signals are received from.",
+        verbose_name=_("Device"),
+        help_text=_("Which timing device signals are received from."),
     )
     # Single-digit device channels (0–9): which physical channel carries the
     # start pulse and which carries the finish pulse.
     start_channel = models.PositiveSmallIntegerField(
         default=1, validators=[MaxValueValidator(9)],
-        help_text="Device channel that carries the start signal (0–9).",
+        help_text=_("Device channel that carries the start signal (0–9)."),
     )
     finish_channel = models.PositiveSmallIntegerField(
         default=2, validators=[MaxValueValidator(9)],
-        help_text="Device channel that carries the finish signal (0–9).",
+        help_text=_("Device channel that carries the finish signal (0–9)."),
     )
     # Where to reach the CP540. Kept even while another device is selected, so the
     # address doesn't have to be re-typed when switching back (default 192.168.1.50).
     ip_address = models.GenericIPAddressField(
         null=True, blank=True, default="192.168.1.50",
-        help_text="Network address of the Tag Heuer CP540.",
+        verbose_name=_("IP address"),
+        help_text=_("Network address of the Tag Heuer CP540."),
     )
     # TCP port the CP540 streams its time lines on (default 7000).
     port = models.PositiveIntegerField(
         null=True, blank=True, default=7000, validators=[MaxValueValidator(65535)],
-        help_text="TCP port of the Tag Heuer CP540.",
+        verbose_name=_("Port"),
+        help_text=_("TCP port of the Tag Heuer CP540."),
     )
     # Operator "lock" toggled from the timing pages: while on, every incoming time
     # (from any device or the simulator) is sent straight to the ignore list rather
@@ -56,7 +60,7 @@ class TimingSettings(models.Model):
     @classmethod
     def load(cls):
         """The one settings row, created with defaults on first access."""
-        obj, _ = cls.objects.get_or_create(pk=1)
+        obj, _created = cls.objects.get_or_create(pk=1)
         return obj
 
 
@@ -67,8 +71,8 @@ class TimingSignal(models.Model):
     into runs (see apps/timing/arrangement.py)."""
 
     class Role(models.TextChoices):
-        START = "start", "Start"
-        FINISH = "finish", "Finish"
+        START = "start", _("Start")
+        FINISH = "finish", _("Finish")
 
     # Which competition was being timed when this fired (stamped at ingestion);
     # the live view is scoped to it. Null when no competition was active.
@@ -77,12 +81,12 @@ class TimingSignal(models.Model):
         on_delete=models.CASCADE, related_name="timing_signals",
     )
     running_number = models.PositiveIntegerField()
-    port = models.PositiveSmallIntegerField(help_text="Physical channel the signal came in on (1–4).")
+    port = models.PositiveSmallIntegerField(help_text=_("Physical channel the signal came in on (1–4)."))
     # A manual trigger (the simulator's M-buttons, a hand button on the device)
     # fires on the same port as its light barrier but is flagged so downstream
     # code can tell an operator press from an automatic beam break.
     is_manual = models.BooleanField(default=False)
-    device_time = models.TimeField(help_text="Wall-clock time the signal fired (hh:mm:ss.mmm).")
+    device_time = models.TimeField(help_text=_("Wall-clock time the signal fired (hh:mm:ss.mmm)."))
     source = models.CharField(max_length=20, default="simulator")
     # A wrong measurement (someone walked through a beam): kept, but removed from
     # its run and listed separately, greyed out.
@@ -120,8 +124,8 @@ class TimedRun(models.Model):
     joins a start that came before it."""
 
     class RunType(models.TextChoices):
-        PRACTICE = "practice", "Practice"
-        COUNTED = "counted", "Counted"
+        PRACTICE = "practice", _("Practice")
+        COUNTED = "counted", _("Counted")
 
     competition = models.ForeignKey(
         "competitions.Competition", on_delete=models.CASCADE, related_name="timed_runs"
@@ -207,9 +211,9 @@ class MarshalPenalty(models.Model):
 
 class TimingEvent(models.Model):
     class Channel(models.TextChoices):
-        START = "start", "Start"
-        FINISH = "finish", "Finish"
-        INTERMEDIATE = "intermediate", "Intermediate"
+        START = "start", _("Start")
+        FINISH = "finish", _("Finish")
+        INTERMEDIATE = "intermediate", _("Intermediate")
 
     channel = models.CharField(max_length=20, choices=Channel.choices)
     bib_number = models.PositiveIntegerField(null=True, blank=True)

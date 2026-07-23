@@ -5,6 +5,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
+from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
@@ -62,13 +63,13 @@ def role_create(request):
         return redirect("accounts:login")
     name = (request.POST.get("name") or "").strip()
     if not name:
-        messages.error(request, "A role needs a name.")
+        messages.error(request, _("A role needs a name."))
     elif Group.objects.filter(name=name).exists():
-        messages.error(request, f"A role named “{name}” already exists.")
+        messages.error(request, _("A role named “%(name)s” already exists.") % {"name": name})
     else:
         group = Group.objects.create(name=name)
         RoleAccess.objects.create(group=group, pages=[])
-        messages.success(request, f"Role “{name}” created.")
+        messages.success(request, _("Role “%(name)s” created.") % {"name": name})
     return redirect("accounts:users")
 
 
@@ -78,10 +79,10 @@ def role_update(request):
         return redirect("accounts:login")
     group = get_object_or_404(Group, pk=request.POST.get("group"))
     selected = [k for k in request.POST.getlist("pages") if k in pages.PAGE_KEYS]
-    access, _ = RoleAccess.objects.get_or_create(group=group)
+    access, _created = RoleAccess.objects.get_or_create(group=group)
     access.pages = selected
     access.save(update_fields=["pages"])
-    messages.success(request, f"Access for “{group.name}” updated.")
+    messages.success(request, _("Access for “%(name)s” updated.") % {"name": group.name})
     return redirect("accounts:users")
 
 
@@ -92,7 +93,7 @@ def role_delete(request):
     group = get_object_or_404(Group, pk=request.POST.get("group"))
     name = group.name
     group.delete()
-    messages.success(request, f"Role “{name}” deleted.")
+    messages.success(request, _("Role “%(name)s” deleted.") % {"name": name})
     return redirect("accounts:users")
 
 
@@ -110,10 +111,10 @@ def user_create(request):
     username = (request.POST.get("username") or "").strip()
     password = request.POST.get("password") or ""
     if not username:
-        messages.error(request, "A username is required.")
+        messages.error(request, _("A username is required."))
         return redirect("accounts:users")
     if User.objects.filter(username=username).exists():
-        messages.error(request, f"A user named “{username}” already exists.")
+        messages.error(request, _("A user named “%(name)s” already exists.") % {"name": username})
         return redirect("accounts:users")
     try:
         validate_password(password)
@@ -123,7 +124,7 @@ def user_create(request):
     with transaction.atomic():
         user = User.objects.create_user(username=username, password=password)
         user.groups.set(_selected_groups(request))
-    messages.success(request, f"User “{username}” created.")
+    messages.success(request, _("User “%(name)s” created.") % {"name": username})
     return redirect("accounts:users")
 
 
@@ -144,9 +145,9 @@ def user_update(request):
             return redirect("accounts:users")
         user.set_password(password)
         user.save()
-        messages.success(request, f"Password for “{user.username}” reset.")
+        messages.success(request, _("Password for “%(name)s” reset.") % {"name": user.username})
     else:
-        messages.success(request, f"Roles for “{user.username}” updated.")
+        messages.success(request, _("Roles for “%(name)s” updated.") % {"name": user.username})
     return redirect("accounts:users")
 
 
@@ -156,12 +157,12 @@ def user_delete(request):
         return redirect("accounts:login")
     user = get_object_or_404(User, pk=request.POST.get("user"))
     if user == request.user:
-        messages.error(request, "You can’t delete your own account.")
+        messages.error(request, _("You can’t delete your own account."))
         return redirect("accounts:users")
     if user.is_superuser and User.objects.filter(is_superuser=True).count() <= 1:
-        messages.error(request, "Can’t delete the last superuser.")
+        messages.error(request, _("Can’t delete the last superuser."))
         return redirect("accounts:users")
     name = user.username
     user.delete()
-    messages.success(request, f"User “{name}” deleted.")
+    messages.success(request, _("User “%(name)s” deleted.") % {"name": name})
     return redirect("accounts:users")

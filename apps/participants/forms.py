@@ -1,4 +1,5 @@
 from django import forms
+from django.utils.translation import gettext_lazy as _
 
 from apps.competitions.models import Competition, CompetitionType
 
@@ -111,10 +112,10 @@ class ParticipantForm(forms.ModelForm):
                 continue
             counts[pk] = counts.get(pk, 0) + 1
             if counts[pk] > 1 and pk not in repeatable:
-                self.add_error(None, f"“{cc.name}” can’t be added more than once.")
+                self.add_error(None, _("“%(name)s” can’t be added more than once.") % {"name": cc.name})
                 continue
             if pk not in distinct and distinct and not self.allow_multiple_classes:
-                self.add_error(None, "Only one class can be assigned to this participant.")
+                self.add_error(None, _("Only one class can be assigned to this participant."))
                 continue
             distinct.add(pk)
             chosen.append(cc)
@@ -152,19 +153,19 @@ class ParticipantForm(forms.ModelForm):
             "email": forms.EmailInput(attrs={"autocomplete": "off"}),
         }
         labels = {
-            "co_driver_first_name": "Co-driver first name",
-            "co_driver_last_name": "Co-driver last name",
-            "address_street": "Street address",
-            "address_zip_code": "ZIP code",
-            "address_city": "City",
-            "email": "E-Mail",
+            "co_driver_first_name": _("Co-driver first name"),
+            "co_driver_last_name": _("Co-driver last name"),
+            "address_street": _("Street address"),
+            "address_zip_code": _("ZIP code"),
+            "address_city": _("City"),
+            "email": _("E-Mail"),
         }
 
 
 class ParticipantCreateForm(ParticipantForm):
     bib_number = forms.IntegerField(
-        required=False, min_value=1, label="Bib number",
-        help_text="Optional — assigns this participant a bib for the current competition right away.",
+        required=False, min_value=1, label=_("Bib number"),
+        help_text=_("Optional — assigns this participant a bib for the current competition right away."),
     )
 
     def __init__(self, *args, **kwargs):
@@ -179,7 +180,7 @@ class ParticipantCreateForm(ParticipantForm):
         if self.competition is None:
             self.fields["bib_number"].disabled = True
             self.fields["bib_number"].help_text = (
-                "No competition is currently selected, so a bib can't be assigned yet."
+                _("No competition is currently selected, so a bib can't be assigned yet.")
             )
 
     def clean(self):
@@ -188,12 +189,12 @@ class ParticipantCreateForm(ParticipantForm):
         if bib_number is None or self.competition is None:
             return cleaned_data
         if EventEntry.objects.filter(competition=self.competition, bib_number=bib_number).exists():
-            self.add_error("bib_number", "This bib number is already taken in the current competition.")
+            self.add_error("bib_number", _("This bib number is already taken in the current competition."))
         return cleaned_data
 
 
 class ParticipantUpdateForm(ParticipantForm):
-    bib_number = forms.IntegerField(required=False, min_value=1, label="Bib number")
+    bib_number = forms.IntegerField(required=False, min_value=1, label=_("Bib number"))
 
     def __init__(self, *args, competition=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -203,7 +204,7 @@ class ParticipantUpdateForm(ParticipantForm):
         self.setup_classes(competition)
 
         if competition is None:
-            self._disable_bib_field("No competition is currently selected, so a bib can't be assigned.")
+            self._disable_bib_field(_("No competition is currently selected, so a bib can't be assigned."))
             return
 
         if self.instance.pk and self.instance.competition_type_id == competition.competition_type_id:
@@ -214,7 +215,7 @@ class ParticipantUpdateForm(ParticipantForm):
                 self.fields["bib_number"].initial = self.entry.bib_number
         else:
             self._disable_bib_field(
-                "This participant's type doesn't match the current competition, so a bib can't be assigned."
+                _("This participant's type doesn't match the current competition, so a bib can't be assigned.")
             )
 
     def _disable_bib_field(self, reason):
@@ -229,5 +230,5 @@ class ParticipantUpdateForm(ParticipantForm):
             if self.entry:
                 conflict = conflict.exclude(pk=self.entry.pk)
             if conflict.exists():
-                self.add_error("bib_number", "This bib number is already taken in the current competition.")
+                self.add_error("bib_number", _("This bib number is already taken in the current competition."))
         return cleaned_data

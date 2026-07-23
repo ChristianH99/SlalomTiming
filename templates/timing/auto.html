@@ -1,25 +1,19 @@
 {% extends "base.html" %}
-{% load static %}
-{% block title %}Auto timing – Slalom Timing{% endblock %}
-{% block topbar_title %}Auto timing{% endblock %}
+{% load static i18n %}
+{% block title %}{% trans "Auto timing" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Auto timing" %}{% endblock %}
 {% block topbar_actions %}
-  <button type="button" class="topbar-help" data-help-open title="How Auto timing works" aria-label="How Auto timing works">?</button>
+  <button type="button" class="topbar-help" data-help-open title="{% trans 'How Auto timing works' %}" aria-label="{% trans 'How Auto timing works' %}">?</button>
 {% endblock %}
 {% block help_modal %}
   <div class="modal-overlay help-modal" id="help-modal" hidden data-help-modal>
     <div class="modal help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
-      <button type="button" class="modal-close" data-help-close aria-label="Close">×</button>
-      <h2 class="modal-title" id="help-title">Auto timing</h2>
+      <button type="button" class="modal-close" data-help-close aria-label="{% trans 'Close' %}">×</button>
+      <h2 class="modal-title" id="help-title">{% trans "Auto timing" %}</h2>
       <div class="modal-body">
-        <p>The start order comes from <strong>Run order</strong> and the <strong>start pattern</strong>;
-          times attach to it automatically. Drag a tile in the list to reorder, and drag an ignored time
-          back onto a slot to re-pair it.</p>
-        <p><strong>Double-click</strong> a Start, Finish or Run time to type it in by hand when the device
-          didn't fire — keyed-in times are highlighted. <strong>Scroll</strong> the tiles (or click a tile
-          in the list) to browse the field without changing the current starter; keying a start time onto
-          an upcoming competitor makes them the current one.</p>
-        <p>The red <strong>Lock</strong> switch sends every incoming time straight to the Ignored list —
-          a way to pause capture without disconnecting the device.</p>
+        <p>{% blocktrans %}The start order comes from <strong>Run order</strong> and the <strong>start pattern</strong>; times attach to it automatically. Drag a tile in the list to reorder, and drag an ignored time back onto a slot to re-pair it.{% endblocktrans %}</p>
+        <p>{% blocktrans %}<strong>Double-click</strong> a Start, Finish or Run time to type it in by hand when the device didn't fire — keyed-in times are highlighted. <strong>Scroll</strong> the tiles (or click a tile in the list) to browse the field without changing the current starter; keying a start time onto an upcoming competitor makes them the current one.{% endblocktrans %}</p>
+        <p>{% blocktrans %}The red <strong>Lock</strong> switch sends every incoming time straight to the Ignored list — a way to pause capture without disconnecting the device.{% endblocktrans %}</p>
       </div>
     </div>
   </div>
@@ -28,20 +22,18 @@
   <style>.content { max-width: none; }</style>
   {% if not competition %}
     <div class="notice">
-      <p>No competition is selected. Timing runs against the active competition, so
-        <a href="{% url 'competitions:list' %}">pick a competition</a> to time it.</p>
+      <p>{% url 'competitions:list' as list_url %}{% blocktrans %}No competition is selected. Timing runs against the active competition, so <a href="{{ list_url }}">pick a competition</a> to time it.{% endblocktrans %}</p>
     </div>
   {% else %}
     <div class="autotiming" id="autotiming">
       <div class="auto-layout">
         <aside class="auto-order">
           <div class="auto-order-head">
-            <h2 class="auto-col-title">Start order</h2>
-            <button type="button" class="button button--small" data-reset>Reset order</button>
+            <h2 class="auto-col-title">{% trans "Start order" %}</h2>
+            <button type="button" class="button button--small" data-reset>{% trans "Reset order" %}</button>
           </div>
           <ol class="auto-order-list" id="auto-order-list"></ol>
-          <p class="auto-empty hint" id="auto-empty" hidden>No start order yet — set the
-            <a href="{% url 'competitions:runorder' %}">run order</a> and register starters.</p>
+          <p class="auto-empty hint" id="auto-empty" hidden>{% url 'competitions:runorder' as runorder_url %}{% blocktrans %}No start order yet — set the <a href="{{ runorder_url }}">run order</a> and register starters.{% endblocktrans %}</p>
         </aside>
 
         <section class="auto-stage">

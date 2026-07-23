@@ -136,7 +136,7 @@
           const file = cell.querySelector('input[type="file"]');
           if (file) file.value = "";
         } catch (e) {
-          alert("Could not remove the logo (" + e.message + ").");
+          alert(interpolate(gettext("Could not remove the logo (%(error)s)."), { error: e.message }, true));
           btn.disabled = false;
         }
       });
@@ -150,7 +150,7 @@
       syncEditors();
       sampleBtn.disabled = true;
       const original = sampleBtn.textContent;
-      sampleBtn.textContent = "Building…";
+      sampleBtn.textContent = gettext("Building…");
       try {
         const res = await fetch(root.dataset.sampleUrl, {
           method: "POST",
@@ -162,7 +162,7 @@
         window.open(url, "_blank");
         setTimeout(() => URL.revokeObjectURL(url), 60000);
       } catch (e) {
-        alert("Could not build the sample PDF (" + e.message + ").");
+        alert(interpolate(gettext("Could not build the sample PDF (%(error)s)."), { error: e.message }, true));
       } finally {
         sampleBtn.disabled = false;
         sampleBtn.textContent = original;

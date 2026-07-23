@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% load static %}
-{% block title %}{% if object %}Edit{% else %}Add{% endif %} participant – Slalom Timing{% endblock %}
-{% block topbar_title %}{% if object %}Edit {{ object }}{% else %}Add participant{% endif %}{% endblock %}
+{% load static i18n %}
+{% block title %}{% if object %}{% trans "Edit participant" %}{% else %}{% trans "Add participant" %}{% endif %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% if object %}{% blocktrans with name=object %}Edit {{ name }}{% endblocktrans %}{% else %}{% trans "Add participant" %}{% endif %}{% endblock %}
 {% block content %}
-  <a class="back-link" href="{% url 'participants:list' %}">&larr; Back to participants</a>
+  <a class="back-link" href="{% url 'participants:list' %}">{% trans "← Back to participants" %}</a>
 
   <div id="duplicate-warning" class="notice notice--warning" hidden></div>
 
@@ -15,7 +15,7 @@
     {{ form.non_field_errors }}
 
     <div class="bib-box">
-      <h2>Bib</h2>
+      <h2>{% trans "Bib" %}</h2>
       {{ form.bib_number }}
       {{ form.bib_number.errors }}
       {% if form.bib_number.help_text %}<span class="hint">{{ form.bib_number.help_text }}</span>{% endif %}
@@ -26,7 +26,7 @@
 
     <p>
       <label for="{{ form.date_of_birth.id_for_label }}">
-        {{ form.date_of_birth.label }} <span class="required-marker" title="Required">*</span>
+        {{ form.date_of_birth.label }} <span class="required-marker" title="{% trans 'Required' %}">*</span>
       </label>
       {{ form.date_of_birth }}
       {{ form.date_of_birth.errors }}
@@ -34,15 +34,15 @@
     </p>
 
     <div class="class-line">
-      <label>Class{% if form.class_mode == "manual" and form.allow_multiple_classes %} <span class="hint">(one or more)</span>{% endif %}</label>
+      <label>{% trans "Class" %}{% if form.class_mode == "manual" and form.allow_multiple_classes %} <span class="hint">{% trans "(one or more)" %}</span>{% endif %}</label>
       {% if form.class_mode == "age" %}
         {% if active_competition %}
           <div class="class-readonly">
             <span class="class-chip" id="class-preview-value">–</span>
           </div>
-          <span class="hint">Automatically derived from age for {{ active_competition.name }}.</span>
+          <span class="hint">{% blocktrans with name=active_competition.name %}Automatically derived from age for {{ name }}.{% endblocktrans %}</span>
         {% else %}
-          <span class="hint">No competition selected — class can't be computed.</span>
+          <span class="hint">{% trans "No competition selected — class can't be computed." %}</span>
         {% endif %}
       {% elif form.class_mode == "manual" %}
         <div class="class-picker" data-class-picker
@@ -51,20 +51,19 @@
             {% for cc in form.initial_classes %}
               <span class="class-chip" data-chip data-pk="{{ cc.pk }}">{{ cc.name }}
                 <input type="hidden" name="classes" value="{{ cc.pk }}">
-                <button type="button" class="chip-remove" data-chip-remove aria-label="Remove">&times;</button>
+                <button type="button" class="chip-remove" data-chip-remove aria-label="{% trans 'Remove' %}">&times;</button>
               </span>
             {% endfor %}
           </div>
           <select class="class-picker-select" data-picker-add>
-            <option value="">Add class…</option>
+            <option value="">{% trans "Add class…" %}</option>
             {% for cc in form.running_classes %}
               <option value="{{ cc.pk }}" data-repeat="{% if cc.allow_multiple_entries %}1{% else %}0{% endif %}">{{ cc.name }}</option>
             {% endfor %}
           </select>
         </div>
       {% else %}
-        <span class="hint">No competition selected, or this participant's type doesn't match the current
-          competition — no class can be assigned.</span>
+        <span class="hint">{% trans "No competition selected, or this participant's type doesn't match the current competition — no class can be assigned." %}</span>
       {% endif %}
     </div>
 
@@ -84,7 +83,7 @@
     {% endif %}
 
     {% if "requires_address" in form.collected_info %}
-      <h2 class="form-section">Address</h2>
+      <h2 class="form-section">{% trans "Address" %}</h2>
       {% include "participants/_form_field.html" with field=form.address_street mandatory=True %}
       {% include "participants/_form_field.html" with field=form.address_zip_code mandatory=True %}
       {% include "participants/_form_field.html" with field=form.address_city mandatory=True %}
@@ -93,7 +92,7 @@
     {% if "requires_club" in form.collected_info %}
       <div class="combobox" data-combobox="club">
         <label for="{{ form.club.id_for_label }}">
-          {{ form.club.label }} <span class="required-marker" title="Required">*</span>
+          {{ form.club.label }} <span class="required-marker" title="{% trans 'Required' %}">*</span>
         </label>
         <span class="combobox-control">
           {{ form.club }}
@@ -111,7 +110,7 @@
     {% if "requires_email" in form.collected_info %}
       <div class="combobox" data-combobox="email">
         <label for="{{ form.email.id_for_label }}">
-          {{ form.email.label }} <span class="required-marker" title="Required">*</span>
+          {{ form.email.label }} <span class="required-marker" title="{% trans 'Required' %}">*</span>
         </label>
         <span class="combobox-control">
           {{ form.email }}
@@ -127,8 +126,8 @@
     {% endif %}
 
     <div class="actions">
-      <button class="button" type="submit">Save</button>
-      <a href="{% url 'participants:list' %}">Cancel</a>
+      <button class="button" type="submit">{% trans "Save" %}</button>
+      <a href="{% url 'participants:list' %}">{% trans "Cancel" %}</a>
     </div>
   </form>
 
@@ -166,10 +165,10 @@
 
       function checkValidity() {
         const malformed = isMalformed();
-        dobInput.setCustomValidity(malformed ? "Invalid date" : "");
+        dobInput.setCustomValidity(malformed ? "{% trans 'Invalid date'|escapejs %}" : "");
         if (!dobError) return;
         dobError.textContent = dobInput.validity.badInput || malformed
-          ? "That's not a valid date — please check the day exists in that month/year."
+          ? "{% trans 'That’s not a valid date — please check the day exists in that month/year.'|escapejs %}"
           : "";
       }
 
@@ -229,7 +228,7 @@
         input.type = "hidden"; input.name = "classes"; input.value = pk;
         const btn = document.createElement("button");
         btn.type = "button"; btn.className = "chip-remove"; btn.dataset.chipRemove = "";
-        btn.setAttribute("aria-label", "Remove"); btn.innerHTML = "&times;";
+        btn.setAttribute("aria-label", "{% trans 'Remove'|escapejs %}"); btn.innerHTML = "&times;";
         chip.append(input, btn);
         chips.appendChild(chip);
       }

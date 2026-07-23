@@ -1,16 +1,20 @@
-{% load static %}<!doctype html>
-<html lang="en">
+{% load static i18n %}{% get_current_language as LANGUAGE_CODE %}<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Slalom Timing{% endblock %}</title>
+  <title>{% block title %}{% trans "Slalom Timing" %}{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
+  {# Defines gettext()/interpolate() in the browser from the compiled djangojs
+     catalog, so the static/js scripts render in the active language. Must load
+     before any app script that calls gettext(). #}
+  <script src="{% url 'javascript-catalog' %}"></script>
 </head>
 <body>
-  <a href="#main-content" class="skip-link">Skip to content</a>
+  <a href="#main-content" class="skip-link">{% trans "Skip to content" %}</a>
   <div class="shell">
     <aside class="shell-sidebar" id="shell-sidebar">
       <div class="shell-brand">
@@ -19,46 +23,46 @@
       <nav class="shell-nav">
         {% with url_name=request.resolver_match.url_name app_name=request.resolver_match.app_name %}
         {% if 'dashboard' in nav_pages %}
-        <a class="shell-nav-item{% if url_name == 'dashboard' %} active{% endif %}" href="{% url 'timing:dashboard' %}">Dashboard</a>
+        <a class="shell-nav-item{% if url_name == 'dashboard' %} active{% endif %}" href="{% url 'timing:dashboard' %}">{% trans "Dashboard" %}</a>
         {% endif %}
         {% if 'competition_setup' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'competitions' and url_name != 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:list' %}">Competition Setup</a>
+        <a class="shell-nav-item shell-nav-parent{% if app_name == 'competitions' and url_name != 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:list' %}">{% trans "Competition Setup" %}</a>
         <div class="shell-nav-sub">
           {% comment %}"list"/"add" also match participants:list/add, so guard by app.{% endcomment %}
-          <a class="shell-nav-subitem{% if url_name == 'type-list' or url_name == 'type-add' or app_name == 'competitions' and url_name == 'list' or app_name == 'competitions' and url_name == 'add' %} active{% endif %}" href="{% url 'competitions:list' %}">Manage competitions</a>
-          <a class="shell-nav-subitem{% if url_name == 'general' %} active{% endif %}" href="{% url 'competitions:general' %}">General</a>
-          <a class="shell-nav-subitem{% if url_name == 'classes' %} active{% endif %}" href="{% url 'competitions:classes' %}">Classes</a>
-          <a class="shell-nav-subitem{% if url_name == 'runorder' %} active{% endif %}" href="{% url 'competitions:runorder' %}">Run order</a>
-          <a class="shell-nav-subitem{% if url_name == 'penalties' %} active{% endif %}" href="{% url 'competitions:penalties' %}">Penalties</a>
-          <a class="shell-nav-subitem{% if app_name == 'results' and url_name == 'settings' %} active{% endif %}" href="{% url 'results:settings' %}">Results</a>
+          <a class="shell-nav-subitem{% if url_name == 'type-list' or url_name == 'type-add' or app_name == 'competitions' and url_name == 'list' or app_name == 'competitions' and url_name == 'add' %} active{% endif %}" href="{% url 'competitions:list' %}">{% trans "Manage competitions" %}</a>
+          <a class="shell-nav-subitem{% if url_name == 'general' %} active{% endif %}" href="{% url 'competitions:general' %}">{% trans "General" %}</a>
+          <a class="shell-nav-subitem{% if url_name == 'classes' %} active{% endif %}" href="{% url 'competitions:classes' %}">{% trans "Classes" %}</a>
+          <a class="shell-nav-subitem{% if url_name == 'runorder' %} active{% endif %}" href="{% url 'competitions:runorder' %}">{% trans "Run order" %}</a>
+          <a class="shell-nav-subitem{% if url_name == 'penalties' %} active{% endif %}" href="{% url 'competitions:penalties' %}">{% trans "Penalties" %}</a>
+          <a class="shell-nav-subitem{% if app_name == 'results' and url_name == 'settings' %} active{% endif %}" href="{% url 'results:settings' %}">{% trans "Results" %}</a>
         </div>
         {% endif %}
         {% if 'participants' in nav_pages %}
-        <a class="shell-nav-item{% if request.resolver_match.app_name == 'participants' %} active{% endif %}" href="{% url 'participants:list' %}">Participants</a>
+        <a class="shell-nav-item{% if request.resolver_match.app_name == 'participants' %} active{% endif %}" href="{% url 'participants:list' %}">{% trans "Participants" %}</a>
         {% endif %}
         {% comment %}Timing sub-pages will grow; Settings is kept last (future
         pages go above it).{% endcomment %}
         {% if 'timing' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'timing' and url_name != 'dashboard' %} active{% endif %}" href="{% url 'timing:manual' %}">Timing</a>
+        <a class="shell-nav-item shell-nav-parent{% if app_name == 'timing' and url_name != 'dashboard' %} active{% endif %}" href="{% url 'timing:manual' %}">{% trans "Timing" %}</a>
         <div class="shell-nav-sub">
-          <a class="shell-nav-subitem{% if url_name == 'manual' %} active{% endif %}" href="{% url 'timing:manual' %}">Manual timing</a>
-          <a class="shell-nav-subitem{% if url_name == 'auto' %} active{% endif %}" href="{% url 'timing:auto' %}">Auto timing</a>
-          <a class="shell-nav-subitem{% if url_name == 'settings' %} active{% endif %}" href="{% url 'timing:settings' %}">Settings</a>
+          <a class="shell-nav-subitem{% if url_name == 'manual' %} active{% endif %}" href="{% url 'timing:manual' %}">{% trans "Manual timing" %}</a>
+          <a class="shell-nav-subitem{% if url_name == 'auto' %} active{% endif %}" href="{% url 'timing:auto' %}">{% trans "Auto timing" %}</a>
+          <a class="shell-nav-subitem{% if url_name == 'settings' %} active{% endif %}" href="{% url 'timing:settings' %}">{% trans "Settings" %}</a>
         </div>
         {% endif %}
         {% if 'marshal_posts' in nav_pages %}
-        <a class="shell-nav-item{% if url_name == 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">Marshal Posts</a>
+        <a class="shell-nav-item{% if url_name == 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">{% trans "Marshal Posts" %}</a>
         {% endif %}
         {% if 'results' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'results' and url_name != 'settings' %} active{% endif %}" href="{% url 'results:index' %}">Results</a>
+        <a class="shell-nav-item shell-nav-parent{% if app_name == 'results' and url_name != 'settings' %} active{% endif %}" href="{% url 'results:index' %}">{% trans "Results" %}</a>
         <div class="shell-nav-sub">
           {% for g in results_overall %}
-            <a class="shell-nav-subitem{% if url_name == 'overall' and request.resolver_match.kwargs.method == g.method and request.resolver_match.kwargs.runs == g.counted_runs %} active{% endif %}" href="{% url 'results:overall' g.method g.counted_runs %}">Overall · {{ g.method_label }} · {{ g.counted_runs }} Runs</a>
+            <a class="shell-nav-subitem{% if url_name == 'overall' and request.resolver_match.kwargs.method == g.method and request.resolver_match.kwargs.runs == g.counted_runs %} active{% endif %}" href="{% url 'results:overall' g.method g.counted_runs %}">{% blocktrans with label=g.method_label runs=g.counted_runs %}Overall · {{ label }} · {{ runs }} Runs{% endblocktrans %}</a>
           {% endfor %}
           {% for cc in results_classes %}
             <a class="shell-nav-subitem{% if url_name == 'class' and request.resolver_match.kwargs.pk == cc.pk %} active{% endif %}" href="{% url 'results:class' cc.pk %}">{{ cc.name }}</a>
           {% empty %}
-            <span class="shell-nav-subitem shell-nav-subitem--muted">No running classes</span>
+            <span class="shell-nav-subitem shell-nav-subitem--muted">{% trans "No running classes" %}</span>
           {% endfor %}
         </div>
         {% endif %}
@@ -66,14 +70,14 @@
       </nav>
       <div class="shell-sidebar-footer">
         {% if can_manage_users %}
-          <a class="shell-admin-link" href="{% url 'accounts:users' %}">User Access</a>
+          <a class="shell-admin-link" href="{% url 'accounts:users' %}">{% trans "User Access" %}</a>
         {% endif %}
         {% if user.is_authenticated %}
           <div class="shell-user">
             <span class="shell-user-name" title="{{ user.username }}">{{ user.username }}</span>
             <form method="post" action="{% url 'accounts:logout' %}" class="shell-logout-form">
               {% csrf_token %}
-              <button type="submit" class="shell-logout">Log out</button>
+              <button type="submit" class="shell-logout">{% trans "Log out" %}</button>
             </form>
           </div>
         {% endif %}
@@ -82,21 +86,22 @@
     <div class="shell-overlay" id="shell-overlay"></div>
     <div class="shell-main">
       <header class="shell-topbar">
-        <button class="shell-hamburger" id="shell-hamburger" aria-expanded="true" aria-controls="shell-sidebar" aria-label="Toggle navigation">
+        <button class="shell-hamburger" id="shell-hamburger" aria-expanded="true" aria-controls="shell-sidebar" aria-label="{% trans 'Toggle navigation' %}">
           <span class="shell-hamburger-icon"><span></span><span></span><span></span></span>
         </button>
         <div class="topbar-titles">
-          <span class="topbar-page">{% block topbar_title %}Slalom Timing{% endblock %}</span>
+          <span class="topbar-page">{% block topbar_title %}{% trans "Slalom Timing" %}{% endblock %}</span>
           <span class="topbar-sub">
             {% if active_competition %}
               {{ active_competition.name }} · {{ active_competition.date|date:"d.m.Y" }}
             {% else %}
-              <span class="topbar-sub--none">No event selected</span> · <a href="{% url 'competitions:list' %}">choose one</a>
+              <span class="topbar-sub--none">{% trans "No event selected" %}</span> · <a href="{% url 'competitions:list' %}">{% trans "choose one" %}</a>
             {% endif %}
           </span>
         </div>
         <div class="topbar-actions">
           {% block topbar_actions %}{% endblock %}
+          {% include "_lang_switcher.html" %}
         </div>
       </header>
       <main class="content" id="main-content">
@@ -114,13 +119,12 @@
 
   <div class="modal-overlay" id="unsaved-modal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="unsaved-title">
-      <h2 class="modal-title" id="unsaved-title">Unsaved changes</h2>
-      <p class="modal-body">You have unsaved changes on this page. Do you want to save them
-        before leaving?</p>
+      <h2 class="modal-title" id="unsaved-title">{% trans "Unsaved changes" %}</h2>
+      <p class="modal-body">{% trans "You have unsaved changes on this page. Do you want to save them before leaving?" %}</p>
       <div class="modal-actions">
-        <button type="button" class="button" data-unsaved-save>Save changes</button>
-        <button type="button" class="button button--secondary" data-unsaved-discard>Discard</button>
-        <button type="button" class="link-button" data-unsaved-cancel>Cancel</button>
+        <button type="button" class="button" data-unsaved-save>{% trans "Save changes" %}</button>
+        <button type="button" class="button button--secondary" data-unsaved-discard>{% trans "Discard" %}</button>
+        <button type="button" class="link-button" data-unsaved-cancel>{% trans "Cancel" %}</button>
       </div>
     </div>
   </div>
@@ -203,6 +207,31 @@
       });
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && !modal.hidden) close();
+      });
+    })();
+  </script>
+
+  <script>
+    // Topbar language selector: toggle the menu; close on outside click or Escape.
+    (function () {
+      const root = document.querySelector("[data-lang-switcher]");
+      if (!root) return;
+      const toggle = root.querySelector("[data-lang-toggle]");
+      const menu = root.querySelector("[data-lang-menu]");
+      if (!toggle || !menu) return;
+
+      const open = () => { menu.hidden = false; toggle.setAttribute("aria-expanded", "true"); };
+      const close = () => { menu.hidden = true; toggle.setAttribute("aria-expanded", "false"); };
+
+      toggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        menu.hidden ? open() : close();
+      });
+      document.addEventListener("click", (event) => {
+        if (!menu.hidden && !root.contains(event.target)) close();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !menu.hidden) close();
       });
     })();
   </script>

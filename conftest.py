@@ -2,6 +2,18 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _english_ui(settings):
+    """Pin the UI language to English for the test suite. The app now ships with
+    German as the default language (LANGUAGE_CODE='de'), so without this the test
+    client would render German and assertions on user-facing text ("Difference",
+    "Starters:", …) would break. Tests assert behaviour, not translations, so a
+    stable English UI keeps them independent of the shipped default. A test that
+    specifically checks translation can override the language itself.
+    """
+    settings.LANGUAGE_CODE = "en"
+
+
+@pytest.fixture(autouse=True)
 def _login_superuser(request, django_user_model):
     """Access control now requires a login on every page, so the existing view
     tests (which drive the `client` fixture) need an authenticated session. Log

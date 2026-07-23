@@ -15,6 +15,8 @@ run; it's what the previous/current/next tiles centre on and what the marshal
 posts judge. Each post's running penalty for that run is a ``MarshalPenalty``.
 """
 
+from django.utils.translation import gettext_lazy as _
+
 from apps.competitions import startpattern
 from apps.participants.models import EventEntry
 
@@ -283,9 +285,9 @@ def _item(precision, ctype, marshal_mode, index, slot, run, posts):
 
 # Per penalty type: (label, the TimedRun/MarshalPenalty count field, the adjust field).
 PENALTY_TYPES = (
-    ("Pylons", "pylon_count", "pylon_adjust"),
-    ("Task", "task_count", "task_adjust"),
-    ("Stop line", "stopline_count", "stopline_adjust"),
+    (_("Pylons"), "pylon_count", "pylon_adjust"),
+    (_("Task"), "task_count", "task_adjust"),
+    (_("Stop line"), "stopline_count", "stopline_adjust"),
 )
 
 

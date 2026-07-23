@@ -1,35 +1,33 @@
 {% extends "base.html" %}
-{% load competitions_tags %}
-{% block title %}Participants – Slalom Timing{% endblock %}
-{% block topbar_title %}Participants{% endblock %}
+{% load competitions_tags i18n %}
+{% block title %}{% trans "Participants" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Participants" %}{% endblock %}
 {% block content %}
   {% if not competition %}
     <div class="notice">
-      <p>No competition is selected. Participants are registered under a competition's
-        type, so <a href="{% url 'competitions:list' %}">pick a competition</a> to see and
-        manage its participants.</p>
+      <p>{% url 'competitions:list' as list_url %}{% blocktrans %}No competition is selected. Participants are registered under a competition's type, so <a href="{{ list_url }}">pick a competition</a> to see and manage its participants.{% endblocktrans %}</p>
     </div>
   {% else %}
   <div class="list-toolbar">
     <form method="get" class="search-form" role="search" id="participant-search">
       <span class="search-input-wrap">
         <input type="text" name="q" value="{{ query }}" id="participant-search-input"
-               placeholder="Search by name, club or bib…" autocomplete="off">
+               placeholder="{% trans 'Search by name, club or bib…' %}" autocomplete="off">
         <button type="button" class="search-clear" id="participant-search-clear"
-                aria-label="Clear search" hidden>&times;</button>
+                aria-label="{% trans 'Clear search' %}" hidden>&times;</button>
       </span>
       {% if active_only %}<input type="hidden" name="active" value="1">{% endif %}
-      <button class="button button--secondary" type="submit">Search</button>
+      <button class="button button--secondary" type="submit">{% trans "Search" %}</button>
     </form>
-    <a class="button" href="{% url 'participants:add' %}">+ Add participant</a>
+    <a class="button" href="{% url 'participants:add' %}">{% trans "+ Add participant" %}</a>
   </div>
 
   <p class="hint">
     {{ competition.competition_type.name }} · {{ competition.name }} —
     {% if active_only %}
-      showing active participants only. <a href="?q={{ query }}">Show all</a>
+      {% trans "showing active participants only." %} <a href="?q={{ query }}">{% trans "Show all" %}</a>
     {% else %}
-      showing all registered participants. <a href="?active=1&q={{ query }}">Show active only</a>
+      {% trans "showing all registered participants." %} <a href="?active=1&q={{ query }}">{% trans "Show active only" %}</a>
     {% endif %}
   </p>
 
@@ -37,12 +35,12 @@
   <table class="participants-table">
     <thead>
       <tr>
-        <th class="col-bib">Bib</th>
-        <th class="col-name">Name</th>
-        <th class="col-dob">Date of birth</th>
-        <th class="col-class">Class</th>
-        {% if "requires_club" in collected_info %}<th class="col-club">Club</th>{% endif %}
-        {% if "requires_license" in collected_info %}<th class="col-licence">Licence</th>{% endif %}
+        <th class="col-bib">{% trans "Bib" %}</th>
+        <th class="col-name">{% trans "Name" %}</th>
+        <th class="col-dob">{% trans "Date of birth" %}</th>
+        <th class="col-class">{% trans "Class" %}</th>
+        {% if "requires_club" in collected_info %}<th class="col-club">{% trans "Club" %}</th>{% endif %}
+        {% if "requires_license" in collected_info %}<th class="col-licence">{% trans "Licence" %}</th>{% endif %}
         <th class="col-actions"></th>
       </tr>
     </thead>
@@ -80,7 +78,7 @@
           <td colspan="{{ column_count }}">
             <div class="pd">
               <div class="pd-bib">
-                <label for="bib-{{ participant.pk }}">Bib number</label>
+                <label for="bib-{{ participant.pk }}">{% trans "Bib number" %}</label>
                 <input type="text" inputmode="numeric" id="bib-{{ participant.pk }}"
                        class="pd-bib-input" value="{{ participant.current_bib|default:'' }}"
                        autocomplete="off" placeholder="—">
@@ -90,20 +88,20 @@
                 {% for row in participant.detail_rows %}
                   <div class="pd-item"><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
                 {% empty %}
-                  <div class="pd-empty">No further details recorded.</div>
+                  <div class="pd-empty">{% trans "No further details recorded." %}</div>
                 {% endfor %}
               </dl>
               <div class="pd-actions">
-                <a class="button button--secondary pd-edit" href="{% url 'participants:edit' participant.pk %}">Edit full details</a>
-                <a class="button pd-delete" href="{% url 'participants:delete' participant.pk %}">Delete</a>
+                <a class="button button--secondary pd-edit" href="{% url 'participants:edit' participant.pk %}">{% trans "Edit full details" %}</a>
+                <a class="button pd-delete" href="{% url 'participants:delete' participant.pk %}">{% trans "Delete" %}</a>
               </div>
             </div>
           </td>
         </tr>
       {% empty %}
-        <tr class="empty-row"><td colspan="{{ column_count }}">No participants found.</td></tr>
+        <tr class="empty-row"><td colspan="{{ column_count }}">{% trans "No participants found." %}</td></tr>
       {% endfor %}
-      <tr class="empty-row no-results-row" hidden><td colspan="{{ column_count }}">No participants match your search.</td></tr>
+      <tr class="empty-row no-results-row" hidden><td colspan="{{ column_count }}">{% trans "No participants match your search." %}</td></tr>
     </tbody>
   </table>
   </div>
@@ -164,11 +162,11 @@
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
           body: JSON.stringify({ participant: row.dataset.participant, bib: field.value.trim() }),
-        }).then((r) => r.json()).catch(() => ({ ok: false, error: "Could not save." }));
+        }).then((r) => r.json()).catch(() => ({ ok: false, error: "{% trans 'Could not save.'|escapejs %}" }));
         if (res.ok) {
           delete field.dataset.dirty;
           field.classList.remove("pd-bib-input--error");
-          if (msg) { msg.textContent = "Saved"; msg.className = "pd-bib-msg pd-bib-msg--ok"; }
+          if (msg) { msg.textContent = "{% trans 'Saved'|escapejs %}"; msg.className = "pd-bib-msg pd-bib-msg--ok"; }
           const bib = res.bib == null ? "" : String(res.bib);
           field.value = bib;
           const display = row.querySelector("[data-bib-display]");
@@ -179,7 +177,7 @@
         }
         if (msg) {
           field.classList.add("pd-bib-input--error");
-          msg.textContent = res.error || "Could not save.";
+          msg.textContent = res.error || "{% trans 'Could not save.'|escapejs %}";
           msg.className = "pd-bib-msg pd-bib-msg--error";
         }
         return false;

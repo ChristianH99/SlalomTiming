@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% block title %}{{ competition_type.name }} settings – Slalom Timing{% endblock %}
-{% block topbar_title %}Competition type settings{% endblock %}
+{% load i18n %}
+{% block title %}{% blocktrans with name=competition_type.name %}{{ name }} settings{% endblocktrans %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Competition type settings" %}{% endblock %}
 {% block content %}
-  <a class="back-link" href="{% url 'competitions:type-list' %}">&larr; Back to Competition Types</a>
+  <a class="back-link" href="{% url 'competitions:type-list' %}">{% trans "← Back to Competition Types" %}</a>
 
   <h1 class="page-heading">{{ competition_type.name }}</h1>
-  <p class="hint">Rules every competition of this type is run and evaluated under.</p>
+  <p class="hint">{% trans "Rules every competition of this type is run and evaluated under." %}</p>
 
   <form method="post" class="settings-form" data-unsaved-guard>
     {% csrf_token %}
@@ -20,14 +21,14 @@
       </label>
     </div>
 
-    <h2 class="form-section">Penalties</h2>
+    <h2 class="form-section">{% trans "Penalties" %}</h2>
     <div class="settings-section">
       <label class="switch">
         {{ form.penalties_enabled }}
         <span class="switch-track"><span class="switch-thumb"></span></span>
-        <span class="switch-text">Enter penalties during the race</span>
+        <span class="switch-text">{% trans "Enter penalties during the race" %}</span>
       </label>
-      <p class="hint">With this on, the timing screen shows the penalties entry for each run.</p>
+      <p class="hint">{% trans "With this on, the timing screen shows the penalties entry for each run." %}</p>
 
       <div class="settings-row" data-penalty-block>
         {% for field in penalty_fields %}
@@ -42,7 +43,7 @@
       </div>
     </div>
 
-    <h2 class="form-section">Evaluation</h2>
+    <h2 class="form-section">{% trans "Evaluation" %}</h2>
     <div class="settings-section">
       <div class="settings-row">
         <label class="settings-field" for="{{ form.tie_break.id_for_label }}">
@@ -58,26 +59,25 @@
       </div>
     </div>
 
-    <h2 class="form-section">Required participant info</h2>
+    <h2 class="form-section">{% trans "Required participant info" %}</h2>
     <div class="settings-section">
-      <p class="hint">Which details the participant form asks for in this competition type.
-        Name and date of birth are always asked for.
-        <span class="required-marker">*</span> marks a detail that is mandatory once collected.</p>
+      <p class="hint">{% trans "Which details the participant form asks for in this competition type. Name and date of birth are always asked for." %}
+        {% blocktrans %}<span class="required-marker">*</span> marks a detail that is mandatory once collected.{% endblocktrans %}</p>
       <div class="settings-checks">
         {% for field, mandatory in participant_info_fields %}
           <label class="switch">
             {{ field }}
             <span class="switch-track"><span class="switch-thumb"></span></span>
             <span class="switch-text">{{ field.label }}{% if mandatory %}
-              <span class="required-marker" title="Mandatory">*</span>{% endif %}</span>
+              <span class="required-marker" title="{% trans 'Mandatory' %}">*</span>{% endif %}</span>
           </label>
         {% endfor %}
       </div>
     </div>
 
     <div class="actions">
-      <button class="button" type="submit">Save</button>
-      <a href="{% url 'competitions:type-list' %}">Cancel</a>
+      <button class="button" type="submit">{% trans "Save" %}</button>
+      <a href="{% url 'competitions:type-list' %}">{% trans "Cancel" %}</a>
     </div>
   </form>
 

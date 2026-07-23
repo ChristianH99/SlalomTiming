@@ -66,7 +66,7 @@
     const on = !!state.input_locked;
     lockCheck.checked = on;
     if (lockLabel) lockLabel.classList.toggle("input-lock--on", on);
-    if (lockText) lockText.textContent = on ? "Locked" : "Lock";
+    if (lockText) lockText.textContent = on ? gettext("Locked") : gettext("Lock");
   }
 
   // A thin strip below the header; hover reveals a + to add a placeholder row.
@@ -76,7 +76,7 @@
     td.colSpan = colspan();
     const btn = el("button", "tt-add-btn", "+");
     btn.type = "button";
-    btn.title = "Add a row for an upcoming starter";
+    btn.title = gettext("Add a row for an upcoming starter");
     btn.addEventListener("click", () => addRun().then(refresh));
     td.append(btn);
     tr.append(td);
@@ -108,7 +108,7 @@
       const del = el("button", "row-delete", "×");
       del.type = "button";
       del.tabIndex = -1;
-      del.title = "Remove this row";
+      del.title = gettext("Remove this row");
       del.addEventListener("click", () => deleteRun(run.id).then(refresh));
       totalCell.append(del);
     }
@@ -128,7 +128,7 @@
     if (!sig) {
       wrap.classList.add("time-slot--empty");
       wrap.append(el("span", "time-empty", "–"));
-      wrap.title = "Double-click to type a time";
+      wrap.title = gettext("Double-click to type a time");
       return wrap;
     }
     wrap.dataset.time = sig.time;
@@ -140,8 +140,8 @@
     chip.dataset.signalId = sig.id;
     chip.dataset.role = role;
     chip.dataset.time = sig.time;
-    const kind = sig.entered ? "Typed in by hand" : sig.manual ? "Manual" : "Light barrier";
-    chip.title = kind + " · drag to pair or to the Ignored panel · double-click to edit";
+    const kind = sig.entered ? gettext("Typed in by hand") : sig.manual ? gettext("Manual") : gettext("Light barrier");
+    chip.title = interpolate(gettext("%(kind)s · drag to pair or to the Ignored panel · double-click to edit"), { kind: kind }, true);
     chip.addEventListener("dragstart", (e) => onDragStart(e, sig.id, role, sig.time));
     chip.addEventListener("dragend", clearDrag);
     wrap.append(chip);
@@ -154,7 +154,7 @@
     const span = el("span", "run-time" + (row.run_time_manual ? " run-time--entered" : ""),
       row.run_time || "–");
     const td = cell("tt-run", span);
-    td.title = "Double-click to type a run time";
+    td.title = gettext("Double-click to type a run time");
     td.addEventListener("dblclick", () =>
       enterRuntimeEdit(td, row.run.id, row.run_time_manual ? row.run_time : ""));
     return td;
@@ -208,7 +208,7 @@
     input.value = run.bib_number == null ? "" : run.bib_number;
     input.dataset.rowKey = run.id;
     input.dataset.field = "bib";
-    if (run.bib_unknown) input.title = "No starter with this bib is registered (kept anyway).";
+    if (run.bib_unknown) input.title = gettext("No starter with this bib is registered (kept anyway).");
 
     let lastSent = input.value;
     const submit = () => {
@@ -323,7 +323,7 @@
     chip.dataset.signalId = sig.id;
     chip.dataset.role = sig.role;
     chip.dataset.time = sig.time;
-    chip.title = "Drag onto a run's slot · double-click to restore";
+    chip.title = gettext("Drag onto a run's slot · double-click to restore");
     chip.addEventListener("dragstart", (e) => onDragStart(e, sig.id, sig.role, sig.time));
     chip.addEventListener("dragend", clearDrag);
     chip.addEventListener("dblclick", () => setIgnored(sig.id, false).then(refresh));

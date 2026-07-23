@@ -42,8 +42,8 @@
   const lockText = document.getElementById("input-lock-text");
 
   // Scroll-to-current affordances, floated over the top/bottom of the list.
-  const scrollUp = el("button", "auto-scroll-cue auto-scroll-cue--up", "▲ current");
-  const scrollDown = el("button", "auto-scroll-cue auto-scroll-cue--down", "▼ current");
+  const scrollUp = el("button", "auto-scroll-cue auto-scroll-cue--up", gettext("▲ current"));
+  const scrollDown = el("button", "auto-scroll-cue auto-scroll-cue--down", gettext("▼ current"));
   scrollUp.type = scrollDown.type = "button";
   scrollUp.hidden = scrollDown.hidden = true;
   scrollUp.addEventListener("click", returnToCurrent);
@@ -151,7 +151,7 @@
     const on = !!state.input_locked;
     lockCheck.checked = on;
     if (lockLabel) lockLabel.classList.toggle("input-lock--on", on);
-    if (lockText) lockText.textContent = on ? "Locked" : "Lock";
+    if (lockText) lockText.textContent = on ? gettext("Locked") : gettext("Lock");
   }
 
   function renderList() {
@@ -160,7 +160,7 @@
     state.items.forEach((item) => {
       if (item.group_index !== null && item.group_index !== lastGroup) {
         lastGroup = item.group_index;
-        nodes.push(el("li", "auto-order-divider", item.group_label || "Run"));
+        nodes.push(el("li", "auto-order-divider", item.group_label || gettext("Run")));
       }
       nodes.push(orderRow(item));
     });
@@ -179,10 +179,10 @@
     else if (item.started) li.classList.add("auto-order-item--running");
     li.append(el("span", "auto-order-bib", "#" + (item.bib == null ? "?" : item.bib)));
     li.append(el("span", "auto-order-run", item.run_label || ""));
-    li.append(el("span", "auto-order-name", item.name || (item.orphan ? "(extra start)" : "")));
+    li.append(el("span", "auto-order-name", item.name || (item.orphan ? gettext("(extra start)") : "")));
     // The total (run + penalties) is the meaningful figure here.
     if (item.total_time) li.append(el("span", "auto-order-time", item.total_time));
-    li.title = "Click to bring this competitor into the tiles";
+    li.title = gettext("Click to bring this competitor into the tiles");
     // A plain click focuses this competitor in the tiles (dragging still reorders).
     li.addEventListener("click", () => focusItem(item.index));
     li.addEventListener("dragstart", onOrderDragStart);
@@ -209,7 +209,7 @@
     // the current reads "Previous", the current "Current", everything below (the
     // ones a scroll-down brings up) "Next up".
     const labelFor = (i) =>
-      i === ci ? "Current" : ci >= 0 && i < ci ? "Previous" : "Next up";
+      i === ci ? gettext("Current") : ci >= 0 && i < ci ? gettext("Previous") : gettext("Next up");
     tilesEl.replaceChildren(
       tile(at(focused - 1), "prev", labelFor(focused - 1)),
       tile(focused >= 0 ? at(focused) : null, "current", labelFor(focused)),
@@ -242,24 +242,24 @@
     if (!item) {
       div.classList.add("auto-tile--empty");
       div.append(el("p", "auto-tile-waiting",
-        kind === "next" ? "—" : "Waiting for the first start…"));
+        kind === "next" ? "—" : gettext("Waiting for the first start…")));
       return div;
     }
 
     const head = el("div", "auto-tile-head");
     head.append(el("span", "auto-tile-bib", "#" + (item.bib == null ? "?" : item.bib)));
     const id = el("div", "auto-tile-id");
-    id.append(el("span", "auto-tile-name", item.name || "(no starter)"));
+    id.append(el("span", "auto-tile-name", item.name || gettext("(no starter)")));
     const sub = [item.class_name, item.run_label].filter(Boolean).join(" · ");
     id.append(el("span", "auto-tile-sub", sub));
     head.append(id);
     div.append(head);
 
     const times = el("div", "auto-tile-times");
-    times.append(timeBlock("Start", item.start, item, "start"));
-    times.append(timeBlock("Finish", item.finish, item, "finish"));
+    times.append(timeBlock(gettext("Start"), item.start, item, "start"));
+    times.append(timeBlock(gettext("Finish"), item.finish, item, "finish"));
     times.append(runTimeFigure(item));
-    times.append(figure("Total", item.total_time || "–", "auto-runtime--total"));
+    times.append(figure(gettext("Total"), item.total_time || "–", "auto-runtime--total"));
     div.append(times);
 
     // Timekeeper manual +/- on the run's total pylon / task counts.
@@ -271,8 +271,8 @@
       if (item.run_id) {
         const all = el("button", "auto-lock-all", "🔒");
         all.type = "button";
-        all.title = "Lock all posts";
-        all.setAttribute("aria-label", "Lock all posts");
+        all.title = gettext("Lock all posts");
+        all.setAttribute("aria-label", gettext("Lock all posts"));
         all.addEventListener("click", () => lockAll(item.run_id).then(refresh));
         boxes.append(all);
       }
@@ -302,12 +302,12 @@
   // Run time (not Total): editable by double-click, highlighted when typed in.
   function runTimeFigure(item) {
     const wrap = el("div", "auto-time");
-    wrap.append(el("span", "auto-time-label", "Run time"));
+    wrap.append(el("span", "auto-time-label", gettext("Run time")));
     const val = el("span", "auto-runtime" + (item.run_time_manual ? " auto-runtime--entered" : ""),
       item.run_time || "–");
     wrap.append(val);
     if (editable(item)) {
-      wrap.title = "Double-click to type a run time";
+      wrap.title = gettext("Double-click to type a run time");
       wrap.addEventListener("dblclick", () =>
         enterRuntimeEdit(val, item, item.run_time_manual ? item.run_time : ""));
     }
@@ -338,8 +338,8 @@
       chip.dataset.signalId = sig.id;
       chip.dataset.role = role;
       chip.dataset.time = sig.time;
-      chip.title = (sig.entered ? "Typed in by hand" : "Drag to re-pair or to Ignored") +
-        " · double-click to edit";
+      chip.title = interpolate(gettext("%(kind)s · double-click to edit"),
+        { kind: sig.entered ? gettext("Typed in by hand") : gettext("Drag to re-pair or to Ignored") }, true);
       chip.addEventListener("dragstart", (e) => onTimeDragStart(e, sig.id, role, sig.time));
       chip.addEventListener("dragend", clearTimeDrag);
       slot.append(chip);
@@ -482,16 +482,16 @@
   function popup(box, item) {
     const editable = box.submitted;
     const pop = el("div", "auto-popup");
-    pop.append(el("div", "auto-popup-title", "Post " + box.number));
+    pop.append(el("div", "auto-popup-title", interpolate(gettext("Post %(n)s"), { n: box.number }, true)));
     const list = el("div", "auto-popup-tasks");
     box.detail.tasks.forEach((t) => {
       const row = el("div", "auto-popup-row");
-      row.append(el("span", "auto-popup-task", "Task " + t.task));
+      row.append(el("span", "auto-popup-task", interpolate(gettext("Task %(n)s"), { n: t.task }, true)));
       if (editable) {
         row.append(taskStepper(item, box.number, t));
       } else {
         let mark = "—";
-        if (t.task_penalty) mark = "Task";
+        if (t.task_penalty) mark = gettext("Task");
         else if (t.pylons) mark = t.pylons + " P";
         row.append(el("span", "auto-popup-mark" + (mark === "—" ? " auto-popup-mark--none" : ""), mark));
       }
@@ -499,12 +499,12 @@
     });
     if (box.detail.handles_stop_line) {
       const row = el("div", "auto-popup-row");
-      row.append(el("span", "auto-popup-task", "Stop line"));
+      row.append(el("span", "auto-popup-task", gettext("Stop line")));
       if (editable) {
         row.append(stopStepper(item, box.number, box.detail.stop_line));
       } else {
         row.append(el("span", "auto-popup-mark" + (box.detail.stop_line ? "" : " auto-popup-mark--none"),
-          box.detail.stop_line ? "Penalty" : "—"));
+          box.detail.stop_line ? gettext("Penalty") : "—"));
       }
       list.append(row);
     }
@@ -512,11 +512,11 @@
 
     const foot = el("div", "auto-popup-foot");
     if (box.submitted) {
-      foot.append(popupButton("Unlock", () =>
+      foot.append(popupButton(gettext("Unlock"), () =>
         unlock(item.run_id, box.number).then(() => { openPopup = null; refresh(); })));
     } else {
       // Locking here lets the timekeeper then edit the post's per-task penalties.
-      foot.append(popupButton("Lock", () => lockPost(item.run_id, box.number).then(refresh)));
+      foot.append(popupButton(gettext("Lock"), () => lockPost(item.run_id, box.number).then(refresh)));
     }
     pop.append(foot);
     return pop;
@@ -571,7 +571,7 @@
 
   function stopStepper(item, post, on) {
     const wrap = el("div", "auto-popup-stepper");
-    const label = el("span", "auto-popup-mark" + (on ? "" : " auto-popup-mark--none"), on ? "Penalty" : "—");
+    const label = el("span", "auto-popup-mark" + (on ? "" : " auto-popup-mark--none"), on ? gettext("Penalty") : "—");
     const toggle = el("button", "pen-btn", on ? "−" : "+");
     toggle.type = "button";
     toggle.addEventListener("click", () =>
@@ -604,7 +604,7 @@
     chip.dataset.signalId = sig.id;
     chip.dataset.role = sig.role;
     chip.dataset.time = sig.time;
-    chip.title = "Drag onto a slot · double-click to restore";
+    chip.title = gettext("Drag onto a slot · double-click to restore");
     chip.addEventListener("dragstart", (e) => onTimeDragStart(e, sig.id, sig.role, sig.time));
     chip.addEventListener("dragend", clearTimeDrag);
     chip.addEventListener("dblclick", () => ignore(sig.id, false).then(refresh));

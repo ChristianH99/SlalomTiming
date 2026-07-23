@@ -1,12 +1,13 @@
 from django import forms
 from django.forms import modelformset_factory
+from django.utils.translation import gettext_lazy as _
 
 from .models import Competition, CompetitionClass, CompetitionType
 
 
 class CompetitionForm(forms.ModelForm):
     competition_type = forms.ModelChoiceField(
-        queryset=CompetitionType.objects.all(), empty_label="Select a type…"
+        queryset=CompetitionType.objects.all(), empty_label=_("Select a type…")
     )
 
     class Meta:
@@ -37,13 +38,13 @@ class CompetitionTypeSettingsForm(forms.ModelForm):
             *CompetitionType.PARTICIPANT_INFO,
         ]
         labels = {
-            "pylon_penalty": "Pylon",
-            "task_penalty": "Task",
-            "stop_line_penalty": "Stop line",
-            "max_penalty_per_task": "Max per task",
+            "pylon_penalty": _("Pylon"),
+            "task_penalty": _("Task"),
+            "stop_line_penalty": _("Stop line"),
+            "max_penalty_per_task": _("Max per task"),
             **{
                 setting: label
-                for setting, (label, _, _) in CompetitionType.PARTICIPANT_INFO.items()
+                for setting, (label, _mandatory, _fields) in CompetitionType.PARTICIPANT_INFO.items()
             },
         }
 
@@ -60,7 +61,7 @@ class CompetitionTypeSettingsForm(forms.ModelForm):
         if cleaned.get("penalties_enabled"):
             for name in CompetitionType.PENALTY_FIELDS:
                 if cleaned.get(name) is None and name not in self.errors:
-                    self.add_error(name, "Required when penalties are enabled.")
+                    self.add_error(name, _("Required when penalties are enabled."))
         else:
             # Amounts entered before the toggle was turned off aren't kept: with
             # penalties off there is nothing for them to apply to.

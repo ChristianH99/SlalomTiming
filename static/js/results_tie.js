@@ -39,7 +39,7 @@
       const original = cell.innerHTML;
       const rank = tr.dataset.rank || start;
       cell.innerHTML =
-        `<span class="tie-drag" title="Drag to reorder">⠿</span>` +
+        `<span class="tie-drag" title="${gettext("Drag to reorder")}">⠿</span>` +
         `<input type="number" class="tie-rank-input" value="${rank}" ` +
         `min="${start}" max="${start + trs.length - 1}" inputmode="numeric">`;
       tr.classList.add("tie-editing");
@@ -49,7 +49,7 @@
       tr.addEventListener("dragend", onDragEnd);
       active.rows.push({ tr, cell, original });
     });
-    setMessage("Drag the tied competitors into order, then set their ranks.", false);
+    setMessage(gettext("Drag the tied competitors into order, then set their ranks."), false);
     toolbar.hidden = false;
   }
 
@@ -97,11 +97,11 @@
     let previous = null;
     for (let i = 0; i < members.length; i += 1) {
       const rank = members[i].rank;
-      if (Number.isNaN(rank)) return "Every rank needs a number.";
+      if (Number.isNaN(rank)) return gettext("Every rank needs a number.");
       if (i === 0) {
-        if (rank !== start) return `The first competitor must be rank ${start}.`;
+        if (rank !== start) return interpolate(gettext("The first competitor must be rank %(start)s."), { start: start }, true);
       } else if (rank !== previous && rank !== start + i) {
-        return "Ranks must go in order — a tie keeps the lower number.";
+        return gettext("Ranks must go in order — a tie keeps the lower number.");
       }
       previous = rank;
     }
@@ -129,10 +129,10 @@
         if (ok && data.ok) {
           window.location.reload();
         } else {
-          setMessage(data.error || "Could not save.", true);
+          setMessage(data.error || gettext("Could not save."), true);
         }
       })
-      .catch(() => setMessage("Could not save.", true));
+      .catch(() => setMessage(gettext("Could not save."), true));
   }
 
   document.addEventListener("click", (event) => {

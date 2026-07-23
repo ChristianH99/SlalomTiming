@@ -8,6 +8,8 @@ Methods only ever touch objects passed in, so this module imports no models and
 can be imported from ``models.py`` for the field choices without a cycle.
 """
 
+from django.utils.translation import gettext_lazy as _
+
 
 class AssignmentMethod:
     key = ""
@@ -24,7 +26,7 @@ class AssignmentMethod:
 
 class ManualAssignment(AssignmentMethod):
     key = "manual"
-    label = "Manual"
+    label = _("Manual")
     manual = True
     configurable_multiple = True
 
@@ -41,7 +43,7 @@ class ManualAssignment(AssignmentMethod):
 
 class AgeAssignment(AssignmentMethod):
     key = "age"
-    label = "Based on age"
+    label = _("Based on age")
     uses_age = True
 
     def classes_for(self, competition, participant):

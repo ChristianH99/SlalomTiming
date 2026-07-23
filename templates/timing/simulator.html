@@ -1,9 +1,9 @@
-{% load static %}<!doctype html>
-<html lang="en">
+{% load static i18n %}{% get_current_language as LANGUAGE_CODE %}<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Simulator – Slalom Timing</title>
+  <title>{% trans "Simulator" %} – Slalom Timing</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
@@ -12,26 +12,26 @@
 <body class="sim-body">
   <header class="sim-topbar">
     <span class="brand">Slalom<span class="brand-slash">/</span>Timing</span>
-    <span class="sim-badge">Simulator</span>
+    <span class="sim-badge">{% trans "Simulator" %}</span>
   </header>
 
   <main class="sim">
     <section class="sim-clock-card">
       <div class="sim-clock" id="sim-clock">00:00:00</div>
-      <div class="sim-clock-label">Device time</div>
+      <div class="sim-clock-label">{% trans "Device time" %}</div>
     </section>
 
     <section class="sim-runnum">
       <div class="sim-runnum-info">
-        <span class="sim-runnum-label">Next running number</span>
+        <span class="sim-runnum-label">{% trans "Next running number" %}</span>
         <span class="sim-runnum-value" id="sim-runnum">1</span>
       </div>
-      <button type="button" class="button button--secondary" id="sim-reset">Reset to 1</button>
+      <button type="button" class="button button--secondary" id="sim-reset">{% trans "Reset to 1" %}</button>
     </section>
 
     <section class="sim-pads">
       <div class="sim-pad-group">
-        <span class="sim-pad-label">Light barrier</span>
+        <span class="sim-pad-label">{% trans "Light barrier" %}</span>
         <div class="sim-row">
           <button type="button" class="sim-btn sim-btn--barrier" data-port="1" data-manual="0" data-label="1">1</button>
           <button type="button" class="sim-btn sim-btn--barrier" data-port="2" data-manual="0" data-label="2">2</button>
@@ -40,7 +40,7 @@
         </div>
       </div>
       <div class="sim-pad-group">
-        <span class="sim-pad-label">Manual</span>
+        <span class="sim-pad-label">{% trans "Manual" %}</span>
         <div class="sim-row">
           <button type="button" class="sim-btn sim-btn--manual" data-port="1" data-manual="1" data-label="M1">M1</button>
           <button type="button" class="sim-btn sim-btn--manual" data-port="2" data-manual="1" data-label="M2">M2</button>
@@ -52,11 +52,11 @@
 
     <section class="sim-log-card">
       <div class="sim-log-head">
-        <h2>Signal log</h2>
-        <button type="button" class="link-button" id="sim-clear">Clear</button>
+        <h2>{% trans "Signal log" %}</h2>
+        <button type="button" class="link-button" id="sim-clear">{% trans "Clear" %}</button>
       </div>
       <ul class="sim-log" id="sim-log" aria-live="polite"></ul>
-      <p class="sim-log-empty" id="sim-log-empty">No signals sent yet.</p>
+      <p class="sim-log-empty" id="sim-log-empty">{% trans "No signals sent yet." %}</p>
     </section>
   </main>
 
@@ -117,12 +117,14 @@
             body: JSON.stringify({ running_number: running, port, is_manual: isManual, time }),
           });
           const data = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data.error || "Signal rejected.");
+          if (!res.ok || !data.ok) throw new Error(data.error || "{% trans 'Signal rejected.'|escapejs %}");
           addLog(`#${running} · ${label} · ${time}`, isManual ? "manual" : "barrier");
           nextNumber = running + 1;
           renderRunnum();
         } catch (err) {
-          addLog(`#${running} · ${label} · ${time} — failed: ${err.message}`, "error");
+          addLog("{% trans '#{n} · {label} · {time} — failed: {err}'|escapejs %}"
+            .replace("{n}", running).replace("{label}", label)
+            .replace("{time}", time).replace("{err}", err.message), "error");
         }
       }
 

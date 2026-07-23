@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView, UpdateView
@@ -80,13 +81,14 @@ class TimingSettingsView(UpdateView):
             cp540.reader.start(settings.ip_address, settings.port)
             messages.info(
                 self.request,
-                f"Connecting to the Tag Heuer CP540 at {settings.ip_address}:{settings.port}…",
+                _("Connecting to the Tag Heuer CP540 at %(ip)s:%(port)s…")
+                % {"ip": settings.ip_address, "port": settings.port},
             )
         elif action == "disconnect":
             cp540.reader.stop()
-            messages.info(self.request, "Disconnected from the timing device.")
+            messages.info(self.request, _("Disconnected from the timing device."))
         else:
-            messages.success(self.request, "Timing settings saved.")
+            messages.success(self.request, _("Timing settings saved."))
         return response
 
 

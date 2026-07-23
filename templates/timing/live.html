@@ -1,23 +1,19 @@
 {% extends "base.html" %}
-{% load static %}
-{% block title %}Manual timing – Slalom Timing{% endblock %}
-{% block topbar_title %}Manual timing{% endblock %}
+{% load static i18n %}
+{% block title %}{% trans "Manual timing" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Manual timing" %}{% endblock %}
 {% block topbar_actions %}
-  <button type="button" class="topbar-help" data-help-open title="How Manual timing works" aria-label="How Manual timing works">?</button>
+  <button type="button" class="topbar-help" data-help-open title="{% trans 'How Manual timing works' %}" aria-label="{% trans 'How Manual timing works' %}">?</button>
 {% endblock %}
 {% block help_modal %}
   <div class="modal-overlay help-modal" id="help-modal" hidden data-help-modal>
     <div class="modal help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
-      <button type="button" class="modal-close" data-help-close aria-label="Close">×</button>
-      <h2 class="modal-title" id="help-title">Manual timing</h2>
+      <button type="button" class="modal-close" data-help-close aria-label="{% trans 'Close' %}">×</button>
+      <h2 class="modal-title" id="help-title">{% trans "Manual timing" %}</h2>
       <div class="modal-body">
-        <p>Hover between the header and the top row for a <strong>+</strong> to pre-enter an upcoming
-          starter. <strong>Double-click</strong> a Start, Finish or Run time (or an empty slot) to type it
-          in by hand when the device didn't fire — keyed-in times are highlighted.</p>
-        <p><strong>Drag</strong> a wrong time to the Ignored list on the right to ignore it; drag it back
-          onto a slot (or double-click the chip) to use it again.</p>
-        <p>The red <strong>Lock</strong> switch sends every incoming time straight to the Ignored list —
-          a way to pause capture without disconnecting the device.</p>
+        <p>{% blocktrans %}Hover between the header and the top row for a <strong>+</strong> to pre-enter an upcoming starter. <strong>Double-click</strong> a Start, Finish or Run time (or an empty slot) to type it in by hand when the device didn't fire — keyed-in times are highlighted.{% endblocktrans %}</p>
+        <p>{% blocktrans %}<strong>Drag</strong> a wrong time to the Ignored list on the right to ignore it; drag it back onto a slot (or double-click the chip) to use it again.{% endblocktrans %}</p>
+        <p>{% blocktrans %}The red <strong>Lock</strong> switch sends every incoming time straight to the Ignored list — a way to pause capture without disconnecting the device.{% endblocktrans %}</p>
       </div>
     </div>
   </div>
@@ -27,8 +23,7 @@
   <style>.content { max-width: none; }</style>
   {% if not competition %}
     <div class="notice">
-      <p>No competition is selected. Timing runs against the active competition, so
-        <a href="{% url 'competitions:list' %}">pick a competition</a> to start timing it.</p>
+      <p>{% url 'competitions:list' as list_url %}{% blocktrans %}No competition is selected. Timing runs against the active competition, so <a href="{{ list_url }}">pick a competition</a> to start timing it.{% endblocktrans %}</p>
     </div>
   {% else %}
     <div class="timing-live" id="timing-live">
@@ -37,19 +32,19 @@
           <table class="timing-table">
             <thead>
               <tr>
-                <th class="tt-time">Start</th>
-                <th class="tt-time">Finish</th>
-                <th class="tt-run">Run time</th>
-                <th class="tt-bib">Bib</th>
-                <th class="tt-class">Class</th>
-                <th class="tt-run-sel">Run</th>
+                <th class="tt-time">{% trans "Start" %}</th>
+                <th class="tt-time">{% trans "Finish" %}</th>
+                <th class="tt-run">{% trans "Run time" %}</th>
+                <th class="tt-bib">{% trans "Bib" %}</th>
+                <th class="tt-class">{% trans "Class" %}</th>
+                <th class="tt-run-sel">{% trans "Run" %}</th>
                 {% if arrangement.penalties_enabled %}
-                  <th class="tt-pen">Pylon</th>
-                  <th class="tt-pen">Task</th>
-                  <th class="tt-pen">Stop line</th>
-                  <th class="tt-pen-total">Penalty</th>
+                  <th class="tt-pen">{% trans "Pylon" %}</th>
+                  <th class="tt-pen">{% trans "Task" %}</th>
+                  <th class="tt-pen">{% trans "Stop line" %}</th>
+                  <th class="tt-pen-total">{% trans "Penalty" %}</th>
                 {% endif %}
-                <th class="tt-total">Total</th>
+                <th class="tt-total">{% trans "Total" %}</th>
               </tr>
             </thead>
             <tbody id="timing-rows"></tbody>
@@ -57,7 +52,7 @@
         </div>
         {% include "timing/_ignored.html" %}
       </div>
-      <p class="timing-empty hint" id="timing-empty" hidden>Waiting for the first start signal…</p>
+      <p class="timing-empty hint" id="timing-empty" hidden>{% trans "Waiting for the first start signal…" %}</p>
     </div>
 
     {{ arrangement|json_script:"timing-data" }}

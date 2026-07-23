@@ -1,6 +1,6 @@
 {% comment %}Renders the ranked results table and, when present, the unranked block.
 Expects `layout`, `ranked`, `unranked`, `scope`.{% endcomment %}
-{% load static %}
+{% load static i18n %}
 <div class="table-card results-card">
   <table class="results-table" data-results-table>
     <thead>{% include "results/_results_head.html" %}</thead>
@@ -9,9 +9,9 @@ Expects `layout`, `ranked`, `unranked`, `scope`.{% endcomment %}
         <tr class="{% if row.skipped %}result-skipped {% endif %}{% if row.tie_state == 'pending' %}result-inspect{% endif %}"
             {% if row.tie_group %}data-tie-group="{{ row.tie_group }}" data-entry="{{ row.entry_pk }}" data-occ="{{ row.occ }}" data-rank="{{ row.rank|default_if_none:'' }}" data-tie-start="{{ row.tie_start }}" data-tie-size="{{ row.tie_size }}"{% endif %}>
           <td class="rt-rank" data-rank-cell>
-            <span class="rt-rank-num">{% if row.rank %}{{ row.rank }}{% else %}<span class="result-dash" title="Lower repeat entry — not ranked">–</span>{% endif %}</span>
+            <span class="rt-rank-num">{% if row.rank %}{{ row.rank }}{% else %}<span class="result-dash" title="{% trans 'Lower repeat entry — not ranked' %}">–</span>{% endif %}</span>
             {% if row.tie_state %}<button type="button" class="tie-flag tie-flag--{{ row.tie_state }}" data-tie-flag
-              title="{% if row.tie_state == 'pending' %}Tied — click to rank manually{% elif row.tie_state == 'manual' %}Tie ranked manually — click to adjust{% else %}Tie resolved automatically — click to adjust{% endif %}">⚑</button>{% endif %}
+              title="{% if row.tie_state == 'pending' %}{% trans 'Tied — click to rank manually' %}{% elif row.tie_state == 'manual' %}{% trans 'Tie ranked manually — click to adjust' %}{% else %}{% trans 'Tie resolved automatically — click to adjust' %}{% endif %}">⚑</button>{% endif %}
           </td>
           <td class="rt-bib">{{ row.bib }}</td>
           {% include "results/_results_midcells.html" %}
@@ -21,16 +21,15 @@ Expects `layout`, `ranked`, `unranked`, `scope`.{% endcomment %}
           </td>
         </tr>
       {% empty %}
-        <tr class="empty-row"><td colspan="{{ layout.column_count }}">No complete results yet.</td></tr>
+        <tr class="empty-row"><td colspan="{{ layout.column_count }}">{% trans "No complete results yet." %}</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 
 {% if unranked %}
-  <h2 class="form-section">Not yet ranked</h2>
-  <p class="hint">Competitors missing a counted run, or marked did-not-start / did-not-finish /
-    disqualified.</p>
+  <h2 class="form-section">{% trans "Not yet ranked" %}</h2>
+  <p class="hint">{% trans "Competitors missing a counted run, or marked did-not-start / did-not-finish / disqualified." %}</p>
   <div class="table-card results-card">
     <table class="results-table results-table--muted">
       <thead>{% include "results/_results_head.html" %}</thead>
@@ -49,17 +48,17 @@ Expects `layout`, `ranked`, `unranked`, `scope`.{% endcomment %}
 {% endif %}
 
 <div class="results-summary">
-  <span><strong>Starters:</strong> {{ layout.summary.starters }}</span>
+  <span><strong>{% trans "Starters:" %}</strong> {{ layout.summary.starters }}</span>
   <span class="results-summary-sep">·</span>
-  <span><strong>Classified:</strong> {{ layout.summary.classified }}</span>
+  <span><strong>{% trans "Classified:" %}</strong> {{ layout.summary.classified }}</span>
   <span class="results-summary-sep">·</span>
-  <span><strong>Not Classified:</strong> {{ layout.summary.not_classified }}</span>
+  <span><strong>{% trans "Not Classified:" %}</strong> {{ layout.summary.not_classified }}</span>
 </div>
 
 <div id="tie-editor" data-scope="{{ scope }}" data-resolve-url="{% url 'results:tie-resolve' %}" hidden>{% csrf_token %}</div>
 <div class="tie-toolbar" id="tie-toolbar" hidden>
-  <span class="tie-toolbar-msg" id="tie-toolbar-msg">Drag the tied competitors into order and set their ranks.</span>
-  <button type="button" class="button button--small" id="tie-save">Save order</button>
-  <button type="button" class="button button--secondary button--small" id="tie-cancel">Cancel</button>
+  <span class="tie-toolbar-msg" id="tie-toolbar-msg">{% trans "Drag the tied competitors into order and set their ranks." %}</span>
+  <button type="button" class="button button--small" id="tie-save">{% trans "Save order" %}</button>
+  <button type="button" class="button button--secondary button--small" id="tie-cancel">{% trans "Cancel" %}</button>
 </div>
 <script src="{% static 'js/results_tie.js' %}"></script>

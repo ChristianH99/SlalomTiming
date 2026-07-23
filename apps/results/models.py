@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 # The results column vocabulary. Each key -> (label, availability, group):
 #   * availability: the CompetitionType flag that must be on for the column to be
@@ -8,18 +9,18 @@ from django.db import models
 #     "address" or "licence" block, a single "vehicle" cell, or the "runs" region.
 # The order here is the canonical column order the settings and tables follow.
 RESULT_COLUMNS = {
-    "driver_name": ("Driver name", None, "name"),
-    "co_driver": ("Co-driver", "requires_co_driver", "name"),
-    "club": ("Club", "requires_club", "name"),
-    "email": ("E-Mail", "requires_email", "name"),
-    "phone": ("Phone", "requires_phone", "name"),
-    "street": ("Street", "requires_address", "address"),
-    "city": ("City", "requires_address", "address"),
-    "vehicle": ("Vehicle", "requires_vehicle", "vehicle"),
-    "license": ("Licence number", "requires_license", "licence"),
-    "birthday": ("Birthday", None, "licence"),
-    "birth_year": ("Birth year", None, "licence"),
-    "training": ("Training runs", "__training__", "runs"),
+    "driver_name": (_("Driver name"), None, "name"),
+    "co_driver": (_("Co-driver"), "requires_co_driver", "name"),
+    "club": (_("Club"), "requires_club", "name"),
+    "email": (_("E-Mail"), "requires_email", "name"),
+    "phone": (_("Phone"), "requires_phone", "name"),
+    "street": (_("Street"), "requires_address", "address"),
+    "city": (_("City"), "requires_address", "address"),
+    "vehicle": (_("Vehicle"), "requires_vehicle", "vehicle"),
+    "license": (_("Licence number"), "requires_license", "licence"),
+    "birthday": (_("Birthday"), None, "licence"),
+    "birth_year": (_("Birth year"), None, "licence"),
+    "training": (_("Training runs"), "__training__", "runs"),
 }
 
 
@@ -71,7 +72,7 @@ class ResultColumnSettings(models.Model):
         has practice runs. Name and date-of-birth columns are always available."""
         ctype = competition.competition_type
         keys = []
-        for key, (_, setting, _) in RESULT_COLUMNS.items():
+        for key, (_label, setting, _group) in RESULT_COLUMNS.items():
             if setting is None:
                 keys.append(key)
             elif setting == "__training__":
@@ -149,9 +150,9 @@ class ResultsPdfLayout(models.Model):
     two optional logos render top-left / top-right on every page."""
 
     class Orientation(models.TextChoices):
-        PORTRAIT = "portrait", "Portrait"
-        LANDSCAPE = "landscape", "Landscape"
-        AUTO = "auto", "Auto (fit the table)"
+        PORTRAIT = "portrait", _("Portrait")
+        LANDSCAPE = "landscape", _("Landscape")
+        AUTO = "auto", _("Auto (fit the table)")
 
     # Default rendered height of each logo, in millimetres.
     DEFAULT_LOGO_HEIGHT_MM = 18

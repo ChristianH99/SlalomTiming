@@ -1,12 +1,13 @@
 {% extends "base.html" %}
-{% block title %}New competition type – Slalom Timing{% endblock %}
-{% block topbar_title %}New competition type{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "New competition type" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "New competition type" %}{% endblock %}
 {% block content %}
-  <a class="back-link" href="{% url 'competitions:type-list' %}">&larr; Back to Competition Types</a>
+  <a class="back-link" href="{% url 'competitions:type-list' %}">{% trans "← Back to Competition Types" %}</a>
   <form method="post">
     {% csrf_token %}
     {{ form.as_p }}
-    <button class="button" type="submit">Save</button>
-    <a href="{% url 'competitions:type-list' %}">Cancel</a>
+    <button class="button" type="submit">{% trans "Save" %}</button>
+    <a href="{% url 'competitions:type-list' %}">{% trans "Cancel" %}</a>
   </form>
 {% endblock %}

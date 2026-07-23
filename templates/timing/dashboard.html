@@ -1,40 +1,38 @@
 {% extends "base.html" %}
-{% load static %}
-{% block title %}Dashboard – Slalom Timing{% endblock %}
-{% block topbar_title %}Dashboard{% endblock %}
+{% load static i18n %}
+{% block title %}{% trans "Dashboard" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Dashboard" %}{% endblock %}
 {% block content %}
   {% if not competition %}
     <div class="notice">
-      <p>No competition is selected. The dashboard shows the status of the active
-        competition, so <a href="{% url 'competitions:list' %}">pick a competition</a>
-        to follow it.</p>
+      <p>{% url 'competitions:list' as list_url %}{% blocktrans %}No competition is selected. The dashboard shows the status of the active competition, so <a href="{{ list_url }}">pick a competition</a> to follow it.{% endblocktrans %}</p>
     </div>
   {% else %}
     <div class="dash" id="dash">
       <div class="dash-head">
-        <h1><span id="live-dot" class="live-dot"></span>Event overview</h1>
+        <h1><span id="live-dot" class="live-dot"></span>{% trans "Event overview" %}</h1>
         <span class="dash-updated" id="dash-updated" aria-live="polite"></span>
       </div>
 
       {% comment %}Stat tiles, the progress ring, per-class board and current
         competitor are all rendered from the JSON below by dashboard_overview.js,
         and re-rendered on every live nudge.{% endcomment %}
-      <section class="dash-stats" id="dash-stats" aria-label="Event statistics"></section>
+      <section class="dash-stats" id="dash-stats" aria-label="{% trans 'Event statistics' %}"></section>
 
       <div class="dash-grid">
-        <section class="dash-panel dash-progress-panel" aria-label="Overall progress">
-          <h2 class="dash-panel-title">Overall progress</h2>
+        <section class="dash-panel dash-progress-panel" aria-label="{% trans 'Overall progress' %}">
+          <h2 class="dash-panel-title">{% trans "Overall progress" %}</h2>
           <div class="dash-progress" id="dash-progress"></div>
         </section>
 
-        <section class="dash-panel dash-current-panel" aria-label="On course now">
-          <h2 class="dash-panel-title">On course now</h2>
+        <section class="dash-panel dash-current-panel" aria-label="{% trans 'On course now' %}">
+          <h2 class="dash-panel-title">{% trans "On course now" %}</h2>
           <div class="dash-current" id="dash-current"></div>
         </section>
       </div>
 
-      <section class="dash-panel" aria-label="Classes">
-        <h2 class="dash-panel-title">Classes</h2>
+      <section class="dash-panel" aria-label="{% trans 'Classes' %}">
+        <h2 class="dash-panel-title">{% trans "Classes" %}</h2>
         <div class="dash-classes" id="dash-classes"></div>
       </section>
     </div>

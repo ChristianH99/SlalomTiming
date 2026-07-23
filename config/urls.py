@@ -18,9 +18,17 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
+from django.views.i18n import JavaScriptCatalog
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # django.views.i18n.set_language: the topbar language selector POSTs here to
+    # store the chosen language (session + cookie) and redirect back.
+    path('i18n/', include('django.conf.urls.i18n')),
+    # Serves the compiled "djangojs" catalog as a script that defines gettext()
+    # etc. in the browser, so static/js/*.js can be translated. Loaded from
+    # base.html before the app scripts; reflects the request's active language.
+    path('jsi18n/', JavaScriptCatalog.as_view(), name='javascript-catalog'),
     path('accounts/', include('apps.accounts.urls')),
     path('competitions/', include('apps.competitions.urls')),
     path('participants/', include('apps.participants.urls')),

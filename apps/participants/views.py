@@ -4,6 +4,7 @@ from django.db.models import F, OuterRef, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
+from django.utils.translation import gettext, gettext_lazy as _
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
@@ -95,12 +96,12 @@ def _format_address(participant):
 # class are already in the main row; club and licence get their own columns when
 # collected — so the panel carries the rest of what the edit view collects.
 DETAIL_FIELDS = [
-    ("requires_co_driver", "Co-driver",
+    ("requires_co_driver", _("Co-driver"),
      lambda p: f"{p.co_driver_first_name} {p.co_driver_last_name}".strip()),
-    ("requires_vehicle", "Vehicle", lambda p: p.vehicle),
-    ("requires_address", "Address", _format_address),
-    ("requires_email", "E-Mail", lambda p: p.email),
-    ("requires_phone", "Phone", lambda p: p.phone_number),
+    ("requires_vehicle", _("Vehicle"), lambda p: p.vehicle),
+    ("requires_address", _("Address"), _format_address),
+    ("requires_email", _("E-Mail"), lambda p: p.email),
+    ("requires_phone", _("Phone"), lambda p: p.phone_number),
 ]
 
 
@@ -278,17 +279,17 @@ def participant_set_bib(request):
     Enforces the same per-competition uniqueness the edit form does."""
     competition = Competition.get_current()
     if competition is None:
-        return JsonResponse({"ok": False, "error": "No competition is selected."}, status=400)
+        return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
     try:
         payload = json.loads(request.body or "{}")
     except json.JSONDecodeError:
-        return JsonResponse({"ok": False, "error": "Malformed request."}, status=400)
+        return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
 
     participant = Participant.objects.filter(
         pk=payload.get("participant"), competition_type=competition.competition_type
     ).first()
     if participant is None:
-        return JsonResponse({"ok": False, "error": "Unknown participant."}, status=404)
+        return JsonResponse({"ok": False, "error": gettext("Unknown participant.")}, status=404)
 
     entry = EventEntry.objects.filter(participant=participant, competition=competition).first()
     raw = str(payload.get("bib", "")).strip()
@@ -299,14 +300,14 @@ def participant_set_bib(request):
         return JsonResponse({"ok": True, "bib": None})
 
     if not raw.isdigit() or int(raw) < 1:
-        return JsonResponse({"ok": False, "error": "Bib must be a positive number."})
+        return JsonResponse({"ok": False, "error": gettext("Bib must be a positive number.")})
     bib = int(raw)
 
     conflict = EventEntry.objects.filter(competition=competition, bib_number=bib)
     if entry is not None:
         conflict = conflict.exclude(pk=entry.pk)
     if conflict.exists():
-        return JsonResponse({"ok": False, "error": f"Bib {bib} is already taken."})
+        return JsonResponse({"ok": False, "error": gettext("Bib %(bib)s is already taken.") % {"bib": bib}})
 
     if entry is None:
         EventEntry.objects.create(participant=participant, competition=competition, bib_number=bib)
@@ -332,13 +333,13 @@ def participant_check(request):
     results = {}
     if license_number:
         for participant in base.filter(license_number__iexact=license_number)[:5]:
-            results[participant.pk] = (participant, "licence number")
+            results[participant.pk] = (participant, gettext("licence number"))
     if first_name and last_name:
         for participant in base.filter(first_name__iexact=first_name, last_name__iexact=last_name)[:5]:
             if participant.pk in results:
-                results[participant.pk] = (participant, "name and licence number")
+                results[participant.pk] = (participant, gettext("name and licence number"))
             else:
-                results[participant.pk] = (participant, "name")
+                results[participant.pk] = (participant, gettext("name"))
 
     matches = [
         {

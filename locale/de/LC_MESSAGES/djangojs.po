@@ -1,0 +1,286 @@
+# German translation for Slalom Timing (JavaScript catalog).
+# This file is distributed under the same license as the Slalom Timing package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Slalom Timing\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2026-07-23\n"
+"Last-Translator: \n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "▲ current"
+msgstr "▲ Aktuell"
+
+msgid "▼ current"
+msgstr "▼ Aktuell"
+
+msgid "Locked"
+msgstr "Gesperrt"
+
+msgid "Lock"
+msgstr "Sperren"
+
+msgid "Run"
+msgstr "Lauf"
+
+msgid "(extra start)"
+msgstr "(zusätzlicher Start)"
+
+msgid "Click to bring this competitor into the tiles"
+msgstr "Klicken, um diesen Teilnehmer in die Kacheln zu holen"
+
+msgid "Current"
+msgstr "Aktuell"
+
+msgid "Previous"
+msgstr "Vorheriger"
+
+msgid "Next up"
+msgstr "Als Nächstes"
+
+msgid "Waiting for the first start…"
+msgstr "Warten auf den ersten Start…"
+
+msgid "(no starter)"
+msgstr "(kein Starter)"
+
+msgid "Start"
+msgstr "Start"
+
+msgid "Finish"
+msgstr "Ziel"
+
+msgid "Total"
+msgstr "Gesamt"
+
+msgid "Lock all posts"
+msgstr "Alle Posten sperren"
+
+msgid "Run time"
+msgstr "Laufzeit"
+
+msgid "Double-click to type a run time"
+msgstr "Doppelklicken, um eine Laufzeit einzugeben"
+
+msgid "%(kind)s · double-click to edit"
+msgstr "%(kind)s · zum Bearbeiten doppelklicken"
+
+msgid "Typed in by hand"
+msgstr "Von Hand eingegeben"
+
+msgid "Drag to re-pair or to Ignored"
+msgstr "Ziehen zum erneuten Zuordnen oder auf „Ignoriert“"
+
+msgid "Post %(n)s"
+msgstr "Posten %(n)s"
+
+msgid "Task %(n)s"
+msgstr "Aufgabe %(n)s"
+
+msgid "Task"
+msgstr "Aufgabe"
+
+msgid "Stop line"
+msgstr "Stopplinie"
+
+msgid "Penalty"
+msgstr "Strafe"
+
+msgid "Unlock"
+msgstr "Entsperren"
+
+msgid "Drag onto a slot · double-click to restore"
+msgstr "Auf einen Platz ziehen · zum Wiederherstellen doppelklicken"
+
+msgid "Done"
+msgstr "Fertig"
+
+msgid "Running"
+msgstr "Läuft"
+
+msgid "To come"
+msgstr "Ausstehend"
+
+msgid "Participants"
+msgstr "Teilnehmer"
+
+msgid "%(n)s did not run"
+msgstr "%(n)s nicht gestartet"
+
+msgid "all racing"
+msgstr "alle am Start"
+
+msgid "Runs completed"
+msgstr "Läufe abgeschlossen"
+
+msgid "of %(total)s · %(remaining)s to go"
+msgstr "von %(total)s · %(remaining)s verbleibend"
+
+msgid "Classes finished"
+msgstr "Klassen abgeschlossen"
+
+msgid "of %(total)s"
+msgstr "von %(total)s"
+
+msgid "Marshal posts"
+msgstr "Streckenposten"
+
+msgid "reporting"
+msgstr "melden"
+
+msgid "%(percent)s% of runs completed"
+msgstr "%(percent)s % der Läufe abgeschlossen"
+
+msgid "of runs done"
+msgstr "der Läufe erledigt"
+
+msgid "runs completed"
+msgstr "Läufe abgeschlossen"
+
+msgid "No one is on course yet."
+msgstr "Noch niemand auf der Strecke."
+
+msgid "Ready to start"
+msgstr "Startbereit"
+
+msgid "Finished"
+msgstr "Beendet"
+
+msgid "On course"
+msgstr "Auf der Strecke"
+
+msgid "Total time"
+msgstr "Gesamtzeit"
+
+msgid "Penalties"
+msgstr "Strafen"
+
+msgid "Timing in progress — result shown when the run finishes."
+msgstr ""
+"Zeitmessung läuft — das Ergebnis erscheint, wenn der Lauf beendet ist."
+
+msgid "Waiting for the start signal."
+msgstr "Warten auf das Startsignal."
+
+msgid "%(n)s × pylon"
+msgstr "%(n)s × Pylone"
+
+msgid "%(n)s × task"
+msgstr "%(n)s × Aufgabe"
+
+msgid "stop line"
+msgstr "Stopplinie"
+
+msgid "No running classes yet."
+msgstr "Noch keine laufenden Klassen."
+
+msgid "%(finished)s / %(total)s runs"
+msgstr "%(finished)s / %(total)s Läufe"
+
+msgid "no starters"
+msgstr "keine Starter"
+
+msgid "Updated %(time)s"
+msgstr "Aktualisiert %(time)s"
+
+msgid "Post %(n)s is in use on another device."
+msgstr "Posten %(n)s wird auf einem anderen Gerät verwendet."
+
+msgid "Post %(n)s — in use"
+msgstr "Posten %(n)s — in Verwendung"
+
+msgid "Reduce penalty for task %(n)s"
+msgstr "Strafe für Aufgabe %(n)s verringern"
+
+msgid "Max penalty per task reached"
+msgstr "Maximale Strafe pro Aufgabe erreicht"
+
+msgid "Penalty: %(n)s s"
+msgstr "Strafe: %(n)s s"
+
+msgid "Waiting for the next starter…"
+msgstr "Warten auf den nächsten Starter…"
+
+msgid "Penalties submitted for bib %(bib)s"
+msgstr "Strafen für Startnummer %(bib)s übermittelt"
+
+msgid "Press Tab to complete %(email)s"
+msgstr "Tab drücken, um %(email)s zu vervollständigen"
+
+msgid ""
+"Matches <strong>%(name)s</strong>%(club)s on %(reason)s — licence "
+"%(license)s. <a href=\"%(url)s\">Jump to this participant</a>"
+msgstr ""
+"Übereinstimmung mit <strong>%(name)s</strong>%(club)s bei %(reason)s — "
+"Lizenz %(license)s. <a href=\"%(url)s\">Zu diesem Teilnehmer springen</a>"
+
+msgid ""
+"<strong>Possible duplicate.</strong> This looks like someone already "
+"registered. You can continue anyway, cancel, or open the existing record:"
+msgstr ""
+"<strong>Möglicherweise ein Duplikat.</strong> Diese Person scheint bereits "
+"registriert zu sein. Sie können trotzdem fortfahren, abbrechen oder den "
+"vorhandenen Datensatz öffnen:"
+
+msgid "Could not remove the logo (%(error)s)."
+msgstr "Logo konnte nicht entfernt werden (%(error)s)."
+
+msgid "Building…"
+msgstr "Wird erstellt…"
+
+msgid "Could not build the sample PDF (%(error)s)."
+msgstr "Beispiel-PDF konnte nicht erstellt werden (%(error)s)."
+
+msgid "Drag to reorder"
+msgstr "Ziehen zum Umordnen"
+
+msgid "Drag the tied competitors into order, then set their ranks."
+msgstr ""
+"Ziehen Sie die punktgleichen Teilnehmer in die richtige Reihenfolge und "
+"legen Sie dann ihre Plätze fest."
+
+msgid "Every rank needs a number."
+msgstr "Jeder Platz benötigt eine Zahl."
+
+msgid "The first competitor must be rank %(start)s."
+msgstr "Der erste Teilnehmer muss Platz %(start)s sein."
+
+msgid "Ranks must go in order — a tie keeps the lower number."
+msgstr ""
+"Die Plätze müssen der Reihe nach vergeben werden — bei Gleichstand gilt die "
+"niedrigere Zahl."
+
+msgid "Could not save."
+msgstr "Konnte nicht gespeichert werden."
+
+msgid "Add a row for an upcoming starter"
+msgstr "Eine Zeile für einen kommenden Starter hinzufügen"
+
+msgid "Remove this row"
+msgstr "Diese Zeile entfernen"
+
+msgid "Double-click to type a time"
+msgstr "Doppelklicken, um eine Zeit einzugeben"
+
+msgid "Manual"
+msgstr "Manuell"
+
+msgid "Light barrier"
+msgstr "Lichtschranke"
+
+msgid "%(kind)s · drag to pair or to the Ignored panel · double-click to edit"
+msgstr ""
+"%(kind)s · ziehen zum Zuordnen oder auf das Feld „Ignoriert“ · zum "
+"Bearbeiten doppelklicken"
+
+msgid "No starter with this bib is registered (kept anyway)."
+msgstr "Kein Starter mit dieser Startnummer registriert (trotzdem behalten)."
+
+msgid "Drag onto a run's slot · double-click to restore"
+msgstr "Auf den Platz eines Laufs ziehen · zum Wiederherstellen doppelklicken"

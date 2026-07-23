@@ -10,15 +10,17 @@ both the Timing view and the Marshal Posts view), so access is granted when the
 user holds *any* page a URL belongs to.
 """
 
+from django.utils.translation import gettext_lazy as _
+
 # key -> human label, in sidebar order. This ordering is what the User Access
 # page renders the page checkboxes in.
 PAGES = [
-    ("dashboard", "Dashboard"),
-    ("competition_setup", "Competition Setup"),
-    ("participants", "Participants"),
-    ("timing", "Timing"),
-    ("marshal_posts", "Marshal Posts"),
-    ("results", "Results"),
+    ("dashboard", _("Dashboard")),
+    ("competition_setup", _("Competition Setup")),
+    ("participants", _("Participants")),
+    ("timing", _("Timing")),
+    ("marshal_posts", _("Marshal Posts")),
+    ("results", _("Results")),
 ]
 
 PAGE_KEYS = [key for key, _ in PAGES]

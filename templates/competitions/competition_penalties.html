@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Penalties – Slalom Timing{% endblock %}
-{% block topbar_title %}Penalties{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Penalties" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Penalties" %}{% endblock %}
 {% block content %}
-  <h1 class="page-heading">Penalties</h1>
-  <p class="hint">How penalties are entered for <strong>{{ object.name }}</strong>.</p>
+  <h1 class="page-heading">{% trans "Penalties" %}</h1>
+  <p class="hint">{% blocktrans with name=object.name %}How penalties are entered for <strong>{{ name }}</strong>.{% endblocktrans %}</p>
 
   <form method="post" class="settings-form" data-unsaved-guard id="penalties-form">
     {% csrf_token %}
@@ -13,20 +14,19 @@
     <input type="hidden" name="stop_line_post" id="stop-line-post"
            value="{% for row in rows %}{% if row.stop_line %}{{ row.number }}{% endif %}{% endfor %}">
 
-    <h2 class="form-section">General</h2>
+    <h2 class="form-section">{% trans "General" %}</h2>
     <div class="settings-section">
       <label class="switch">
         <input type="checkbox" name="penalties_by_marshal_posts" id="penalties-toggle"
                {% if enabled %}checked{% endif %}>
         <span class="switch-track"><span class="switch-thumb"></span></span>
-        <span class="switch-text">Penalties set by marshal posts</span>
+        <span class="switch-text">{% trans "Penalties set by marshal posts" %}</span>
       </label>
-      <p class="hint">Off: the timekeeper enters every penalty on the Manual timing view.
-        On: each marshal post enters the penalties for the tasks in its own area.</p>
+      <p class="hint">{% trans "Off: the timekeeper enters every penalty on the Manual timing view. On: each marshal post enters the penalties for the tasks in its own area." %}</p>
 
       <div data-posts-config {% if not enabled %}hidden{% endif %}>
         <label class="settings-field post-count-field" for="post-count">
-          <span class="settings-label">Number of posts</span>
+          <span class="settings-label">{% trans "Number of posts" %}</span>
           <span class="settings-control">
             <input type="number" name="post_count" id="post-count"
                    min="1" max="{{ max_posts }}" step="1" inputmode="numeric"
@@ -40,12 +40,12 @@
     <div data-posts {% if not enabled %}hidden{% endif %}>
       {% for row in rows %}
         <div class="settings-section marshal-post" data-post data-number="{{ row.number }}">
-          <h2 class="form-section" data-post-title>Marshal Post {{ row.number }}</h2>
+          <h2 class="form-section" data-post-title>{% blocktrans with n=row.number %}Marshal Post {{ n }}{% endblocktrans %}</h2>
           <label class="settings-field settings-field--wide">
-            <span class="settings-label">Tasks watched</span>
+            <span class="settings-label">{% trans "Tasks watched" %}</span>
             <span class="settings-control">
               <input type="text" name="post-{{ row.number }}-tasks" data-tasks
-                     value="{{ row.tasks }}" placeholder="e.g. 1, 5, 9, 11-15, 20">
+                     value="{{ row.tasks }}" placeholder="{% trans 'e.g. 1, 5, 9, 11-15, 20' %}">
             </span>
             <span class="field-error" data-post-error>{{ row.error }}</span>
           </label>
@@ -53,32 +53,32 @@
             <input type="checkbox" data-stop-line value="{{ row.number }}"
                    {% if row.stop_line %}checked{% endif %}>
             <span class="switch-track"><span class="switch-thumb"></span></span>
-            <span class="switch-text">Responsible for the stop line</span>
+            <span class="switch-text">{% trans "Responsible for the stop line" %}</span>
           </label>
         </div>
       {% endfor %}
     </div>
 
     <div class="actions">
-      <button class="button" type="submit" id="penalties-save">Save</button>
+      <button class="button" type="submit" id="penalties-save">{% trans "Save" %}</button>
     </div>
   </form>
 
   <template id="post-template">
     <div class="settings-section marshal-post" data-post data-number="__N__">
-      <h2 class="form-section" data-post-title>Marshal Post __N__</h2>
+      <h2 class="form-section" data-post-title>{% trans "Marshal Post" %} __N__</h2>
       <label class="settings-field settings-field--wide">
-        <span class="settings-label">Tasks watched</span>
+        <span class="settings-label">{% trans "Tasks watched" %}</span>
         <span class="settings-control">
           <input type="text" name="post-__N__-tasks" data-tasks
-                 placeholder="e.g. 1, 5, 9, 11-15, 20">
+                 placeholder="{% trans 'e.g. 1, 5, 9, 11-15, 20' %}">
         </span>
         <span class="field-error" data-post-error></span>
       </label>
       <label class="switch">
         <input type="checkbox" data-stop-line value="__N__">
         <span class="switch-track"><span class="switch-thumb"></span></span>
-        <span class="switch-text">Responsible for the stop line</span>
+        <span class="switch-text">{% trans "Responsible for the stop line" %}</span>
       </label>
     </div>
   </template>
@@ -132,7 +132,7 @@
         posts().forEach((post, index) => {
           const n = index + 1;
           post.dataset.number = n;
-          post.querySelector("[data-post-title]").textContent = "Marshal Post " + n;
+          post.querySelector("[data-post-title]").textContent = "{% trans 'Marshal Post'|escapejs %} " + n;
           post.querySelector("[data-tasks]").name = "post-" + n + "-tasks";
           post.querySelector("[data-stop-line]").value = n;
         });
@@ -158,13 +158,13 @@
           const arr = parsedList[i];
           if (arr === null) {
             input.classList.add("input--bad");
-            errEl.textContent = "This task list can't be read.";
+            errEl.textContent = "{% trans 'This task list can’t be read.'|escapejs %}";
             return;
           }
           const overlap = arr.filter((n) => dupes.has(n));
           if (overlap.length) {
             input.classList.add("input--bad");
-            errEl.textContent = "Task " + formatRanges(overlap) + " is on another post too.";
+            errEl.textContent = "{% trans 'Task {tasks} is on another post too.'|escapejs %}".replace("{tasks}", formatRanges(overlap));
           } else {
             input.classList.remove("input--bad");
             errEl.textContent = "";
@@ -173,18 +173,18 @@
         });
 
         if (malformed) {
-          summaryEl.textContent = "Check the task lists — one can't be read.";
+          summaryEl.textContent = "{% trans 'Check the task lists — one can’t be read.'|escapejs %}";
           summaryEl.classList.add("tasks-summary--bad");
         } else if (dupes.size) {
-          summaryEl.textContent = "Task " + formatRanges([...dupes].sort((a, b) => a - b)) +
-            " assigned to more than one post.";
+          summaryEl.textContent = "{% trans 'Task {tasks} assigned to more than one post.'|escapejs %}"
+            .replace("{tasks}", formatRanges([...dupes].sort((a, b) => a - b)));
           summaryEl.classList.add("tasks-summary--bad");
         } else {
           summaryEl.classList.remove("tasks-summary--bad");
           const sorted = [...all].sort((a, b) => a - b);
           summaryEl.textContent = sorted.length
-            ? "Tasks " + formatRanges(sorted) + " assigned"
-            : "No tasks assigned yet";
+            ? "{% trans 'Tasks {tasks} assigned'|escapejs %}".replace("{tasks}", formatRanges(sorted))
+            : "{% trans 'No tasks assigned yet'|escapejs %}";
         }
 
         // A duplicate or unreadable list must not be saved.

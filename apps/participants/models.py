@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType
 
@@ -8,8 +9,8 @@ class Participant(models.Model):
         CompetitionType,
         on_delete=models.PROTECT,
         related_name="participants",
-        help_text="Discipline this participant is registered under (e.g. Motorcycle, Go-Cart). "
-        "A participant can only ever belong to one type.",
+        help_text=_("Discipline this participant is registered under (e.g. Motorcycle, Go-Cart). "
+        "A participant can only ever belong to one type."),
     )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
@@ -63,11 +64,11 @@ class ClassAssignment(models.Model):
 
 class EventEntry(models.Model):
     class Status(models.TextChoices):
-        REGISTERED = "registered", "Registered"
-        DNS = "dns", "Did Not Start"
-        DNF = "dnf", "Did Not Finish"
-        DSQ = "dsq", "Disqualified"
-        FINISHED = "finished", "Finished"
+        REGISTERED = "registered", _("Registered")
+        DNS = "dns", _("Did Not Start")
+        DNF = "dnf", _("Did Not Finish")
+        DSQ = "dsq", _("Disqualified")
+        FINISHED = "finished", _("Finished")
 
     participant = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name="entries")
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name="entries")

@@ -1,12 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Run order – Slalom Timing{% endblock %}
-{% block topbar_title %}Run order{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Run order" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Run order" %}{% endblock %}
 {% block content %}
-  <h1 class="page-heading">Run order</h1>
-  <p class="hint">The order runs start for <strong>{{ object.name }}</strong>. Drag classes between
-    runs to start them together, drop a class in the gap between runs to split it into its own run,
-    and drag a run's handle to reorder. Only classes marked <em>Running</em> on the
-    <a href="{% url 'competitions:classes' %}">Classes</a> page appear here.</p>
+  <h1 class="page-heading">{% trans "Run order" %}</h1>
+  <p class="hint">{% url 'competitions:classes' as classes_url %}{% blocktrans with name=object.name %}The order runs start for <strong>{{ name }}</strong>. Drag classes between runs to start them together, drop a class in the gap between runs to split it into its own run, and drag a run's handle to reorder. Only classes marked <em>Running</em> on the <a href="{{ classes_url }}">Classes</a> page appear here.{% endblocktrans %}</p>
 
   {% if run_groups_data %}
     <form method="post" data-unsaved-guard>
@@ -15,17 +13,11 @@
       <div id="run-order" data-run-order></div>
       <input type="hidden" name="run_order" id="run-order-data" value="[]">
 
-      <h2 class="page-heading page-heading--sub">Start pattern</h2>
-      <p class="hint">The order participants take their runs inside a run. Each block plays its
-        runs for a window of participants at a time — every participant in the window takes the
-        first run, then the second, and so on — then slides on to the next window until everyone
-        has been through it. Drag runs from the palette into a block, reorder them within a block,
-        and drag a block's handle to move the whole block. Each participant's runs are used up in
-        the order the blocks come, so a second <em>Counted</em> chip is their second counted run.
-        The same pattern is replayed for every run above.</p>
+      <h2 class="page-heading page-heading--sub">{% trans "Start pattern" %}</h2>
+      <p class="hint">{% blocktrans %}The order participants take their runs inside a run. Each block plays its runs for a window of participants at a time — every participant in the window takes the first run, then the second, and so on — then slides on to the next window until everyone has been through it. Drag runs from the palette into a block, reorder them within a block, and drag a block's handle to move the whole block. Each participant's runs are used up in the order the blocks come, so a second <em>Counted</em> chip is their second counted run. The same pattern is replayed for every run above.{% endblocktrans %}</p>
 
       <div class="pattern-palette">
-        <span class="pattern-palette-label">Drag in:</span>
+        <span class="pattern-palette-label">{% trans "Drag in:" %}</span>
         {% for value, label in run_type_labels.items %}
           <span class="run-chip run-chip--{{ value }}" draggable="true"
                 data-palette data-run-type="{{ value }}">{{ label }}</span>
@@ -35,10 +27,10 @@
       <div id="start-pattern" data-start-pattern></div>
       <input type="hidden" name="start_pattern" id="start-pattern-data" value="[]">
       <div class="actions">
-        <button type="button" class="button button--secondary button--small" data-add-block>+ Add block</button>
+        <button type="button" class="button button--secondary button--small" data-add-block>{% trans "+ Add block" %}</button>
       </div>
 
-      <h2 class="page-heading page-heading--sub">Preview</h2>
+      <h2 class="page-heading page-heading--sub">{% trans "Preview" %}</h2>
       {% comment %}
         Preview-only controls: unnamed so they never post, and data-no-dirty so
         switching preview source doesn't count as an unsaved change.
@@ -48,17 +40,17 @@
         <label class="switch" data-dummy-switch>
           <input type="checkbox" data-dummy-toggle checked>
           <span class="switch-track"><span class="switch-thumb"></span></span>
-          <span class="switch-text">Dummy participants</span>
+          <span class="switch-text">{% trans "Dummy participants" %}</span>
         </label>
         <label class="preview-dummy-count" data-dummy-count-wrap>
           <input type="number" min="1" max="{{ max_dummy }}" value="10" data-dummy-count>
-          <span>participants, bibs 1–n</span>
+          <span>{% trans "participants, bibs 1–n" %}</span>
         </label>
       </div>
       <div id="pattern-preview"></div>
 
       <div class="actions">
-        <button class="button" type="submit">Save</button>
+        <button class="button" type="submit">{% trans "Save" %}</button>
       </div>
     </form>
     {{ run_groups_data|json_script:"run-groups-data" }}
@@ -107,7 +99,7 @@
           const handle = document.createElement("span");
           handle.className = "run-handle";
           handle.textContent = "⠿";
-          handle.title = "Drag to reorder run";
+          handle.title = "{% trans 'Drag to reorder run'|escapejs %}";
           handle.addEventListener("mousedown", () => { run.draggable = true; });
           run.addEventListener("dragstart", (e) => {
             // Let chip drags through — only react to a handle-initiated row drag.
@@ -151,7 +143,7 @@
 
         function relabelRuns() {
           runOrderEl.querySelectorAll("[data-run]").forEach((run, i) => {
-            run.querySelector(".run-label").textContent = "Run " + (i + 1);
+            run.querySelector(".run-label").textContent = "{% trans 'Run'|escapejs %} " + (i + 1);
           });
         }
 
@@ -253,8 +245,8 @@
         const dummyToggle = document.querySelector("[data-dummy-toggle]");
         const dummyCountInput = document.querySelector("[data-dummy-count]");
         const dummyCountWrap = document.querySelector("[data-dummy-count-wrap]");
-        const LABELS = {practice: "Practice", counted: "Counted"};
-        const SHORT = {practice: "P", counted: "C"};
+        const LABELS = {practice: "{% trans 'Practice'|escapejs %}", counted: "{% trans 'Counted'|escapejs %}"};
+        const SHORT = {practice: "{% trans 'P'|escapejs %}", counted: "{% trans 'C'|escapejs %}"};
         const MAX_WINDOW = 99;
         const MAX_DUMMY = {{ max_dummy }};
 
@@ -323,7 +315,7 @@
           const starters = [];
           for (let bib = 1; bib <= count; bib++) {
             starters.push({
-              key: "dummy-" + bib, bib: bib, name: "Dummy participant " + bib,
+              key: "dummy-" + bib, bib: bib, name: "{% trans 'Dummy participant'|escapejs %} " + bib,
               class_name: cls ? cls.name : "—", practice: practice, counted: counted,
             });
           }
@@ -348,7 +340,7 @@
           remove.type = "button";
           remove.className = "run-chip-remove";
           remove.textContent = "×";
-          remove.title = "Remove this run";
+          remove.title = "{% trans 'Remove this run'|escapejs %}";
           remove.addEventListener("click", () => { chip.remove(); serialize(); });
           chip.appendChild(remove);
 
@@ -373,7 +365,7 @@
           const handle = document.createElement("span");
           handle.className = "run-handle";
           handle.textContent = "⠿";
-          handle.title = "Drag to reorder block";
+          handle.title = "{% trans 'Drag to reorder block'|escapejs %}";
           handle.addEventListener("mousedown", () => { row.draggable = true; });
           row.addEventListener("dragstart", (e) => {
             if (e.target.closest(".run-chip")) return;  // let chip drags through
@@ -399,7 +391,7 @@
           windowInput.type = "number";
           windowInput.min = "1";
           windowInput.max = String(MAX_WINDOW);
-          windowInput.title = "Participants per pass";
+          windowInput.title = "{% trans 'Participants per pass'|escapejs %}";
           windowInput.setAttribute("data-window", "");
           windowInput.addEventListener("input", serialize);
 
@@ -408,17 +400,17 @@
           const allInput = document.createElement("input");
           allInput.type = "checkbox";
           allInput.setAttribute("data-window-all", "");
-          allInput.title = "Take every participant in one pass";
+          allInput.title = "{% trans 'Take every participant in one pass'|escapejs %}";
           allInput.checked = !(block && block.window);  // a new block starts as "all"
           allWrap.appendChild(allInput);
           allWrap.appendChild(Object.assign(document.createElement("span"), {
-            textContent: "all",
+            textContent: "{% trans 'all'|escapejs %}",
           }));
 
           windowWrap.appendChild(windowInput);
           windowWrap.appendChild(allWrap);
           windowWrap.appendChild(Object.assign(document.createElement("span"), {
-            className: "pattern-window-suffix", textContent: "at a time",
+            className: "pattern-window-suffix", textContent: "{% trans 'at a time'|escapejs %}",
           }));
 
           // Ticking "all" empties and disables the number; unticking restores a
@@ -459,7 +451,7 @@
           remove.type = "button";
           remove.className = "row-remove";
           remove.textContent = "×";
-          remove.title = "Remove this block";
+          remove.title = "{% trans 'Remove this block'|escapejs %}";
           remove.addEventListener("click", () => { row.remove(); serialize(); });
 
           row.appendChild(handle);
@@ -515,7 +507,7 @@
         function serialize() {
           const out = [];
           patternEl.querySelectorAll("[data-block]").forEach((row, i) => {
-            row.querySelector(".run-label").textContent = "Block " + (i + 1);
+            row.querySelector(".run-label").textContent = "{% trans 'Block'|escapejs %} " + (i + 1);
             const chips = [...row.querySelectorAll(".run-chip")]
               .map((c) => c.getAttribute("data-run-type"));
             const raw = parseInt(row.querySelector("[data-window]").value, 10);
@@ -536,7 +528,7 @@
           try { pattern = JSON.parse(patternData.value) || []; } catch (e) { pattern = []; }
 
           if (!pattern.length) {
-            previewEl.appendChild(emptyNote("Add a block to see the start order."));
+            previewEl.appendChild(emptyNote("{% trans 'Add a block to see the start order.'|escapejs %}"));
             return;
           }
 
@@ -552,7 +544,7 @@
 
             const head = document.createElement("div");
             head.className = "preview-run-head";
-            head.textContent = dummy ? "Dummy run" : "Run " + (i + 1);
+            head.textContent = dummy ? "{% trans 'Dummy run'|escapejs %}" : "{% trans 'Run'|escapejs %} " + (i + 1);
             card.appendChild(head);
 
             if (dummy) {
@@ -560,14 +552,16 @@
               const note = document.createElement("div");
               note.className = "preview-run-note";
               note.textContent = made.cls
-                ? starters.length + " participants taking " + made.cls.name + "'s runs: "
-                  + made.cls.practice + " practice, " + made.cls.counted + " counted"
-                : starters.length + " participants taking 1 practice, 2 counted";
+                ? "{% trans '{n} participants taking {cls}’s runs: {p} practice, {c} counted'|escapejs %}"
+                    .replace("{n}", starters.length).replace("{cls}", made.cls.name)
+                    .replace("{p}", made.cls.practice).replace("{c}", made.cls.counted)
+                : "{% trans '{n} participants taking 1 practice, 2 counted'|escapejs %}"
+                    .replace("{n}", starters.length);
               card.appendChild(note);
             }
 
             if (!starters.length) {
-              card.appendChild(emptyNote("No participants with a bib in this run yet."));
+              card.appendChild(emptyNote("{% trans 'No participants with a bib in this run yet.'|escapejs %}"));
               previewEl.appendChild(card);
               return;
             }
@@ -578,7 +572,7 @@
               line.className = "preview-line";
               const tag = document.createElement("span");
               tag.className = "preview-line-tag";
-              tag.textContent = "Block " + (b + 1);
+              tag.textContent = "{% trans 'Block'|escapejs %} " + (b + 1);
               line.appendChild(tag);
 
               const seq = document.createElement("div");
@@ -591,7 +585,7 @@
               if (!filled.length) {
                 seq.appendChild(Object.assign(document.createElement("span"), {
                   className: "preview-nothing",
-                  textContent: "nothing left to schedule — these participants have no such run left",
+                  textContent: "{% trans 'nothing left to schedule — these participants have no such run left'|escapejs %}",
                 }));
               }
               filled.forEach((slots, p) => {
@@ -602,8 +596,9 @@
                   const chip = document.createElement("span");
                   chip.className = "preview-slot preview-slot--" + slot.runType;
                   chip.textContent = "#" + slot.starter.bib + " " + SHORT[slot.runType] + slot.runNumber;
-                  chip.title = slot.starter.name + " — " + slot.starter.class_name + ", "
-                    + LABELS[slot.runType].toLowerCase() + " run " + slot.runNumber;
+                  chip.title = "{% trans '{name} — {cls}, {type} run {n}'|escapejs %}"
+                    .replace("{name}", slot.starter.name).replace("{cls}", slot.starter.class_name)
+                    .replace("{type}", LABELS[slot.runType].toLowerCase()).replace("{n}", slot.runNumber);
                   seq.appendChild(chip);
                 });
               });
@@ -615,7 +610,7 @@
             if (missing.length) {
               const warn = document.createElement("div");
               warn.className = "preview-warning";
-              warn.textContent = "Not scheduled: " + missing.join("; ") + ".";
+              warn.textContent = "{% trans 'Not scheduled: {list}.'|escapejs %}".replace("{list}", missing.join("; "));
               card.appendChild(warn);
             }
             previewEl.appendChild(card);
@@ -668,8 +663,7 @@
     </script>
   {% else %}
     <div class="empty-state">
-      No classes are running yet. Mark classes as <em>Running</em> on the
-      <a href="{% url 'competitions:classes' %}">Classes</a> page and they'll appear here.
+      {% url 'competitions:classes' as classes_url %}{% blocktrans %}No classes are running yet. Mark classes as <em>Running</em> on the <a href="{{ classes_url }}">Classes</a> page and they'll appear here.{% endblocktrans %}
     </div>
   {% endif %}
 {% endblock %}

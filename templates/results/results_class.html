@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% block title %}{{ cclass.name }} results – Slalom Timing{% endblock %}
-{% block topbar_title %}Results{% endblock %}
+{% load i18n %}
+{% block title %}{% blocktrans with name=cclass.name %}{{ name }} results{% endblocktrans %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Results" %}{% endblock %}
 {% block content %}
   <div class="results-header">
-    <h1 class="page-heading">Class {{ cclass.name }}</h1>
+    <h1 class="page-heading">{% blocktrans with name=cclass.name %}Class {{ name }}{% endblocktrans %}</h1>
     <span class="results-method">{{ scoring_label }}</span>
-    <a class="button button--small results-export" href="{{ export_url }}" target="_blank" rel="noopener">Export PDF</a>
+    <a class="button button--small results-export" href="{{ export_url }}" target="_blank" rel="noopener">{% trans "Export PDF" %}</a>
   </div>
   <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }}</p>
 

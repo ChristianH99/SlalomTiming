@@ -21,9 +21,9 @@
   // Status → icon + human label. Colour is carried by a class on the element, but
   // the icon and label mean the state is never conveyed by colour alone.
   const STATUS = {
-    done: { icon: "✓", label: "Done" },
-    running: { icon: "●", label: "Running" },
-    not_started: { icon: "○", label: "To come" },
+    done: { icon: "✓", label: gettext("Done") },
+    running: { icon: "●", label: gettext("Running") },
+    not_started: { icon: "○", label: gettext("To come") },
   };
 
   // ---- small DOM helpers --------------------------------------------------
@@ -38,15 +38,18 @@
   function renderStats() {
     const s = state.stats;
     const tiles = [
-      { label: "Participants", value: s.participants,
-        sub: s.did_not_run ? `${s.did_not_run} did not run` : "all racing" },
-      { label: "Runs completed", value: `${s.runs_finished}`,
-        sub: `of ${s.runs_expected} · ${s.runs_remaining} to go` },
-      { label: "Classes finished", value: `${s.classes_done}`,
-        sub: `of ${s.classes_total}` },
+      { label: gettext("Participants"), value: s.participants,
+        sub: s.did_not_run
+          ? interpolate(gettext("%(n)s did not run"), { n: s.did_not_run }, true)
+          : gettext("all racing") },
+      { label: gettext("Runs completed"), value: `${s.runs_finished}`,
+        sub: interpolate(gettext("of %(total)s · %(remaining)s to go"),
+          { total: s.runs_expected, remaining: s.runs_remaining }, true) },
+      { label: gettext("Classes finished"), value: `${s.classes_done}`,
+        sub: interpolate(gettext("of %(total)s"), { total: s.classes_total }, true) },
     ];
     if (s.marshal_posts) {
-      tiles.push({ label: "Marshal posts", value: s.marshal_posts, sub: "reporting" });
+      tiles.push({ label: gettext("Marshal posts"), value: s.marshal_posts, sub: gettext("reporting") });
     }
     statsEl.replaceChildren(...tiles.map(renderTile));
   }
@@ -73,7 +76,8 @@
     svg.setAttribute("viewBox", "0 0 128 128");
     svg.setAttribute("class", "ring");
     svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", `${p.percent}% of runs completed`);
+    svg.setAttribute("aria-label",
+      interpolate(gettext("%(percent)s% of runs completed"), { percent: p.percent }, true));
 
     const track = document.createElementNS(svgNS, "circle");
     const arc = document.createElementNS(svgNS, "circle");
@@ -92,7 +96,7 @@
     const center = el("div", "ring-center");
     center.append(
       el("span", "ring-percent", `${p.percent}%`),
-      el("span", "ring-caption", "of runs done"),
+      el("span", "ring-caption", gettext("of runs done")),
     );
 
     const wrap = el("div", "ring-wrap");
@@ -101,7 +105,7 @@
     const legend = el("div", "dash-progress-legend");
     legend.append(
       el("span", "dash-progress-count", `${p.finished} / ${p.expected}`),
-      el("span", "dash-progress-caption", "runs completed"),
+      el("span", "dash-progress-caption", gettext("runs completed")),
     );
 
     progressEl.replaceChildren(wrap, legend);
@@ -112,7 +116,7 @@
     const c = state.current;
     if (!c) {
       currentEl.replaceChildren(
-        el("p", "dash-empty", "No one is on course yet.")
+        el("p", "dash-empty", gettext("No one is on course yet."))
       );
       return;
     }
@@ -127,24 +131,24 @@
     head.append(who);
 
     // A state badge that mirrors the class status vocabulary.
-    let badgeKey = "not_started", badgeText = "Ready to start";
-    if (c.finished) { badgeKey = "done"; badgeText = "Finished"; }
-    else if (c.started) { badgeKey = "running"; badgeText = "On course"; }
+    let badgeKey = "not_started", badgeText = gettext("Ready to start");
+    if (c.finished) { badgeKey = "done"; badgeText = gettext("Finished"); }
+    else if (c.started) { badgeKey = "running"; badgeText = gettext("On course"); }
     const badge = el("span", `dash-badge dash-badge--${badgeKey}`);
     badge.append(el("span", "dash-badge-dot", STATUS[badgeKey].icon), document.createTextNode(badgeText));
     head.append(badge);
 
     const body = el("div", "dash-current-body");
     if (c.finished) {
-      body.append(figure("Run time", c.run_time || "—"));
-      body.append(figure("Total time", c.total_time || "—", "primary"));
+      body.append(figure(gettext("Run time"), c.run_time || "—"));
+      body.append(figure(gettext("Total time"), c.total_time || "—", "primary"));
       if (state.penalties_enabled) {
-        body.append(figure("Penalties", c.penalty ? `+${c.penalty}s` : "0"));
+        body.append(figure(gettext("Penalties"), c.penalty ? `+${c.penalty}s` : "0"));
       }
     } else {
       const note = el("p", "dash-current-note",
-        c.started ? "Timing in progress — result shown when the run finishes."
-                  : "Waiting for the start signal.");
+        c.started ? gettext("Timing in progress — result shown when the run finishes.")
+                  : gettext("Waiting for the start signal."));
       body.append(note);
     }
     currentEl.replaceChildren(head, body);
@@ -152,9 +156,11 @@
     if (c.finished && state.penalties_enabled &&
         (c.pylons || c.tasks || c.stop)) {
       const chips = el("div", "dash-pen-chips");
-      if (c.pylons) chips.append(el("span", "dash-pen-chip", `${c.pylons} × pylon`));
-      if (c.tasks) chips.append(el("span", "dash-pen-chip", `${c.tasks} × task`));
-      if (c.stop) chips.append(el("span", "dash-pen-chip", "stop line"));
+      if (c.pylons) chips.append(el("span", "dash-pen-chip",
+        interpolate(gettext("%(n)s × pylon"), { n: c.pylons }, true)));
+      if (c.tasks) chips.append(el("span", "dash-pen-chip",
+        interpolate(gettext("%(n)s × task"), { n: c.tasks }, true)));
+      if (c.stop) chips.append(el("span", "dash-pen-chip", gettext("stop line")));
       currentEl.append(chips);
     }
   }
@@ -169,7 +175,7 @@
   // ---- classes board ------------------------------------------------------
   function renderClasses() {
     if (!state.classes.length) {
-      classesEl.replaceChildren(el("p", "dash-empty", "No running classes yet."));
+      classesEl.replaceChildren(el("p", "dash-empty", gettext("No running classes yet.")));
       return;
     }
     classesEl.replaceChildren(...state.classes.map(renderClassRow));
@@ -187,7 +193,10 @@
     const top = el("div", "dash-class-top");
     top.append(el("span", "dash-class-name", cls.name));
     top.append(el("span", "dash-class-count",
-      cls.total ? `${cls.finished} / ${cls.total} runs` : "no starters"));
+      cls.total
+        ? interpolate(gettext("%(finished)s / %(total)s runs"),
+            { finished: cls.finished, total: cls.total }, true)
+        : gettext("no starters")));
     main.append(top);
 
     const bar = el("div", "dash-bar");
@@ -214,8 +223,8 @@
     renderCurrent();
     renderClasses();
     if (updatedEl) {
-      updatedEl.textContent = "Updated " +
-        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      updatedEl.textContent = interpolate(gettext("Updated %(time)s"),
+        { time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) }, true);
     }
   }
 

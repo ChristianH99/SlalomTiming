@@ -1,12 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Competition Types – Slalom Timing{% endblock %}
-{% block topbar_title %}Competition Types{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Competition Types" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Competition Types" %}{% endblock %}
 {% block content %}
-  <a class="back-link" href="{% url 'competitions:list' %}">&larr; Back to Competition Setup</a>
+  <a class="back-link" href="{% url 'competitions:list' %}">{% trans "← Back to Competition Setup" %}</a>
 
   <div class="list-toolbar">
     <span></span>
-    <a class="button" href="{% url 'competitions:type-add' %}">+ New type</a>
+    <a class="button" href="{% url 'competitions:type-add' %}">{% trans "+ New type" %}</a>
   </div>
 
   <div class="table-card">
@@ -14,8 +15,8 @@
     <thead>
       <tr>
         <th class="col-expand"></th>
-        <th>Name</th>
-        <th>Used in</th>
+        <th>{% trans "Name" %}</th>
+        <th>{% trans "Used in" %}</th>
         <th class="col-actions"></th>
       </tr>
     </thead>
@@ -25,23 +26,23 @@
           <td class="col-expand">
             {% if competition_type.competition_count %}
               <button type="button" class="expander" data-expander aria-expanded="false"
-                      aria-label="Show competitions of this type">&#9654;</button>
+                      aria-label="{% trans 'Show competitions of this type' %}">&#9654;</button>
             {% endif %}
           </td>
           <td>{{ competition_type.name }}</td>
           <td class="hint">
-            {{ competition_type.competition_count }} competition{{ competition_type.competition_count|pluralize }},
-            {{ competition_type.participant_count }} participant{{ competition_type.participant_count|pluralize }}
+            {% blocktrans count count=competition_type.competition_count %}{{ count }} competition{% plural %}{{ count }} competitions{% endblocktrans %},
+            {% blocktrans count count=competition_type.participant_count %}{{ count }} participant{% plural %}{{ count }} participants{% endblocktrans %}
           </td>
           <td class="col-actions">
-            <a class="link-button" href="{% url 'competitions:type-settings' competition_type.pk %}">Settings</a>
+            <a class="link-button" href="{% url 'competitions:type-settings' competition_type.pk %}">{% trans "Settings" %}</a>
             {% if competition_type.competition_count or competition_type.participant_count %}
               <button type="button" class="link-button link-button--danger" disabled
-                      title="This type is in use and can't be deleted">Delete</button>
+                      title="{% trans 'This type is in use and can’t be deleted' %}">{% trans "Delete" %}</button>
             {% else %}
               <form method="post" action="{% url 'competitions:type-delete' competition_type.pk %}" style="display:inline">
                 {% csrf_token %}
-                <button type="submit" class="link-button link-button--danger">Delete</button>
+                <button type="submit" class="link-button link-button--danger">{% trans "Delete" %}</button>
               </form>
             {% endif %}
           </td>
@@ -59,7 +60,7 @@
           </tr>
         {% endif %}
       {% empty %}
-        <tr><td colspan="4">No competition types yet.</td></tr>
+        <tr><td colspan="4">{% trans "No competition types yet." %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

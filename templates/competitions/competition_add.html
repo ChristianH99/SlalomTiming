@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}New competition – Slalom Timing{% endblock %}
-{% block topbar_title %}New competition{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "New competition" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "New competition" %}{% endblock %}
 {% block content %}
-  <a class="back-link" href="{% url 'competitions:list' %}">&larr; Back to Competition Setup</a>
-  <p class="hint">Create a competition, then configure its classes and run order. The new
-    competition becomes the current one.</p>
+  <a class="back-link" href="{% url 'competitions:list' %}">{% trans "← Back to Competition Setup" %}</a>
+  <p class="hint">{% trans "Create a competition, then configure its classes and run order. The new competition becomes the current one." %}</p>
   <form method="post" data-unsaved-guard>
     {% csrf_token %}
     <input type="hidden" name="next" value="">
@@ -12,7 +12,7 @@
     <p>
       {{ form.competition_type.label_tag }}
       {{ form.competition_type }}
-      <a href="{% url 'competitions:type-add' %}">+ add new type</a>
+      <a href="{% url 'competitions:type-add' %}">{% trans "+ add new type" %}</a>
       {{ form.competition_type.errors }}
     </p>
     <p>
@@ -26,8 +26,8 @@
       {{ form.date.errors }}
     </p>
     <div class="actions">
-      <button class="button" type="submit">Create</button>
-      <a href="{% url 'competitions:list' %}">Cancel</a>
+      <button class="button" type="submit">{% trans "Create" %}</button>
+      <a href="{% url 'competitions:list' %}">{% trans "Cancel" %}</a>
     </div>
   </form>
 {% endblock %}

@@ -1,34 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Results – Slalom Timing{% endblock %}
-{% block topbar_title %}Results{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Results" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Results" %}{% endblock %}
 {% block content %}
   <div class="results-header">
-    <h1 class="page-heading">Results</h1>
-    <a class="button button--small results-export" href="{% url 'results:export-all' %}" target="_blank" rel="noopener">Export all to PDF</a>
+    <h1 class="page-heading">{% trans "Results" %}</h1>
+    <a class="button button--small results-export" href="{% url 'results:export-all' %}" target="_blank" rel="noopener">{% trans "Export all to PDF" %}</a>
   </div>
   <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }}</p>
 
   {% if overall_groups %}
-    <h2 class="form-section">Overall</h2>
+    <h2 class="form-section">{% trans "Overall" %}</h2>
     <div class="results-index">
       {% for g in overall_groups %}
         <a class="results-index-card" href="{% url 'results:overall' g.method g.counted_runs %}">
-          <span class="results-index-name">Overall · {{ g.method_label }}</span>
-          <span class="results-index-meta">{{ g.counted_runs }} Runs · {{ g.classes|length }} class{{ g.classes|length|pluralize:"es" }}</span>
+          <span class="results-index-name">{% blocktrans with label=g.method_label %}Overall · {{ label }}{% endblocktrans %}</span>
+          <span class="results-index-meta">{% blocktrans count count=g.classes|length with runs=g.counted_runs %}{{ runs }} Runs · {{ count }} class{% plural %}{{ runs }} Runs · {{ count }} classes{% endblocktrans %}</span>
         </a>
       {% endfor %}
     </div>
   {% endif %}
 
-  <h2 class="form-section">Classes</h2>
+  <h2 class="form-section">{% trans "Classes" %}</h2>
   <div class="results-index">
     {% for cc in classes %}
       <a class="results-index-card" href="{% url 'results:class' cc.pk %}">
-        <span class="results-index-name">Class {{ cc.name }}</span>
+        <span class="results-index-name">{% blocktrans with name=cc.name %}Class {{ name }}{% endblocktrans %}</span>
         <span class="results-index-meta">{{ cc.get_scoring_method_display }}</span>
       </a>
     {% empty %}
-      <p class="empty-state">No running classes yet.</p>
+      <p class="empty-state">{% trans "No running classes yet." %}</p>
     {% endfor %}
   </div>
 {% endblock %}

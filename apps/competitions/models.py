@@ -1,6 +1,7 @@
 from collections import Counter
 
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from . import startpattern, taskspec
 from .assignment import (
@@ -20,8 +21,8 @@ class CompetitionType(models.Model):
     participant form each read them when those features are built."""
 
     class TieBreak(models.TextChoices):
-        FASTEST_RUN = "fastest_run", "Fastest run time"
-        MANUAL = "manual", "Manual"
+        FASTEST_RUN = "fastest_run", _("Fastest run time")
+        MANUAL = "manual", _("Manual")
 
     class Precision(models.IntegerChoices):
         """Decimal places the timing device resolves to."""
@@ -41,31 +42,31 @@ class CompetitionType(models.Model):
 
     penalties_enabled = models.BooleanField(
         default=True,
-        help_text="Show the penalties screen during timing so penalties can be entered per run.",
+        help_text=_("Show the penalties screen during timing so penalties can be entered per run."),
     )
     pylon_penalty = models.PositiveSmallIntegerField(
-        **_penalty_amount, help_text="Seconds added per pylon hit.",
+        **_penalty_amount, help_text=_("Seconds added per pylon hit."),
     )
     task_penalty = models.PositiveSmallIntegerField(
-        **_penalty_amount, help_text="Seconds added for a failed task.",
+        **_penalty_amount, help_text=_("Seconds added for a failed task."),
     )
     stop_line_penalty = models.PositiveSmallIntegerField(
-        **_penalty_amount, help_text="Seconds added for missing the stop line.",
+        **_penalty_amount, help_text=_("Seconds added for missing the stop line."),
     )
     max_penalty_per_task = models.PositiveSmallIntegerField(
-        **_penalty_amount, help_text="Upper bound on the seconds a single task can add.",
+        **_penalty_amount, help_text=_("Upper bound on the seconds a single task can add."),
     )
 
     tie_break = models.CharField(
         max_length=20,
         choices=TieBreak.choices,
         default=TieBreak.FASTEST_RUN,
-        help_text="How equal results are separated.",
+        help_text=_("How equal results are separated."),
     )
     timing_precision = models.PositiveSmallIntegerField(
         choices=Precision.choices,
         default=Precision.HUNDREDTHS,
-        help_text="Resolution of the timing device.",
+        help_text=_("Resolution of the timing device."),
     )
 
     # Which optional participant details this discipline collects. Whether a collected
@@ -83,16 +84,16 @@ class CompetitionType(models.Model):
     # fields, one that's on shows them and marks them per `mandatory`.
     PARTICIPANT_INFO = {
         "requires_co_driver": (
-            "Co-driver", False, ["co_driver_first_name", "co_driver_last_name"],
+            _("Co-driver"), False, ["co_driver_first_name", "co_driver_last_name"],
         ),
-        "requires_vehicle": ("Vehicle", True, ["vehicle"]),
+        "requires_vehicle": (_("Vehicle"), True, ["vehicle"]),
         "requires_address": (
-            "Address", True, ["address_street", "address_zip_code", "address_city"],
+            _("Address"), True, ["address_street", "address_zip_code", "address_city"],
         ),
-        "requires_club": ("Club", True, ["club"]),
-        "requires_license": ("Licence number", True, ["license_number"]),
-        "requires_email": ("E-Mail", True, ["email"]),
-        "requires_phone": ("Phone", False, ["phone_number"]),
+        "requires_club": (_("Club"), True, ["club"]),
+        "requires_license": (_("Licence number"), True, ["license_number"]),
+        "requires_email": (_("E-Mail"), True, ["email"]),
+        "requires_phone": (_("Phone"), False, ["phone_number"]),
     }
 
     class Meta:
@@ -106,7 +107,7 @@ class CompetitionType(models.Model):
         """Every Participant field whose presence a type decides."""
         return [
             field
-            for _, _, fields in cls.PARTICIPANT_INFO.values()
+            for _label, _mandatory, fields in cls.PARTICIPANT_INFO.values()
             for field in fields
         ]
 
@@ -116,7 +117,7 @@ class CompetitionType(models.Model):
         form hides those."""
         return {
             field: mandatory
-            for setting, (_, mandatory, fields) in self.PARTICIPANT_INFO.items()
+            for setting, (_label, mandatory, fields) in self.PARTICIPANT_INFO.items()
             if getattr(self, setting)
             for field in fields
         }
@@ -134,21 +135,21 @@ class Competition(models.Model):
     )
     name = models.CharField(max_length=150)
     date = models.DateField()
-    is_active = models.BooleanField(default=False, help_text="The competition currently being run.")
+    is_active = models.BooleanField(default=False, help_text=_("The competition currently being run."))
     assignment_method = models.CharField(
         max_length=20,
         choices=ASSIGNMENT_METHOD_CHOICES,
         default=DEFAULT_ASSIGNMENT_METHOD,
-        help_text="How participants are assigned to classes.",
+        help_text=_("How participants are assigned to classes."),
     )
     allow_multiple_classes = models.BooleanField(
         default=False,
-        help_text="Manual assignment only: may a participant be in more than one class.",
+        help_text=_("Manual assignment only: may a participant be in more than one class."),
     )
     penalties_by_marshal_posts = models.BooleanField(
         default=False,
-        help_text="Marshal posts enter penalties for their own area, instead of the "
-        "timekeeper entering every penalty.",
+        help_text=_("Marshal posts enter penalties for their own area, instead of the "
+        "timekeeper entering every penalty."),
     )
     start_pattern = models.JSONField(
         default=list,
@@ -312,33 +313,33 @@ class CompetitionClass(models.Model):
         """How a class's counted runs turn into a result. Recorded per class here;
         the calculation itself lives with the results feature."""
 
-        AGGREGATE = "aggregate", "Aggregate times"
-        BEST_RUN = "best_run", "Best run only"
-        REGULARITY = "regularity", "Regularity test"
+        AGGREGATE = "aggregate", _("Aggregate times")
+        BEST_RUN = "best_run", _("Best run only")
+        REGULARITY = "regularity", _("Regularity test")
 
     competition = models.ForeignKey(Competition, on_delete=models.CASCADE, related_name="classes")
     name = models.CharField(max_length=50)
-    position = models.PositiveIntegerField(default=0, help_text="Display order in the classes list.")
+    position = models.PositiveIntegerField(default=0, help_text=_("Display order in the classes list."))
     is_running = models.BooleanField(default=False)
-    age_from = models.PositiveIntegerField(null=True, blank=True, help_text="Starting age, e.g. 6")
-    age_to = models.PositiveIntegerField(null=True, blank=True, help_text="Ending age, e.g. 7")
+    age_from = models.PositiveIntegerField(null=True, blank=True, help_text=_("Starting age, e.g. 6"))
+    age_to = models.PositiveIntegerField(null=True, blank=True, help_text=_("Ending age, e.g. 7"))
     practice_runs = models.PositiveIntegerField(default=1)
     counted_runs = models.PositiveIntegerField(default=2)
     scoring_method = models.CharField(
         max_length=20,
         choices=Scoring.choices,
         default=Scoring.AGGREGATE,
-        help_text="How this class's counted runs are turned into a result.",
+        help_text=_("How this class's counted runs are turned into a result."),
     )
     allow_multiple_entries = models.BooleanField(
         default=False,
-        help_text="Manual assignment only: may a participant be entered into this class more than once.",
+        help_text=_("Manual assignment only: may a participant be entered into this class more than once."),
     )
     run_position = models.PositiveIntegerField(
         null=True,
         blank=True,
-        help_text="The run this class belongs to. Classes sharing a run_position start "
-        "together; runs execute in ascending order. Null when not placed.",
+        help_text=_("The run this class belongs to. Classes sharing a run_position start "
+        "together; runs execute in ascending order. Null when not placed."),
     )
 
     class Meta:
@@ -369,15 +370,15 @@ class MarshalPost(models.Model):
     competition = models.ForeignKey(
         Competition, on_delete=models.CASCADE, related_name="marshal_posts"
     )
-    number = models.PositiveSmallIntegerField(help_text="1-based post number, in setup order.")
+    number = models.PositiveSmallIntegerField(help_text=_("1-based post number, in setup order."))
     tasks = models.CharField(
         max_length=200,
         blank=True,
-        help_text="Task numbers this post watches, e.g. “1, 5, 11-15”.",
+        help_text=_("Task numbers this post watches, e.g. “1, 5, 11-15”."),
     )
     handles_stop_line = models.BooleanField(
         default=False,
-        help_text="This post also judges the stop line (at most one post per competition).",
+        help_text=_("This post also judges the stop line (at most one post per competition)."),
     )
     # A soft claim so only one device edits a post at a time: the token of the
     # device that confirmed it on the Marshal Posts page, kept alive by a

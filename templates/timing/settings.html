@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Timing settings – Slalom Timing{% endblock %}
-{% block topbar_title %}Timing settings{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Timing settings" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Timing settings" %}{% endblock %}
 {% block content %}
-  <h1 class="page-heading">Timing</h1>
-  <p class="hint">The timing device this machine receives signals from, and how its channels map to start and finish.</p>
+  <h1 class="page-heading">{% trans "Timing" %}</h1>
+  <p class="hint">{% trans "The timing device this machine receives signals from, and how its channels map to start and finish." %}</p>
 
   <form method="post" class="settings-form" data-unsaved-guard>
     {% csrf_token %}
@@ -18,12 +19,12 @@
 
       <div class="settings-row">
         <label class="settings-field" for="{{ form.start_channel.id_for_label }}">
-          <span class="settings-label">Start channel</span>
+          <span class="settings-label">{% trans "Start channel" %}</span>
           <span class="settings-control">{{ form.start_channel }}</span>
           <span class="field-error">{{ form.start_channel.errors|join:" " }}</span>
         </label>
         <label class="settings-field" for="{{ form.finish_channel.id_for_label }}">
-          <span class="settings-label">Finish channel</span>
+          <span class="settings-label">{% trans "Finish channel" %}</span>
           <span class="settings-control">{{ form.finish_channel }}</span>
           <span class="field-error">{{ form.finish_channel.errors|join:" " }}</span>
         </label>
@@ -32,15 +33,15 @@
       {# Save persists the device and channel mapping. IP/port are saved with them,
          but the CP540 is actually reached with Connect below. #}
       <div class="actions actions--start">
-        <button class="button button--secondary" type="submit" name="action" value="save">Save</button>
+        <button class="button button--secondary" type="submit" name="action" value="save">{% trans "Save" %}</button>
         <a class="button" href="{% url 'timing:simulator' %}" target="_blank" rel="noopener"
-           data-start="simulator" hidden>Start simulator ↗</a>
+           data-start="simulator" hidden>{% trans "Start simulator ↗" %}</a>
       </div>
     </div>
 
     {# Networked-device only: shown when the CP540 is selected. #}
     <div class="settings-section" data-device-group="cp540" hidden>
-      <h2 class="settings-subheading">CP540 connection</h2>
+      <h2 class="settings-subheading">{% trans "CP540 connection" %}</h2>
       <div class="settings-row">
         <label class="settings-field" for="{{ form.ip_address.id_for_label }}">
           <span class="settings-label">{{ form.ip_address.label }}</span>
@@ -53,11 +54,11 @@
           <span class="field-error">{{ form.port.errors|join:" " }}</span>
         </label>
       </div>
-      <p class="hint" id="cp540-locked-hint" hidden>Disconnect to change the address or port.</p>
+      <p class="hint" id="cp540-locked-hint" hidden>{% trans "Disconnect to change the address or port." %}</p>
 
       <div class="actions actions--start">
-        <button class="button" type="submit" name="action" value="connect" id="cp540-connect">Connect</button>
-        <button class="button button--secondary" type="submit" name="action" value="disconnect" id="cp540-disconnect">Disconnect</button>
+        <button class="button" type="submit" name="action" value="connect" id="cp540-connect">{% trans "Connect" %}</button>
+        <button class="button button--secondary" type="submit" name="action" value="disconnect" id="cp540-disconnect">{% trans "Disconnect" %}</button>
       </div>
     </div>
   </form>
@@ -65,13 +66,12 @@
   {# CP540 live link status + raw stream, for debugging the connection. #}
   <section class="settings-section device-log" data-device-group="cp540" hidden>
     <div class="device-log-head">
-      <h2 class="settings-subheading">Device stream</h2>
-      <span class="device-status" id="cp540-status" data-state="idle">Idle</span>
+      <h2 class="settings-subheading">{% trans "Device stream" %}</h2>
+      <span class="device-status" id="cp540-status" data-state="idle">{% trans "Idle" %}</span>
     </div>
-    <p class="hint">Every line the CP540 sends is shown here. Only <code>TN</code> lines (a running
-      number, an input 1–4 or M1–M4, and a time) become timing signals — those are highlighted.</p>
+    <p class="hint">{% blocktrans %}Every line the CP540 sends is shown here. Only <code>TN</code> lines (a running number, an input 1–4 or M1–M4, and a time) become timing signals — those are highlighted.{% endblocktrans %}</p>
     <ul class="device-log-lines" id="cp540-log" aria-live="polite"></ul>
-    <p class="device-log-empty" id="cp540-log-empty">No lines received yet.</p>
+    <p class="device-log-empty" id="cp540-log-empty">{% trans "No lines received yet." %}</p>
   </section>
 
   <script>
@@ -100,8 +100,9 @@
       const portInput = document.getElementById("{{ form.port.id_for_label }}");
       const lockedHint = document.getElementById("cp540-locked-hint");
       const STATUS_TEXT = {
-        idle: "Idle", connecting: "Connecting…", connected: "Connected",
-        error: "Connection error", stopped: "Disconnected",
+        idle: "{% trans 'Idle'|escapejs %}", connecting: "{% trans 'Connecting…'|escapejs %}",
+        connected: "{% trans 'Connected'|escapejs %}",
+        error: "{% trans 'Connection error'|escapejs %}", stopped: "{% trans 'Disconnected'|escapejs %}",
       };
       let timer = null;
 
@@ -124,7 +125,11 @@
           statusEl.dataset.state = data.error ? "error" : state;
           statusEl.textContent = (STATUS_TEXT[state] || state)
             + (data.error ? ` — ${data.error}` : "")
-            + (data.running && data.signals ? ` · ${data.signals} signal${data.signals === 1 ? "" : "s"}` : "");
+            + (data.running && data.signals
+                ? " · " + (data.signals === 1
+                    ? "{% trans '{n} signal'|escapejs %}".replace("{n}", data.signals)
+                    : "{% trans '{n} signals'|escapejs %}".replace("{n}", data.signals))
+                : "");
           applyLink(!!data.running);
           renderLog(data.log || []);
         } catch (err) { /* transient; try again next tick */ }

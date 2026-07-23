@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Classes – Slalom Timing{% endblock %}
-{% block topbar_title %}Classes{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Classes" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Classes" %}{% endblock %}
 {% block content %}
-  <h1 class="page-heading">Classes</h1>
-  <p class="hint">Classes for <strong>{{ object.name }}</strong>. Choose how participants are assigned
-    to classes, then edit each class below. Group them into runs on the
-    <a href="{% url 'competitions:runorder' %}">Run order</a> page.</p>
+  <h1 class="page-heading">{% trans "Classes" %}</h1>
+  <p class="hint">{% blocktrans with name=object.name %}Classes for <strong>{{ name }}</strong>. Choose how participants are assigned to classes, then edit each class below.{% endblocktrans %}
+    {% url 'competitions:runorder' as runorder_url %}{% blocktrans %}Group them into runs on the <a href="{{ runorder_url }}">Run order</a> page.{% endblocktrans %}</p>
 
   <form method="post" data-unsaved-guard>
     {% csrf_token %}
@@ -15,13 +15,13 @@
 
     <div class="assignment-bar">
       <div class="assignment-method">
-        <label for="{{ assignment_form.assignment_method.id_for_label }}">Assignment method</label>
+        <label for="{{ assignment_form.assignment_method.id_for_label }}">{% trans "Assignment method" %}</label>
         {{ assignment_form.assignment_method }}
       </div>
       <label class="switch" data-multiple-switch>
         {{ assignment_form.allow_multiple_classes }}
         <span class="switch-track"><span class="switch-thumb"></span></span>
-        <span class="switch-text">Allow participation in multiple classes</span>
+        <span class="switch-text">{% trans "Allow participation in multiple classes" %}</span>
       </label>
     </div>
 
@@ -36,7 +36,7 @@
     </div>
 
     <div class="actions">
-      <button type="button" class="button button--secondary button--small" id="add-class">+ Add class</button>
+      <button type="button" class="button button--secondary button--small" id="add-class">{% trans "+ Add class" %}</button>
     </div>
 
     <template id="class-empty-form">
@@ -44,17 +44,17 @@
     </template>
 
     <div class="actions">
-      <button class="button" type="submit">Save</button>
+      <button class="button" type="submit">{% trans "Save" %}</button>
     </div>
   </form>
 
   <div class="modal-overlay" id="delete-class-modal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-class-title">
-      <h2 class="modal-title" id="delete-class-title">Delete class?</h2>
+      <h2 class="modal-title" id="delete-class-title">{% trans "Delete class?" %}</h2>
       <div class="modal-body" data-delete-class-body></div>
       <div class="modal-actions">
-        <button type="button" class="button" data-delete-class-confirm>Delete class</button>
-        <button type="button" class="button button--secondary" data-delete-class-cancel>Cancel</button>
+        <button type="button" class="button" data-delete-class-confirm>{% trans "Delete class" %}</button>
+        <button type="button" class="button button--secondary" data-delete-class-cancel>{% trans "Cancel" %}</button>
       </div>
     </div>
   </div>
@@ -165,12 +165,12 @@
         const assignCount = parseInt(tile.dataset.assignmentCount || "0", 10);
         if ((runCount > 0 || assignCount > 0) && deleteModal && deleteBody) {
           const nameInput = tile.querySelector('input[name$="-name"]');
-          const name = nameInput && nameInput.value ? nameInput.value : "This class";
+          const name = nameInput && nameInput.value ? nameInput.value : "{% trans 'This class'|escapejs %}";
           const items = [];
-          if (runCount > 0) items.push(`<li><strong>${runCount}</strong> recorded run(s) — the times are kept but lose their class</li>`);
-          if (assignCount > 0) items.push(`<li><strong>${assignCount}</strong> participant assignment(s) — removed</li>`);
-          deleteBody.innerHTML = `<p>“${escapeHtml(name)}” has:</p><ul>${items.join("")}</ul>`
-            + `<p>It will be deleted when you press Save.</p>`;
+          if (runCount > 0) items.push(`<li><strong>${runCount}</strong> {% trans 'recorded run(s) — the times are kept but lose their class'|escapejs %}</li>`);
+          if (assignCount > 0) items.push(`<li><strong>${assignCount}</strong> {% trans 'participant assignment(s) — removed'|escapejs %}</li>`);
+          deleteBody.innerHTML = `<p>“${escapeHtml(name)}” {% trans 'has:'|escapejs %}</p><ul>${items.join("")}</ul>`
+            + `<p>{% trans 'It will be deleted when you press Save.'|escapejs %}</p>`;
           pendingTile = tile;
           deleteModal.hidden = false;
           document.body.classList.add("modal-open");

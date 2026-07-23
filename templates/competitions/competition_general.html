@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% block title %}General – Slalom Timing{% endblock %}
-{% block topbar_title %}General{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "General" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "General" %}{% endblock %}
 {% block content %}
-  <h1 class="page-heading">General</h1>
-  <p class="hint">Basic details for <strong>{{ object.name }}</strong>.</p>
+  <h1 class="page-heading">{% trans "General" %}</h1>
+  <p class="hint">{% blocktrans with name=object.name %}Basic details for <strong>{{ name }}</strong>.{% endblocktrans %}</p>
   <form method="post" data-unsaved-guard>
     {% csrf_token %}
     <input type="hidden" name="next" value="">
@@ -11,7 +12,7 @@
     <p>
       {{ form.competition_type.label_tag }}
       {{ form.competition_type }}
-      <a href="{% url 'competitions:type-add' %}">+ add new type</a>
+      <a href="{% url 'competitions:type-add' %}">{% trans "+ add new type" %}</a>
       {{ form.competition_type.errors }}
     </p>
     <p>
@@ -25,7 +26,7 @@
       {{ form.date.errors }}
     </p>
     <div class="actions">
-      <button class="button" type="submit">Save</button>
+      <button class="button" type="submit">{% trans "Save" %}</button>
     </div>
   </form>
 {% endblock %}

@@ -1,33 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Delete participant – Slalom Timing{% endblock %}
-{% block topbar_title %}Delete participant{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Delete participant" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Delete participant" %}{% endblock %}
 {% block content %}
-  <h1>Delete {{ object }}?</h1>
+  <h1>{% blocktrans with name=object %}Delete {{ name }}?{% endblocktrans %}</h1>
   <p>{{ object.first_name }} {{ object.last_name }}{% if object.club %} ({{ object.club }}){% endif %}
-     will be <strong>permanently removed</strong>.</p>
+     {% blocktrans %}will be <strong>permanently removed</strong>.{% endblocktrans %}</p>
 
   {% if entry_count or assignment_count %}
     <div class="delete-warning">
-      <p>This also removes:</p>
+      <p>{% trans "This also removes:" %}</p>
       <ul>
-        {% if entry_count %}<li><strong>{{ entry_count }}</strong> bib registration{{ entry_count|pluralize }} across all competitions</li>{% endif %}
-        {% if assignment_count %}<li><strong>{{ assignment_count }}</strong> class assignment{{ assignment_count|pluralize }}</li>{% endif %}
+        {% if entry_count %}<li>{% blocktrans count count=entry_count %}<strong>{{ count }}</strong> bib registration across all competitions{% plural %}<strong>{{ count }}</strong> bib registrations across all competitions{% endblocktrans %}</li>{% endif %}
+        {% if assignment_count %}<li>{% blocktrans count count=assignment_count %}<strong>{{ count }}</strong> class assignment{% plural %}<strong>{{ count }}</strong> class assignments{% endblocktrans %}</li>{% endif %}
       </ul>
     </div>
   {% endif %}
 
   {% if orphaned_run_count %}
     <div class="delete-warning">
-      <p><strong>{{ orphaned_run_count }} recorded run{{ orphaned_run_count|pluralize }}</strong>
-         under this participant's bib{{ entry_count|pluralize }} will <strong>not</strong> be deleted —
-         the times stay in the timing data but will no longer show a name, and the bib may be reused
-         by someone else. Delete anyway only if you're sure.</p>
+      <p>{% blocktrans count count=orphaned_run_count %}<strong>{{ count }} recorded run</strong> under this participant's bib will <strong>not</strong> be deleted — the time stays in the timing data but will no longer show a name, and the bib may be reused by someone else. Delete anyway only if you're sure.{% plural %}<strong>{{ count }} recorded runs</strong> under this participant's bibs will <strong>not</strong> be deleted — the times stay in the timing data but will no longer show a name, and the bibs may be reused by someone else. Delete anyway only if you're sure.{% endblocktrans %}</p>
     </div>
   {% endif %}
 
   <form method="post">
     {% csrf_token %}
-    <button class="button" type="submit">Confirm delete</button>
-    <a href="{% url 'participants:list' %}">Cancel</a>
+    <button class="button" type="submit">{% trans "Confirm delete" %}</button>
+    <a href="{% url 'participants:list' %}">{% trans "Cancel" %}</a>
   </form>
 {% endblock %}

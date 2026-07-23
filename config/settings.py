@@ -80,6 +80,11 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # Resolves the active language (session -> cookie -> Accept-Language ->
+    # LANGUAGE_CODE) so {% trans %} and gettext render in the chosen language.
+    # Must sit after SessionMiddleware (reads the language from the session) and
+    # before CommonMiddleware.
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -194,7 +199,23 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+from django.utils.translation import gettext_lazy as _  # noqa: E402
+
+# Default language for a visitor who hasn't chosen one. The app targets German
+# slalom races, so German is the default; English is offered via the topbar
+# language selector (django.views.i18n.set_language, wired in config/urls.py).
+LANGUAGE_CODE = 'de'
+
+# The languages the selector offers. Add a tuple here (plus a compiled
+# locale/<code>/LC_MESSAGES/django.mo) to introduce another language later.
+LANGUAGES = [
+    ('de', _('German')),
+    ('en', _('English')),
+]
+
+# Where makemessages writes and compilemessages/LocaleMiddleware read the
+# translation catalogs.
+LOCALE_PATHS = [BASE_DIR / 'locale']
 
 TIME_ZONE = 'UTC'
 

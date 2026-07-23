@@ -1,0 +1,38 @@
+{% load i18n %}
+{% comment %}
+Topbar language selector: a globe icon that toggles a small menu of the
+configured LANGUAGES. Each option POSTs to django.views.i18n.set_language,
+which stores the choice (session + cookie) and redirects back to `next`.
+Persistent across pages — lives in the topbar outside the page's overridable
+topbar_actions block. Behaviour in static/js (inline in base.html).
+{% endcomment %}
+{% get_current_language as CURRENT_LANGUAGE %}
+{% get_available_languages as AVAILABLE_LANGUAGES %}
+{% get_language_info_list for AVAILABLE_LANGUAGES as languages %}
+<div class="lang-switcher" data-lang-switcher>
+  <button type="button" class="topbar-help lang-toggle" data-lang-toggle
+          aria-haspopup="true" aria-expanded="false"
+          title="{% trans 'Language' %}" aria-label="{% trans 'Language' %}">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+         stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M3 12h18"></path>
+      <path d="M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"></path>
+    </svg>
+  </button>
+  <div class="lang-menu" data-lang-menu hidden role="menu">
+    {% for language in languages %}
+    <form method="post" action="{% url 'set_language' %}" role="none">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <input type="hidden" name="language" value="{{ language.code }}">
+      <button type="submit" role="menuitemradio"
+              aria-checked="{% if language.code == CURRENT_LANGUAGE %}true{% else %}false{% endif %}"
+              class="lang-option{% if language.code == CURRENT_LANGUAGE %} lang-option--active{% endif %}">
+        <span class="lang-option-name">{{ language.name_local|capfirst }}</span>
+        <span class="lang-option-code">{{ language.code }}</span>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</div>

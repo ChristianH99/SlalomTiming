@@ -1,31 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Delete competition – Slalom Timing{% endblock %}
-{% block topbar_title %}Delete competition{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Delete competition" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Delete competition" %}{% endblock %}
 {% block content %}
-  <h1>Delete {{ object.name }}?</h1>
-  <p>The competition on {{ object.date }} will be <strong>permanently removed</strong>.</p>
+  <h1>{% blocktrans with name=object.name %}Delete {{ name }}?{% endblocktrans %}</h1>
+  <p>{% blocktrans with date=object.date %}The competition on {{ date }} will be <strong>permanently removed</strong>.{% endblocktrans %}</p>
 
   {% if entry_count or recorded_run_count or signal_count or class_count or assignment_count %}
     <div class="delete-warning">
-      <p>Deleting it also permanently deletes, with no way to recover:</p>
+      <p>{% trans "Deleting it also permanently deletes, with no way to recover:" %}</p>
       <ul>
-        {% if entry_count %}<li><strong>{{ entry_count }}</strong> bib registration{{ entry_count|pluralize }}</li>{% endif %}
-        {% if recorded_run_count %}<li><strong>{{ recorded_run_count }}</strong> recorded run{{ recorded_run_count|pluralize }} (timed results)</li>{% endif %}
-        {% if signal_count %}<li><strong>{{ signal_count }}</strong> raw timing signal{{ signal_count|pluralize }}</li>{% endif %}
-        {% if class_count %}<li><strong>{{ class_count }}</strong> class{{ class_count|pluralize:"es" }}</li>{% endif %}
-        {% if assignment_count %}<li><strong>{{ assignment_count }}</strong> participant class assignment{{ assignment_count|pluralize }}</li>{% endif %}
+        {% if entry_count %}<li>{% blocktrans count count=entry_count %}<strong>{{ count }}</strong> bib registration{% plural %}<strong>{{ count }}</strong> bib registrations{% endblocktrans %}</li>{% endif %}
+        {% if recorded_run_count %}<li>{% blocktrans count count=recorded_run_count %}<strong>{{ count }}</strong> recorded run (timed results){% plural %}<strong>{{ count }}</strong> recorded runs (timed results){% endblocktrans %}</li>{% endif %}
+        {% if signal_count %}<li>{% blocktrans count count=signal_count %}<strong>{{ count }}</strong> raw timing signal{% plural %}<strong>{{ count }}</strong> raw timing signals{% endblocktrans %}</li>{% endif %}
+        {% if class_count %}<li>{% blocktrans count count=class_count %}<strong>{{ count }}</strong> class{% plural %}<strong>{{ count }}</strong> classes{% endblocktrans %}</li>{% endif %}
+        {% if assignment_count %}<li>{% blocktrans count count=assignment_count %}<strong>{{ count }}</strong> participant class assignment{% plural %}<strong>{{ count }}</strong> participant class assignments{% endblocktrans %}</li>{% endif %}
       </ul>
       {% if recorded_run_count or signal_count %}
-        <p><strong>This includes timed results.</strong> The participant records themselves are kept — only this competition's registrations, classes and timing data are removed.</p>
+        <p>{% trans "<strong>This includes timed results.</strong> The participant records themselves are kept — only this competition's registrations, classes and timing data are removed." %}</p>
       {% else %}
-        <p>The participant records themselves are kept — only this competition's registrations and classes are removed.</p>
+        <p>{% trans "The participant records themselves are kept — only this competition's registrations and classes are removed." %}</p>
       {% endif %}
     </div>
   {% endif %}
 
   <form method="post">
     {% csrf_token %}
-    <button class="button" type="submit">Confirm delete</button>
-    <a href="{% url 'competitions:list' %}">Cancel</a>
+    <button class="button" type="submit">{% trans "Confirm delete" %}</button>
+    <a href="{% url 'competitions:list' %}">{% trans "Cancel" %}</a>
   </form>
 {% endblock %}

@@ -1,9 +1,9 @@
-{% load static %}<!doctype html>
-<html lang="en">
+{% load static i18n %}{% get_current_language as LANGUAGE_CODE %}<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in – Slalom Timing</title>
+  <title>{% trans "Sign in" %} – Slalom Timing</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
@@ -14,25 +14,25 @@
     <div class="login-brand">
       <span class="brand">Slalom<span class="brand-slash">/</span>Timing</span>
     </div>
-    <h1 class="login-title">Sign in</h1>
+    <h1 class="login-title">{% trans "Sign in" %}</h1>
 
     {% if form.errors %}
-      <p class="notice notice--error">Wrong username or password. Please try again.</p>
+      <p class="notice notice--error">{% trans "Wrong username or password. Please try again." %}</p>
     {% endif %}
 
     <form method="post" action="{% url 'accounts:login' %}" class="login-form">
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ next }}">
       <p>
-        <label for="{{ form.username.id_for_label }}">Username</label>
+        <label for="{{ form.username.id_for_label }}">{% trans "Username" %}</label>
         {{ form.username }}
       </p>
       <p>
-        <label for="{{ form.password.id_for_label }}">Password</label>
+        <label for="{{ form.password.id_for_label }}">{% trans "Password" %}</label>
         <span class="pw-wrap">
           {{ form.password }}
           <button type="button" class="pw-reveal" data-pw-reveal
-                  aria-label="Show password (hold)" title="Show password (hold)">
+                  aria-label="{% trans 'Show password (hold)' %}" title="{% trans 'Show password (hold)' %}">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
@@ -41,7 +41,7 @@
           </button>
         </span>
       </p>
-      <button class="button button--big" type="submit">Sign in</button>
+      <button class="button button--big" type="submit">{% trans "Sign in" %}</button>
     </form>
   </main>
 

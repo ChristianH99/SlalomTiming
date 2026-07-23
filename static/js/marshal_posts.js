@@ -65,7 +65,7 @@
   config.posts.forEach((post) => {
     const option = document.createElement("option");
     option.value = String(post.number);
-    option.textContent = "Post " + post.number;
+    option.textContent = interpolate(gettext("Post %(n)s"), { n: post.number }, true);
     select.appendChild(option);
   });
 
@@ -74,7 +74,7 @@
     select.value = saved;
     claimPost(saved).then((ok) => {
       if (ok) lockSelection();
-      else { showToast("Post " + saved + " is in use on another device."); refreshClaims(); }
+      else { showToast(interpolate(gettext("Post %(n)s is in use on another device."), { n: saved }, true)); refreshClaims(); }
     });
   }
   refreshClaims();
@@ -85,7 +85,7 @@
   confirmBtn.addEventListener("click", async () => {
     const number = select.value;
     if (!(await claimPost(number))) {
-      showToast("Post " + number + " is in use on another device.");
+      showToast(interpolate(gettext("Post %(n)s is in use on another device."), { n: number }, true));
       refreshClaims();
       return;
     }
@@ -144,7 +144,9 @@
     Array.from(select.options).forEach((opt) => {
       const busy = takenSet.has(opt.value) && opt.value !== String(confirmedPost);
       opt.disabled = busy;
-      opt.textContent = "Post " + opt.value + (busy ? " — in use" : "");
+      opt.textContent = interpolate(
+        busy ? gettext("Post %(n)s — in use") : gettext("Post %(n)s"),
+        { n: opt.value }, true);
     });
   }
 
@@ -191,7 +193,7 @@
     reduce.type = "button";
     reduce.className = "marshal-reduce";
     reduce.textContent = "−";
-    reduce.setAttribute("aria-label", "Reduce penalty for task " + n);
+    reduce.setAttribute("aria-label", interpolate(gettext("Reduce penalty for task %(n)s"), { n: n }, true));
     reduce.addEventListener("click", () => reduceTask(n, btn));
 
     cell.append(btn, reduce);
@@ -206,7 +208,7 @@
     btn.className = "marshal-task marshal-task--stop";
     btn.dataset.stop = "";
     btn.innerHTML =
-      '<span class="marshal-task-num">Stop line</span>' +
+      '<span class="marshal-task-num">' + gettext("Stop line") + "</span>" +
       '<span class="marshal-task-state"></span>';
     bindPress(btn, () => { stopLine = !stopLine; renderStop(btn); commitChange(); }, () => {});
     renderStop(btn);
@@ -225,7 +227,7 @@
       const next = cell.pylons + 1;
       if (config.maxPylons !== null && next > config.maxPylons) {
         wiggle(btn);
-        showToast("Max penalty per task reached");
+        showToast(gettext("Max penalty per task reached"));
         return;
       }
       cell.mode = "pylon";
@@ -267,7 +269,7 @@
     const label = btn.querySelector(".marshal-task-state");
     btn.classList.toggle("marshal-task--active", cell.mode !== "none");
     btn.classList.toggle("marshal-task--task", cell.mode === "task");
-    if (cell.mode === "task") label.textContent = "Task";
+    if (cell.mode === "task") label.textContent = gettext("Task");
     else if (cell.mode === "pylon") label.textContent = "×" + cell.pylons;
     else label.textContent = "—";
   }
@@ -275,7 +277,7 @@
   function renderStop(btn) {
     const label = btn.querySelector(".marshal-task-state");
     btn.classList.toggle("marshal-task--active", stopLine);
-    label.textContent = stopLine ? "Penalty" : "—";
+    label.textContent = stopLine ? gettext("Penalty") : "—";
   }
 
   // --- Total (only if the type carries penalty seconds) --------------------
@@ -287,7 +289,7 @@
       else if (cell.mode === "pylon") seconds += cell.pylons * config.pylonPenalty;
     });
     if (stopLine) seconds += config.stopLinePenalty || 0;
-    totalEl.textContent = "Penalty: " + seconds + " s";
+    totalEl.textContent = interpolate(gettext("Penalty: %(n)s s"), { n: seconds }, true);
   }
 
   // --- Starter gating ------------------------------------------------------
@@ -302,7 +304,7 @@
       clubEl.textContent = starter.club || "";
     } else {
       bibEl.textContent = "—";
-      nameEl.textContent = "Waiting for the next starter…";
+      nameEl.textContent = gettext("Waiting for the next starter…");
       clubEl.textContent = "";
     }
     applyEnabled();
@@ -328,7 +330,7 @@
     pushPenalty(true);
     locked = true;
     applyEnabled();
-    showToast("Penalties submitted for bib " + starter.bib);
+    showToast(interpolate(gettext("Penalties submitted for bib %(bib)s"), { bib: starter.bib }, true));
   });
 
   // --- Timing link ---------------------------------------------------------
