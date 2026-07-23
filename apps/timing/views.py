@@ -1,7 +1,9 @@
 import datetime
 import json
+import secrets
 from collections import Counter
 
+from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
 from django.urls import reverse_lazy
@@ -422,6 +424,11 @@ def timing_signal(request):
     This is the simulator's door. Only one source feeds the database at a time, so
     it is refused unless the simulator is the selected device — otherwise a stray
     simulator tab left open could inject times while the CP540 is live."""
+    # Authorisation: a logged-in operator (the browser Simulator carries its
+    # session) or a device presenting the shared token. See _signal_authorized.
+    if not _signal_authorized(request):
+        return JsonResponse({"ok": False, "error": "Unauthorized."}, status=401)
+
     if TimingSettings.load().device != TimingSettings.Device.SIMULATOR:
         return JsonResponse(
             {"ok": False, "error": "The timing device isn’t the simulator; these signals are ignored."},
@@ -453,6 +460,25 @@ def timing_signal(request):
     # signal is None when the DB was busy and the time went to the recovery file;
     # it wasn't lost, so still report success.
     return JsonResponse({"ok": True, "id": signal.id if signal else None, "captured": signal is None})
+
+
+def _signal_authorized(request):
+    """Who may POST a raw timing signal. The endpoint is CSRF-exempt and outside
+    the login gate (a device can't log in), so it enforces its own rule here:
+
+    - a logged-in user (the Simulator page runs in the operator's session) — OK;
+    - otherwise, if TIMING_DEVICE_TOKEN is configured, a matching X-Device-Token
+      (constant-time compared) — OK;
+    - otherwise the door is open only while DEBUG is on (local dev). In a
+      deployment (DEBUG off) an anonymous, tokenless post is refused, so the one
+      unauthenticated write endpoint isn't world-writable."""
+    if request.user.is_authenticated:
+        return True
+    token = getattr(settings, "TIMING_DEVICE_TOKEN", "")
+    if token:
+        provided = request.headers.get("X-Device-Token", "")
+        return bool(provided) and secrets.compare_digest(provided, token)
+    return settings.DEBUG
 
 
 def _parse_device_time(raw):

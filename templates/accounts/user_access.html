@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}User Access – Slalom Timing{% endblock %}
+{% block topbar_title %}User Access{% endblock %}
+{% block content %}
+  <h1 class="page-heading">User Access</h1>
+  <p class="hint">Roles decide which pages an account can open. A role grants a set of
+    pages; a user gets the combined access of all their roles. Superusers always have
+    full access.</p>
+  <p class="hint"><a href="/admin/">Open Django Admin →</a> <span class="hint">— low-level data
+    administration (superusers only).</span></p>
+
+  {# ===== ROLES ===== #}
+  <h2 class="page-heading--sub">Roles</h2>
+  <p class="hint">Tick the pages each role may open, then Save.</p>
+
+  <div class="access-grid">
+    {% for role in roles %}
+      <div class="access-card">
+        <div class="access-card-head">
+          <span class="access-card-title">{{ role.group.name }}</span>
+          <form method="post" action="{% url 'accounts:role-delete' %}"
+                onsubmit="return confirm('Delete the role “{{ role.group.name }}”? Users lose the access it grants.');">
+            {% csrf_token %}
+            <input type="hidden" name="group" value="{{ role.group.pk }}">
+            <button class="button button--small button--danger" type="submit">Delete</button>
+          </form>
+        </div>
+        <form method="post" action="{% url 'accounts:role-update' %}">
+          {% csrf_token %}
+          <input type="hidden" name="group" value="{{ role.group.pk }}">
+          <div class="settings-checks access-checks">
+            {% for page in role.pages %}
+              <label class="switch">
+                <input type="checkbox" name="pages" value="{{ page.key }}" {% if page.granted %}checked{% endif %}>
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+                <span class="switch-text">{{ page.label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          <div class="actions actions--start">
+            <button class="button button--small" type="submit">Save pages</button>
+          </div>
+        </form>
+      </div>
+    {% empty %}
+      <p class="empty-state">No roles yet. Create one below.</p>
+    {% endfor %}
+  </div>
+
+  <form method="post" action="{% url 'accounts:role-create' %}" class="access-inline-form">
+    {% csrf_token %}
+    <label for="new-role-name">New role</label>
+    <input type="text" id="new-role-name" name="name" placeholder="e.g. Marshals" required>
+    <button class="button" type="submit">Create role</button>
+  </form>
+
+  {# ===== USERS ===== #}
+  <h2 class="page-heading--sub">Users</h2>
+  <p class="hint">Assign each account to one or more roles. Leave the password blank when
+    editing to keep the current one.</p>
+
+  <div class="access-grid">
+    {% for row in users %}
+      <div class="access-card">
+        <div class="access-card-head">
+          <span class="access-card-title">{{ row.user.username }}
+            {% if row.user.is_superuser %}<span class="access-badge">superuser</span>{% endif %}</span>
+          <form method="post" action="{% url 'accounts:user-delete' %}"
+                onsubmit="return confirm('Delete the user “{{ row.user.username }}”?');">
+            {% csrf_token %}
+            <input type="hidden" name="user" value="{{ row.user.pk }}">
+            <button class="button button--small button--danger" type="submit"
+                    {% if row.user == request.user %}disabled title="You can’t delete your own account"{% endif %}>Delete</button>
+          </form>
+        </div>
+        <form method="post" action="{% url 'accounts:user-update' %}">
+          {% csrf_token %}
+          <input type="hidden" name="user" value="{{ row.user.pk }}">
+          {% if row.user.is_superuser %}
+            <p class="hint">Full access (superuser). Roles don’t affect this account.</p>
+          {% else %}
+            <div class="access-roles">
+              {% for group in all_roles %}
+                <label class="access-role-check">
+                  <input type="checkbox" name="roles" value="{{ group.pk }}"
+                         {% if group.pk in row.role_ids %}checked{% endif %}>
+                  <span>{{ group.name }}</span>
+                </label>
+              {% empty %}
+                <span class="hint">No roles defined.</span>
+              {% endfor %}
+            </div>
+          {% endif %}
+          <p class="access-pw">
+            <label for="pw-{{ row.user.pk }}">Reset password</label>
+            <input type="password" id="pw-{{ row.user.pk }}" name="password"
+                   placeholder="leave blank to keep" autocomplete="new-password">
+          </p>
+          <div class="actions actions--start">
+            <button class="button button--small" type="submit">Save</button>
+          </div>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+
+  <form method="post" action="{% url 'accounts:user-create' %}" class="access-new-user">
+    {% csrf_token %}
+    <h3 class="access-subhead">Add a user</h3>
+    <div class="access-new-user-fields">
+      <p>
+        <label for="new-username">Username</label>
+        <input type="text" id="new-username" name="username" required autocomplete="off">
+      </p>
+      <p>
+        <label for="new-password">Password</label>
+        <input type="password" id="new-password" name="password" required autocomplete="new-password">
+      </p>
+    </div>
+    <div class="access-new-user-roles">
+      <span class="pdf-label">Roles</span>
+      <div class="access-roles">
+        {% for group in all_roles %}
+          <label class="access-role-check">
+            <input type="checkbox" name="roles" value="{{ group.pk }}">
+            <span>{{ group.name }}</span>
+          </label>
+        {% empty %}
+          <span class="hint">No roles defined yet — create one above first.</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="actions actions--start">
+      <button class="button" type="submit">Create user</button>
+    </div>
+  </form>
+{% endblock %}

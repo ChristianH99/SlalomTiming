@@ -10,22 +10,49 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
+def _env_bool(name, default=False):
+    """Read a boolean from the environment ("1/true/yes/on" -> True)."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _env_list(name):
+    """Read a comma-separated list from the environment (empties dropped)."""
+    return [item.strip() for item in os.environ.get(name, '').split(',') if item.strip()]
+
+
+# --- Core security settings (see config/.env.example for deployment) ---
+# In production every one of these MUST come from the environment. The literal
+# fallbacks below only exist so a fresh local checkout runs with no setup — they
+# are NOT safe to expose on a network.
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-qvzii-zuntaf-+wv0yuv32g2vz%1)@mo4d7_a8n(bycgw&_@4o'
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-qvzii-zuntaf-+wv0yuv32g2vz%1)@mo4d7_a8n(bycgw&_@4o',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Defaults to True for local use; set DJANGO_DEBUG=False in any deployment.
+DEBUG = _env_bool('DJANGO_DEBUG', default=True)
 
-ALLOWED_HOSTS = []
+# Hosts/domains this site may serve. Required (non-empty) once DEBUG is off.
+ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS')
+if DEBUG and not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+
+# Origins allowed to send authenticated POSTs over HTTPS (the live domain(s)),
+# e.g. "https://timing.example.org". Needed for form posts from the real host.
+CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
 
 
 # Application definition
@@ -43,6 +70,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'channels',
+    'apps.accounts',
     'apps.competitions',
     'apps.participants',
     'apps.timing',
@@ -57,7 +85,45 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Login required everywhere + role-based page gating (see apps/accounts).
+    # Must sit after AuthenticationMiddleware (needs request.user).
+    'apps.accounts.middleware.AccessControlMiddleware',
 ]
+
+# Authentication redirects (apps.accounts provides the login/logout views).
+LOGIN_URL = 'accounts:login'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = 'accounts:login'
+
+# Shared secret an *unauthenticated* HTTP timing device must present on
+# timing:signal (header "X-Device-Token"). Empty in local dev: while DEBUG is on
+# the endpoint stays open, but a logged-in operator's browser (the Simulator)
+# always works via its session. Set this in production so the one open write
+# endpoint isn't world-writable. The real CP540 doesn't use this door (it feeds
+# record_signal() directly from the reader thread), so this only matters for a
+# future networked HTTP device.
+TIMING_DEVICE_TOKEN = os.environ.get('TIMING_DEVICE_TOKEN', '')
+
+# --- Production hardening ---
+# All data pages already require a login (apps.accounts.AccessControlMiddleware),
+# so nothing is world-readable. These transport-level protections switch on once
+# DEBUG is off (a real deployment); serve the site behind HTTPS. Each HTTPS-only
+# toggle can be overridden by env if you must run a deployment on plain HTTP
+# (e.g. a trusted LAN) — but the secure default is HTTPS.
+if not DEBUG:
+    # Trust the X-Forwarded-Proto header from a TLS-terminating reverse proxy.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = _env_bool('DJANGO_SECURE_SSL_REDIRECT', default=True)
+    SESSION_COOKIE_SECURE = _env_bool('DJANGO_SECURE_COOKIES', default=True)
+    CSRF_COOKIE_SECURE = _env_bool('DJANGO_SECURE_COOKIES', default=True)
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    SESSION_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = False  # the JS timing views read the CSRF cookie
+    X_FRAME_OPTIONS = 'DENY'
 
 ROOT_URLCONF = 'config.urls'
 
@@ -72,6 +138,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'apps.competitions.context_processors.active_competition',
+                'apps.accounts.context_processors.access',
             ],
         },
     },

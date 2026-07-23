@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}No access – Slalom Timing{% endblock %}
+{% block topbar_title %}No access{% endblock %}
+{% block content %}
+  <div class="empty-state access-denied">
+    <h1 class="page-heading">You don’t have access to this page</h1>
+    <p class="hint">Your account’s roles don’t include this area. If you need it, ask an
+      administrator to grant your role access on the User Access page.</p>
+    <p><a class="button button--secondary" href="{% url 'timing:dashboard' %}">Back to Dashboard</a></p>
+  </div>
+{% endblock %}

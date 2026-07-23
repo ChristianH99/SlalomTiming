@@ -18,7 +18,10 @@
       </div>
       <nav class="shell-nav">
         {% with url_name=request.resolver_match.url_name app_name=request.resolver_match.app_name %}
+        {% if 'dashboard' in nav_pages %}
         <a class="shell-nav-item{% if url_name == 'dashboard' %} active{% endif %}" href="{% url 'timing:dashboard' %}">Dashboard</a>
+        {% endif %}
+        {% if 'competition_setup' in nav_pages %}
         <a class="shell-nav-item shell-nav-parent{% if app_name == 'competitions' and url_name != 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:list' %}">Competition Setup</a>
         <div class="shell-nav-sub">
           {% comment %}"list"/"add" also match participants:list/add, so guard by app.{% endcomment %}
@@ -29,16 +32,24 @@
           <a class="shell-nav-subitem{% if url_name == 'penalties' %} active{% endif %}" href="{% url 'competitions:penalties' %}">Penalties</a>
           <a class="shell-nav-subitem{% if app_name == 'results' and url_name == 'settings' %} active{% endif %}" href="{% url 'results:settings' %}">Results</a>
         </div>
+        {% endif %}
+        {% if 'participants' in nav_pages %}
         <a class="shell-nav-item{% if request.resolver_match.app_name == 'participants' %} active{% endif %}" href="{% url 'participants:list' %}">Participants</a>
+        {% endif %}
         {% comment %}Timing sub-pages will grow; Settings is kept last (future
         pages go above it).{% endcomment %}
+        {% if 'timing' in nav_pages %}
         <a class="shell-nav-item shell-nav-parent{% if app_name == 'timing' and url_name != 'dashboard' %} active{% endif %}" href="{% url 'timing:manual' %}">Timing</a>
         <div class="shell-nav-sub">
           <a class="shell-nav-subitem{% if url_name == 'manual' %} active{% endif %}" href="{% url 'timing:manual' %}">Manual timing</a>
           <a class="shell-nav-subitem{% if url_name == 'auto' %} active{% endif %}" href="{% url 'timing:auto' %}">Auto timing</a>
           <a class="shell-nav-subitem{% if url_name == 'settings' %} active{% endif %}" href="{% url 'timing:settings' %}">Settings</a>
         </div>
+        {% endif %}
+        {% if 'marshal_posts' in nav_pages %}
         <a class="shell-nav-item{% if url_name == 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">Marshal Posts</a>
+        {% endif %}
+        {% if 'results' in nav_pages %}
         <a class="shell-nav-item shell-nav-parent{% if app_name == 'results' and url_name != 'settings' %} active{% endif %}" href="{% url 'results:index' %}">Results</a>
         <div class="shell-nav-sub">
           {% for g in results_overall %}
@@ -50,10 +61,22 @@
             <span class="shell-nav-subitem shell-nav-subitem--muted">No running classes</span>
           {% endfor %}
         </div>
+        {% endif %}
         {% endwith %}
       </nav>
       <div class="shell-sidebar-footer">
-        <a class="shell-admin-link" href="/admin/">Django Admin</a>
+        {% if can_manage_users %}
+          <a class="shell-admin-link" href="{% url 'accounts:users' %}">User Access</a>
+        {% endif %}
+        {% if user.is_authenticated %}
+          <div class="shell-user">
+            <span class="shell-user-name" title="{{ user.username }}">{{ user.username }}</span>
+            <form method="post" action="{% url 'accounts:logout' %}" class="shell-logout-form">
+              {% csrf_token %}
+              <button type="submit" class="shell-logout">Log out</button>
+            </form>
+          </div>
+        {% endif %}
       </div>
     </aside>
     <div class="shell-overlay" id="shell-overlay"></div>

@@ -2981,3 +2981,101 @@ textarea:focus-visible,
 .pdf-height .hint { font-size: 0.78rem; }
 
 .pdf-sample { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+
+/* ===== ACCESS CONTROL (apps/accounts) ===== */
+
+/* Login page (standalone, no app shell) */
+.login-body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--frost-bg, #F4F6FA);
+  padding: 1.5rem;
+}
+.login-card {
+  width: 100%;
+  max-width: 22rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 40px rgba(22,35,63,0.10);
+  padding: 2rem 2rem 2.2rem;
+}
+.login-brand { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 1.3rem; margin-bottom: 1.4rem; }
+/* The .brand span is white for the dark sidebar; on the light login card it must
+   be dark, otherwise the headline is invisible (white on white). */
+.login-brand .brand, .login-brand .brand:hover { color: var(--text-dark); }
+.login-title { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 1.1rem; margin: 0 0 1.1rem; color: var(--text-dark); }
+.login-form p { margin: 0 0 0.9rem; }
+.login-form label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-mid); margin-bottom: 0.35rem; }
+.login-form input { width: 100%; box-sizing: border-box; }
+.login-form .button { width: 100%; margin-top: 0.4rem; }
+.login-card .notice { margin-bottom: 1rem; }
+
+/* Password field with a press-and-hold reveal icon. */
+.pw-wrap { position: relative; display: block; }
+.pw-wrap input { padding-right: 2.6rem; }
+.pw-reveal {
+  position: absolute; top: 0; right: 0; height: 100%; width: 2.5rem;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--text-light); transition: color 0.15s;
+}
+.pw-reveal:hover { color: var(--text-mid); }
+.pw-reveal--on { color: var(--flame); }
+.pw-reveal:focus-visible { outline: 2px solid var(--flame); outline-offset: -2px; border-radius: var(--radius-sm); }
+
+/* Sidebar user chip + logout */
+.shell-user { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-top: 0.4rem; }
+.shell-user-name {
+  font-size: 0.82rem; font-weight: 600; color: rgba(255,255,255,0.85);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.shell-logout-form { margin: 0; }
+.shell-logout {
+  background: none; border: 1px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.8);
+  font-size: 0.78rem; font-weight: 600; padding: 0.3rem 0.7rem; border-radius: var(--radius-sm);
+  cursor: pointer; transition: all 0.2s;
+}
+.shell-logout:hover { border-color: var(--flame); color: var(--flame-light); }
+
+/* User Access page */
+.access-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+  margin: 0.75rem 0 1.25rem;
+}
+.access-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.1rem 1.1rem;
+  background: var(--white);
+}
+.access-card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.8rem; }
+.access-card-title { font-family: 'Manrope', sans-serif; font-weight: 700; color: var(--text-dark); }
+.access-badge {
+  display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--flame); background: var(--flame-bg);
+  padding: 0.1rem 0.4rem; border-radius: var(--radius-sm); margin-left: 0.35rem; vertical-align: middle;
+}
+.access-checks { margin-bottom: 0.9rem; }
+.access-roles { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 0.9rem; }
+.access-role-check { display: flex; align-items: center; gap: 0.45rem; font-size: 0.9rem; color: var(--text-dark); }
+.access-role-check input { margin: 0; }
+.access-pw { margin: 0 0 0.8rem; }
+.access-pw label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-mid); margin-bottom: 0.3rem; }
+.access-pw input { width: 100%; box-sizing: border-box; }
+.access-inline-form { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0.5rem 0 0.5rem; }
+.access-inline-form label { font-weight: 600; font-size: 0.85rem; color: var(--text-mid); }
+.access-new-user { max-width: 32rem; margin-top: 1rem; }
+.access-subhead, .access-new-user-roles .pdf-label { font-family: 'Manrope', sans-serif; font-weight: 700; }
+.access-subhead { font-size: 1rem; margin: 0 0 0.8rem; color: var(--text-dark); }
+.access-new-user-fields { display: flex; gap: 1rem; flex-wrap: wrap; }
+.access-new-user-fields p { margin: 0 0 0.9rem; flex: 1 1 12rem; }
+.access-new-user-fields label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-mid); margin-bottom: 0.3rem; }
+.access-new-user-fields input { width: 100%; box-sizing: border-box; }
+.access-new-user-roles { margin-bottom: 0.5rem; }
+.access-new-user-roles .pdf-label { display: block; margin-bottom: 0.5rem; }
+.access-denied { max-width: 34rem; }

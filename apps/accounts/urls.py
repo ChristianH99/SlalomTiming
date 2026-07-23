@@ -1,0 +1,19 @@
+from django.contrib.auth import views as auth_views
+from django.urls import path
+
+from . import views
+
+app_name = "accounts"
+
+urlpatterns = [
+    path("login/", auth_views.LoginView.as_view(
+        template_name="accounts/login.html"), name="login"),
+    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("users/", views.UserAccessView.as_view(), name="users"),
+    path("roles/create/", views.role_create, name="role-create"),
+    path("roles/update/", views.role_update, name="role-update"),
+    path("roles/delete/", views.role_delete, name="role-delete"),
+    path("users/create/", views.user_create, name="user-create"),
+    path("users/update/", views.user_update, name="user-update"),
+    path("users/delete/", views.user_delete, name="user-delete"),
+]

@@ -1,0 +1,97 @@
+"""The page registry: the single source of truth for the app's gateable "pages".
+
+Access control is *page-level* and coarse — six functional areas, each covering a
+set of (app_name, url_name) URL patterns. A role (Django Group, via RoleAccess)
+grants a subset of the six page keys; a user's access is the union of their roles'
+pages (a superuser gets all of them).
+
+A URL may belong to more than one page (the marshal endpoints are reachable from
+both the Timing view and the Marshal Posts view), so access is granted when the
+user holds *any* page a URL belongs to.
+"""
+
+# key -> human label, in sidebar order. This ordering is what the User Access
+# page renders the page checkboxes in.
+PAGES = [
+    ("dashboard", "Dashboard"),
+    ("competition_setup", "Competition Setup"),
+    ("participants", "Participants"),
+    ("timing", "Timing"),
+    ("marshal_posts", "Marshal Posts"),
+    ("results", "Results"),
+]
+
+PAGE_KEYS = [key for key, _ in PAGES]
+PAGE_LABELS = dict(PAGES)
+
+# The marshal endpoints live under the timing app but drive the Marshal Posts
+# page too, so they belong to both pages (either page grants them).
+_MARSHAL_ENDPOINTS = {
+    ("timing", name)
+    for name in (
+        "marshal-state", "marshal-submit", "marshal-unlock", "marshal-lock",
+        "marshal-lock-all", "marshal-task-edit", "marshal-claim",
+        "marshal-release", "marshal-claims",
+    )
+}
+
+# page key -> set of (app_name, url_name) it covers.
+PAGE_URLS = {
+    "dashboard": {
+        ("timing", "dashboard"),
+        ("timing", "dashboard-state"),
+    },
+    "competition_setup": {
+        ("competitions", name)
+        for name in (
+            "list", "add", "general", "classes", "runorder", "penalties",
+            "delete", "select", "duplicate", "type-list", "type-add",
+            "type-settings", "type-delete",
+        )
+    } | {("results", "settings")},
+    "participants": {
+        ("participants", name)
+        for name in ("list", "check", "set-bib", "add", "edit", "delete")
+    },
+    "timing": {
+        ("timing", name)
+        for name in (
+            "settings", "cp540-status", "input-lock", "simulator", "manual",
+            "arrangement", "run-update", "run-add", "run-delete", "ignore",
+            "pair", "set-time", "set-runtime", "auto", "auto-state",
+            "auto-reorder", "auto-reset-order", "auto-adjust",
+        )
+    } | _MARSHAL_ENDPOINTS,
+    "marshal_posts": {("competitions", "marshal-posts")} | _MARSHAL_ENDPOINTS,
+    "results": {
+        ("results", name)
+        for name in (
+            "index", "class", "overall", "tie-resolve", "pdf-logo-remove",
+            "export-all", "export-sample", "export-overall", "export-class",
+        )
+    },
+}
+
+# URLs that must never be gated: the timing device posts here and can't log in.
+OPEN = {("timing", "signal")}
+
+
+def pages_for_url(app_name, url_name):
+    """The set of page keys a (app_name, url_name) belongs to. Empty means the
+    URL is an unmapped utility endpoint — any authenticated user may reach it."""
+    return {key for key, urls in PAGE_URLS.items() if (app_name, url_name) in urls}
+
+
+def user_pages(user):
+    """The set of page keys a user may access. Superusers get all of them;
+    otherwise it's the union of every role (Group) the user belongs to."""
+    if not user.is_authenticated:
+        return set()
+    if user.is_superuser:
+        return set(PAGE_KEYS)
+    granted = set()
+    for group in user.groups.all():
+        access = getattr(group, "access", None)
+        if access:
+            granted.update(access.pages or [])
+    return granted
