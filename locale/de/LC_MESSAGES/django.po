@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-23 20:57+0200\n"
+"POT-Creation-Date: 2026-07-24 19:33+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -337,15 +337,12 @@ msgstr "Die Startnummer muss eine positive Zahl sein."
 msgid "Bib %(bib)s is already taken."
 msgstr "Startnummer %(bib)s ist bereits vergeben."
 
-#| msgid "Licence number"
 msgid "licence number"
 msgstr "Lizenznummer"
 
-#| msgid "Licence number"
 msgid "name and licence number"
 msgstr "Name und Lizenznummer"
 
-#| msgid "Username"
 msgid "name"
 msgstr "Name"
 
@@ -373,6 +370,49 @@ msgstr "Querformat"
 msgid "Auto (fit the table)"
 msgstr "Automatisch (an Tabelle anpassen)"
 
+msgid "Rank"
+msgstr "Platz"
+
+msgid "Bib"
+msgstr "Startnr."
+
+msgid "Class"
+msgstr "Klasse"
+
+msgid "No complete results yet."
+msgstr "Noch keine vollständigen Ergebnisse."
+
+msgid "Not yet ranked"
+msgstr "Noch nicht platziert"
+
+#, python-format
+msgid "Exported %(dt)s"
+msgstr "Exportiert %(dt)s"
+
+#| msgid "Competition Setup"
+msgid "Competition name"
+msgstr "Wettbewerbsname"
+
+msgid "Competition date (21.07.2026)"
+msgstr "Wettbewerbsdatum (21.07.2026)"
+
+msgid "Competition date, long (21. July 2026)"
+msgstr "Wettbewerbsdatum, lang (21. Juli 2026)"
+
+#| msgid "Competition Types"
+msgid "Competition year"
+msgstr "Wettbewerbsjahr"
+
+msgid "Edition number, counted from the start year"
+msgstr "Ausgabennummer, gezählt ab dem Startjahr"
+
+#| msgid "New competition type"
+msgid "Discipline / competition type"
+msgstr "Disziplin / Wettbewerbstyp"
+
+msgid "This page's class or Overall table"
+msgstr "Klasse dieser Seite oder Gesamttabelle"
+
 msgid "Best run"
 msgstr "Bester Lauf"
 
@@ -382,10 +422,25 @@ msgstr "Differenz"
 msgid "Total"
 msgstr "Gesamt"
 
+#, python-format
+msgid "Class %(name)s"
+msgstr "Klasse %(name)s"
+
+msgid "Overall"
+msgstr "Gesamt"
+
+#, python-format
+#| msgid "Overall · %(label)s · %(runs)s Runs"
+msgid "%(label)s · %(runs)s Runs"
+msgstr "%(label)s · %(runs)s Läufe"
+
+#, python-format
+msgid "Overall · %(label)s · %(runs)s Runs"
+msgstr "Gesamt · %(label)s · %(runs)s Läufe"
+
 msgid "Results settings saved."
 msgstr "Ergebnis-Einstellungen gespeichert."
 
-#| msgid "Pylon"
 msgid "Pylons"
 msgstr "Pylonen"
 
@@ -615,10 +670,6 @@ msgstr "Automatische Zeitmessung"
 
 msgid "Settings"
 msgstr "Einstellungen"
-
-#, python-format
-msgid "Overall · %(label)s · %(runs)s Runs"
-msgstr "Gesamt · %(label)s · %(runs)s Läufe"
 
 msgid "No running classes"
 msgstr "Keine laufenden Klassen"
@@ -1228,12 +1279,6 @@ msgstr "%(name)s bearbeiten"
 msgid "← Back to participants"
 msgstr "← Zurück zu den Teilnehmern"
 
-msgid "Bib"
-msgstr "Startnr."
-
-msgid "Class"
-msgstr "Klasse"
-
 msgid "(one or more)"
 msgstr "(eine oder mehrere)"
 
@@ -1333,12 +1378,6 @@ msgstr "Gleichstand manuell platziert — zum Anpassen klicken"
 msgid "Tie resolved automatically — click to adjust"
 msgstr "Gleichstand automatisch aufgelöst — zum Anpassen klicken"
 
-msgid "No complete results yet."
-msgstr "Noch keine vollständigen Ergebnisse."
-
-msgid "Not yet ranked"
-msgstr "Noch nicht platziert"
-
 msgid ""
 "Competitors missing a counted run, or marked did-not-start / did-not-finish "
 "/ disqualified."
@@ -1366,9 +1405,6 @@ msgstr "Reihenfolge speichern"
 msgid "Export all to PDF"
 msgstr "Alle als PDF exportieren"
 
-msgid "Overall"
-msgstr "Gesamt"
-
 #, python-format
 msgid "Overall · %(label)s"
 msgstr "Gesamt · %(label)s"
@@ -1378,10 +1414,6 @@ msgid "%(runs)s Runs · %(count)s class"
 msgid_plural "%(runs)s Runs · %(count)s classes"
 msgstr[0] "%(runs)s Läufe · %(count)s Klasse"
 msgstr[1] "%(runs)s Läufe · %(count)s Klassen"
-
-#, python-format
-msgid "Class %(name)s"
-msgstr "Klasse %(name)s"
 
 msgid "No running classes yet."
 msgstr "Noch keine laufenden Klassen."

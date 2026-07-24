@@ -13,10 +13,12 @@ Two consumers share this module:
     ``<font size="…">``).
 """
 
-import calendar
 from html import escape
 from html.parser import HTMLParser
 from xml.sax.saxutils import escape as xml_escape
+
+from django.utils.formats import date_format
+from django.utils.translation import gettext_lazy as _
 
 # Size marker class -> point size used in the PDF header.
 SIZE_POINTS = {
@@ -33,18 +35,20 @@ DEFAULT_HEADER_SIZE = SIZE_POINTS["pdf-sz-medium"]
 
 # Token -> human description (shown in the editor's insert list).
 WILDCARDS = [
-    ("#name", "Competition name"),
-    ("#date", "Competition date (21.07.2026)"),
-    ("#event_date_long", "Competition date, long (21 July 2026)"),
-    ("#year", "Competition year"),
-    ("#increment", "Edition number, counted from the start year"),
-    ("#discipline", "Discipline / competition type"),
-    ("#class", "This page's class or Overall table"),
+    ("#name", _("Competition name")),
+    ("#date", _("Competition date (21.07.2026)")),
+    ("#event_date_long", _("Competition date, long (21. July 2026)")),
+    ("#year", _("Competition year")),
+    ("#increment", _("Edition number, counted from the start year")),
+    ("#discipline", _("Discipline / competition type")),
+    ("#class", _("This page's class or Overall table")),
 ]
 
 
 def _long_date(d):
-    return f"{d.day} {calendar.month_name[d.month]} {d.year}"
+    # Locale-aware long date: the active language's DATE_FORMAT resolves the month
+    # name (e.g. "21 July 2026" in English, "21. Juli 2026" in German).
+    return date_format(d, format="DATE_FORMAT", use_l10n=True)
 
 
 def wildcard_values(competition, layout, class_label=""):

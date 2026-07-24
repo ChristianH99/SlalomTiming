@@ -54,6 +54,9 @@ cover/
 # Translations
 *.mo
 *.pot
+# …but keep the project's own compiled catalogs tracked, so a fresh checkout
+# has working translations without a compilemessages step.
+!locale/**/*.mo
 
 # Django stuff:
 *.log

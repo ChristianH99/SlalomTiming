@@ -26,6 +26,8 @@ from functools import partial
 from io import BytesIO
 from xml.sax.saxutils import escape
 
+from django.utils.translation import gettext as _
+
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4, landscape
@@ -203,9 +205,9 @@ def _columns(layout):
         cols.append(("vehicle", _COLW["vehicle"]))
     if layout["licence_keys"]:
         cols.append(("licence", _COLW["licence"]))
-    for _ in layout["training_labels"]:
+    for _col in layout["training_labels"]:
         cols.append(("run", _COLW["run"]))
-    for _ in layout["counted_labels"]:
+    for _col in layout["counted_labels"]:
         cols.append(("run", _COLW["run"]))
     cols.append(("total", _COLW["total"]))
     return cols
@@ -231,15 +233,15 @@ def _row_lines(layout):
 
 
 def _header_cells(layout):
-    cells = [Paragraph("Rank", _head_c), Paragraph("Bib", _head_c)]
+    cells = [Paragraph(_("Rank"), _head_c), Paragraph(_("Bib"), _head_c)]
     if layout["include_class"]:
-        cells.append(Paragraph("Class", _head))
+        cells.append(Paragraph(_("Class"), _head))
     if layout["name_keys"]:
         cells.append(Paragraph(escape(layout["name_header"]), _head))
     if layout["address_keys"]:
         cells.append(Paragraph(escape(layout["address_header"]), _head))
     if layout["has_vehicle"]:
-        cells.append(Paragraph("Vehicle", _head))
+        cells.append(Paragraph(_("Vehicle"), _head))
     if layout["licence_keys"]:
         cells.append(Paragraph(escape(layout["licence_header"]), _head))
     for t in layout["training_labels"]:
@@ -338,7 +340,7 @@ def _make_table(layout, rows, ranked, usable_w):
             data.append(_row_cells(layout, row, ranked, col_widths, num_size))
             heights.append(row_h)
     else:
-        data.append([Paragraph("No complete results yet.",
+        data.append([Paragraph(_("No complete results yet."),
                                 ParagraphStyle("e", parent=_cell_c, textColor=_GRAY))]
                     + [""] * (len(col_widths) - 1))
         heights.append(row_h)
@@ -363,17 +365,17 @@ def _make_table(layout, rows, ranked, usable_w):
 def _section_flowables(section, usable_w):
     """Title + ranked table (+ unranked block) + summary for one section."""
     layout = section["layout"]
-    headline = f'{section["title"]} · Results · {section["scoring_label"]}'
+    headline = f'{section["title"]} · {_("Results")} · {section["scoring_label"]}'
     flow = [Paragraph(escape(headline), _title)]
     flow.append(_make_table(layout, section["ranked"], True, usable_w))
     if section["unranked"]:
-        flow.append(Paragraph("Not yet ranked", _subhead))
+        flow.append(Paragraph(_("Not yet ranked"), _subhead))
         flow.append(_make_table(layout, section["unranked"], False, usable_w))
     summary = layout["summary"]
     flow.append(Paragraph(
-        f'<b>Starters:</b> {summary["starters"]} &nbsp;·&nbsp; '
-        f'<b>Classified:</b> {summary["classified"]} &nbsp;·&nbsp; '
-        f'<b>Not Classified:</b> {summary["not_classified"]}',
+        f'<b>{_("Starters:")}</b> {summary["starters"]} &nbsp;·&nbsp; '
+        f'<b>{_("Classified:")}</b> {summary["classified"]} &nbsp;·&nbsp; '
+        f'<b>{_("Not Classified:")}</b> {summary["not_classified"]}',
         _summary,
     ))
     return flow
@@ -422,12 +424,12 @@ def _draw_page(canv, doc, geom, header_markup, footer_markup, export_dt):
         x1 = w - _MARGIN_X - (right["w"] + _LOGO_GAP if right else 0)
         center_x = (x0 + x1) / 2
         para = Paragraph(header_markup, _header_style())
-        _, ph = para.wrap(avail, geom["band_h"])
+        _w, ph = para.wrap(avail, geom["band_h"])
         para.drawOn(canv, center_x - avail / 2, band_center - ph / 2)
 
     if footer_markup:
         para = Paragraph(footer_markup, _footer_style)
-        _, ph = para.wrap(w - 2 * _MARGIN_X, geom["footer_h"])
+        _w, ph = para.wrap(w - 2 * _MARGIN_X, geom["footer_h"])
         para.drawOn(canv, _MARGIN_X, geom["footer_bottom"])
 
     canv.setFont("Helvetica", 8)
@@ -509,10 +511,10 @@ def render_results_pdf(competition, layout, sections):
         hmarkup = pdfmarkup.to_reportlab_markup(layout.header_html, resolver)
         fmarkup = pdfmarkup.to_reportlab_markup(layout.footer_html, resolver)
         if hmarkup:
-            _, hh = Paragraph(hmarkup, hstyle).wrap(header_avail, page_h)
+            _w, hh = Paragraph(hmarkup, hstyle).wrap(header_avail, page_h)
             header_h_max = max(header_h_max, hh)
         if fmarkup:
-            _, fh = Paragraph(fmarkup, _footer_style).wrap(content_w, page_h)
+            _w, fh = Paragraph(fmarkup, _footer_style).wrap(content_w, page_h)
             footer_h_max = max(footer_h_max, fh)
         section_markup.append((hmarkup, fmarkup))
 
@@ -531,13 +533,14 @@ def render_results_pdf(competition, layout, sections):
         "footer_bottom": footer_bottom, "footer_h": footer_h_max,
     }
     # Export stamp in the computer's local timezone (not the app's stored TZ).
-    export_dt = "Exported " + datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+    export_dt = _("Exported %(dt)s") % {
+        "dt": datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")}
 
     buffer = BytesIO()
     doc = BaseDocTemplate(
         buffer, pagesize=pagesize, leftMargin=_MARGIN_X, rightMargin=_MARGIN_X,
         topMargin=top_margin, bottomMargin=bottom_margin,
-        title="Results", author="Slalom Timing",
+        title=_("Results"), author="Slalom Timing",
     )
     frame = Frame(doc.leftMargin, doc.bottomMargin, content_w,
                   page_h - top_margin - bottom_margin, id="body",

@@ -224,10 +224,11 @@ def class_section(competition, cclass):
         include_class=False,
         score_heading=_score_heading(cclass.scoring_method),
     )
+    class_title = _("Class %(name)s") % {"name": cclass.name}
     return {
-        "title": f"Class {cclass.name}",
+        "title": class_title,
         "scoring_label": cclass.get_scoring_method_display(),
-        "class_label": f"Class {cclass.name}",
+        "class_label": class_title,
         "scope": resultscalc.class_scope(cclass),
         "layout": layout, "ranked": ranked, "unranked": unranked,
         "cclass": cclass,
@@ -250,9 +251,11 @@ def overall_section(competition, method, runs):
     return {
         # title/scoring_label feed the PDF headline only (the web view reads
         # results.method_label); class_label feeds the #class wildcard.
-        "title": "Overall",
-        "scoring_label": f"{results.method_label} · {results.counted_runs} Runs",
-        "class_label": f"Overall · {results.method_label} · {results.counted_runs} Runs",
+        "title": _("Overall"),
+        "scoring_label": _("%(label)s · %(runs)s Runs") % {
+            "label": results.method_label, "runs": results.counted_runs},
+        "class_label": _("Overall · %(label)s · %(runs)s Runs") % {
+            "label": results.method_label, "runs": results.counted_runs},
         "scope": resultscalc.overall_scope(method, runs),
         "layout": layout, "ranked": ranked, "unranked": unranked,
         "results": results,
