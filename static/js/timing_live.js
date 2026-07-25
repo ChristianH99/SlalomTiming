@@ -58,6 +58,7 @@
     emptyEl.hidden = state.rows.length > 0;
     renderIgnored();
     renderLock();
+    if (window.renderDeviceAlarm) window.renderDeviceAlarm(state.device_link);
   }
 
   // The red operator lock: while on, incoming times go straight to the ignore list.

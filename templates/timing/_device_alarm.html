@@ -1,0 +1,12 @@
+{% load i18n %}
+{% comment %}The device-link alarm, shown on both timing pages. A timing device
+that has to hold a connection and has lost it is recording nothing, and the
+settings page is not what anyone is looking at during a run — so the state
+travels with the live payload (`device_link`, see cp540.link_state) and
+device_alarm.js raises it here. Hidden whenever the link is fine, or when the
+selected device holds no connection at all (the simulator).{% endcomment %}
+<div class="device-alarm" id="device-alarm" role="status" aria-live="polite" hidden>
+  <span class="device-alarm-dot" aria-hidden="true"></span>
+  <span class="device-alarm-text" id="device-alarm-text"></span>
+  <a class="device-alarm-link" href="{% url 'timing:settings' %}">{% trans "Timing settings" %}</a>
+</div>

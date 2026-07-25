@@ -65,6 +65,11 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          records the marshal-post penalty setup: Competition.penalties_by_marshal_posts
                          turns it on, and each post watches a set of numbered tasks. taskspec.py parses/renders the
                          free-text task lists ("1, 5, 11-15") the Penalties page collects.
+                         Deleting a post CASCADE-deletes every MarshalPenalty recorded against it,
+                         so turning the toggle off (or reducing the post count) is confirmed first:
+                         PenaltiesView counts what would go (_penalties_lost) and refuses without
+                         `confirm_penalty_loss`, and the page shows the same number in a dialog
+                         before submitting — the server check is what catches a stale page.
                          The Marshal Posts page (competitions:marshal-posts, a top-level sidebar
                          item below Timing) is the operator surface a marshal drives on a phone;
                          it reads the current competitor from the Auto timing view and pushes
@@ -217,6 +222,13 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          column is handled by locating the input/number relative to the time
                          token) into record_signal(); every wire line is kept in a ring buffer the
                          Settings page polls (timing:cp540-status) to show a live debug log.
+                         A dropped link never ends the session: _worker loops over _session(),
+                         reconnecting with backoff (_RETRY_DELAYS, napped in short ticks so
+                         Disconnect stays instant) until stop() — a knocked cable would otherwise
+                         lose every later time silently. Each state change nudges the live views
+                         (_set_status → notify_live), and link_state() is what they render: for a
+                         device that must hold a connection, whether it has one. The simulator
+                         holds none, so it never alarms.
   views.py               DashboardView (organiser overview) + dashboard-state JSON endpoint;
                          Settings page; standalone Simulator; live Manual timing view + a JSON
                          arrangement endpoint and mutate endpoints (run-update by run id — marks
@@ -224,8 +236,15 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          dragged onto an upcoming Auto competitor with no run yet], set-time [type a
                          start/finish by hand, displaced device time kept on the rail], set-runtime
                          [type a run time]; the slot_key path creates the run via _run_from_slot).
+                         Every operator-entered number is bounded here, because SQLite stores an
+                         out-of-range value rather than refusing it: MAX_RUN_SECONDS + digits-only
+                         parsing in _parse_duration (an over-long Decimal makes *every later read*
+                         of that row raise, which used to 500 both timing views and the dashboard
+                         for the rest of the event), and MAX_PENALTY_COUNT in _as_count/_as_signed.
                          serialize_arrangement()/timing_signal both run sync_bindings so the two
-                         views stay in step. timing_signal ingests device posts (csrf-exempt, since a
+                         views stay in step; serialize_arrangement (and autotiming.serialize) also
+                         carry `device_link` (cp540.link_state) so a lost device raises its alarm
+                         on the timing pages, not only on the settings page. timing_signal ingests device posts (csrf-exempt, since a
                          real device can't send a token) and nudges live views to refresh — but it is
                          the *simulator's* door and is refused (409) unless the simulator is the
                          selected device, so only one source ever writes at a time (the CP540 reader
@@ -248,7 +267,8 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          nudges to open live views, group "timing_live").
   management/commands/run_timing_connector.py   [legacy] runs the connector loop
 templates/timing/        dashboard.html (organiser overview), settings.html, simulator.html
-                         (standalone, no app shell), live.html (Manual timing), auto.html (Auto timing)
+                         (standalone, no app shell), live.html (Manual timing), auto.html (Auto timing),
+                         _device_alarm.html (the device-link banner both timing pages include)
 static/js/               dashboard_overview.js (organiser Dashboard: renders the stat tiles,
                          progress ring, per-class board and current-competitor card from the
                          dashboard-state JSON, re-fetching on each timing_live WebSocket nudge) +
@@ -258,8 +278,14 @@ static/js/               dashboard_overview.js (organiser Dashboard: renders the
                          auto_timing.js (Auto timing: draggable start order, prev/current/next tiles,
                          marshal boxes, re-pair, same double-click manual time entry, WS refresh).
                          marshal_posts.js pushes taps/submit to timing:marshal-submit and pulls the
-                         current competitor via timing:marshal-state, single-flight so rapid taps
-                         can't land out of order.
+                         current competitor via timing:marshal-state. Nothing is fire-and-forget:
+                         a push goes into an outbox held in localStorage (so it survives a reload
+                         or a phone walking out of Wi-Fi range) and is retried with backoff until
+                         the server takes it, still last-writer-wins per run+post so rapid taps
+                         can't land out of order. The board says "Sending…" / "not sent yet", and
+                         the "submitted" toast waits for the server rather than claiming it early;
+                         a 409 means the run is already locked and is dropped quietly.
+                         device_alarm.js renders the shared device-link banner from `device_link`.
 apps/results/           A "Results" landing page (index) listing every running class + the
                         Overall pages, per-class ranked tables, cross-class Overall tables, and a
                         Competition-Setup "Results" sub-page that configures the columns.
@@ -348,7 +374,11 @@ apps/transfer/          Moving data between Slalom Timing systems: an Export pag
                          onto the target's own (Django's own deserializer restores the original
                          pks, which would clobber unrelated rows). Values are encoded by JSON and
                          decoded back through the model field's own to_python(), so the two
-                         directions can't drift. Deliberately not carried: auto timestamps,
+                         directions can't drift — and then checked against that field's own
+                         validators, so a damaged document is refused as a TransferError instead
+                         of writing a value SQLite accepts but every later read of the row chokes
+                         on (the same trap the timing views' bounds close, from the other door).
+                         Deliberately not carried: auto timestamps,
                          MarshalPost.claim_token/claim_seen (which *device* holds a post) and
                          Competition.is_active (an import must never take over the running event).
                          TimingSignal.received_at *is* carried — arrangement.py orders runs by
@@ -435,7 +465,10 @@ templates/transfer/      export.html (event + type tiles with what each file wou
   doesn't apply (already connected / already idle). IP/port are read-only while connected. Selecting
   any device other than the CP540 stops the reader (only one source writes at a time). "Start
   simulator" opens the Simulator in a new tab. A live status pill + raw-line log below the form
-  (polling timing:cp540-status) shows the device stream verbatim for debugging.
+  (polling timing:cp540-status) shows the device stream verbatim for debugging. The reader
+  reconnects on its own after a drop, so the pill also reads "Reconnecting…"; while it is not
+  connected, both timing pages carry a red **device-link banner** (`_device_alarm.html`) saying
+  times are not being recorded — the operator is never left timing against a dead link.
 - **Simulator** (`timing/simulator/`) — a standalone new-tab device emulator: a running clock, an
   auto-incrementing running number (with reset), a 2×4 pad (ports 1–4 light barrier, M1–M4 manual
   → same port, is_manual), and an on-page log. Each press POSTs a signal to `timing:signal`.
@@ -499,7 +532,9 @@ templates/transfer/      export.html (event + type tiles with what each file wou
   green. Once submitted the board shows a 🔒 and locks; a timekeeper Unlock reopens it, and the board
   resumes its exact per-task state for editing. Confirming a post claims it for that device
   (heartbeated); the post shows "— in use" and can't be claimed on another device until released or the
-  claim goes stale.
+  claim goes stale. A tap the network swallowed is not lost: it waits in a localStorage outbox and
+  keeps being retried, the footer says "Sending…" / "not sent yet", and a submit that never reached
+  the server is delivered when the page next loads.
 
 ### Adding a real device connector
 

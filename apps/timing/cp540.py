@@ -21,6 +21,7 @@ kept in a small ring buffer the settings page polls to show a live log.
 import re
 import socket
 import threading
+import time
 from collections import deque
 from datetime import time as dt_time
 from datetime import timedelta
@@ -37,6 +38,18 @@ _INPUTS = {
 }
 
 _LOG_MAX = 400
+
+# A dropped link (knocked cable, device reboot, Wi-Fi blip) must not end the
+# session: the reader keeps trying while the CP540 is the selected device, since
+# every time that arrives while it is down is a time nobody can get back. Backoff
+# doubles from the first delay up to the last, then stays there.
+_RETRY_DELAYS = (1.0, 2.0, 4.0, 8.0, 15.0)
+# How long to nap between checks of the stop flag while waiting to retry, so
+# Disconnect still takes effect immediately.
+_RETRY_TICK = 0.25
+# Statuses that mean the reader thread is meant to be working. Anything else is
+# a link the operator has to be told about.
+_LIVE_STATUSES = ("connecting", "connected", "reconnecting")
 
 
 def parse_time(raw):
@@ -92,7 +105,8 @@ class CP540Reader:
         self._thread = None
         self._running = threading.Event()
         self._log = deque(maxlen=_LOG_MAX)
-        self._status = "idle"          # idle | connecting | connected | error | stopped
+        # idle | connecting | connected | reconnecting | error | stopped
+        self._status = "idle"
         self._error = ""
         self._ip = ""
         self._port = None
@@ -106,7 +120,7 @@ class CP540Reader:
             self._stop_locked()
             self._ip, self._port = ip, int(port)
             self._error = ""
-            self._status = "connecting"
+            self._set_status("connecting", f"Connecting to {ip}:{port}…")
             self._running.set()
             self._thread = threading.Thread(
                 target=self._worker, args=(ip, int(port)), daemon=True,
@@ -124,8 +138,8 @@ class CP540Reader:
             self._thread.join(timeout=2.5)
         self._thread = None
         self._running.clear()
-        if self._status in ("connecting", "connected"):
-            self._status = "stopped"
+        if self._status in _LIVE_STATUSES:
+            self._set_status("stopped")
 
     # ----- reporting -----
 
@@ -149,16 +163,56 @@ class CP540Reader:
         # stream reads exactly as it arrives; our own status notes go in as-is too.
         self._log.appendleft({"text": text, "kind": kind})
 
+    def _set_status(self, status, note="", kind="status"):
+        """Move to a new connection state, log the note and — when the state
+        actually changed — nudge the open timing views, so a link that goes down
+        raises its alarm on the operator's screen rather than only on the
+        settings page nobody is watching during a run."""
+        changed = status != self._status
+        self._status = status
+        if note:
+            self._add_log(note, kind)
+        if changed:
+            # Lazily imported: the reader thread must not drag the view layer in.
+            from .services import notify_live
+            try:
+                notify_live()
+            except Exception:       # a nudge is never worth killing the reader for
+                pass
+
     # ----- worker -----
 
     def _worker(self, ip, port):
+        """Hold the CP540 connection for as long as the reader is running,
+        reconnecting with backoff whenever it drops. Only ``stop()`` ends this."""
+        attempt = 0
+        while self._running.is_set():
+            established = self._session(ip, port)
+            if not self._running.is_set():
+                break
+            # A link that worked and then dropped retries from the shortest delay;
+            # one that never came up backs off further with each failure.
+            attempt = 0 if established else attempt + 1
+            delay = _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)]
+            self._set_status("reconnecting", f"Reconnecting to {ip}:{port} in {delay:.0f} s…", "error")
+            if not self._nap(delay):
+                break
+            self._set_status("connecting", f"Reconnecting to {ip}:{port}…")
+        close_old_connections()
+        self._set_status("stopped", "Disconnected")
+
+    def _session(self, ip, port):
+        """One connection: connect, then read until it drops or we're stopped.
+        Returns whether it was ever established."""
+        established = False
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.settimeout(5.0)
                 sock.connect((ip, port))
                 sock.settimeout(1.0)
-                self._status = "connected"
-                self._add_log(f"Connected to {ip}:{port}", "status")
+                established = True
+                self._error = ""
+                self._set_status("connected", f"Connected to {ip}:{port}")
                 buffer = ""
                 while self._running.is_set():
                     try:
@@ -168,6 +222,8 @@ class CP540Reader:
                         continue
                     if not data:
                         # Peer closed the connection.
+                        if self._running.is_set():
+                            self._add_log("The device closed the connection", "error")
                         break
                     buffer += data.decode(errors="ignore")
                     lines = buffer.split("\n")
@@ -175,14 +231,22 @@ class CP540Reader:
                     for line in lines:
                         self._handle_line(line.rstrip("\r"))
         except OSError as exc:
-            self._status = "error"
             self._error = str(exc)
             self._add_log(f"Connection failed: {exc}", "error")
         finally:
             close_old_connections()
-            if self._status not in ("error",):
-                self._status = "stopped"
-                self._add_log("Disconnected", "status")
+        return established
+
+    def _nap(self, seconds):
+        """Wait out a retry delay in short ticks. False if we were stopped
+        meanwhile, so Disconnect doesn't have to wait for the backoff."""
+        deadline = time.monotonic() + seconds
+        while self._running.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return True
+            time.sleep(min(_RETRY_TICK, remaining))
+        return False
 
     def _handle_line(self, raw):
         line = raw.strip()
@@ -212,3 +276,34 @@ class CP540Reader:
 
 # Process-wide reader instance.
 reader = CP540Reader()
+
+
+def link_state(settings=None):
+    """The device link as the live timing pages show it. A device that has to
+    hold a connection and hasn't got one is an alarm: every time that fires while
+    it is down is gone. The simulator holds no connection, so it never alarms."""
+    from django.utils.translation import gettext
+
+    from .models import TimingSettings
+
+    settings = settings or TimingSettings.load()
+    if settings.device != TimingSettings.Device.CP540:
+        return {"monitored": False, "ok": True, "status": "", "message": ""}
+
+    snapshot = reader.snapshot()
+    status = snapshot["status"]
+    if status == "connected":
+        message = gettext("Connected to the timing device.")
+    elif status in ("connecting", "reconnecting"):
+        message = gettext("No contact with the timing device — reconnecting. Times are not being recorded.")
+    elif status == "idle":
+        message = gettext("The timing device is not connected. Connect it on the Timing settings page.")
+    else:
+        message = gettext("The timing device is disconnected — times are not being recorded.")
+    return {
+        "monitored": True,
+        "ok": status == "connected",
+        "status": status,
+        "message": message,
+        "error": snapshot["error"],
+    }

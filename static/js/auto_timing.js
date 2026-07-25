@@ -138,6 +138,7 @@
     renderTiles();
     renderIgnored();
     renderLock();
+    if (window.renderDeviceAlarm) window.renderDeviceAlarm(state.device_link);
     emptyEl.hidden = state.items.length > 0;
     // Keep the current starter in view as the field advances, unless the
     // operator has scrolled away.

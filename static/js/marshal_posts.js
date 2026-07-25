@@ -23,6 +23,7 @@
   const nameEl = root.querySelector("[data-name]");
   const clubEl = root.querySelector("[data-club]");
   const lockEl = root.querySelector("[data-lock]");
+  const deliveryEl = root.querySelector("[data-delivery]");
   const toastEl = root.querySelector("[data-toast]");
 
   const LONG_PRESS_MS = 500;
@@ -324,13 +325,14 @@
 
   // --- Submit --------------------------------------------------------------
   // Submitting locks the board here immediately (the timekeeper can unlock it);
-  // no way back to edit until then.
+  // no way back to edit until then. The "submitted" toast comes from the outbox
+  // once the server has actually taken it — saying so before it lands would be
+  // the very lie this page used to tell.
   submitBtn.addEventListener("click", () => {
     if (!starter || locked) return;
     pushPenalty(true);
     locked = true;
     applyEnabled();
-    showToast(interpolate(gettext("Penalties submitted for bib %(bib)s"), { bib: starter.bib }, true));
   });
 
   // --- Timing link ---------------------------------------------------------
@@ -363,32 +365,121 @@
     return { tasks, stop_line: stopLine };
   }
 
-  // Single-flight push so a burst of taps can't land out of order on the server:
-  // only one request is in flight; the latest state is always what gets sent
-  // last. (Fire-and-forget POSTs otherwise race — last writer wins by arrival.)
-  let sending = false;
-  let queued = null;
+  // --- Delivery ------------------------------------------------------------
+  // The timing side is built on "a time is never lost"; a marshal's penalties
+  // need the same promise. A phone at the far end of a course drops off Wi-Fi
+  // mid-tap, so nothing is fire-and-forget: every push waits in an outbox held
+  // in localStorage (so it survives a reload or the browser being backgrounded)
+  // until the server has acknowledged it, is retried with backoff, and says out
+  // loud on the board when it hasn't landed.
+  //
+  // Still single-flight, and still last-writer-wins per competitor: a newer push
+  // for the same run+post replaces the older one rather than queueing behind it,
+  // so a burst of taps can't land out of order.
+  const OUTBOX_KEY = "marshalOutbox:" + config.competitionId;
+  const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000];
+  let outbox = loadOutbox();
+  let flushing = false;
+  let retries = 0;
+  let retryTimer = null;
+
+  function loadOutbox() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(OUTBOX_KEY) || "[]");
+      return Array.isArray(stored) ? stored.filter((e) => e && e.body) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function saveOutbox() {
+    try {
+      localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox));
+    } catch (e) { /* a full or blocked store must not stop the board working */ }
+  }
+  // Whether this run still has something unsent — the board must not be
+  // rebuilt from the server's (older) copy while it has.
+  function isPending(runId) {
+    return outbox.some((entry) => entry.body.run_id === runId);
+  }
+
   function pushPenalty(submitted) {
     if (!URLS || currentRunId == null || confirmedPost == null) return;
-    queued = Object.assign(
+    const body = Object.assign(
       { post: Number(confirmedPost), run_id: currentRunId, submitted, detail: detailObject() },
       aggregate()
     );
-    flushPenalty();
+    outbox = outbox.filter(
+      (entry) => !(entry.body.post === body.post && entry.body.run_id === body.run_id)
+    );
+    outbox.push({ body, bib: starter ? starter.bib : null });
+    saveOutbox();
+    renderDelivery();
+    flush();
   }
-  function flushPenalty() {
-    if (sending || !queued) return;
-    const body = queued;
-    queued = null;
-    sending = true;
-    fetch(URLS.submit, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-      body: JSON.stringify(body),
-    })
-      .catch(() => {})
-      .finally(() => { sending = false; flushPenalty(); });
+
+  async function flush() {
+    if (flushing || !outbox.length || !URLS) return;
+    flushing = true;
+    const entry = outbox[0];
+    let outcome = "retry";
+    try {
+      const response = await fetch(URLS.submit, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+        body: JSON.stringify(entry.body),
+      });
+      if (response.ok) outcome = "sent";
+      // 409 — the run is already locked, either because this very entry landed
+      // and only its reply was lost, or because a timekeeper locked the post.
+      // Either way it can never be delivered, and it is not an error to shout at.
+      else if (response.status === 409) outcome = "locked";
+      else if (response.status < 500) outcome = "refused";
+    } catch (e) {
+      /* offline or the server is down — keep the entry and try again */
+    }
+    flushing = false;
+    if (outcome === "retry") {
+      scheduleRetry();
+      renderDelivery();
+      return;
+    }
+    outbox.shift();
+    saveOutbox();
+    retries = 0;
+    if (outcome === "refused") {
+      showToast(gettext("The timekeeper's system would not take that entry."));
+    } else if (outcome === "sent" && entry.body.submitted && entry.bib != null) {
+      showToast(interpolate(gettext("Penalties submitted for bib %(bib)s"), { bib: entry.bib }, true));
+    }
+    renderDelivery();
+    if (outbox.length) flush();
   }
+
+  function scheduleRetry() {
+    if (retryTimer) return;
+    const delay = RETRY_DELAYS[Math.min(retries, RETRY_DELAYS.length - 1)];
+    retries += 1;
+    retryTimer = setTimeout(() => { retryTimer = null; flush(); }, delay);
+  }
+
+  // Sending / not sent yet. Silent once the outbox is empty — the marshal only
+  // needs telling when something is still owed to the timekeeper.
+  function renderDelivery() {
+    if (!deliveryEl) return;
+    const waiting = outbox.length;
+    deliveryEl.hidden = waiting === 0;
+    deliveryEl.classList.toggle("marshal-delivery--stuck", retries > 0);
+    if (!waiting) return;
+    deliveryEl.textContent = retries > 0
+      ? interpolate(gettext("Not sent yet — %(n)s waiting. Still trying…"), { n: waiting }, true)
+      : gettext("Sending…");
+  }
+
+  // Anything left over from a reload, a closed tab or a walk out of Wi-Fi range.
+  renderDelivery();
+  flush();
+  // A phone coming back onto the network shouldn't wait out the backoff.
+  window.addEventListener("online", () => { retries = 0; flush(); });
 
   // Pull the current competitor for this post. A new run resets the board; the
   // same run is left alone so the marshal's in-progress taps aren't wiped.
@@ -421,7 +512,10 @@
     }
     // Same competitor: only react when the lock state flips (a timekeeper
     // unlocked it, or our submit was confirmed) — otherwise leave in-progress
-    // taps untouched.
+    // taps untouched. While something for this run is still unsent the server's
+    // copy is the older one, so rebuilding from it would wipe the very taps that
+    // haven't arrived yet.
+    if (isPending(currentRunId)) return;
     if (!!penalty.submitted !== locked) {
       locked = !!penalty.submitted;
       buildBoard(penalty.detail);   // restore the submitted detail for editing

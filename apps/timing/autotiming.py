@@ -215,9 +215,11 @@ def current_run(competition):
 def serialize(competition):
     """The whole Auto timing state: the ordered items (slot + its bound run), the
     current index, the ignored times, and the marshal posts."""
+    from . import cp540
     from .models import TimingSettings
 
     sync_bindings(competition)
+    settings = TimingSettings.load()
     ctype = competition.competition_type
     precision = ctype.timing_precision
     marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
@@ -235,7 +237,10 @@ def serialize(competition):
         "precision": precision,
         "penalties_enabled": ctype.penalties_enabled,
         # The red operator lock: incoming times go straight to the ignore list.
-        "input_locked": TimingSettings.load().ignore_incoming,
+        "input_locked": settings.ignore_incoming,
+        # The device link, so a reader that has lost the CP540 raises its alarm
+        # here rather than only on the settings page.
+        "device_link": cp540.link_state(settings),
         "items": items,
         # Centre on the run with the latest timing activity (last start, or a
         # finish that just came in for an earlier starter).

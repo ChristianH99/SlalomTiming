@@ -27,6 +27,7 @@
     </div>
   {% else %}
     <div class="timing-live" id="timing-live">
+      {% include "timing/_device_alarm.html" %}
       <div class="timing-live-body" id="timing-live-body">
         <div class="table-card">
           <table class="timing-table">
@@ -70,6 +71,7 @@
       };
       window.TIMING_CSRF = "{{ csrf_token }}";
     </script>
+    <script src="{% static 'js/device_alarm.js' %}"></script>
     <script src="{% static 'js/timing_live.js' %}"></script>
   {% endif %}
 {% endblock %}

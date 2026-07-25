@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.common import safe_next
+from apps.timing.models import MarshalPenalty
 
 from . import startpattern, taskspec
 from .assignment import assignment_methods_meta
@@ -328,9 +329,16 @@ class PenaltiesView(ActiveCompetitionMixin, View):
         if competition is None:
             return self.render_empty(request)
         enabled = bool(request.POST.get("penalties_by_marshal_posts"))
+        confirmed = bool(request.POST.get("confirm_penalty_loss"))
+
         if not enabled:
             # Turning it off removes the posts entirely — the timekeeper is back
-            # in charge and there is nothing for a post to enter.
+            # in charge and there is nothing for a post to enter. Every penalty
+            # they recorded goes with them (CASCADE), so it is confirmed first.
+            doomed = self._penalties_lost(competition, keep=set())
+            if doomed and not confirmed:
+                return self._ask_to_confirm(request, competition, False,
+                                            self._rows_from_db(competition), doomed)
             with transaction.atomic():
                 competition.penalties_by_marshal_posts = False
                 competition.save(update_fields=["penalties_by_marshal_posts"])
@@ -342,12 +350,33 @@ class PenaltiesView(ActiveCompetitionMixin, View):
         if has_errors:
             messages.error(request, _("Some task lists couldn't be read — fix them and save again."))
             return render(request, self.template_name, self._context(competition, True, rows))
+        # Fewer posts than before: the ones dropped take their penalties with them.
+        doomed = self._penalties_lost(competition, keep={row["number"] for row in rows})
+        if doomed and not confirmed:
+            return self._ask_to_confirm(request, competition, True, rows, doomed)
         with transaction.atomic():
             competition.penalties_by_marshal_posts = True
             competition.save(update_fields=["penalties_by_marshal_posts"])
             self._reconcile_posts(competition, rows)
         messages.success(request, "Penalties settings saved.")
         return redirect(safe_next(request, reverse("competitions:penalties")))
+
+    @staticmethod
+    def _penalties_lost(competition, keep):
+        """How many recorded marshal penalties this save would delete: the ones
+        on posts that wouldn't survive it."""
+        return MarshalPenalty.objects.filter(
+            marshal_post__competition=competition
+        ).exclude(marshal_post__number__in=keep).count()
+
+    def _ask_to_confirm(self, request, competition, enabled, rows, doomed):
+        """Re-render the page with the loss spelled out and the confirm dialog
+        open. The page asks before submitting too — this is the guard for a
+        stale page, a form posted without JavaScript, or a penalty recorded
+        between loading the page and pressing Save."""
+        context = self._context(competition, enabled, rows)
+        context["confirm_loss"] = doomed
+        return render(request, self.template_name, context)
 
     @staticmethod
     def _context(competition, enabled, rows):
@@ -359,7 +388,22 @@ class PenaltiesView(ActiveCompetitionMixin, View):
             "post_count": len(rows),
             "tasks_summary": taskspec.summary(numbers),
             "max_posts": MAX_MARSHAL_POSTS,
+            # Recorded penalties per post number, so the page can say what a
+            # change would destroy before it is submitted.
+            "penalty_counts": PenaltiesView._penalty_counts(competition),
+            # How many this save would destroy — non-zero only when the view
+            # refused one and is asking (see _ask_to_confirm).
+            "confirm_loss": 0,
         }
+
+    @staticmethod
+    def _penalty_counts(competition):
+        counts = (
+            MarshalPenalty.objects.filter(marshal_post__competition=competition)
+            .values("marshal_post__number")
+            .annotate(total=Count("id"))
+        )
+        return {str(row["marshal_post__number"]): row["total"] for row in counts}
 
     @staticmethod
     def _rows_from_db(competition):

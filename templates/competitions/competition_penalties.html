@@ -13,6 +13,10 @@
     by the exclusive checkboxes below.{% endcomment %}
     <input type="hidden" name="stop_line_post" id="stop-line-post"
            value="{% for row in rows %}{% if row.stop_line %}{{ row.number }}{% endif %}{% endfor %}">
+    {% comment %}Set by the confirm dialog below: the operator has been told how
+    many recorded penalties this save deletes and said yes anyway. The view
+    refuses a destructive save without it.{% endcomment %}
+    <input type="hidden" name="confirm_penalty_loss" id="confirm-penalty-loss" value="">
 
     <h2 class="form-section">{% trans "General" %}</h2>
     <div class="settings-section">
@@ -63,6 +67,29 @@
       <button class="button" type="submit" id="penalties-save">{% trans "Save" %}</button>
     </div>
   </form>
+
+  {% comment %}Turning marshal penalties off, or reducing the number of posts,
+  deletes the posts — and every penalty recorded against them goes with them.
+  Nothing else in the app can bring those back, so the operator is told the
+  number first. Shown by the page before it submits, and by the view if it is
+  asked to make the change without a confirmation.{% endcomment %}
+  <div class="modal-overlay" id="penalty-loss-modal" {% if not confirm_loss %}hidden{% endif %}>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="penalty-loss-title">
+      <h2 class="modal-title" id="penalty-loss-title">{% trans "Delete recorded penalties?" %}</h2>
+      <div class="modal-body">
+        <p data-penalty-loss-body>
+          {% blocktrans count n=confirm_loss %}This will delete <strong>{{ n }}</strong> penalty already recorded by a marshal post.{% plural %}This will delete <strong>{{ n }}</strong> penalties already recorded by marshal posts.{% endblocktrans %}
+        </p>
+        <p>{% trans "Recorded penalties cannot be recovered once the posts are gone." %}</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="button button--danger" data-penalty-loss-confirm>{% trans "Delete penalties and save" %}</button>
+        <button type="button" class="button button--secondary" data-penalty-loss-cancel>{% trans "Cancel" %}</button>
+      </div>
+    </div>
+  </div>
+
+  {{ penalty_counts|json_script:"penalty-counts" }}
 
   <template id="post-template">
     <div class="settings-section marshal-post" data-post data-number="__N__">
@@ -239,6 +266,68 @@
       postsWrap.addEventListener("change", (event) => {
         if (event.target.matches("[data-stop-line]")) syncStopLine(event.target);
       });
+
+      // ---- confirm before recorded penalties are destroyed ----
+      // Turning the toggle off deletes every post; reducing the count deletes the
+      // ones past it. Their MarshalPenalty rows CASCADE away with them, so the
+      // number is put in front of the operator first. The view checks the same
+      // thing, so a stale page or a JS-less post can't slip past.
+      const lossModal = document.getElementById("penalty-loss-modal");
+      const lossBody = lossModal && lossModal.querySelector("[data-penalty-loss-body]");
+      const lossField = document.getElementById("confirm-penalty-loss");
+      const penaltyCounts = JSON.parse(document.getElementById("penalty-counts").textContent);
+
+      // How many recorded penalties the form as it stands would delete.
+      function penaltiesAtRisk() {
+        const keep = toggle.checked ? posts().length : 0;
+        let total = 0;
+        Object.keys(penaltyCounts).forEach((number) => {
+          if (parseInt(number, 10) > keep) total += penaltyCounts[number];
+        });
+        return total;
+      }
+
+      function openLossModal(count) {
+        if (!lossModal) return;
+        if (lossBody) {
+          lossBody.innerHTML = (count === 1
+            ? "{% trans 'This will delete <strong>{n}</strong> penalty already recorded by a marshal post.'|escapejs %}"
+            : "{% trans 'This will delete <strong>{n}</strong> penalties already recorded by marshal posts.'|escapejs %}"
+          ).replace("{n}", count);
+        }
+        lossModal.hidden = false;
+        document.body.classList.add("modal-open");
+      }
+      function closeLossModal() {
+        if (!lossModal) return;
+        lossModal.hidden = true;
+        document.body.classList.remove("modal-open");
+      }
+
+      form.addEventListener("submit", (event) => {
+        if (lossField.value) return;             // already confirmed
+        const count = penaltiesAtRisk();
+        if (!count) return;
+        event.preventDefault();
+        openLossModal(count);
+      });
+
+      if (lossModal) {
+        lossModal.querySelector("[data-penalty-loss-confirm]").addEventListener("click", () => {
+          lossField.value = "1";
+          closeLossModal();
+          form.submit();
+        });
+        lossModal.querySelector("[data-penalty-loss-cancel]").addEventListener("click", closeLossModal);
+        lossModal.addEventListener("click", (event) => {
+          if (event.target === lossModal) closeLossModal();
+        });
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && !lossModal.hidden) closeLossModal();
+        });
+        // Rendered already open: the view refused a destructive save.
+        if (!lossModal.hidden) document.body.classList.add("modal-open");
+      }
 
       applyToggle();
       syncStopLine(null);

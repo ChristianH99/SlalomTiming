@@ -1,7 +1,9 @@
 import datetime
 import json
+import re
 import secrets
 from collections import Counter
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib import messages
@@ -21,6 +23,27 @@ from .forms import TimingSettingsForm
 from .ingest import record_signal
 from .models import MarshalPenalty, TimedRun, TimingSettings, TimingSignal
 from .services import notify_live
+
+
+# --- bounds on operator-entered numbers -------------------------------------
+# SQLite stores whatever it is handed, so a value past a column's declared range
+# isn't rejected — it is written and only surfaces later. For a Decimal that is
+# fatal: Django's SQLite converter raises on *every subsequent read of the row*,
+# so one mistyped run time would 500 the timing views, the Auto view and the
+# dashboard for the rest of the event. These are the doors those numbers come
+# through, so the bounds are enforced here.
+#
+# A typed run time goes into TimedRun.manual_run_time — DecimalField(max_digits=9,
+# decimal_places=3). 24 h is past any conceivable run and comfortably inside the
+# column.
+MAX_RUN_SECONDS = Decimal("86400")
+RUN_TIME_PLACES = Decimal("0.001")
+# Only digits, colons and dots: no sign, and no "1e3" quietly becoming 1000 s.
+_DURATION_CHARS = re.compile(r"^[0-9:.]+$")
+# Penalty counts are PositiveSmallIntegerField and the timekeeper's adjusts are
+# IntegerField. They are driven by steppers, so anything outside this range is a
+# broken client rather than an operator — clamped, so the run stays readable.
+MAX_PENALTY_COUNT = 999
 
 
 def broadcast_live():
@@ -325,8 +348,14 @@ def marshal_task_edit(request):
         detail["stop_line"] = bool(payload.get("stop_line"))
     detail["tasks"] = tasks
     mp.detail = detail
-    mp.pylon_count = sum(int((v or {}).get("pylons", 0) or 0) for v in tasks.values())
-    mp.task_count = sum(1 for v in tasks.values() if isinstance(v, dict) and v.get("task"))
+    # Summed across the post's tasks, so bounded again: each task's pylons is
+    # already capped, their total is not.
+    mp.pylon_count = min(
+        sum(int((v or {}).get("pylons", 0) or 0) for v in tasks.values()), MAX_PENALTY_COUNT
+    )
+    mp.task_count = min(
+        sum(1 for v in tasks.values() if isinstance(v, dict) and v.get("task")), MAX_PENALTY_COUNT
+    )
     mp.stopline_count = 1 if detail.get("stop_line") else 0
     mp.save()
     broadcast_live()
@@ -771,26 +800,28 @@ def timing_set_runtime(request):
 
 def _parse_duration(raw):
     """A typed run time -> Decimal seconds, or None. Accepts plain seconds
-    ("30.25") or an hh:mm:ss.mmm / mm:ss.mmm clock duration."""
-    from decimal import Decimal, InvalidOperation
+    ("30.25") or an hh:mm:ss.mmm / mm:ss.mmm clock duration.
 
-    if ":" in raw:
-        parts = raw.split(":")
-        if len(parts) > 3:
-            return None
-        try:
-            values = [Decimal(p) for p in parts]
-        except InvalidOperation:
-            return None
-        total = Decimal(0)
-        for value in values:
-            total = total * 60 + value
-        return total if total >= 0 else None
+    Refused rather than stored: anything with a character other than a digit,
+    colon or dot, and anything longer than MAX_RUN_SECONDS — see the note there
+    for what an out-of-range value does to the rest of the event."""
+    if not _DURATION_CHARS.match(raw):
+        return None
+    parts = raw.split(":")
+    if len(parts) > 3:
+        return None
     try:
-        value = Decimal(raw)
+        values = [Decimal(p) for p in parts]
     except InvalidOperation:
         return None
-    return value if value >= 0 else None
+    total = Decimal(0)
+    for value in values:
+        total = total * 60 + value
+    if total < 0 or total > MAX_RUN_SECONDS:
+        return None
+    # Truncated to the column's precision, never rounded — the same rule calc.py
+    # applies to a measured time.
+    return total.quantize(RUN_TIME_PLACES, rounding=ROUND_DOWN)
 
 
 # ----- serialization -----
@@ -809,6 +840,9 @@ def serialize_arrangement(competition):
         "precision": ctype.timing_precision,
         # The red operator lock: incoming times go straight to the ignore list.
         "input_locked": settings.ignore_incoming,
+        # The device link, so a reader that has lost the CP540 raises its alarm
+        # here rather than only on the settings page.
+        "device_link": cp540.link_state(settings),
         "multi_class": competition.allows_multiple_classes_effective(),
         "rows": [_serialize_run(run, competition, ctype) for run in arrangement.rows(competition)],
         "ignored": [
@@ -1057,15 +1091,18 @@ def _as_positive_int(value):
 
 
 def _as_count(value):
+    """A penalty count from the client -> 0..MAX_PENALTY_COUNT (garbage -> 0)."""
     text = str(value).strip()
-    return int(text) if text.isdigit() else 0
+    return min(int(text), MAX_PENALTY_COUNT) if text.isdigit() else 0
 
 
 def _as_signed(value):
+    """A timekeeper's signed +/- adjust, clamped to ±MAX_PENALTY_COUNT."""
     try:
-        return int(value)
+        number = int(value)
     except (TypeError, ValueError):
         return 0
+    return max(-MAX_PENALTY_COUNT, min(number, MAX_PENALTY_COUNT))
 
 
 def _parse_run_value(value):

@@ -9,7 +9,7 @@ from django.urls import reverse
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
 from apps.participants.models import ClassAssignment, EventEntry, Participant
 
-from . import arrangement, autotiming, calc
+from . import arrangement, autotiming, calc, views
 from .connectors import TimingPulse, get_connector
 from .connectors.simulator import SimulatorConnector
 from .models import TimedRun, TimingEvent, TimingSettings, TimingSignal
@@ -251,6 +251,55 @@ def test_cp540_time_normalises_minutes_over_an_hour():
     from . import cp540
     # 75 minutes rolls into the hour field rather than staying an illegal minute.
     assert cp540.parse_time("75:30.50000") == datetime.time(1, 15, 30, 500000)
+
+
+# ----- CP540 reconnect + the device-link alarm -----
+
+def test_cp540_reader_reconnects_after_the_link_drops():
+    """A knocked cable used to end the reader thread for good — every later time
+    lost with nothing said. It has to keep trying while it is the live device."""
+    import socket
+    from . import cp540
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    server.settimeout(10)
+    host, port = server.getsockname()
+    reader = cp540.CP540Reader()
+    try:
+        reader.start(host, port)
+        first, _addr = server.accept()
+        first.sendall(b"TN         1  1     10:00:00.00000     0\n")
+        first.close()                       # the device drops the link
+        second, _addr = server.accept()     # …and the reader comes back on its own
+        assert second is not None
+        second.close()
+    finally:
+        reader.stop()
+        server.close()
+    assert any("Reconnecting" in entry["text"] for entry in reader.snapshot()["log"])
+
+
+def test_device_link_is_quiet_for_the_simulator():
+    from . import cp540
+    settings = TimingSettings.load()
+    settings.device = TimingSettings.Device.SIMULATOR
+    settings.save()
+    # The simulator holds no connection, so there is nothing to alarm about.
+    assert cp540.link_state(settings) == {
+        "monitored": False, "ok": True, "status": "", "message": ""
+    }
+
+
+def test_device_link_alarms_when_the_cp540_is_selected_but_down(client):
+    settings = TimingSettings.load()
+    settings.device = TimingSettings.Device.CP540
+    settings.save()
+    comp = make_active_competition()
+    # Both live views carry it, so the banner is raised wherever the operator is.
+    assert serialize_arrangement(comp)["device_link"]["ok"] is False
+    assert autotiming.serialize(comp)["device_link"]["monitored"] is True
 
 
 def test_channel_rejects_two_digits(client):
@@ -1141,6 +1190,54 @@ def test_set_runtime_endpoint_sets_manual_run_time(client):
     post_json(client, "timing:set-runtime", run_id=run.id, run_time="")
     run.refresh_from_db()
     assert run.manual_run_time is None
+
+
+@pytest.mark.parametrize("bad", ["99999999", "1e3", "-5", "999999:00", "12.3.4", "abc"])
+def test_set_runtime_refuses_a_time_the_column_cannot_hold(client, bad):
+    """One over-long run time used to be stored happily and then raise on every
+    later read of the row — 500ing both timing views and the dashboard for the
+    rest of the event. It has to be refused at the door."""
+    comp, cls = auto_scenario(bibs=(1,))
+    run = TimedRun.objects.create(competition=comp)
+    resp = post_json(client, "timing:set-runtime", run_id=run.id, run_time=bad)
+    assert resp.status_code == 400
+    run.refresh_from_db()
+    assert run.manual_run_time is None
+    # The row is still readable, and so are the views that read it.
+    assert client.get(reverse("timing:arrangement")).status_code == 200
+    assert client.get(reverse("timing:auto-state")).status_code == 200
+
+
+def test_set_runtime_truncates_to_the_column_precision(client):
+    comp, cls = auto_scenario(bibs=(1,))
+    run = TimedRun.objects.create(competition=comp)
+    post_json(client, "timing:set-runtime", run_id=run.id, run_time="30.259999")
+    run.refresh_from_db()
+    assert run.manual_run_time == Decimal("30.259")   # truncated, never rounded
+
+
+def test_penalty_counts_are_bounded(client):
+    """PositiveSmallIntegerField tops out at 32767 and SQLite doesn't enforce it,
+    so an out-of-range count is latent corruption of the same kind."""
+    comp, cls = auto_scenario(bibs=(1,))
+    run = TimedRun.objects.create(competition=comp)
+    post_json(client, "timing:run-update", run_id=run.id, pylon_count="1000000000")
+    run.refresh_from_db()
+    assert run.pylon_count == views.MAX_PENALTY_COUNT
+    post_json(client, "timing:auto-adjust", run_id=run.id, pylon_adjust=-10 ** 9)
+    run.refresh_from_db()
+    assert run.pylon_adjust == -views.MAX_PENALTY_COUNT
+
+
+def test_marshal_submit_counts_are_bounded(client):
+    comp, cls = auto_scenario(bibs=(1,))
+    post = MarshalPost.objects.create(competition=comp, number=1, tasks="1")
+    run = TimedRun.objects.create(competition=comp)
+    post_json(client, "timing:marshal-submit", run_id=run.id, post=1,
+              pylon_count=10 ** 9, task_count=10 ** 9, stopline_count=10 ** 9)
+    from .models import MarshalPenalty
+    mp = MarshalPenalty.objects.get(timed_run=run, marshal_post=post)
+    assert mp.pylon_count == mp.task_count == mp.stopline_count == views.MAX_PENALTY_COUNT
 
 
 def test_set_time_endpoint_keys_in_a_time_and_rails_the_device_one(client):

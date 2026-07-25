@@ -164,13 +164,20 @@ class ImportReviewView(View):
             return redirect("transfer:import")
         _document, media, plan = staged
 
-        result = importers.commit(
-            plan,
-            resolutions=_resolutions(request.POST, plan),
-            type_action=request.POST.get("type_action"),
-            media=media,
-            activate=request.POST.get("activate") == "on",
-        )
+        try:
+            result = importers.commit(
+                plan,
+                resolutions=_resolutions(request.POST, plan),
+                type_action=request.POST.get("type_action"),
+                media=media,
+                activate=request.POST.get("activate") == "on",
+            )
+        except TransferError as error:
+            # A value the document carries but the database can't hold (see
+            # schema.load). commit() is one transaction, so nothing was written.
+            _discard_staged(request)
+            messages.error(request, str(error))
+            return redirect("transfer:import")
 
         _discard_staged(request)
         messages.success(request, _("Import finished."))

@@ -969,6 +969,79 @@ def test_penalties_view_shrinking_count_drops_extra_posts(client):
     assert competition.marshal_posts.get(number=1).tasks == "1-8"
 
 
+def _post_with_a_recorded_penalty(competition, number=1):
+    """A marshal post that has already judged a run — deleting it destroys work
+    nothing else in the app can bring back."""
+    from apps.timing.models import MarshalPenalty, TimedRun
+
+    competition.penalties_by_marshal_posts = True
+    competition.save(update_fields=["penalties_by_marshal_posts"])
+    post = MarshalPost.objects.create(competition=competition, number=number, tasks="1-5")
+    run = TimedRun.objects.create(competition=competition)
+    MarshalPenalty.objects.create(timed_run=run, marshal_post=post, pylon_count=2)
+    return post
+
+
+def test_turning_penalties_off_asks_before_destroying_recorded_ones(client):
+    from apps.timing.models import MarshalPenalty
+
+    competition = make_active_competition()
+    _post_with_a_recorded_penalty(competition)
+    response = client.post(reverse("competitions:penalties"), {"post_count": "1"})
+    assert response.status_code == 200                  # re-rendered, not saved
+    assert response.context["confirm_loss"] == 1
+    competition.refresh_from_db()
+    assert competition.penalties_by_marshal_posts is True
+    assert competition.marshal_posts.count() == 1
+    assert MarshalPenalty.objects.count() == 1
+
+
+def test_turning_penalties_off_goes_through_once_confirmed(client):
+    from apps.timing.models import MarshalPenalty
+
+    competition = make_active_competition()
+    _post_with_a_recorded_penalty(competition)
+    response = client.post(reverse("competitions:penalties"), {
+        "post_count": "1", "confirm_penalty_loss": "1",
+    })
+    assert response.status_code == 302
+    competition.refresh_from_db()
+    assert competition.penalties_by_marshal_posts is False
+    assert competition.marshal_posts.count() == 0
+    assert MarshalPenalty.objects.count() == 0
+
+
+def test_shrinking_the_post_count_asks_before_dropping_a_judged_post(client):
+    competition = make_active_competition()
+    MarshalPost.objects.create(competition=competition, number=1, tasks="1-5")
+    _post_with_a_recorded_penalty(competition, number=2)
+    response = client.post(reverse("competitions:penalties"), {
+        "penalties_by_marshal_posts": "on", "post_count": "1", "post-1-tasks": "1-8",
+    })
+    assert response.status_code == 200
+    assert response.context["confirm_loss"] == 1
+    assert competition.marshal_posts.count() == 2       # nothing dropped yet
+
+
+def test_shrinking_past_an_empty_post_needs_no_confirmation(client):
+    """Only recorded penalties are worth stopping for — an unjudged post isn't."""
+    competition = make_active_competition()
+    MarshalPost.objects.create(competition=competition, number=1, tasks="1-5")
+    MarshalPost.objects.create(competition=competition, number=2, tasks="6-10")
+    response = client.post(reverse("competitions:penalties"), {
+        "penalties_by_marshal_posts": "on", "post_count": "1", "post-1-tasks": "1-8",
+    })
+    assert response.status_code == 302
+    assert [p.number for p in competition.marshal_posts.all()] == [1]
+
+
+def test_penalties_page_shows_what_each_post_has_recorded(client):
+    competition = make_active_competition()
+    _post_with_a_recorded_penalty(competition, number=3)
+    response = client.get(reverse("competitions:penalties"))
+    assert response.context["penalty_counts"] == {"3": 1}
+
+
 def test_penalties_page_needs_an_active_competition(client):
     response = client.get(reverse("competitions:penalties"))
     assert "competitions/no_active_competition.html" in [t.name for t in response.templates]

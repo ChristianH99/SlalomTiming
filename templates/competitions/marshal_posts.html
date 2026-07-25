@@ -34,6 +34,10 @@
         <div class="marshal-footer">
           <span class="marshal-total" data-total></span>
           <span class="marshal-lock" data-lock hidden>{% trans "🔒 Submitted — locked" %}</span>
+          {% comment %}Whether anything the marshal entered is still owed to the
+          timekeeper. Driven by the outbox in marshal_posts.js — hidden while
+          everything has landed.{% endcomment %}
+          <span class="marshal-delivery" data-delivery role="status" aria-live="polite" hidden></span>
           <button type="button" class="button button--big" data-submit>{% trans "Submit" %}</button>
         </div>
       </div>

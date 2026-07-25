@@ -16,6 +16,9 @@ become ISO/­decimal strings) and decoded back through the model field's own
 ``to_python()``, so the two directions can never drift apart.
 """
 
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+
 FORMAT = "slalomtiming-export"
 VERSION = 1
 
@@ -166,10 +169,25 @@ def dump(instance, field_names):
 def load(model, row, field_names):
     """``**kwargs`` for building *model* from a document row, each value put back
     through the model field's own ``to_python()`` so an ISO string becomes a date
-    again. Fields the row doesn't carry fall back to the model's default."""
+    again. Fields the row doesn't carry fall back to the model's default.
+
+    Each value is then checked against its field's own validators. SQLite stores
+    an out-of-range number rather than refusing it, and an over-long Decimal
+    makes every later read of that row raise — so a damaged document has to be
+    refused here, at the decode point, not written and discovered mid-event."""
     values = {}
     for name in field_names:
         if name not in row:
             continue
-        values[name] = model._meta.get_field(name).to_python(row[name])
+        field = model._meta.get_field(name)
+        try:
+            value = field.to_python(row[name])
+            if value not in field.empty_values:
+                field.run_validators(value)
+        except ValidationError:
+            raise TransferError(
+                _("The export holds a value %(model)s.%(field)s cannot store.")
+                % {"model": model.__name__, "field": name}
+            ) from None
+        values[name] = value
     return values
