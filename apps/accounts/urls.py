@@ -6,8 +6,8 @@ from . import views
 app_name = "accounts"
 
 urlpatterns = [
-    path("login/", auth_views.LoginView.as_view(
-        template_name="accounts/login.html"), name="login"),
+    # Our own LoginView: Django's has no failed-attempt limit (see throttle.py).
+    path("login/", views.LoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("users/", views.UserAccessView.as_view(), name="users"),
     path("roles/create/", views.role_create, name="role-create"),

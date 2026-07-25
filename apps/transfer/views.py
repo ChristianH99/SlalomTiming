@@ -20,6 +20,12 @@ from apps.competitions.models import Competition, CompetitionType
 from . import archive, csvimport, exporters, importers, merge, staging
 from .schema import TransferError
 
+# A participant list is text a human typed; a few thousand starters is well under a
+# megabyte. The cap is here rather than in csvimport because it belongs to the door
+# (`archive.MAX_UPLOAD_BYTES` does the same job for the export file), and because
+# read() takes the whole file into memory.
+MAX_CSV_BYTES = 8 * 1024 * 1024
+
 
 class ExportView(View):
     template_name = "transfer/export.html"
@@ -102,6 +108,15 @@ class ImportView(View):
         if upload is None:
             messages.error(request, _("Choose a file to import."))
             return redirect("transfer:import")
+        if upload.size > archive.MAX_UPLOAD_BYTES:
+            messages.error(request, _(
+                "That file is %(size)s MB — too large for an export archive "
+                "(the limit is %(limit)s MB)."
+            ) % {
+                "size": upload.size // (1024 * 1024),
+                "limit": archive.MAX_UPLOAD_BYTES // (1024 * 1024),
+            })
+            return redirect("transfer:import")
 
         try:
             document, _media = archive.read(upload)
@@ -122,7 +137,18 @@ class ImportView(View):
             messages.error(request, _("Choose a competition to import participants into."))
             return redirect("transfer:import")
 
-        report = csvimport.read(request.FILES["csv"].read(), competition)
+        upload = request.FILES["csv"]
+        if upload.size > MAX_CSV_BYTES:
+            messages.error(request, _(
+                "That file is %(size)s MB — too large for a participant list "
+                "(the limit is %(limit)s MB)."
+            ) % {
+                "size": upload.size // (1024 * 1024),
+                "limit": MAX_CSV_BYTES // (1024 * 1024),
+            })
+            return redirect("transfer:import")
+
+        report = csvimport.read(upload.read(), competition)
         if not report.ok:
             return render(request, self.template_name, self._context(csv_report=report))
 

@@ -12,7 +12,7 @@ from apps.participants.models import ClassAssignment, EventEntry, Participant
 from . import arrangement, autotiming, calc, views
 from .connectors import TimingPulse, get_connector
 from .connectors.simulator import SimulatorConnector
-from .models import TimedRun, TimingEvent, TimingSettings, TimingSignal
+from .models import MarshalPenalty, TimedRun, TimingEvent, TimingSettings, TimingSignal
 from .services import _persist_pulse
 from .views import serialize_arrangement
 
@@ -956,6 +956,98 @@ def test_post_claim_is_exclusive(client):
     assert client.get(reverse("timing:marshal-claims"), {"token": "A"}).json()["taken"] == []
     post_json(client, "timing:marshal-release", post=1, token="A")
     assert post_json(client, "timing:marshal-claim", post=1, token="B").json()["ok"] is True
+
+
+# ----- SEC-3: a claim is what authorises a marshal's write -----
+
+def marshal_client(*page_keys):
+    """A signed-in client holding only the given pages — a marshal's phone, which is
+    *not* the timekeeper. The shared `client` fixture is a superuser and holds
+    everything, which is why these paths looked fine."""
+    from django.contrib.auth.models import Group, User
+    from django.test import Client
+
+    from apps.accounts.models import RoleAccess
+
+    name = "marshal-" + "-".join(page_keys)
+    user = User.objects.create_user(username=name, password="pw")
+    group = Group.objects.create(name=name + "-role")
+    RoleAccess.objects.create(group=group, pages=list(page_keys))
+    user.groups.add(group)
+    phone = Client()
+    phone.force_login(user)
+    return phone
+
+
+def test_marshal_submit_needs_the_claim_for_that_post(client):
+    """The reproduction from the audit: a device that claimed post 1 could write
+    post 2's penalties, because no write path looked at claim_token."""
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    post2 = MarshalPost.objects.create(competition=comp, number=2, tasks="6-8")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+
+    phone = marshal_client("marshal_posts")
+    assert post_json(phone, "timing:marshal-claim", post=1, token="aaaa").json()["ok"] is True
+
+    # Post 2 is not this device's — with the wrong token, or with none at all.
+    refused = submit_penalty(phone, run, post=2, pylons=3)
+    assert refused.status_code == 403
+    assert post_json(phone, "timing:marshal-submit", post=2, run_id=run.id,
+                     pylon_count=3, token="aaaa").status_code == 403
+    assert not MarshalPenalty.objects.filter(marshal_post=post2).exists()
+
+    # Its own post, with its own token, still works.
+    ok = post_json(phone, "timing:marshal-submit", post=1, run_id=run.id,
+                   pylon_count=3, submitted=True, detail={}, token="aaaa")
+    assert ok.status_code == 200
+    assert MarshalPenalty.objects.get(marshal_post__number=1).pylon_count == 3
+
+
+def test_marshal_cannot_rewrite_a_long_finished_run(client):
+    """A tap the network swallowed is retried, so a delivery may arrive a few
+    starters late — but not for a run from the far side of the event."""
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    first = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    for n in range(2, views.MARSHAL_RUN_WINDOW + 3):
+        latest = run_of(signal_in(comp, 1, f"10:{n:02d}:00.000", running=n))
+
+    phone = marshal_client("marshal_posts")
+    post_json(phone, "timing:marshal-claim", post=1, token="aaaa")
+    stale = post_json(phone, "timing:marshal-submit", post=1, run_id=first.id,
+                      pylon_count=5, token="aaaa")
+    assert stale.status_code == 403
+    fresh = post_json(phone, "timing:marshal-submit", post=1, run_id=latest.id,
+                      pylon_count=5, submitted=True, detail={}, token="aaaa")
+    assert fresh.status_code == 200
+
+    # The timekeeper is not bounded by the window — they fix up earlier runs.
+    assert submit_penalty(client, first, post=1, pylons=5).status_code == 200
+
+
+@pytest.mark.parametrize("endpoint,body", [
+    ("timing:marshal-unlock", {"post": 1}),
+    ("timing:marshal-lock", {"post": 1}),
+    ("timing:marshal-lock-all", {}),
+    ("timing:marshal-task-edit", {"post": 1, "task": 2, "pylons": 4}),
+])
+def test_lock_unlock_and_task_edit_are_timekeeper_only(client, endpoint, body):
+    """These endpoints are shared by both pages (the access gate grants them to
+    either), so only the view can tell that they are the timekeeper's."""
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    submit_penalty(client, run, post=1, pylons=1, submitted=True)
+
+    phone = marshal_client("marshal_posts")
+    post_json(phone, "timing:marshal-claim", post=1, token="aaaa")
+    assert post_json(phone, endpoint, run_id=run.id, **body).status_code == 403
+    # Nothing moved: still locked, still one pylon.
+    penalty = MarshalPenalty.objects.get(marshal_post__number=1)
+    assert penalty.submitted is True and penalty.pylon_count == 1
+    # And the timekeeper can still do it.
+    assert post_json(client, endpoint, run_id=run.id, **body).status_code == 200
 
 
 def test_stale_claim_is_free(client):

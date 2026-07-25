@@ -14,7 +14,9 @@
     </div>
     <h1 class="login-title">{% trans "Sign in" %}</h1>
 
-    {% if form.errors %}
+    {% if locked_out %}
+      <p class="notice notice--error">{% blocktrans count minutes=lockout_minutes %}Too many failed attempts. Please wait a minute and try again.{% plural %}Too many failed attempts. Please wait {{ minutes }} minutes and try again.{% endblocktrans %}</p>
+    {% elif form.errors %}
       <p class="notice notice--error">{% trans "Wrong username or password. Please try again." %}</p>
     {% endif %}
 

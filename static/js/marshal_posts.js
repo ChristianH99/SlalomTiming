@@ -426,7 +426,10 @@
       const response = await fetch(URLS.submit, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-        body: JSON.stringify(entry.body),
+        // The claim token proves this device holds the post; the server refuses a
+        // write without it. Added here rather than in the stored body so an entry
+        // queued before a token existed still goes out with the current one.
+        body: JSON.stringify(Object.assign({}, entry.body, { token: deviceToken })),
       });
       if (response.ok) outcome = "sent";
       // 409 — the run is already locked, either because this very entry landed

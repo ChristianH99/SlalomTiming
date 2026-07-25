@@ -87,6 +87,18 @@ def started_runs(competition):
     return runs
 
 
+def recent_run_ids(competition, window):
+    """The ids of the last *window* runs to have started, newest last.
+
+    What a marshal post is still allowed to write a penalty against (see
+    apps/timing/views.py): their board follows the current competitor, but a tap the
+    network swallowed is retried from an outbox, so a delivery may arrive a few
+    starters late and must still land. A run from much earlier in the event may not.
+    """
+    started = started_runs(competition)
+    return {run.id for run in started[-window:]} if window > 0 else set()
+
+
 def _signal_activity(run):
     """The run's most recent signal *arrival* (start or finish), or None. Used to
     pick the current competitor by latest activity rather than start order, so a

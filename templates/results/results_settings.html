@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static i18n %}
+{% load static i18n pdf_markup %}
 {% block title %}{% trans "Results settings" %} – Slalom Timing{% endblock %}
 {% block topbar_title %}{% trans "Results settings" %}{% endblock %}
 {% block content %}
@@ -91,7 +91,7 @@
         </div>
         <div class="pdf-editor" id="pdf-header" contenteditable="true"
              data-target="pdf-header-input"
-             data-placeholder="{% trans 'e.g. #increment. #name' %}">{{ pdf_layout.header_html|safe }}</div>
+             data-placeholder="{% trans 'e.g. #increment. #name' %}">{{ pdf_layout.header_html|pdf_header }}</div>
       </div>
 
       <div class="pdf-field">
@@ -101,7 +101,7 @@
         </div>
         <div class="pdf-editor" id="pdf-footer" contenteditable="true"
              data-target="pdf-footer-input"
-             data-placeholder="{% trans 'e.g. Timed with Slalom Timing' %}">{{ pdf_layout.footer_html|safe }}</div>
+             data-placeholder="{% trans 'e.g. Timed with Slalom Timing' %}">{{ pdf_layout.footer_html|pdf_footer }}</div>
       </div>
 
       <div class="pdf-wildcards">

@@ -36,10 +36,12 @@ timing.local {
 	# 	file_server
 	# }
 
-	# An event archive can be tens of megabytes; the default 10 MB body limit
-	# would reject the import upload.
+	# An event archive can be tens of megabytes, so the default 10 MB body limit
+	# would reject a legitimate import. Slightly above the app's own cap
+	# (archive.MAX_UPLOAD_BYTES, 64 MB) so an over-sized file gets Slalom Timing's
+	# explanation rather than a bare 413, while an absurd one never reaches Python.
 	request_body {
-		max_size 100MB
+		max_size 70MB
 	}
 
 	encode gzip

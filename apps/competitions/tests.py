@@ -1066,7 +1066,7 @@ def test_marshal_posts_page_serves_config(client):
     MarshalPost.objects.create(competition=competition, number=1, tasks="1-3",
                                handles_stop_line=True)
     response = client.get(reverse("competitions:marshal-posts"))
-    config = json.loads(response.context["config_json"])
+    config = response.context["config"]
     assert config["maxPylons"] == 5          # max_penalty_per_task // pylon_penalty
     assert config["posts"][0]["tasks"] == [1, 2, 3]
     assert config["posts"][0]["stop_line"] is True

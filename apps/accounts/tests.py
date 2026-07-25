@@ -1,10 +1,12 @@
 import pytest
 from django.contrib.auth.models import Group, User
+from django.core.cache import cache
 from django.test import Client, override_settings
 from django.urls import reverse
 
-from apps.accounts import pages
+from apps.accounts import pages, throttle
 from apps.accounts.models import RoleAccess
+from apps.timing.models import TimingSignal
 
 pytestmark = pytest.mark.django_db
 
@@ -87,6 +89,95 @@ def test_signal_endpoint_requires_matching_token_in_production():
     ok = c.post(url, data="{}", content_type="application/json",
                 HTTP_X_DEVICE_TOKEN="s3cr3t-token")
     assert ok.status_code != 401
+
+
+def test_signal_endpoint_requires_the_timing_page():
+    """SEC-2: the device door is outside the login gate, so it used to accept any
+    authenticated session — a registration desk could write times into the live
+    event. A login is not authorisation; the Timing page is."""
+    desk = Client()
+    desk.force_login(user_with_pages("desk-only", ["participants"]))
+    signal = {"running_number": 1, "port": 1, "time": "10:00:00.000"}
+    refused = desk.post(reverse("timing:signal"), data=signal, content_type="application/json")
+    assert refused.status_code == 403
+    assert not TimingSignal.objects.exists()
+
+    timekeeper = Client()
+    timekeeper.force_login(user_with_pages("tk", ["timing"]))
+    allowed = timekeeper.post(
+        reverse("timing:signal"), data=signal, content_type="application/json"
+    )
+    assert allowed.status_code == 200
+    assert TimingSignal.objects.count() == 1
+
+
+# ----- SEC-4: failed-login throttling -----
+
+@pytest.fixture
+def clean_throttle():
+    """The throttle counts in the local-memory cache, which outlives a test."""
+    cache.clear()
+    yield
+    cache.clear()
+
+
+def _attempt(client, username="tk", password="wrong-password"):
+    return client.post(reverse("accounts:login"),
+                       {"username": username, "password": password})
+
+
+@override_settings(LOGIN_MAX_ATTEMPTS=3, LOGIN_LOCKOUT_SECONDS=300)
+def test_login_locks_out_after_repeated_failures(clean_throttle):
+    User.objects.create_user(username="tk", password="the-real-password")
+    c = Client()
+    for _ in range(3):
+        assert _attempt(c).status_code == 200        # wrong password, form redisplayed
+
+    # Locked out now — and the *right* password is refused too, otherwise the limit
+    # could be walked around by guessing until you hit it.
+    locked = _attempt(c, password="the-real-password")
+    assert locked.status_code == 200
+    assert b"Too many failed attempts" in locked.content
+    assert not locked.wsgi_request.user.is_authenticated
+
+
+@override_settings(LOGIN_MAX_ATTEMPTS=3, LOGIN_LOCKOUT_SECONDS=300)
+def test_a_good_login_clears_the_count(clean_throttle):
+    User.objects.create_user(username="tk", password="the-real-password")
+    c = Client()
+    _attempt(c)
+    _attempt(c)
+    assert throttle.failures("tk", "127.0.0.1") == 2
+    assert _attempt(c, password="the-real-password").status_code == 302   # signed in
+    assert throttle.failures("tk", "127.0.0.1") == 0
+
+
+@override_settings(LOGIN_MAX_ATTEMPTS=2, LOGIN_LOCKOUT_SECONDS=300)
+def test_lockout_is_per_username_and_ip(clean_throttle):
+    """One fumbling operator must not lock an account for everyone else, and one
+    host must not be able to work through a user list from a single address."""
+    User.objects.create_user(username="tk", password="the-real-password")
+    User.objects.create_user(username="other", password="another-password")
+    c = Client()
+    _attempt(c)
+    _attempt(c)
+    assert throttle.locked_out("tk", "127.0.0.1")
+    # Same address, different account: untouched.
+    assert not throttle.locked_out("other", "127.0.0.1")
+    # Same account, a different device on the venue network: untouched.
+    assert not throttle.locked_out("tk", "192.168.1.77")
+    elsewhere = Client(REMOTE_ADDR="192.168.1.77")
+    assert _attempt(elsewhere, password="the-real-password").status_code == 302
+
+
+def test_forwarded_for_is_only_trusted_behind_a_proxy(rf):
+    """A client can put anything in X-Forwarded-For, so trusting it unconditionally
+    would make the throttle key attacker-chosen — i.e. no throttle at all."""
+    request = rf.post("/", REMOTE_ADDR="10.0.0.9", HTTP_X_FORWARDED_FOR="1.2.3.4")
+    assert throttle.client_ip(request) == "10.0.0.9"
+    with override_settings(SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https")):
+        # The proxy appends the peer it saw, so the *last* hop is the real one.
+        assert throttle.client_ip(request) == "1.2.3.4"
 
 
 def test_role_scoped_user_allowed_own_page_blocked_others():

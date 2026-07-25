@@ -15,6 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView, UpdateView
 
+from apps.accounts import pages
 from apps.competitions.models import Competition, CompetitionClass
 from apps.participants.models import EventEntry
 
@@ -212,6 +213,48 @@ def auto_reset_order(request):
 
 # ----- marshal posts <-> auto timing link -----
 
+# Who may write here. The access gate grants the marshal endpoints to *either* the
+# Timing page or the Marshal Posts page (the two surfaces share them), so it cannot
+# tell a timekeeper from a marshal — the views do, because the two are allowed very
+# different things: the timekeeper owns lock/unlock/task-edit and may reach any run,
+# a marshal may only enter the penalty for the post their device holds.
+#
+# How far back a marshal's phone may write: a tap the network swallowed waits in the
+# page's outbox and is retried (static/js/marshal_posts.js), so a post may
+# legitimately deliver a penalty for a competitor a few starters ago — but not for a
+# run that finished an hour back. The window is the last few *started* runs.
+MARSHAL_RUN_WINDOW = 10
+
+
+def _holds_timing(user):
+    """Whether this user acts as the timekeeper (holds the Timing page)."""
+    return user.is_authenticated and "timing" in pages.user_pages(user)
+
+
+def _timekeeper_required(request):
+    """A 403 response unless the caller holds the Timing page, else None."""
+    if _holds_timing(request.user):
+        return None
+    return JsonResponse(
+        {"ok": False, "error": "That is the timekeeper's action."}, status=403
+    )
+
+
+def _marshal_may_write(competition, post, run, token):
+    """Whether a marshal's device may enter *this* post's penalty for *this* run.
+
+    The claim is what makes a post one device's: marshal_claim hands it out and a
+    heartbeat keeps it alive. A write therefore has to present the same token —
+    without that check the whole claim machinery was decoration, and any phone on
+    the venue network could rewrite any post's penalties on any run of the event.
+    """
+    if not (post.claim_token and token):
+        return False
+    if not secrets.compare_digest(post.claim_token, token):
+        return False
+    return run.id in autotiming.recent_run_ids(competition, MARSHAL_RUN_WINDOW)
+
+
 def marshal_state(request):
     """The current competitor (and this post's stored penalty) for a marshal
     post's page. ``?post=N`` names the post."""
@@ -238,6 +281,14 @@ def marshal_submit(request):
     post = competition.marshal_posts.filter(number=payload.get("post")).first()
     if run is None or post is None:
         return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
+    # A marshal writes with the claim their device holds; the timekeeper may write
+    # any post (they enter a penalty a marshal phoned in).
+    if not _holds_timing(request.user) and not _marshal_may_write(
+        competition, post, run, str(payload.get("token") or "")
+    ):
+        return JsonResponse(
+            {"ok": False, "error": "This post isn’t held by this device."}, status=403
+        )
     existing = MarshalPenalty.objects.filter(timed_run=run, marshal_post=post).first()
     if existing is not None and existing.submitted:
         return JsonResponse({"ok": False, "locked": True}, status=409)
@@ -261,6 +312,9 @@ def marshal_submit(request):
 def marshal_unlock(request):
     """Timekeeper action: reopen a submitted marshal penalty so the marshal can
     edit and re-submit it. Identified by the run and post number."""
+    refused = _timekeeper_required(request)
+    if refused is not None:
+        return refused
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
@@ -281,6 +335,9 @@ def marshal_unlock(request):
 def marshal_lock_all(request):
     """Timekeeper action: lock (submit) every post for a run at once. A post that
     hasn't entered anything gets a zero row locked, so the whole run reads green."""
+    refused = _timekeeper_required(request)
+    if refused is not None:
+        return refused
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
@@ -305,6 +362,9 @@ def _resolve_run_and_post(competition, payload):
 @require_POST
 def marshal_lock(request):
     """Timekeeper locks (submits) a single post at its current values."""
+    refused = _timekeeper_required(request)
+    if refused is not None:
+        return refused
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
@@ -322,6 +382,9 @@ def marshal_lock(request):
 def marshal_task_edit(request):
     """Timekeeper edits one task's pylons (or the stop line) on a *locked* post,
     then the aggregate counts are recomputed from the per-task detail."""
+    refused = _timekeeper_required(request)
+    if refused is not None:
+        return refused
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
@@ -455,10 +518,13 @@ def timing_signal(request):
     This is the simulator's door. Only one source feeds the database at a time, so
     it is refused unless the simulator is the selected device — otherwise a stray
     simulator tab left open could inject times while the CP540 is live."""
-    # Authorisation: a logged-in operator (the browser Simulator carries its
-    # session) or a device presenting the shared token. See _signal_authorized.
+    # Authorisation: a logged-in operator who holds the Timing page (the browser
+    # Simulator carries its session) or a device presenting the shared token. See
+    # _signal_authorized. 403 rather than 401 for a signed-in caller without the
+    # Timing page, so the log distinguishes "who?" from "not you".
     if not _signal_authorized(request):
-        return JsonResponse({"ok": False, "error": "Unauthorized."}, status=401)
+        status = 403 if request.user.is_authenticated else 401
+        return JsonResponse({"ok": False, "error": "Unauthorized."}, status=status)
 
     if TimingSettings.load().device != TimingSettings.Device.SIMULATOR:
         return JsonResponse(
@@ -497,14 +563,18 @@ def _signal_authorized(request):
     """Who may POST a raw timing signal. The endpoint is CSRF-exempt and outside
     the login gate (a device can't log in), so it enforces its own rule here:
 
-    - a logged-in user (the Simulator page runs in the operator's session) — OK;
+    - a logged-in user *who holds the Timing page* (the Simulator page runs in
+      the operator's session) — OK. A login on its own is not enough: writing a
+      time into the live event is the Timing page's business, and every other
+      Timing URL is gated on it, so a registration-desk account that can't open
+      the timing views can't inject signals into them either;
     - otherwise, if TIMING_DEVICE_TOKEN is configured, a matching X-Device-Token
       (constant-time compared) — OK;
     - otherwise the door is open only while DEBUG is on (local dev). In a
       deployment (DEBUG off) an anonymous, tokenless post is refused, so the one
       unauthenticated write endpoint isn't world-writable."""
     if request.user.is_authenticated:
-        return True
+        return "timing" in pages.user_pages(request.user)
     token = getattr(settings, "TIMING_DEVICE_TOKEN", "")
     if token:
         provided = request.headers.get("X-Device-Token", "")

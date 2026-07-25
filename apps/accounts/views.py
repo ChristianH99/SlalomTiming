@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.contrib.auth import views as auth_views
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.models import Group, User
 from django.contrib.auth.password_validation import validate_password
@@ -9,8 +10,46 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from . import pages
+from . import pages, throttle
 from .models import RoleAccess
+
+
+class LoginView(auth_views.LoginView):
+    """The login form, with a failed-attempt limit per (username, IP).
+
+    Plain LoginView allows unlimited guessing, and on an open venue network that is
+    the whole attack. The counting and the logging live in throttle.py; this view is
+    only the three places it hooks in: refuse while locked out, count a failure, and
+    forget the count on success.
+    """
+
+    template_name = "accounts/login.html"
+
+    def post(self, request, *args, **kwargs):
+        username = request.POST.get("username", "")
+        if throttle.locked_out(username, throttle.client_ip(request)):
+            throttle.note_lockout(request, username)
+            # The same page the wrong-password path renders, with its own message —
+            # and no attempt made, so a locked-out guesser learns nothing about
+            # whether the password was right.
+            return self.render_to_response(
+                self.get_context_data(form=self.get_form(), locked_out=True)
+            )
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        throttle.note_success(self.request, form.get_user().get_username())
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        throttle.record_failure(self.request, self.request.POST.get("username", ""))
+        return super().form_invalid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("locked_out", False)
+        context["lockout_minutes"] = max(1, round(throttle.lockout_seconds() / 60))
+        return context
 
 
 class SuperuserRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):

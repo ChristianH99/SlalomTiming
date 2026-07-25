@@ -122,6 +122,89 @@ class TestSecretKey:
         assert result.returncode == 0, result.stderr
 
 
+class TestTls:
+    """REL-7: HTTPS is the default and turning it off is one explicit decision.
+
+    These run `manage.py diffsettings` in a subprocess because the hardening block
+    only exists with DEBUG off — it cannot be reached with override_settings.
+    """
+
+    KEY = 'a-real-key-for-this-test-0123456789abcdefghijklmnop'
+
+    def _settings(self, **env):
+        # --all, because a setting left at Django's own default (SECURE_SSL_REDIRECT
+        # is False out of the box) is otherwise not listed at all — and "absent" is
+        # exactly what these tests must not confuse with "off".
+        result = _run_manage(
+            'diffsettings', '--output', 'hash', '--all',
+            DJANGO_DEBUG='False', DJANGO_ALLOWED_HOSTS='localhost',
+            DJANGO_SECRET_KEY=self.KEY, **env,
+        )
+        assert result.returncode == 0, result.stderr
+        values = {}
+        for line in result.stdout.splitlines():
+            line = line.removeprefix('###').strip()
+            if ' = ' in line:
+                name, _, value = line.partition(' = ')
+                values[name.strip()] = value.strip()
+        return values, result.stderr
+
+    def test_a_deployment_is_https_by_default(self):
+        values, _stderr = self._settings()
+        assert values['SECURE_SSL_REDIRECT'] == 'True'
+        assert values['SESSION_COOKIE_SECURE'] == 'True'
+        assert values['CSRF_COOKIE_SECURE'] == 'True'
+
+    def test_plain_http_needs_the_one_explicit_flag_and_says_so(self):
+        values, stderr = self._settings(DJANGO_ALLOW_PLAIN_HTTP='True')
+        assert values['SECURE_SSL_REDIRECT'] == 'False'
+        assert values['SESSION_COOKIE_SECURE'] == 'False'
+        assert values['SECURE_HSTS_SECONDS'] == '0'  # HSTS is meaningless over HTTP
+        # Loud, because this is the setting that undoes the rest of the block.
+        assert 'without TLS' in stderr
+
+    def test_the_retired_escape_hatches_refuse_to_start(self):
+        """An old .env must not quietly keep serving plain HTTP under a name that no
+        longer describes what it does."""
+        for retired in ('DJANGO_SECURE_COOKIES', 'DJANGO_SECURE_SSL_REDIRECT'):
+            result = _run_manage(
+                'check', DJANGO_DEBUG='False', DJANGO_ALLOWED_HOSTS='localhost',
+                DJANGO_SECRET_KEY=self.KEY, **{retired: 'False'},
+            )
+            assert result.returncode != 0, retired
+            assert 'DJANGO_ALLOW_PLAIN_HTTP' in result.stderr
+
+    def test_hsts_is_short_by_default_and_raisable(self):
+        """An HSTS pin cannot be revoked before it expires, and a venue hostname
+        served from a local CA gets reused — so a year is a trap, not a default."""
+        values, _stderr = self._settings()
+        assert 0 < int(values['SECURE_HSTS_SECONDS']) <= 3600
+        assert values['SECURE_HSTS_PRELOAD'] == 'False'
+        raised, _stderr = self._settings(
+            DJANGO_HSTS_SECONDS='31536000', DJANGO_HSTS_PRELOAD='True')
+        assert raised['SECURE_HSTS_SECONDS'] == '31536000'
+        assert raised['SECURE_HSTS_PRELOAD'] == 'True'
+
+    def test_check_deploy_is_clean(self):
+        """`start-server.ps1` runs this on every start, so a real warning has to
+        stand out — which it can't if there are warnings we have decided to accept."""
+        result = _run_manage(
+            'check', '--deploy',
+            DJANGO_DEBUG='False', DJANGO_ALLOWED_HOSTS='localhost',
+            DJANGO_CSRF_TRUSTED_ORIGINS='https://localhost',
+            DJANGO_SECRET_KEY=self.KEY,
+        )
+        assert result.returncode == 0, result.stderr
+        assert 'System check identified no issues' in result.stdout + result.stderr
+
+
+class TestSessions:
+    def test_a_session_does_not_last_a_fortnight(self):
+        """Django's two-week default, on a shared timekeeping laptop and on
+        marshals' personal phones."""
+        assert settings.SESSION_COOKIE_AGE <= 24 * 3600
+
+
 class TestSingleInstance:
     """REL-5: one event, one process — enforced, not assumed."""
 

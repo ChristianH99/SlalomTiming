@@ -662,7 +662,9 @@ class MarshalPostsView(ActiveCompetitionMixin, View):
             "object": competition,
             "penalties_by_marshal_posts": competition.penalties_by_marshal_posts,
             "has_posts": bool(posts),
-            "config_json": json.dumps(config),
+            # Rendered by {{ config|json_script:"marshal-config" }} — the template
+            # does the escaping, so nothing here has to be trusted as markup.
+            "config": config,
         })
 
 

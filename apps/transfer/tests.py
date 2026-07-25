@@ -154,6 +154,96 @@ def test_a_newer_document_version_is_refused():
     assert "newer version" in str(error.value)
 
 
+# --- SEC-5: an archive is a hand-picked file, so its size is not a promise ----
+
+
+def _zip_of(name, content):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
+        bundle.writestr(name, content)
+    return buffer.getvalue()
+
+
+def test_an_over_sized_data_entry_is_refused_before_it_is_read(monkeypatch):
+    """A zip declares how far each entry expands, so 60 KiB on disk can be as much
+    memory as whoever wrote the file chose. The budget is checked first."""
+    monkeypatch.setattr(archive, "MAX_DATA_BYTES", 4096)
+    payload = _zip_of(archive.DATA_NAME, b"a" * 100_000)
+    assert len(payload) < 4096          # a small file...
+    with pytest.raises(TransferError) as error:
+        archive.read(payload)           # ...that would have expanded far past it
+    assert "too large" in str(error.value)
+
+
+def test_an_over_sized_media_entry_is_refused(monkeypatch):
+    monkeypatch.setattr(archive, "MAX_MEDIA_ENTRY_BYTES", 4096)
+    document, _media = archive.read(exporters.export(competition=make_event()))
+    payload = archive.write(document, media={"logo.png": b"\0" * 100_000})
+    with pytest.raises(TransferError):
+        archive.read(payload)
+
+
+def test_a_lying_zip_header_is_reported_not_raised_raw():
+    """file_size is the writer's claim, so it is not the only check — the data has
+    to match it. An entry edited to declare a small size fails its CRC, and that has
+    to reach the operator as a sentence rather than a 500."""
+    payload = _zip_of(archive.DATA_NAME, b"a" * 100_000)
+    # Rewrite every declared uncompressed size to something harmless.
+    payload = payload.replace((100_000).to_bytes(4, "little"), (10).to_bytes(4, "little"))
+    with pytest.raises(TransferError) as error:
+        archive.read(payload)
+    assert "damaged" in str(error.value)
+
+
+def test_an_over_sized_upload_is_refused_at_the_import_page(client, monkeypatch):
+    monkeypatch.setattr(archive, "MAX_UPLOAD_BYTES", 1024)
+    upload = SimpleUploadedFile(
+        "event.zip", exporters.export(competition=make_event()) + b"\0" * 2048,
+        content_type="application/zip",
+    )
+    response = client.post(reverse("transfer:import"), {"archive": upload}, follow=True)
+    assert "too large" in response.content.decode()
+    assert staging.SESSION_KEY not in client.session
+
+
+def test_an_over_sized_participant_csv_is_refused(client, monkeypatch):
+    from . import views as transfer_views
+
+    make_event()
+    monkeypatch.setattr(transfer_views, "MAX_CSV_BYTES", 16)
+    upload = SimpleUploadedFile("starters.csv", b"x" * 64, content_type="text/csv")
+    response = client.post(reverse("transfer:import"), {"csv": upload}, follow=True)
+    assert "too large" in response.content.decode()
+
+
+# --- SEC-1: markup arriving in a file ----------------------------------------
+
+
+def test_imported_pdf_header_is_sanitised(settings, tmp_path):
+    """The header/footer is the one field in the document that holds markup, and the
+    settings page renders it into an editor. An import used to store it verbatim, so
+    another club's file could run script in the importer's session."""
+    settings.MEDIA_ROOT = tmp_path
+    competition = make_event()
+    layout = ResultsPdfLayout.objects.create(competition=competition)
+    # Written past the editor, the way an export from a tampered-with system would be.
+    ResultsPdfLayout.objects.filter(pk=layout.pk).update(
+        header_html='<img src=x onerror="alert(document.cookie)"><b>Cup</b>',
+        footer_html='<script>alert(1)</script>Timed',
+    )
+    payload = exporters.export(competition=competition)
+    wipe()
+
+    _plan, result = import_archive(payload)
+
+    imported = ResultsPdfLayout.objects.get(competition=result.competition)
+    assert "onerror" not in imported.header_html
+    assert "<img" not in imported.header_html
+    assert imported.header_html == "<b>Cup</b>"
+    assert "<script>" not in imported.footer_html
+    assert imported.footer_html == "alert(1)Timed"
+
+
 # --- event round trip --------------------------------------------------------
 
 

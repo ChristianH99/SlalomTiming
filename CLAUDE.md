@@ -30,8 +30,34 @@ config/                  Django project (settings, urls, asgi/wsgi). singleinsta
                          event loop are all per-process — a second worker splits the live updates
                          silently). Refused in a deployment, warned about while DEBUG is on.
                          tests.py holds the deployment tests (the DEBUG=False-only failures).
+                         settings.py: HTTPS is the default once DEBUG is off and there is exactly
+                         ONE way off it — DJANGO_ALLOW_PLAIN_HTTP (the older per-setting hatches
+                         DJANGO_SECURE_SSL_REDIRECT/DJANGO_SECURE_COOKIES now *refuse to start*,
+                         so an old .env can't quietly serve a venue on plain HTTP), and setting it
+                         prints a warning on every command. HSTS defaults short (300 s, no
+                         preload): a pin can't be revoked before it expires and a venue hostname
+                         served from a local CA gets reused, so a year is a trap — raise it with a
+                         real public domain. Also SESSION_COOKIE_AGE (12 h, an event day, not
+                         Django's fortnight) and the login-throttle limits.
 deploy/                  Serving the app for real: systemd unit, Windows start-server.ps1 and a
                          Caddyfile — all pinned to exactly one Daphne process. Run-book: DEPLOYMENT.md
+                         (§3.4 is the TLS decision: Caddy's local CA, Tailscale, or plain HTTP said
+                         out loud).
+apps/accounts/           Access control. Login required everywhere and page-level roles:
+                         pages.py is the registry (page key -> the (app, url_name) patterns it
+                         covers; PAGES is also the sidebar order), a role is a Django Group with a
+                         RoleAccess row listing its keys, and a user's access is the union of their
+                         roles (superusers get everything). middleware.py gates on
+                         resolver_match in process_view; pages.OPEN is the one ungated URL
+                         (timing:signal — a device can't log in, so that view authorises itself:
+                         see _signal_authorized, which requires the *timing* page for a
+                         session-authenticated post). A URL may belong to two pages (the marshal
+                         endpoints serve both Timing and Marshal Posts), which is why those views
+                         re-check who is calling rather than trusting the gate.
+                         throttle.py: failed logins counted per (username, IP) in the cache and
+                         locked out past a limit, every attempt logged; views.LoginView is the
+                         three hooks that use it. Counters clear on restart — acceptable because
+                         the app is one process by design.
 apps/common.py           Helpers shared across apps: safe_next() resolves the POSTed ?next to
                          an in-app URL (rejecting off-site ones), so the unsaved-changes
                          modal's "Save changes" lands where the user was navigating.
@@ -256,7 +282,15 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          (timekeeper reopens or force-locks one or all posts) + marshal-task-edit
                          (timekeeper edits a locked post's per-task pylons/stop-line) tie the
                          Marshal Posts page to Auto timing. marshal-claim/release/claims enforce
-                         one device per post. All share broadcast_live()/timing_live
+                         one device per post — and that claim is *authorisation*, not decoration:
+                         the access gate can't tell a timekeeper from a marshal (both pages grant
+                         the same URLs), so the views draw the line. marshal-submit from a
+                         non-timekeeper must present the post's claim_token (constant-time
+                         compared) and name a run inside MARSHAL_RUN_WINDOW — the last few started
+                         runs, so a tap the network swallowed still lands from the page's outbox
+                         while a run from an hour ago can't be rewritten. unlock / lock /
+                         lock-all / task-edit are timekeeper-only (403 otherwise). All share
+                         broadcast_live()/timing_live
                          so a device post, a marshal tap or an unlock nudges every open Auto timing
                          and Marshal Posts page to re-fetch.
   connectors/            (legacy) TimingDeviceConnector ABC + SimulatorConnector for the old
@@ -340,7 +374,15 @@ apps/results/           A "Results" landing page (index) listing every running c
                          show_overall toggle, General columns, and per-class additions.
                          ResultsTieResolveView (JSON endpoint results:tie-resolve): recomputes the
                          table, validates a posted manual ordering, saves the ManualTieResolution.
-                         All reuse competitions.ActiveCompetitionMixin.
+                         All reuse competitions.ActiveCompetitionMixin. The two PDF logos are
+                         assigned straight from request.FILES (there is no ModelForm here), so
+                         _clean_logo() is what checks them at all: MAX_LOGO_BYTES, then Pillow's own
+                         verification via forms.ImageField. A refused logo is a message and the rest
+                         of the settings still save.
+  templatetags/
+    pdf_markup.py        pdf_header / pdf_footer: re-sanitise the stored PDF header/footer as the
+                         settings page loads it back into its contenteditable. Replaces a bare
+                         |safe on a column an *import* can also write — never put that back.
 templates/results/       index.html (class + Overall cards), results_class.html, results_overall.html
                          (both include _results_table.html, which renders the ranked + unranked
                          tables from _results_head.html and _results_midcells.html — the fixed
@@ -384,10 +426,19 @@ apps/transfer/          Moving data between Slalom Timing systems: an Export pag
                          TimingSignal.received_at *is* carried — arrangement.py orders runs by
                          arrival, so dropping it would reshuffle an imported event.
   archive.py             The .zip read/write, and the one place a hand-picked file meets the app:
-                         every way it can be wrong (not a zip, not ours, newer version) comes back
-                         as a TransferError sentence. Its JSON encoder subclasses DjangoJSONEncoder
+                         every way it can be wrong (not a zip, not ours, newer version, damaged,
+                         too big) comes back as a TransferError sentence. Its JSON encoder
+                         subclasses DjangoJSONEncoder
                          to *undo* that class's ECMA-262 truncation of times to milliseconds —
                          this is a timing system, so device_time/received_at must round-trip exact.
+                         Every entry is read through _read_entry against a budget
+                         (MAX_DATA_BYTES / MAX_MEDIA_ENTRY_BYTES / MAX_MEDIA_TOTAL_BYTES): a zip
+                         declares how far it expands, so reading one without looking lets a 60 KiB
+                         file take as much memory as whoever wrote it chose. Checked against
+                         ZipInfo.file_size *and* against what actually comes out, since the header
+                         is only a claim (a mismatch fails the CRC — caught, not raised raw).
+                         MAX_UPLOAD_BYTES caps the file itself at the view; deploy/Caddyfile's
+                         request_body sits just above it so the app's message wins over a bare 413.
   merge.py               Deciding what an imported participant means here (the novel part).
                          Each incoming row is matched against the participants already registered
                          under the same type on two rules — same name + date of birth, or same
@@ -404,6 +455,13 @@ apps/transfer/          Moving data between Slalom Timing systems: an Export pag
                          ManualTieResolution's scope/members — since a stale pk there silently
                          misorders an imported event instead of failing. A type that already exists
                          by name can be reused / overwritten from the file / registered separately.
+                         The results-PDF header/footer is the one field a document carries as
+                         *markup*, and the settings page renders it into an editor — so
+                         _import_results runs it through pdfmarkup.sanitize_header/footer, the same
+                         door the editor's own save path uses. (The template sanitises again on the
+                         way out; see apps/results/templatetags/pdf_markup.py. Sanitising in one
+                         place only is what made an imported file able to run script in the
+                         importer's session.)
                          Two incoming competitors merged onto one participant would break
                          one-entry-per-competition, so the second keeps the first's entry and the
                          operator is warned.
@@ -586,6 +644,28 @@ troubleshooting) is in **DEPLOYMENT.md**, with the artefacts in `deploy/`. What 
 - **The secret key** must come from `DJANGO_SECRET_KEY` — settings raises `ImproperlyConfigured`
   when `DEBUG` is off and the checked-in development key would be used.
 - Environment variables are documented in `.env.example`; nothing loads it automatically.
+
+## Security
+
+Two rules to keep in mind when adding anything to this app:
+
+- **A login is not authorisation.** `AccessControlMiddleware` gates URLs by page key, so any view
+  reachable from two pages (the marshal endpoints), or from outside the gate at all
+  (`pages.OPEN`, i.e. `timing:signal`), has to decide for itself who is calling — see
+  `_signal_authorized` and `_timekeeper_required` / `_marshal_may_write` in `apps/timing/views.py`.
+  A new open or shared endpoint needs the same treatment, and a test that a *scoped* role is
+  refused (the shared `client` fixture is a superuser, so it proves nothing here).
+- **Every value that arrives in a file is hostile until checked**, and it gets checked on the way
+  in *and* on the way out. The stored-XSS hole came from sanitising the PDF header only in the
+  editor's save path while an import wrote the same column raw. Uploads are size-capped at the
+  view and, for a zip, per entry against the declared *and* actual expanded size
+  (`apps/transfer/archive.py`). Numbers keyed in by an operator are bounded in
+  `apps/timing/views.py` because SQLite stores out-of-range values rather than refusing them.
+
+Failed logins are throttled and logged (`apps/accounts/throttle.py`). Still open from the audit
+and deliberately not done yet: no CSP (`SEC-11`), no audit trail of who changed a result
+(`SEC-9`), the duplicate-check endpoint isn't scoped to the competition type (`SEC-7`), and the
+WebSocket consumers check login but not role (`SEC-12`).
 
 ## Notes
 

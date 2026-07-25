@@ -48,7 +48,10 @@ the secret key.
 | `DJANGO_STATIC_ROOT` | no | Where `collectstatic` writes. Default `staticfiles/` in the project. |
 | `DJANGO_MEDIA_ROOT` | no | Uploaded results-PDF logos. Default `media/`. |
 | `DJANGO_SERVE_MEDIA` | no | `False` when the reverse proxy serves `MEDIA_ROOT` itself. |
-| `DJANGO_SECURE_SSL_REDIRECT`, `DJANGO_SECURE_COOKIES` | no | Escape hatches for running on plain HTTP. See the TLS section — the honest answer is to set up TLS instead. |
+| `DJANGO_ALLOW_PLAIN_HTTP` | no | The only way to run without TLS, and a decision — see section 3.4. The old `DJANGO_SECURE_SSL_REDIRECT` / `DJANGO_SECURE_COOKIES` overrides now refuse to start. |
+| `DJANGO_HSTS_SECONDS`, `DJANGO_HSTS_PRELOAD` | no | Defaults 300 s / off. Only raise them with a stable public domain (section 3.4). |
+| `DJANGO_SESSION_HOURS` | no | How long a login lasts. Default 12 — one event day. |
+| `DJANGO_LOGIN_MAX_ATTEMPTS`, `DJANGO_LOGIN_LOCKOUT_SECONDS` | no | Failed logins per username+IP before a lockout, and its length. Defaults 10 / 300 s. |
 | `DJANGO_ALLOW_MULTIPLE_SERVERS` | no | Disables the single-process lock. Only correct if you have swapped `CHANNEL_LAYERS` for `channels_redis`. |
 
 ## 3. Serve
@@ -83,10 +86,17 @@ Do **not** add `--workers`, do not run it under a process manager that spawns
 several copies, and do not use `runserver`: it is a development server, and Django
 says plainly that it is not for production use.
 
-### The reverse proxy
+### 3.4 TLS — pick one of these before the first event
 
-`deploy/Caddyfile` puts Caddy in front of Daphne, terminating TLS with its own local
-CA (no internet, no public domain needed) and passing WebSockets through untouched:
+The app defaults to HTTPS and **there is one switch that turns that off**
+(`DJANGO_ALLOW_PLAIN_HTTP`). It exists so the decision is visible, not so it is easy:
+on plain HTTP every password and every session cookie on the venue Wi-Fi is readable
+by anything else on that network — a marshal's phone, a spectator's laptop, whatever
+joined the guest SSID. Stealing a timekeeper's session is enough to change results.
+
+**Option A — Caddy with its own local CA (the default answer).**
+`deploy/Caddyfile` puts Caddy in front of Daphne, terminating TLS and passing
+WebSockets through untouched. No internet and no public domain needed:
 
 ```bash
 caddy run --config deploy/Caddyfile
@@ -94,14 +104,25 @@ caddy run --config deploy/Caddyfile
 
 Point `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS` at the hostname you
 serve, and install Caddy's root certificate on every device that opens the app
-(`caddy trust` on the server; phones import it manually) — otherwise every browser
-shows a warning.
+(`caddy trust` on the server prints where it lives; phones import it manually) —
+otherwise every browser shows a warning. Do this once, in the workshop, not in the
+paddock: it is the one step that needs every device in your hands.
 
-Serving the app on plain HTTP means every password and session cookie on the venue
-Wi-Fi is readable by anyone else on it, including devices you don't control.
-`DJANGO_SECURE_COOKIES=False` exists to make that possible, not to make it safe;
-[Tailscale](https://tailscale.com/) is the other reasonable answer if the operators'
-devices can all join one tailnet.
+**Option B — [Tailscale](https://tailscale.com/).** If every operator device can join
+one tailnet, `tailscale cert` + serving on the tailnet address gives you real
+certificates and takes the venue Wi-Fi out of the picture entirely. Needs internet
+once, to enrol the devices.
+
+**Option C — plain HTTP.** Only for a single laptop with nothing else on the network
+(and then you may as well bind to `127.0.0.1`). Set `DJANGO_ALLOW_PLAIN_HTTP=True`;
+every management command and the server log will say what you have done.
+
+On HSTS: the defaults are deliberately short (300 s, no preload). HSTS pins a hostname
+to HTTPS in every browser that saw the header and **cannot be revoked before it
+expires** — with a reused venue hostname and a local CA, a one-year pin means a laptop
+that once opened `timing.local` here refuses plain HTTP at the next venue for the rest
+of the year. Raise `DJANGO_HSTS_SECONDS` (and add `DJANGO_HSTS_PRELOAD=True`) once you
+have a stable public domain.
 
 ## 4. Release a new version
 
@@ -162,6 +183,9 @@ Then start Caddy if it isn't already running as a service.
 | `Slalom Timing is already running against this directory` | A server process is still up (section 1, rule 1) | Stop it — check Task Manager / `systemctl status slalomtiming`. The lock is `run/server.lock`. |
 | Results-PDF logo previews 404 | `DJANGO_SERVE_MEDIA=False` without the proxy serving `/media/` | Unset it, or add the `handle_path /media/*` block in the Caddyfile |
 | `ImproperlyConfigured: DJANGO_SECRET_KEY is not set` | `.env` missing or not loaded into the process | Section 2; systemd needs `EnvironmentFile=`, PowerShell uses `start-server.ps1` |
+| `ImproperlyConfigured: DJANGO_SECURE_COOKIES=False is no longer honoured` | An old `.env` from before the TLS decision | Section 3.4 — set up TLS, or set `DJANGO_ALLOW_PLAIN_HTTP=True` deliberately |
+| Login says "Too many failed attempts" | The failed-attempt lockout (username + IP) | Wait it out, restart the server, or raise `DJANGO_LOGIN_MAX_ATTEMPTS` |
+| A browser insists on HTTPS after you moved to plain HTTP | An HSTS pin from an earlier HTTPS run | Nothing server-side can revoke it; clear the site's HSTS entry in the browser and see section 3.4 |
 | `DisallowedHost` in the log | The hostname isn't in `DJANGO_ALLOWED_HOSTS` | Add it (including the bare IP if people type that), restart |
 | Browser refuses to submit a form, CSRF error | Origin missing from `DJANGO_CSRF_TRUSTED_ORIGINS` | Add `https://<host>`, restart |
 | Live views stop updating for *some* browsers | Two server processes | See rule 1 — one process only |

@@ -16,6 +16,20 @@ from django.utils.translation import gettext as _
 
 from .schema import DATA_NAME, FORMAT, MEDIA_DIR, VERSION, TransferError
 
+# --- what an archive is allowed to weigh ------------------------------------
+# A zip says how big each entry expands to, and reading one without looking first
+# means a hand-picked 60 KiB file can decompress to as much memory as whoever wrote
+# it chose. Nothing legitimate here is large: the document is text (a whole event
+# with every recorded time is a few MiB) and media is two logos. So both are
+# budgeted, and an entry that overruns comes back as a sentence like every other
+# bad file. Checked against ZipInfo.file_size — the *declared* expanded size —
+# before any entry is read, and again against what actually came out, because the
+# header is only a claim.
+MAX_UPLOAD_BYTES = 64 * 1024 * 1024      # the .zip itself, on disk
+MAX_DATA_BYTES = 128 * 1024 * 1024       # data.json expanded
+MAX_MEDIA_ENTRY_BYTES = 16 * 1024 * 1024  # one logo expanded
+MAX_MEDIA_TOTAL_BYTES = 64 * 1024 * 1024  # all media expanded
+
 
 class _Encoder(DjangoJSONEncoder):
     """DjangoJSONEncoder, minus its ECMA-262 truncation of times.
@@ -60,12 +74,13 @@ def read(raw):
 
     with bundle:
         try:
-            payload = bundle.read(DATA_NAME)
+            info = bundle.getinfo(DATA_NAME)
         except KeyError:
             raise TransferError(
                 _("The archive has no %(name)s — it is not a Slalom Timing export.")
                 % {"name": DATA_NAME}
             )
+        payload = _read_entry(bundle, info, MAX_DATA_BYTES)
         try:
             document = json.loads(payload)
         except (ValueError, UnicodeDecodeError):
@@ -86,10 +101,40 @@ def read(raw):
             )
 
         prefix = f"{MEDIA_DIR}/"
-        media = {
-            name[len(prefix):]: bundle.read(name)
-            for name in bundle.namelist()
-            if name.startswith(prefix) and not name.endswith("/")
-        }
+        media = {}
+        budget = MAX_MEDIA_TOTAL_BYTES
+        for info in bundle.infolist():
+            if not info.filename.startswith(prefix) or info.filename.endswith("/"):
+                continue
+            content = _read_entry(bundle, info, min(MAX_MEDIA_ENTRY_BYTES, budget))
+            budget -= len(content)
+            media[info.filename[len(prefix):]] = content
 
     return document, media
+
+
+def _read_entry(bundle, info, limit):
+    """One zip entry's bytes, refusing anything over *limit*.
+
+    Both the declared size and the real one are checked: the header is what the
+    writer claims, so a truthful-looking small number is not a promise. A header
+    that doesn't match its data (a damaged file, or one edited to get past the
+    budget) fails the CRC inside zipfile — caught here, because every way a
+    hand-picked file can be wrong has to come back as a sentence."""
+    if info.file_size > limit:
+        raise _too_big()
+    try:
+        with bundle.open(info) as entry:
+            content = entry.read(limit + 1)
+    except (zipfile.BadZipFile, OSError, EOFError):
+        raise TransferError(_("The export file is damaged and could not be read."))
+    if len(content) > limit:
+        raise _too_big()
+    return content
+
+
+def _too_big():
+    return TransferError(
+        _("That export file is too large to read (it expands to more than this "
+          "system will accept). It is either damaged or not a Slalom Timing export.")
+    )

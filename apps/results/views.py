@@ -1,6 +1,8 @@
 import json
 
+from django import forms
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -20,6 +22,12 @@ from .models import (
 
 # Name-block lines rendered in bold (the competitor's and co-driver's names).
 BOLD_KEYS = {"driver_name", "co_driver"}
+
+# A PDF logo is a club emblem printed at ~18 mm high. The two logo fields are
+# assigned straight from request.FILES (there is no ModelForm here), so nothing else
+# checks them: without this an upload of any size is written into MEDIA_ROOT, and
+# anything at all is written as an "image" for ReportLab to choke on at export time.
+MAX_LOGO_BYTES = 4 * 1024 * 1024
 
 # Starters counted as "not classified" in the results summary: those who did not
 # start or were disqualified. (DNF is neither classified nor counted here yet — a
@@ -415,12 +423,32 @@ class ResultsExportSampleView(ActiveCompetitionMixin, View):
         layout.header_html = pdfmarkup.sanitize_header(request.POST.get("header_html", ""))
         layout.footer_html = pdfmarkup.sanitize_footer(request.POST.get("footer_html", ""))
         layout.increment_start_year = _parse_year(request.POST.get("increment_start_year"))
-        if request.FILES.get("image_left"):
-            layout.image_left = request.FILES["image_left"]
-        if request.FILES.get("image_right"):
-            layout.image_right = request.FILES["image_right"]
+        # A refused logo just doesn't appear in the preview — this response is a
+        # PDF, so there is nowhere to put a message.
+        for field in ("image_left", "image_right"):
+            logo, _problem = _clean_logo(request.FILES.get(field))
+            if logo is not None:
+                setattr(layout, field, logo)
         section = sample_section(competition, layout)
         return _pdf_response(competition, layout, [section], "results-sample.pdf")
+
+
+def _clean_logo(upload):
+    """A picked logo, or ``(None, message)`` saying why it was refused.
+
+    Size first, then Pillow's own verification via ``forms.ImageField`` — the same
+    check a ModelForm would have run, which this page bypasses by assigning
+    ``request.FILES`` onto the model directly."""
+    if upload is None:
+        return None, None
+    if upload.size > MAX_LOGO_BYTES:
+        return None, _(
+            "The logo “%(name)s” is too large (limit %(limit)s MB)."
+        ) % {"name": upload.name, "limit": MAX_LOGO_BYTES // (1024 * 1024)}
+    try:
+        return forms.ImageField().clean(upload), None
+    except ValidationError:
+        return None, _("“%(name)s” is not an image file.") % {"name": upload.name}
 
 
 def _parse_year(value):
@@ -660,8 +688,12 @@ class ResultsSettingsView(ActiveCompetitionMixin, View):
         for field, height_field in (
             ("image_left", "image_left_height"), ("image_right", "image_right_height")
         ):
-            if request.FILES.get(field):
-                setattr(layout, field, request.FILES[field])
+            logo, problem = _clean_logo(request.FILES.get(field))
+            if problem:
+                # The rest of the settings still save; only the bad logo is dropped.
+                messages.error(request, problem)
+            elif logo is not None:
+                setattr(layout, field, logo)
             setattr(layout, height_field,
                     _parse_height(request.POST.get(height_field), getattr(layout, height_field)))
         layout.save()

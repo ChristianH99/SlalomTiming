@@ -2,14 +2,15 @@ import datetime
 from decimal import Decimal
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType
 from apps.participants.models import ClassAssignment, EventEntry, Participant
 from apps.timing.models import TimedRun, TimingSignal
 
-from . import resultscalc
-from .models import ResultColumnSettings
+from . import resultscalc, views
+from .models import ResultColumnSettings, ResultsPdfLayout
 
 pytestmark = pytest.mark.django_db
 
@@ -308,6 +309,61 @@ def test_results_settings_page_saves(client):
     assert ResultColumnSettings.general_columns(competition) == ["club"]
     assert ResultColumnSettings.overall_enabled(competition) is True
     assert ResultColumnSettings.class_additions(competition, cclass) == ["city"]
+
+
+# ----- SEC-1 / SEC-5: the PDF layout's own inputs -----
+
+# A 1x1 GIF: small, and a real image, so ImageField and Pillow both accept it.
+PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04"
+         b"\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
+
+
+def test_settings_page_renders_stored_markup_sanitised(client):
+    """SEC-1's other half. The editor sanitises on save, but a row can also be
+    written by an *import*, so the page sanitises again on the way out instead of
+    trusting the column with a bare |safe."""
+    _, competition, _ = make_setup()
+    ResultsPdfLayout.objects.create(competition=competition)
+    ResultsPdfLayout.objects.filter(competition=competition).update(
+        header_html='<img src=x onerror="alert(document.cookie)"><b>Cup</b>',
+        footer_html="<script>alert(1)</script>",
+    )
+    body = client.get(reverse("results:settings")).content.decode()
+    assert "onerror" not in body
+    assert "<script>alert(1)</script>" not in body
+    assert "<b>Cup</b>" in body     # the markup the editor does allow still renders
+
+
+def test_an_over_sized_logo_is_refused(client, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    _, competition, _ = make_setup()
+    big = SimpleUploadedFile("logo.gif", PIXEL + b"\0" * views.MAX_LOGO_BYTES,
+                             content_type="image/gif")
+    response = client.post(reverse("results:settings"),
+                           {"general-club": "on", "image_left": big}, follow=True)
+    assert "too large" in response.content.decode()
+    assert not ResultsPdfLayout.objects.get(competition=competition).image_left
+
+
+def test_a_logo_that_is_not_an_image_is_refused(client, settings, tmp_path):
+    """These fields are assigned straight from request.FILES (no ModelForm), so
+    without an explicit check anything at all was written into MEDIA_ROOT."""
+    settings.MEDIA_ROOT = tmp_path
+    _, competition, _ = make_setup()
+    bogus = SimpleUploadedFile("logo.png", b"<html>not an image</html>",
+                               content_type="image/png")
+    response = client.post(reverse("results:settings"),
+                           {"general-club": "on", "image_left": bogus}, follow=True)
+    assert "not an image" in response.content.decode()
+    assert not ResultsPdfLayout.objects.get(competition=competition).image_left
+
+
+def test_a_real_logo_still_saves(client, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    _, competition, _ = make_setup()
+    good = SimpleUploadedFile("logo.gif", PIXEL, content_type="image/gif")
+    client.post(reverse("results:settings"), {"general-club": "on", "image_left": good})
+    assert ResultsPdfLayout.objects.get(competition=competition).image_left
 
 
 def test_overall_page_ranks_across_classes(client):

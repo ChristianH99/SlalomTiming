@@ -30,6 +30,14 @@ def _env_list(name):
     return [item.strip() for item in os.environ.get(name, '').split(',') if item.strip()]
 
 
+def _env_int(name, default):
+    """Read an integer from the environment, falling back on anything unreadable."""
+    try:
+        return int(os.environ[name])
+    except (KeyError, ValueError):
+        return default
+
+
 # --- Core security settings (see config/.env.example for deployment) ---
 # In production every one of these MUST come from the environment. The literal
 # fallbacks below only exist so a fresh local checkout runs with no setup — they
@@ -130,23 +138,97 @@ TIMING_DEVICE_TOKEN = os.environ.get('TIMING_DEVICE_TOKEN', '')
 # --- Production hardening ---
 # All data pages already require a login (apps.accounts.AccessControlMiddleware),
 # so nothing is world-readable. These transport-level protections switch on once
-# DEBUG is off (a real deployment); serve the site behind HTTPS. Each HTTPS-only
-# toggle can be overridden by env if you must run a deployment on plain HTTP
-# (e.g. a trusted LAN) — but the secure default is HTTPS.
+# DEBUG is off (a real deployment).
+#
+# HTTPS is not optional here, it is the default, and there is exactly ONE way to
+# turn it off: DJANGO_ALLOW_PLAIN_HTTP. A race-day Wi-Fi with marshals' phones on
+# it is not a trusted network — on plain HTTP every password and every timekeeper's
+# session cookie is readable by anything else on that network. deploy/Caddyfile
+# terminates TLS with a local CA (no internet, no public domain needed); Tailscale
+# is the other supported answer. See DEPLOYMENT.md.
+#
+# It is one flag rather than a per-setting override on purpose: nobody should end up
+# on plain HTTP by turning off "secure cookies" and not realising what else that
+# implies. The two older names are refused below rather than ignored.
+ALLOW_PLAIN_HTTP = _env_bool('DJANGO_ALLOW_PLAIN_HTTP', default=False)
+
 if not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+
+    for _retired in ('DJANGO_SECURE_SSL_REDIRECT', 'DJANGO_SECURE_COOKIES'):
+        if os.environ.get(_retired) and not _env_bool(_retired, default=True):
+            raise ImproperlyConfigured(
+                f'{_retired}=False is no longer honoured on its own. Running this app '
+                'on plain HTTP is a single, explicit decision: set '
+                'DJANGO_ALLOW_PLAIN_HTTP=True (and read the TLS section of '
+                'DEPLOYMENT.md first — it is almost never the right answer).'
+            )
+
     # Trust the X-Forwarded-Proto header from a TLS-terminating reverse proxy.
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = _env_bool('DJANGO_SECURE_SSL_REDIRECT', default=True)
-    SESSION_COOKIE_SECURE = _env_bool('DJANGO_SECURE_COOKIES', default=True)
-    CSRF_COOKIE_SECURE = _env_bool('DJANGO_SECURE_COOKIES', default=True)
-    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_HSTS_SECONDS', '31536000'))
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
+    SECURE_SSL_REDIRECT = not ALLOW_PLAIN_HTTP
+    SESSION_COOKIE_SECURE = not ALLOW_PLAIN_HTTP
+    CSRF_COOKIE_SECURE = not ALLOW_PLAIN_HTTP
+    # HSTS pins the hostname to HTTPS in every browser that saw the header, and it
+    # cannot be taken back before it expires. On a venue hostname served with a local
+    # CA that makes a long default a trap rather than a protection (the machine's name
+    # gets reused; a laptop that once opened `timing.local` here would refuse plain
+    # HTTP at the next venue for the rest of the year). So: short by default, long
+    # only once you have a stable public domain and mean it.
+    SECURE_HSTS_SECONDS = 0 if ALLOW_PLAIN_HTTP else _env_int('DJANGO_HSTS_SECONDS', 300)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
+    # Preloading is for public domains submitted to the browsers' list; on a LAN name
+    # it does nothing but make the pin permanent. Opt in with a real domain.
+    SECURE_HSTS_PRELOAD = _env_bool('DJANGO_HSTS_PRELOAD', default=False)
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_REFERRER_POLICY = 'same-origin'
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = False  # the JS timing views read the CSRF cookie
     X_FRAME_OPTIONS = 'DENY'
+
+    if not SECURE_HSTS_PRELOAD:
+        # security.W021 asks for SECURE_HSTS_PRELOAD; see above for why this
+        # deployment shape says no. Silenced so `check --deploy` stays clean and a
+        # real warning stands out on race morning.
+        SILENCED_SYSTEM_CHECKS = ['security.W021']
+
+    if ALLOW_PLAIN_HTTP:
+        # Said out loud on every management command and in the server log, because
+        # this is the one setting that quietly undoes the rest of this block.
+        import sys
+
+        print(
+            'WARNING: DJANGO_ALLOW_PLAIN_HTTP is set — this server is running '
+            'without TLS. Passwords and session cookies are readable by anything '
+            'else on the network. See the TLS section of DEPLOYMENT.md.',
+            file=sys.stderr,
+        )
+
+# --- Sessions ---
+# Django's default is two weeks, which is a long time to leave a signed-in session on
+# a shared timekeeping laptop or a marshal's personal phone. An event day is the unit
+# that matters. Not refreshed per request on purpose (SESSION_SAVE_EVERY_REQUEST
+# stays off): that would add a database write to every poll of the live views, and
+# this system's scarce resource is the SQLite write lock the timing device needs.
+SESSION_COOKIE_AGE = _env_int('DJANGO_SESSION_HOURS', 12) * 3600
+
+# --- Login throttling (apps/accounts/throttle.py) ---
+# Attempts per (username, IP) before that pair is refused, and for how long. The
+# counters live in the cache below; both are env-settable so a locked-out timekeeper
+# can be let back in mid-event without touching code.
+LOGIN_MAX_ATTEMPTS = _env_int('DJANGO_LOGIN_MAX_ATTEMPTS', 10)
+LOGIN_LOCKOUT_SECONDS = _env_int('DJANGO_LOGIN_LOCKOUT_SECONDS', 300)
+
+# Local-memory cache, stated explicitly rather than left to the default: the login
+# throttle keeps its counters here, and this app already runs as exactly one process
+# (config/singleinstance.py), so per-process is per-system. A restart forgets the
+# counters — acceptable, and the alternative is a database table per attempt.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'slalomtiming',
+    }
+}
 
 ROOT_URLCONF = 'config.urls'
 

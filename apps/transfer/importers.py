@@ -23,6 +23,7 @@ from django.utils.translation import gettext as _
 
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
 from apps.participants.models import ClassAssignment, EventEntry
+from apps.results import pdfmarkup
 from apps.results.models import ManualTieResolution, ResultColumnSettings, ResultsPdfLayout
 from apps.timing.autotiming import slot_key
 from apps.timing.models import MarshalPenalty, TimedRun, TimingSignal
@@ -350,10 +351,17 @@ def _import_results(document, competition, classes, entries, media):
 
     layout_row = results.get("pdf_layout")
     if layout_row:
-        layout = ResultsPdfLayout(
-            competition=competition,
-            **load(ResultsPdfLayout, layout_row, schema.PDF_LAYOUT_FIELDS),
-        )
+        values = load(ResultsPdfLayout, layout_row, schema.PDF_LAYOUT_FIELDS)
+        # The PDF header/footer is the one field in the document that holds *markup*,
+        # and it comes from another club's machine. The settings page renders it back
+        # into its editor as HTML, so an unsanitised import is script running in the
+        # importer's session — which for a superuser is the whole system. The editor
+        # sanitises what an operator types; an import has to go through the same door
+        # (and the template sanitises again on the way out — see
+        # apps/results/templatetags/pdf_markup.py).
+        values["header_html"] = pdfmarkup.sanitize_header(values.get("header_html", ""))
+        values["footer_html"] = pdfmarkup.sanitize_footer(values.get("footer_html", ""))
+        layout = ResultsPdfLayout(competition=competition, **values)
         layout.save()
         for side in ("left", "right"):
             name = layout_row.get(f"image_{side}")
