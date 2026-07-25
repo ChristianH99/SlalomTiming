@@ -526,22 +526,18 @@
     }
   }
 
-  function connect() {
-    if (!URLS) return;
-    const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${scheme}://${window.location.host}/ws/timing/live/`);
-    ws.addEventListener("message", (event) => {
-      let msg = {};
-      try {
-        msg = JSON.parse(event.data);
-      } catch (e) {
-        return;
-      }
-      if (msg.event === "refresh") fetchState();
+  // Socket lifecycle, connection banner and the re-fetch after an outage: see
+  // live_socket.js, shared with the timing views. It matters most here — this is
+  // the page on a phone at the far end of the course, and a marshal judging a
+  // competitor the board never updated away from is judging the wrong person.
+  if (URLS) {
+    window.liveSocket({
+      onRefresh: fetchState,
+      // Back on the network: push whatever is still owed before pulling state,
+      // so the board isn't rebuilt from a server copy that predates our taps.
+      onState: (state) => { if (state === "online") { retries = 0; flush(); } },
     });
-    ws.addEventListener("close", () => setTimeout(connect, 2000));
   }
-  connect();
 
   // --- Helpers -------------------------------------------------------------
   // Distinguish a tap from a long press with one timer; suppress the tap that

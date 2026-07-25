@@ -760,7 +760,15 @@
 
   // ---- live refresh -------------------------------------------------------
   async function refresh() {
-    const data = await fetch(URLS.state).then((r) => r.json());
+    let data;
+    try {
+      data = await fetch(URLS.state).then((r) => r.json());
+    } catch (err) {
+      // A refresh runs on every nudge and on every reconnect — the moment the
+      // network is least reliable. Losing one is fine; the next nudge (or the
+      // next reconnect) re-fetches, and the connection banner shows the state.
+      return;
+    }
     if (!data.competition) {
       window.location.reload();
       return;
@@ -775,21 +783,6 @@
     render();
   }
 
-  function connect() {
-    const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${scheme}://${window.location.host}/ws/timing/live/`);
-    ws.addEventListener("message", (event) => {
-      let msg = {};
-      try {
-        msg = JSON.parse(event.data);
-      } catch (e) {
-        return;
-      }
-      if (msg.event === "refresh") refresh();
-    });
-    ws.addEventListener("close", () => setTimeout(connect, 2000));
-  }
-
   if (lockCheck) {
     lockCheck.addEventListener("change", () => {
       state.input_locked = lockCheck.checked;   // optimistic; the nudge confirms
@@ -800,5 +793,7 @@
 
   window.addEventListener("resize", updateScrollCues);
   render();
-  connect();
+  // Socket lifecycle, connection banner and the re-fetch after an outage: see
+  // live_socket.js, shared with the other live views.
+  window.liveSocket({ onRefresh: refresh });
 })();

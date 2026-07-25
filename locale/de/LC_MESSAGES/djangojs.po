@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-25 15:26+0200\n"
+"POT-Creation-Date: 2026-07-25 19:21+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -250,6 +250,33 @@ msgstr "keine Starter"
 msgid "Updated %(time)s"
 msgstr "Aktualisiert %(time)s"
 
+#: .\static\js\live_socket.js:42
+msgid "Live"
+msgstr "Live"
+
+
+#: .\static\js\live_socket.js:43
+msgid "Connection lost — this screen is not updating. Reconnecting…"
+msgstr "Verbindung verloren — dieser Bildschirm wird nicht aktualisiert. Neuverbindung läuft…"
+
+
+#: .\static\js\live_socket.js:63
+msgid "Reload"
+msgstr "Neu laden"
+
+
+#: .\static\js\live_socket.js:69
+msgid ""
+"The current event was changed to “%(name)s”. This screen now shows that "
+"event."
+msgstr "Die aktuelle Veranstaltung wurde auf „%(name)s“ gewechselt. Dieser Bildschirm zeigt jetzt diese Veranstaltung."
+
+
+#: .\static\js\live_socket.js:70
+msgid "The current event was changed. This screen now shows another event."
+msgstr "Die aktuelle Veranstaltung wurde gewechselt. Dieser Bildschirm zeigt jetzt eine andere Veranstaltung."
+
+
 #: .\static\js\marshal_posts.js:78 .\static\js\marshal_posts.js:89
 msgid "Post %(n)s is in use on another device."
 msgstr "Posten %(n)s wird auf einem anderen Gerät verwendet."
@@ -274,19 +301,19 @@ msgstr "Strafe: %(n)s s"
 msgid "Waiting for the next starter…"
 msgstr "Warten auf den nächsten Starter…"
 
-#: .\static\js\marshal_posts.js:450
+#: .\static\js\marshal_posts.js:453
 msgid "The timekeeper's system would not take that entry."
 msgstr "Das System der Zeitnahme hat diese Eingabe nicht angenommen."
 
-#: .\static\js\marshal_posts.js:452
+#: .\static\js\marshal_posts.js:455
 msgid "Penalties submitted for bib %(bib)s"
 msgstr "Strafen für Startnummer %(bib)s übermittelt"
 
-#: .\static\js\marshal_posts.js:474
+#: .\static\js\marshal_posts.js:477
 msgid "Not sent yet — %(n)s waiting. Still trying…"
 msgstr "Noch nicht gesendet — %(n)s ausstehend. Wird weiter versucht…"
 
-#: .\static\js\marshal_posts.js:475
+#: .\static\js\marshal_posts.js:478
 msgid "Sending…"
 msgstr "Wird gesendet…"
 

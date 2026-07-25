@@ -27,6 +27,7 @@
   {% else %}
     <div class="autotiming" id="autotiming">
       {% include "timing/_device_alarm.html" %}
+      {% include "timing/_live_connection.html" %}
       <div class="auto-layout">
         <aside class="auto-order">
           <div class="auto-order-head">
@@ -67,6 +68,7 @@
       window.AUTO_CSRF = "{{ csrf_token }}";
     </script>
     <script src="{% static 'js/device_alarm.js' %}"></script>
+    <script src="{% static 'js/live_socket.js' %}"></script>
     <script src="{% static 'js/auto_timing.js' %}"></script>
   {% endif %}
 {% endblock %}

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-25 15:26+0200\n"
+"POT-Creation-Date: 2026-07-25 19:21+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -60,63 +60,63 @@ msgstr "Ergebnisse"
 msgid "Import / Export"
 msgstr "Import / Export"
 
-#: .\apps\accounts\views.py:66
+#: .\apps\accounts\views.py:105
 msgid "A role needs a name."
 msgstr "Eine Rolle braucht einen Namen."
 
-#: .\apps\accounts\views.py:68
+#: .\apps\accounts\views.py:107
 #, python-format
 msgid "A role named “%(name)s” already exists."
 msgstr "Eine Rolle mit dem Namen „%(name)s“ existiert bereits."
 
-#: .\apps\accounts\views.py:72
+#: .\apps\accounts\views.py:111
 #, python-format
 msgid "Role “%(name)s” created."
 msgstr "Rolle „%(name)s“ erstellt."
 
-#: .\apps\accounts\views.py:85
+#: .\apps\accounts\views.py:124
 #, python-format
 msgid "Access for “%(name)s” updated."
 msgstr "Zugriff für „%(name)s“ aktualisiert."
 
-#: .\apps\accounts\views.py:96
+#: .\apps\accounts\views.py:135
 #, python-format
 msgid "Role “%(name)s” deleted."
 msgstr "Rolle „%(name)s“ gelöscht."
 
-#: .\apps\accounts\views.py:114
+#: .\apps\accounts\views.py:153
 msgid "A username is required."
 msgstr "Ein Benutzername ist erforderlich."
 
-#: .\apps\accounts\views.py:117
+#: .\apps\accounts\views.py:156
 #, python-format
 msgid "A user named “%(name)s” already exists."
 msgstr "Ein Benutzer mit dem Namen „%(name)s“ existiert bereits."
 
-#: .\apps\accounts\views.py:127
+#: .\apps\accounts\views.py:166
 #, python-format
 msgid "User “%(name)s” created."
 msgstr "Benutzer „%(name)s“ erstellt."
 
-#: .\apps\accounts\views.py:148
+#: .\apps\accounts\views.py:187
 #, python-format
 msgid "Password for “%(name)s” reset."
 msgstr "Passwort für „%(name)s“ zurückgesetzt."
 
-#: .\apps\accounts\views.py:150
+#: .\apps\accounts\views.py:189
 #, python-format
 msgid "Roles for “%(name)s” updated."
 msgstr "Rollen für „%(name)s“ aktualisiert."
 
-#: .\apps\accounts\views.py:160
+#: .\apps\accounts\views.py:199
 msgid "You can’t delete your own account."
 msgstr "Sie können Ihr eigenes Konto nicht löschen."
 
-#: .\apps\accounts\views.py:163
+#: .\apps\accounts\views.py:202
 msgid "Can’t delete the last superuser."
 msgstr "Der letzte Superuser kann nicht gelöscht werden."
 
-#: .\apps\accounts\views.py:167
+#: .\apps\accounts\views.py:206
 #, python-format
 msgid "User “%(name)s” deleted."
 msgstr "Benutzer „%(name)s“ gelöscht."
@@ -134,17 +134,17 @@ msgstr "Nach Alter"
 msgid "Select a type…"
 msgstr "Typ auswählen…"
 
-#: .\apps\competitions\forms.py:41 .\templates\timing\live.html:43
+#: .\apps\competitions\forms.py:41 .\templates\timing\live.html:44
 msgid "Pylon"
 msgstr "Pylone"
 
-#: .\apps\competitions\forms.py:42 .\apps\timing\autotiming.py:294
-#: .\templates\timing\live.html:44
+#: .\apps\competitions\forms.py:42 .\apps\timing\autotiming.py:306
+#: .\templates\timing\live.html:45
 msgid "Task"
 msgstr "Aufgabe"
 
-#: .\apps\competitions\forms.py:43 .\apps\timing\autotiming.py:295
-#: .\templates\timing\live.html:45
+#: .\apps\competitions\forms.py:43 .\apps\timing\autotiming.py:307
+#: .\templates\timing\live.html:46
 msgid "Stop line"
 msgstr "Stopplinie"
 
@@ -191,18 +191,18 @@ msgstr "Wie gleiche Ergebnisse getrennt werden."
 msgid "Resolution of the timing device."
 msgstr "Auflösung des Zeitmessgeräts."
 
-#: .\apps\competitions\models.py:87 .\apps\participants\views.py:99
+#: .\apps\competitions\models.py:87 .\apps\participants\views.py:100
 #: .\apps\results\models.py:13
 msgid "Co-driver"
 msgstr "Beifahrer"
 
-#: .\apps\competitions\models.py:89 .\apps\participants\views.py:101
+#: .\apps\competitions\models.py:89 .\apps\participants\views.py:102
 #: .\apps\results\models.py:19 .\apps\results\pdf.py:244
 #: .\apps\transfer\merge.py:40 .\templates\results\_results_head.html:7
 msgid "Vehicle"
 msgstr "Fahrzeug"
 
-#: .\apps\competitions\models.py:91 .\apps\participants\views.py:102
+#: .\apps\competitions\models.py:91 .\apps\participants\views.py:103
 #: .\templates\participants\participant_form.html:87
 msgid "Address"
 msgstr "Adresse"
@@ -219,12 +219,12 @@ msgid "Licence number"
 msgstr "Lizenznummer"
 
 #: .\apps\competitions\models.py:95 .\apps\participants\forms.py:161
-#: .\apps\participants\views.py:103 .\apps\results\models.py:15
+#: .\apps\participants\views.py:104 .\apps\results\models.py:15
 #: .\apps\transfer\merge.py:45
 msgid "E-Mail"
 msgstr "E-Mail"
 
-#: .\apps\competitions\models.py:96 .\apps\participants\views.py:104
+#: .\apps\competitions\models.py:96 .\apps\participants\views.py:105
 #: .\apps\results\models.py:16 .\apps\transfer\merge.py:46
 msgid "Phone"
 msgstr "Telefon"
@@ -337,12 +337,12 @@ msgstr ""
 "Einige Aufgabenlisten konnten nicht gelesen werden — korrigieren Sie sie und "
 "speichern Sie erneut."
 
-#: .\apps\competitions\views.py:618
+#: .\apps\competitions\views.py:640
 #, python-format
 msgid "Settings for “%(name)s” saved."
 msgstr "Einstellungen für „%(name)s“ gespeichert."
 
-#: .\apps\competitions\views.py:675
+#: .\apps\competitions\views.py:699
 msgid "That type is still in use and can't be deleted."
 msgstr "Dieser Typ wird noch verwendet und kann nicht gelöscht werden."
 
@@ -442,36 +442,63 @@ msgstr "Disqualifiziert"
 msgid "Finished"
 msgstr "Beendet"
 
-#: .\apps\participants\views.py:282
+#: .\apps\participants\views.py:299
 msgid "No competition is selected."
 msgstr "Es ist kein Wettbewerb ausgewählt."
 
-#: .\apps\participants\views.py:286
+#: .\apps\participants\views.py:303
 msgid "Malformed request."
 msgstr "Fehlerhafte Anfrage."
 
-#: .\apps\participants\views.py:292
+#: .\apps\participants\views.py:309
 msgid "Unknown participant."
 msgstr "Unbekannter Teilnehmer."
 
-#: .\apps\participants\views.py:303
+#: .\apps\participants\views.py:328
 msgid "Bib must be a positive number."
 msgstr "Die Startnummer muss eine positive Zahl sein."
 
-#: .\apps\participants\views.py:310
+#: .\apps\participants\views.py:335
 #, python-format
 msgid "Bib %(bib)s is already taken."
 msgstr "Startnummer %(bib)s ist bereits vergeben."
 
-#: .\apps\participants\views.py:336
+#: .\apps\participants\views.py:359
+#, python-format
+msgid ""
+"%(count)s recorded run stays with bib %(bib)s and stops being this "
+"participant's."
+msgid_plural ""
+"%(count)s recorded runs stay with bib %(bib)s and stop being this "
+"participant's."
+msgstr[0] "%(count)s erfasster Lauf bleibt bei Startnummer %(bib)s und gehört dann nicht mehr zu diesem Teilnehmer."
+msgstr[1] "%(count)s erfasste Läufe bleiben bei Startnummer %(bib)s und gehören dann nicht mehr zu diesem Teilnehmer."
+
+
+#: .\apps\participants\views.py:365
+#, python-format
+msgid ""
+"%(count)s run already recorded under bib %(bib)s becomes this participant's."
+msgid_plural ""
+"%(count)s runs already recorded under bib %(bib)s become this participant's."
+msgstr[0] "%(count)s bereits unter Startnummer %(bib)s erfasster Lauf gehört dann zu diesem Teilnehmer."
+msgstr[1] "%(count)s bereits unter Startnummer %(bib)s erfasste Läufe gehören dann zu diesem Teilnehmer."
+
+
+#: .\apps\participants\views.py:372
+msgid "This moves recorded times."
+msgstr "Dadurch werden erfasste Zeiten verschoben."
+
+
+#: .\apps\participants\views.py:392
 msgid "licence number"
 msgstr "Lizenznummer"
 
-#: .\apps\participants\views.py:340
+#: .\apps\participants\views.py:396
 msgid "name and licence number"
 msgstr "Name und Lizenznummer"
 
-#: .\apps\participants\views.py:342
+#: .\apps\participants\views.py:398
 msgid "name"
 msgstr "Name"
 
@@ -513,13 +540,13 @@ msgstr "Platz"
 
 #: .\apps\results\pdf.py:236 .\templates\participants\participant_form.html:18
 #: .\templates\participants\participant_list.html:38
-#: .\templates\results\_results_head.html:3 .\templates\timing\live.html:39
+#: .\templates\results\_results_head.html:3 .\templates\timing\live.html:40
 msgid "Bib"
 msgstr "Startnr."
 
 #: .\apps\results\pdf.py:238 .\templates\participants\participant_form.html:37
 #: .\templates\participants\participant_list.html:41
-#: .\templates\results\_results_head.html:4 .\templates\timing\live.html:40
+#: .\templates\results\_results_head.html:4 .\templates\timing\live.html:41
 msgid "Class"
 msgstr "Klasse"
 
@@ -564,51 +591,63 @@ msgstr "Disziplin / Wettbewerbstyp"
 msgid "This page's class or Overall table"
 msgstr "Klasse dieser Seite oder Gesamttabelle"
 
-#: .\apps\results\views.py:69
+#: .\apps\results\views.py:77
 msgid "Best run"
 msgstr "Bester Lauf"
 
-#: .\apps\results\views.py:71
+#: .\apps\results\views.py:79
 msgid "Difference"
 msgstr "Differenz"
 
-#: .\apps\results\views.py:72 .\templates\timing\live.html:48
+#: .\apps\results\views.py:80 .\templates\timing\live.html:49
 msgid "Total"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:227 .\templates\results\index.html:28
+#: .\apps\results\views.py:235 .\templates\results\index.html:28
 #: .\templates\results\results_class.html:7
 #, python-format
 msgid "Class %(name)s"
 msgstr "Klasse %(name)s"
 
-#: .\apps\results\views.py:254 .\templates\results\index.html:13
+#: .\apps\results\views.py:262 .\templates\results\index.html:13
 msgid "Overall"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:255
+#: .\apps\results\views.py:263
 #, python-format
 msgid "%(label)s · %(runs)s Runs"
 msgstr "%(label)s · %(runs)s Läufe"
 
-#: .\apps\results\views.py:257 .\templates\base.html:66
+#: .\apps\results\views.py:265 .\templates\base.html:66
 #, python-format
 msgid "Overall · %(label)s · %(runs)s Runs"
 msgstr "Gesamt · %(label)s · %(runs)s Läufe"
 
-#: .\apps\results\views.py:645
+#: .\apps\results\views.py:446
+#, python-format
+msgid "The logo “%(name)s” is too large (limit %(limit)s MB)."
+msgstr "Das Logo „%(name)s“ ist zu groß (Grenze %(limit)s MB)."
+
+
+#: .\apps\results\views.py:451
+#, python-format
+msgid "“%(name)s” is not an image file."
+msgstr "„%(name)s“ ist keine Bilddatei."
+
+
+#: .\apps\results\views.py:673
 msgid "Results settings saved."
 msgstr "Ergebnis-Einstellungen gespeichert."
 
-#: .\apps\timing\autotiming.py:293
+#: .\apps\timing\autotiming.py:305
 msgid "Pylons"
 msgstr "Pylonen"
 
-#: .\apps\timing\cp540.py:296
+#: .\apps\timing\cp540.py:332
 msgid "Connected to the timing device."
 msgstr "Mit dem Zeitmessgerät verbunden."
 
-#: .\apps\timing\cp540.py:298
+#: .\apps\timing\cp540.py:334
 msgid ""
 "No contact with the timing device — reconnecting. Times are not being "
 "recorded."
@@ -616,17 +655,16 @@ msgstr ""
 "Keine Verbindung zum Zeitmessgerät — es wird neu verbunden. Zeiten werden "
 "derzeit nicht aufgezeichnet."
 
-#: .\apps\timing\cp540.py:300
+#: .\apps\timing\cp540.py:336
 msgid ""
 "The timing device is not connected. Connect it on the Timing settings page."
 msgstr ""
 "Das Zeitmessgerät ist nicht verbunden. Stellen Sie die Verbindung auf der "
 "Seite Zeitmessung-Einstellungen her."
 
-#: .\apps\timing\cp540.py:302
+#: .\apps\timing\cp540.py:338
 msgid "The timing device is disconnected — times are not being recorded."
-msgstr ""
-"Das Zeitmessgerät ist getrennt — Zeiten werden nicht aufgezeichnet."
+msgstr "Das Zeitmessgerät ist getrennt — Zeiten werden nicht aufgezeichnet."
 
 #: .\apps\timing\forms.py:29 .\apps\timing\forms.py:31
 msgid "Required to reach the Tag Heuer CP540."
@@ -669,73 +707,73 @@ msgstr "Port"
 msgid "TCP port of the Tag Heuer CP540."
 msgstr "TCP-Port des Tag Heuer CP540."
 
-#: .\apps\timing\models.py:74 .\apps\timing\models.py:214
-#: .\templates\timing\_ignored.html:12 .\templates\timing\live.html:36
+#: .\apps\timing\models.py:80 .\apps\timing\models.py:220
+#: .\templates\timing\_ignored.html:12 .\templates\timing\live.html:37
 msgid "Start"
 msgstr "Start"
 
-#: .\apps\timing\models.py:75 .\apps\timing\models.py:215
-#: .\templates\timing\_ignored.html:16 .\templates\timing\live.html:37
+#: .\apps\timing\models.py:81 .\apps\timing\models.py:221
+#: .\templates\timing\_ignored.html:16 .\templates\timing\live.html:38
 msgid "Finish"
 msgstr "Ziel"
 
-#: .\apps\timing\models.py:84
+#: .\apps\timing\models.py:90
 msgid "Physical channel the signal came in on (1–4)."
 msgstr "Physischer Kanal, über den das Signal eingegangen ist (1–4)."
 
-#: .\apps\timing\models.py:89
+#: .\apps\timing\models.py:95
 msgid "Wall-clock time the signal fired (hh:mm:ss.mmm)."
 msgstr "Uhrzeit, zu der das Signal ausgelöst wurde (hh:mm:ss.mmm)."
 
-#: .\apps\timing\models.py:127
+#: .\apps\timing\models.py:133
 #: .\templates\competitions\competition_runorder.html:249
 msgid "Practice"
 msgstr "Training"
 
-#: .\apps\timing\models.py:128
+#: .\apps\timing\models.py:134
 #: .\templates\competitions\competition_runorder.html:249
 msgid "Counted"
 msgstr "Wertung"
 
-#: .\apps\timing\models.py:216
+#: .\apps\timing\models.py:222
 msgid "Intermediate"
 msgstr "Zwischenzeit"
 
-#: .\apps\timing\views.py:107
+#: .\apps\timing\views.py:112
 #, python-format
 msgid "Connecting to the Tag Heuer CP540 at %(ip)s:%(port)s…"
 msgstr "Verbinde mit dem Tag Heuer CP540 unter %(ip)s:%(port)s…"
 
-#: .\apps\timing\views.py:112
+#: .\apps\timing\views.py:118
 msgid "Disconnected from the timing device."
 msgstr "Verbindung zum Zeitmessgerät getrennt."
 
-#: .\apps\timing\views.py:114
+#: .\apps\timing\views.py:120
 msgid "Timing settings saved."
 msgstr "Zeitmess-Einstellungen gespeichert."
 
-#: .\apps\transfer\archive.py:59
+#: .\apps\transfer\archive.py:73
 msgid "That is not a Slalom Timing export file (not a .zip archive)."
 msgstr "Das ist keine Slalom-Timing-Exportdatei (kein .zip-Archiv)."
 
-#: .\apps\transfer\archive.py:66
+#: .\apps\transfer\archive.py:80
 #, python-format
 msgid "The archive has no %(name)s — it is not a Slalom Timing export."
 msgstr "Das Archiv enthält keine %(name)s – es ist kein Slalom-Timing-Export."
 
-#: .\apps\transfer\archive.py:72
+#: .\apps\transfer\archive.py:87
 msgid "The export data is damaged and could not be read."
 msgstr "Die Exportdaten sind beschädigt und konnten nicht gelesen werden."
 
-#: .\apps\transfer\archive.py:75
+#: .\apps\transfer\archive.py:90
 msgid "That file is not a Slalom Timing export."
 msgstr "Diese Datei ist kein Slalom-Timing-Export."
 
-#: .\apps\transfer\archive.py:79
+#: .\apps\transfer\archive.py:94
 msgid "The export does not say which version it is."
 msgstr "Der Export gibt seine Version nicht an."
 
-#: .\apps\transfer\archive.py:82
+#: .\apps\transfer\archive.py:97
 #, python-format
 msgid ""
 "This export was written by a newer version of Slalom Timing (file version "
@@ -744,6 +782,18 @@ msgstr ""
 "Dieser Export wurde mit einer neueren Version von Slalom Timing erstellt "
 "(Dateiversion %(file)s, dieses System liest bis %(ours)s). Aktualisiere "
 "dieses System, um ihn zu importieren."
+
+#: .\apps\transfer\archive.py:130
+msgid "The export file is damaged and could not be read."
+msgstr "Die Exportdatei ist beschädigt und konnte nicht gelesen werden."
+
+
+#: .\apps\transfer\archive.py:138
+msgid ""
+"That export file is too large to read (it expands to more than this system "
+"will accept). It is either damaged or not a Slalom Timing export."
+msgstr "Diese Exportdatei ist zu groß zum Einlesen (sie entpackt sich auf mehr, als dieses System annimmt). Sie ist entweder beschädigt oder kein Slalom-Timing-Export."
+
 
 #: .\apps\transfer\csvimport.py:217 .\apps\transfer\csvimport.py:224
 msgid "The file is empty."
@@ -811,39 +861,39 @@ msgstr "Startnummer %(bib)s ist in diesem Wettbewerb schon vergeben."
 msgid "Bib %(bib)s is also used on line %(line)s."
 msgstr "Startnummer %(bib)s wird auch in Zeile %(line)s verwendet."
 
-#: .\apps\transfer\importers.py:74
+#: .\apps\transfer\importers.py:75
 msgid "Use the existing type and keep its current settings"
 msgstr "Vorhandenen Typ verwenden und dessen Einstellungen behalten"
 
-#: .\apps\transfer\importers.py:75
+#: .\apps\transfer\importers.py:76
 msgid "Use the existing type and overwrite its settings from the file"
 msgstr ""
 "Vorhandenen Typ verwenden und dessen Einstellungen aus der Datei "
 "überschreiben"
 
-#: .\apps\transfer\importers.py:78
+#: .\apps\transfer\importers.py:79
 msgid "Register a separate competition type"
 msgstr "Eigenen Wettbewerbstyp anlegen"
 
-#: .\apps\transfer\importers.py:86
+#: .\apps\transfer\importers.py:87
 msgid "The export does not say what it contains."
 msgstr "Der Export gibt nicht an, was er enthält."
 
-#: .\apps\transfer\importers.py:91
+#: .\apps\transfer\importers.py:92
 msgid "The export has no competition type."
 msgstr "Der Export enthält keinen Wettbewerbstyp."
 
-#: .\apps\transfer\importers.py:93
+#: .\apps\transfer\importers.py:94
 msgid "The export claims to be an event but holds no competition."
 msgstr ""
 "Der Export gibt sich als Veranstaltung aus, enthält aber keinen Wettbewerb."
 
-#: .\apps\transfer\importers.py:176
+#: .\apps\transfer\importers.py:177
 #, python-format
 msgid "%(name)s (imported)"
 msgstr "%(name)s (importiert)"
 
-#: .\apps\transfer\importers.py:263
+#: .\apps\transfer\importers.py:264
 #, python-format
 msgid ""
 "%(name)s appears twice in the file (bib %(bib)s was merged into bib "
@@ -880,40 +930,56 @@ msgstr ""
 "Die Exportdatei enthält einen Wert, den %(model)s.%(field)s nicht speichern "
 "kann."
 
-#: .\apps\transfer\views.py:58
+#: .\apps\transfer\views.py:64
 msgid "Choose what to export."
 msgstr "Wähle aus, was exportiert werden soll."
 
-#: .\apps\transfer\views.py:103
+#: .\apps\transfer\views.py:109
 msgid "Choose a file to import."
 msgstr "Wähle eine Datei zum Importieren aus."
 
-#: .\apps\transfer\views.py:122
+#: .\apps\transfer\views.py:113
+#, python-format
+msgid ""
+"That file is %(size)s MB — too large for an export archive (the limit is "
+"%(limit)s MB)."
+msgstr "Diese Datei ist %(size)s MB groß — zu groß für ein Export-Archiv (die Grenze liegt bei %(limit)s MB)."
+
+
+#: .\apps\transfer\views.py:137
 msgid "Choose a competition to import participants into."
 msgstr ""
 "Wähle einen Wettbewerb, in den die Teilnehmer importiert werden sollen."
 
-#: .\apps\transfer\views.py:130
+#: .\apps\transfer\views.py:143
+#, python-format
+msgid ""
+"That file is %(size)s MB — too large for a participant list (the limit is "
+"%(limit)s MB)."
+msgstr "Diese Datei ist %(size)s MB groß — zu groß für eine Teilnehmerliste (die Grenze liegt bei %(limit)s MB)."
+
+
+#: .\apps\transfer\views.py:156
 msgid "Participants imported."
 msgstr "Teilnehmer importiert."
 
-#: .\apps\transfer\views.py:183
+#: .\apps\transfer\views.py:209
 msgid "Import finished."
 msgstr "Import abgeschlossen."
 
-#: .\apps\transfer\views.py:202
+#: .\apps\transfer\views.py:228
 msgid "Import cancelled — nothing was changed."
 msgstr "Import abgebrochen – es wurde nichts geändert."
 
-#: .\apps\transfer\views.py:215
+#: .\apps\transfer\views.py:241
 msgid "The upload has expired. Please choose the file again."
 msgstr "Der Upload ist abgelaufen. Bitte wähle die Datei erneut aus."
 
-#: .\config\settings.py:230
+#: .\config\settings.py:312
 msgid "German"
 msgstr "Deutsch"
 
-#: .\config\settings.py:231
+#: .\config\settings.py:313
 msgid "English"
 msgstr "Englisch"
 
@@ -943,26 +1009,35 @@ msgid "Back to Dashboard"
 msgstr "Zurück zum Dashboard"
 
 #: .\templates\accounts\login.html:6 .\templates\accounts\login.html:15
-#: .\templates\accounts\login.html:42
+#: .\templates\accounts\login.html:44
 msgid "Sign in"
 msgstr "Anmelden"
 
 #: .\templates\accounts\login.html:18
+#, python-format
+msgid "Too many failed attempts. Please wait a minute and try again."
+msgid_plural ""
+"Too many failed attempts. Please wait %(minutes)s minutes and try again."
+msgstr[0] "Zu viele Fehlversuche. Bitte eine Minute warten und erneut versuchen."
+msgstr[1] "Zu viele Fehlversuche. Bitte %(minutes)s Minuten warten und erneut versuchen."
+
+
+#: .\templates\accounts\login.html:20
 msgid "Wrong username or password. Please try again."
 msgstr ""
 "Falscher Benutzername oder falsches Passwort. Bitte versuchen Sie es erneut."
 
-#: .\templates\accounts\login.html:25
+#: .\templates\accounts\login.html:27
 #: .\templates\accounts\user_access.html:109
 msgid "Username"
 msgstr "Benutzername"
 
-#: .\templates\accounts\login.html:29
+#: .\templates\accounts\login.html:31
 #: .\templates\accounts\user_access.html:113
 msgid "Password"
 msgstr "Passwort"
 
-#: .\templates\accounts\login.html:33
+#: .\templates\accounts\login.html:35
 msgid "Show password (hold)"
 msgstr "Passwort anzeigen (halten)"
 
@@ -1217,11 +1292,13 @@ msgstr "Verwerfen"
 #: .\templates\base.html:140 .\templates\competitions\competition_add.html:30
 #: .\templates\competitions\competition_classes.html:57
 #: .\templates\competitions\competition_confirm_delete.html:30
+#: .\templates\competitions\competition_confirm_switch.html:33
 #: .\templates\competitions\competition_penalties.html:90
 #: .\templates\competitions\competitiontype_form.html:11
 #: .\templates\competitions\competitiontype_settings.html:80
 #: .\templates\participants\participant_confirm_delete.html:29
 #: .\templates\participants\participant_form.html:131
+#: .\templates\participants\participant_form.html:157
 #: .\templates\results\_results_table.html:63
 msgid "Cancel"
 msgstr "Abbrechen"
@@ -1426,6 +1503,42 @@ msgstr ""
 #: .\templates\participants\participant_confirm_delete.html:28
 msgid "Confirm delete"
 msgstr "Löschen bestätigen"
+
+#: .\templates\competitions\competition_confirm_switch.html:9
+#: .\templates\competitions\competition_confirm_switch.html:10
+#: .\templates\competitions\competition_confirm_switch.html:32
+msgid "Change the current event"
+msgstr "Aktuelle Veranstaltung wechseln"
+
+
+#: .\templates\competitions\competition_confirm_switch.html:12
+#, python-format
+msgid "Make %(name)s the current event?"
+msgstr "%(name)s zur aktuellen Veranstaltung machen?"
+
+
+#: .\templates\competitions\competition_confirm_switch.html:16
+#, python-format
+msgid "<strong>%(count)s</strong> other person is signed in right now."
+msgid_plural "<strong>%(count)s</strong> other people are signed in right now."
+msgstr[0] "<strong>%(count)s</strong> weitere Person ist gerade angemeldet."
+msgstr[1] "<strong>%(count)s</strong> weitere Personen sind gerade angemeldet."
+
+
+#: .\templates\competitions\competition_confirm_switch.html:17
+msgid ""
+"Timing, results and the marshal posts all follow the current event, so their "
+"screens change too — including anyone in the middle of timing a run."
+msgstr "Zeitmessung, Ergebnisse und die Streckenposten folgen alle der aktuellen Veranstaltung — deren Bildschirme wechseln also mit, auch bei jemandem, der gerade einen Lauf misst."
+
+
+#: .\templates\competitions\competition_confirm_switch.html:25
+#, python-format
+msgid ""
+"Nothing recorded for <strong>%(name)s</strong> is lost — it stays as it is "
+"and you can switch back at any time."
+msgstr "Nichts, was für <strong>%(name)s</strong> erfasst wurde, geht verloren — es bleibt, wie es ist, und Sie können jederzeit zurückwechseln."
+
 
 #: .\templates\competitions\competition_general.html:7
 #, python-format
@@ -1671,7 +1784,7 @@ msgstr "Ziehen, um den Lauf umzuordnen"
 
 #: .\templates\competitions\competition_runorder.html:147
 #: .\templates\competitions\competition_runorder.html:548
-#: .\templates\timing\live.html:41
+#: .\templates\timing\live.html:42
 msgid "Run"
 msgstr "Lauf"
 
@@ -1891,27 +2004,27 @@ msgstr ""
 "Aktivieren Sie zuerst „Strafen von Streckenposten vergeben“ und legen Sie "
 "die Posten auf der Seite <a href=\"%(penalties_url)s\">Strafen</a> fest."
 
-#: .\templates\competitions\marshal_posts.html:17
+#: .\templates\competitions\marshal_posts.html:21
 msgid "Your post"
 msgstr "Ihr Posten"
 
-#: .\templates\competitions\marshal_posts.html:19
+#: .\templates\competitions\marshal_posts.html:23
 msgid "Confirm"
 msgstr "Bestätigen"
 
-#: .\templates\competitions\marshal_posts.html:20
+#: .\templates\competitions\marshal_posts.html:24
 msgid "Change post"
 msgstr "Posten wechseln"
 
-#: .\templates\competitions\marshal_posts.html:27
+#: .\templates\competitions\marshal_posts.html:31
 msgid "Waiting for the next starter…"
 msgstr "Warten auf den nächsten Starter…"
 
-#: .\templates\competitions\marshal_posts.html:36
+#: .\templates\competitions\marshal_posts.html:40
 msgid "🔒 Submitted — locked"
 msgstr "🔒 Übermittelt — gesperrt"
 
-#: .\templates\competitions\marshal_posts.html:42
+#: .\templates\competitions\marshal_posts.html:46
 msgid "Submit"
 msgstr "Übermitteln"
 
@@ -2021,7 +2134,7 @@ msgid "No competition selected — class can't be computed."
 msgstr "Kein Wettbewerb ausgewählt — Klasse kann nicht berechnet werden."
 
 #: .\templates\participants\participant_form.html:54
-#: .\templates\participants\participant_form.html:232
+#: .\templates\participants\participant_form.html:269
 #: .\templates\results\results_settings.html:144
 #: .\templates\results\results_settings.html:157
 msgid "Remove"
@@ -2039,11 +2152,52 @@ msgstr ""
 "Kein Wettbewerb ausgewählt, oder der Typ dieses Teilnehmers passt nicht zum "
 "aktuellen Wettbewerb — es kann keine Klasse zugewiesen werden."
 
-#: .\templates\participants\participant_form.html:169
+#: .\templates\participants\participant_form.html:144
+msgid "Move recorded times?"
+msgstr "Erfasste Zeiten verschieben?"
+
+
+#: .\templates\participants\participant_form.html:147
+#, python-format
+msgid ""
+"<strong>%(n)s</strong> recorded run stays with bib %(bib)s and stops being "
+"this participant's."
+msgid_plural ""
+"<strong>%(n)s</strong> recorded runs stay with bib %(bib)s and stop being "
+"this participant's."
+msgstr[0] "<strong>%(n)s</strong> erfasster Lauf bleibt bei Startnummer %(bib)s und gehört dann nicht mehr zu diesem Teilnehmer."
+msgstr[1] "<strong>%(n)s</strong> erfasste Läufe bleiben bei Startnummer %(bib)s und gehören dann nicht mehr zu diesem Teilnehmer."
+
+
+#: .\templates\participants\participant_form.html:150
+#, python-format
+msgid ""
+"<strong>%(n)s</strong> run already recorded under bib %(bib)s becomes this "
+"participant's."
+msgid_plural ""
+"<strong>%(n)s</strong> runs already recorded under bib %(bib)s become this "
+"participant's."
+msgstr[0] "<strong>%(n)s</strong> bereits unter Startnummer %(bib)s erfasster Lauf gehört dann zu diesem Teilnehmer."
+msgstr[1] "<strong>%(n)s</strong> bereits unter Startnummer %(bib)s erfasste Läufe gehören dann zu diesem Teilnehmer."
+
+
+#: .\templates\participants\participant_form.html:152
+msgid ""
+"Times are recorded against the number on the car, so they follow the number "
+"rather than the person."
+msgstr "Zeiten werden auf die Nummer am Fahrzeug erfasst, sie folgen also der Nummer und nicht der Person."
+
+
+#: .\templates\participants\participant_form.html:156
+msgid "Change the bib"
+msgstr "Startnummer ändern"
+
+
+#: .\templates\participants\participant_form.html:206
 msgid "Invalid date"
 msgstr "Ungültiges Datum"
 
-#: .\templates\participants\participant_form.html:172
+#: .\templates\participants\participant_form.html:209
 msgid ""
 "That’s not a valid date — please check the day exists in that month/year."
 msgstr ""
@@ -2109,12 +2263,17 @@ msgstr "Keine Teilnehmer gefunden."
 msgid "No participants match your search."
 msgstr "Keine Teilnehmer entsprechen Ihrer Suche."
 
-#: .\templates\participants\participant_list.html:166
-#: .\templates\participants\participant_list.html:181
+#: .\templates\participants\participant_list.html:168
+#: .\templates\participants\participant_list.html:192
 msgid "Could not save."
 msgstr "Konnte nicht gespeichert werden."
 
-#: .\templates\participants\participant_list.html:170
+#: .\templates\participants\participant_list.html:173
+msgid "Change the bib anyway?"
+msgstr "Startnummer trotzdem ändern?"
+
+
+#: .\templates\participants\participant_list.html:181
 msgid "Saved"
 msgstr "Gespeichert"
 
@@ -2471,15 +2630,15 @@ msgstr ""
 "Wettbewerb — <a href=\"%(list_url)s\">wählen Sie einen Wettbewerb</a>, um "
 "ihn zu messen."
 
-#: .\templates\timing\auto.html:33
+#: .\templates\timing\auto.html:34
 msgid "Start order"
 msgstr "Startreihenfolge"
 
-#: .\templates\timing\auto.html:34
+#: .\templates\timing\auto.html:35
 msgid "Reset order"
 msgstr "Reihenfolge zurücksetzen"
 
-#: .\templates\timing\auto.html:37
+#: .\templates\timing\auto.html:38
 #, python-format
 msgid ""
 "No start order yet — set the <a href=\"%(runorder_url)s\">run order</a> and "
@@ -2552,15 +2711,15 @@ msgstr ""
 "Wettbewerb — <a href=\"%(list_url)s\">wählen Sie einen Wettbewerb</a>, um "
 "mit der Messung zu beginnen."
 
-#: .\templates\timing\live.html:38
+#: .\templates\timing\live.html:39
 msgid "Run time"
 msgstr "Laufzeit"
 
-#: .\templates\timing\live.html:46
+#: .\templates\timing\live.html:47
 msgid "Penalty"
 msgstr "Strafe"
 
-#: .\templates\timing\live.html:56
+#: .\templates\timing\live.html:57
 msgid "Waiting for the first start signal…"
 msgstr "Warten auf das erste Startsignal…"
 
@@ -2600,15 +2759,22 @@ msgstr "Verbinden"
 msgid "Disconnect"
 msgstr "Trennen"
 
-#: .\templates\timing\settings.html:70
+#: .\templates\timing\settings.html:64
+msgid ""
+"A connected device is reconnected on its own after a dropped link or a "
+"server restart, until you disconnect it here."
+msgstr "Ein verbundenes Gerät verbindet sich nach einem Verbindungsabbruch oder einem Server-Neustart von selbst wieder, bis Sie es hier trennen."
+
+
+#: .\templates\timing\settings.html:71
 msgid "Device stream"
 msgstr "Geräte-Datenstrom"
 
-#: .\templates\timing\settings.html:71 .\templates\timing\settings.html:104
+#: .\templates\timing\settings.html:72 .\templates\timing\settings.html:105
 msgid "Idle"
 msgstr "Bereit"
 
-#: .\templates\timing\settings.html:73
+#: .\templates\timing\settings.html:74
 msgid ""
 "Every line the CP540 sends is shown here. Only <code>TN</code> lines (a "
 "running number, an input 1–4 or M1–M4, and a time) become timing signals — "
@@ -2618,36 +2784,36 @@ msgstr ""
 "Zeilen (eine laufende Nummer, ein Eingang 1–4 oder M1–M4 und eine Zeit) "
 "werden zu Zeitsignalen — diese sind hervorgehoben."
 
-#: .\templates\timing\settings.html:75
+#: .\templates\timing\settings.html:76
 msgid "No lines received yet."
 msgstr "Noch keine Zeilen empfangen."
 
-#: .\templates\timing\settings.html:104
+#: .\templates\timing\settings.html:105
 msgid "Connecting…"
 msgstr "Verbinden…"
 
-#: .\templates\timing\settings.html:105
+#: .\templates\timing\settings.html:106
 msgid "Connected"
 msgstr "Verbunden"
 
-#: .\templates\timing\settings.html:106
+#: .\templates\timing\settings.html:107
 msgid "Reconnecting…"
 msgstr "Neu verbinden…"
 
-#: .\templates\timing\settings.html:107
+#: .\templates\timing\settings.html:108
 msgid "Connection error"
 msgstr "Verbindungsfehler"
 
-#: .\templates\timing\settings.html:107
+#: .\templates\timing\settings.html:108
 msgid "Disconnected"
 msgstr "Getrennt"
 
-#: .\templates\timing\settings.html:132
+#: .\templates\timing\settings.html:133
 #, python-brace-format
 msgid "{n} signal"
 msgstr "{n} Signal"
 
-#: .\templates\timing\settings.html:133
+#: .\templates\timing\settings.html:134
 #, python-brace-format
 msgid "{n} signals"
 msgstr "{n} Signale"

@@ -633,3 +633,147 @@ def test_list_columns_follow_type_settings(client):
     ctype.save()
     body = client.get(reverse("participants:list")).content.decode()
     assert "<th class=\"col-club\">Club</th>" in body
+
+
+# --- DAT-2: a bib carries its recorded times --------------------------------
+# TimedRun.bib_number is a loose integer, so a run belongs to whoever wears the
+# number. Swapping two bibs to fix a registration mistake used to hand one
+# competitor's times to another with nothing said anywhere.
+
+def _make_person(ctype, first="Alice", last="Ahead", licence="A-1", email="a@x.com"):
+    return Participant.objects.create(
+        competition_type=ctype, first_name=first, last_name=last,
+        date_of_birth=datetime.date(2010, 6, 15), address_street="1 Main St",
+        address_zip_code="12345", address_city="Springfield", club="Speed Club",
+        license_number=licence, email=email,
+    )
+
+
+def _record_a_run(competition, bib):
+    """A run with a real time on it, recorded against a bib number."""
+    from apps.timing.models import TimedRun, TimingSignal
+
+    start = TimingSignal.objects.create(
+        competition=competition, running_number=bib, port=1,
+        device_time=datetime.time(10, 0, 0),
+    )
+    return TimedRun.objects.create(competition=competition, bib_number=bib, start_signal=start)
+
+
+def _edit(client, participant, competition, **overrides):
+    data = participant_data(participant.competition_type, first_name=participant.first_name,
+                            last_name=participant.last_name,
+                            license_number=participant.license_number,
+                            email=participant.email)
+    data.update(overrides)
+    return client.post(reverse("participants:edit", kwargs={"pk": participant.pk}), data)
+
+
+def test_a_bib_with_no_times_on_it_changes_freely(client):
+    ctype = make_type()
+    competition = make_competition(ctype)
+    person = _make_person(ctype)
+    EventEntry.objects.create(participant=person, competition=competition, bib_number=7)
+
+    assert _edit(client, person, competition, bib_number="8").status_code == 302
+    assert EventEntry.objects.get(participant=person).bib_number == 8
+
+
+def test_changing_a_bib_that_has_times_asks_first(client):
+    ctype = make_type()
+    competition = make_competition(ctype)
+    person = _make_person(ctype)
+    EventEntry.objects.create(participant=person, competition=competition, bib_number=7)
+    _record_a_run(competition, 7)
+
+    response = _edit(client, person, competition, bib_number="8")
+
+    assert response.status_code == 200                       # the form came back
+    effect = response.context["confirm_bib_change"]
+    assert (effect["leaving"], effect["arriving"]) == (1, 0)
+    assert EventEntry.objects.get(participant=person).bib_number == 7   # nothing moved
+
+
+def test_taking_over_a_bib_that_already_has_times_asks_too(client):
+    """The other direction: whatever was recorded under the new number would
+    become this competitor's."""
+    ctype = make_type()
+    competition = make_competition(ctype)
+    person = _make_person(ctype)
+    EventEntry.objects.create(participant=person, competition=competition, bib_number=7)
+    _record_a_run(competition, 9)
+
+    response = _edit(client, person, competition, bib_number="9")
+
+    effect = response.context["confirm_bib_change"]
+    assert (effect["leaving"], effect["arriving"]) == (0, 1)
+
+
+def test_the_bib_change_goes_through_once_confirmed(client):
+    ctype = make_type()
+    competition = make_competition(ctype)
+    person = _make_person(ctype)
+    EventEntry.objects.create(participant=person, competition=competition, bib_number=7)
+    _record_a_run(competition, 7)
+
+    response = _edit(client, person, competition, bib_number="8", confirm_bib_change="1")
+
+    assert response.status_code == 302
+    assert EventEntry.objects.get(participant=person).bib_number == 8
+
+
+def test_a_placeholder_row_is_not_a_recorded_time(client):
+    """An empty row the operator pre-entered for an upcoming starter has nothing
+    on it to lose, so it must not turn an ordinary correction into a warning."""
+    from apps.timing.models import TimedRun
+
+    ctype = make_type()
+    competition = make_competition(ctype)
+    person = _make_person(ctype)
+    EventEntry.objects.create(participant=person, competition=competition, bib_number=7)
+    TimedRun.objects.create(competition=competition, bib_number=7)
+
+    assert _edit(client, person, competition, bib_number="8").status_code == 302
+
+
+def _set_bib(client, participant, bib, confirm=False):
+    return client.post(
+        reverse("participants:set-bib"),
+        data={"participant": participant.pk, "bib": bib, "confirm": confirm},
+        content_type="application/json",
+    ).json()
+
+
+def test_the_inline_bib_field_asks_the_same_question(client):
+    """The list's inline field changes exactly the same thing as the edit form,
+    so it cannot be the way around the guard."""
+    ctype = make_type()
+    competition = make_competition(ctype)
+    person = _make_person(ctype)
+    EventEntry.objects.create(participant=person, competition=competition, bib_number=7)
+    _record_a_run(competition, 7)
+
+    response = _set_bib(client, person, "8")
+
+    assert response["ok"] is False
+    assert "bib 7" in response["confirm"]
+    assert EventEntry.objects.get(participant=person).bib_number == 7
+
+    assert _set_bib(client, person, "8", confirm=True)["ok"] is True
+    assert EventEntry.objects.get(participant=person).bib_number == 8
+
+
+def test_clearing_a_bib_with_times_on_it_asks_too(client):
+    """Clearing removes the registration but leaves the times behind under a
+    number that can be reissued — the same question."""
+    ctype = make_type()
+    competition = make_competition(ctype)
+    person = _make_person(ctype)
+    EventEntry.objects.create(participant=person, competition=competition, bib_number=7)
+    _record_a_run(competition, 7)
+
+    assert _set_bib(client, person, "")["ok"] is False
+    assert EventEntry.objects.filter(participant=person).exists()
+
+    assert _set_bib(client, person, "", confirm=True)["ok"] is True
+    assert not EventEntry.objects.filter(participant=person).exists()

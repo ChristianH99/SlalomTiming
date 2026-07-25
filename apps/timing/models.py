@@ -44,6 +44,12 @@ class TimingSettings(models.Model):
     # (from any device or the simulator) is sent straight to the ignore list rather
     # than into a run — a way to pause capture without disconnecting. Off = normal.
     ignore_incoming = models.BooleanField(default=False)
+    # Whether the operator left the device connected. The reader thread is process
+    # state, so a restart used to leave the CP540 selected and nothing reading it,
+    # with nobody told — this is the bit that survives, and config/asgi.py brings
+    # the reader back up from it (cp540.autostart). Cleared by Disconnect and by
+    # selecting any other device.
+    reader_enabled = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "timing settings"

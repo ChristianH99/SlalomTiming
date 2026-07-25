@@ -1082,3 +1082,85 @@ def test_duplicate_competition_copies_marshal_posts(client):
     copy = Competition.objects.get(name="Original (Copy)")
     assert copy.penalties_by_marshal_posts is True
     assert copy.marshal_posts.get(number=1).tasks == "1-5"
+
+
+# --- DAT-5: the active competition is everybody's ---------------------------
+# One global flag decides what every timing screen, results table and marshal
+# post is showing. Switching it used to be a single unconfirmed click that other
+# people found out about from their own data changing under them.
+
+def _sign_in_someone_else(django_user_model, username="marshal-mia"):
+    """A second live session, as a second person's browser would leave."""
+    from django.test import Client
+
+    other = django_user_model.objects.create_user(username=username, password="pw")
+    Client().force_login(other)
+    return other
+
+
+def test_switching_alone_needs_no_confirmation(client):
+    a = make_competition(name="A", type_name="A")
+    response = client.post(reverse("competitions:select", kwargs={"pk": a.pk}))
+    assert response.status_code == 302
+    a.refresh_from_db()
+    assert a.is_active is True
+
+
+def test_switching_asks_first_when_others_are_signed_in(client, django_user_model):
+    other = _sign_in_someone_else(django_user_model)
+    a = make_competition(name="A", type_name="A")
+
+    response = client.post(reverse("competitions:select", kwargs={"pk": a.pk}))
+
+    assert response.status_code == 200          # the confirmation page, not a redirect
+    assert other.get_username() in response.content.decode()
+    a.refresh_from_db()
+    assert a.is_active is False                 # and nothing moved
+
+
+def test_switching_goes_through_once_confirmed(client, django_user_model):
+    _sign_in_someone_else(django_user_model)
+    a = make_competition(name="A", type_name="A")
+
+    response = client.post(reverse("competitions:select", kwargs={"pk": a.pk}),
+                           {"confirm_switch": "1"})
+
+    assert response.status_code == 302
+    a.refresh_from_db()
+    assert a.is_active is True
+
+
+def test_an_expired_session_is_not_somebody_watching(client, django_user_model, settings):
+    """Sessions outlive the people in them; only live ones are a reason to ask."""
+    import datetime
+
+    from django.contrib.sessions.models import Session
+    from django.utils import timezone
+
+    _sign_in_someone_else(django_user_model)
+    Session.objects.all().exclude(session_key=client.session.session_key).update(
+        expire_date=timezone.now() - datetime.timedelta(hours=1))
+    a = make_competition(name="A", type_name="A")
+
+    assert client.post(reverse("competitions:select", kwargs={"pk": a.pk})).status_code == 302
+
+
+def test_re_selecting_the_current_event_asks_nobody(client, django_user_model):
+    """It changes nothing, so there is nothing to warn about."""
+    _sign_in_someone_else(django_user_model)
+    a = make_active_competition()
+    assert client.post(reverse("competitions:select", kwargs={"pk": a.pk})).status_code == 302
+
+
+def test_switching_tells_every_open_live_view_which_event_it_now_shows(client, monkeypatch):
+    """A bare refresh nudge would make each open view quietly re-render as a
+    different event; the name is what lets the page say what happened."""
+    from apps.timing import services
+
+    sent = []
+    monkeypatch.setattr(services, "_send", sent.append)
+    a = make_competition(name="Spring Slalom", type_name="A")
+
+    client.post(reverse("competitions:select", kwargs={"pk": a.pk}))
+
+    assert sent == [{"type": "timing.competition", "name": "Spring Slalom"}]

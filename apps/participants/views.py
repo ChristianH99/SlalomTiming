@@ -4,13 +4,14 @@ from django.db.models import F, OuterRef, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
-from django.utils.translation import gettext, gettext_lazy as _
+from django.utils.translation import gettext, ngettext, gettext_lazy as _
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.common import safe_next
 from apps.competitions.models import Competition, CompetitionType
 
+from .bibs import bib_change_effect
 from .forms import ParticipantCreateForm, ParticipantUpdateForm
 from .models import ClassAssignment, EventEntry, Participant
 
@@ -222,6 +223,14 @@ class ParticipantUpdateView(ParticipantFormContextMixin, UpdateView):
         return kwargs
 
     def form_valid(self, form):
+        # A bib is not just a label: runs are keyed by the number, so moving it
+        # moves times (see apps/participants/bibs.py). Say what would move and
+        # take an explicit yes before saving anything.
+        effect = self._bib_change(form)
+        if effect is not None and not self.request.POST.get("confirm_bib_change"):
+            return self.render_to_response(
+                self.get_context_data(form=form, confirm_bib_change=effect)
+            )
         response = super().form_valid(form)
         if form.competition is not None and self.object.competition_type_id == form.competition.competition_type_id:
             bib_number = form.cleaned_data.get("bib_number")
@@ -240,6 +249,14 @@ class ParticipantUpdateView(ParticipantFormContextMixin, UpdateView):
                 form.entry.delete()
         save_class_assignments(self.object, form.competition, form)
         return response
+
+    def _bib_change(self, form):
+        """The times this save would move, or None if it moves none."""
+        if form.competition is None or \
+                self.object.competition_type_id != form.competition.competition_type_id:
+            return None
+        old_bib = form.entry.bib_number if form.entry is not None else None
+        return bib_change_effect(form.competition, old_bib, form.cleaned_data.get("bib_number"))
 
 
 class ParticipantDeleteView(DeleteView):
@@ -292,9 +309,17 @@ def participant_set_bib(request):
         return JsonResponse({"ok": False, "error": gettext("Unknown participant.")}, status=404)
 
     entry = EventEntry.objects.filter(participant=participant, competition=competition).first()
+    old_bib = entry.bib_number if entry is not None else None
     raw = str(payload.get("bib", "")).strip()
+    confirmed = bool(payload.get("confirm"))
+
     if raw == "":
-        # Clearing the bib removes the registration (its run status goes with it).
+        # Clearing the bib removes the registration (its run status goes with it),
+        # and leaves any time recorded under the number behind — so it is the same
+        # question as a change, asked the same way.
+        warning = _bib_change_warning(competition, old_bib, None, confirmed)
+        if warning:
+            return warning
         if entry is not None:
             entry.delete()
         return JsonResponse({"ok": True, "bib": None})
@@ -309,12 +334,43 @@ def participant_set_bib(request):
     if conflict.exists():
         return JsonResponse({"ok": False, "error": gettext("Bib %(bib)s is already taken.") % {"bib": bib}})
 
+    warning = _bib_change_warning(competition, old_bib, bib, confirmed)
+    if warning:
+        return warning
+
     if entry is None:
         EventEntry.objects.create(participant=participant, competition=competition, bib_number=bib)
     elif entry.bib_number != bib:
         entry.bib_number = bib
         entry.save(update_fields=["bib_number"])
     return JsonResponse({"ok": True, "bib": bib})
+
+
+def _bib_change_warning(competition, old_bib, new_bib, confirmed):
+    """The refusal to send back when a bib change would move recorded times and
+    nobody has said yes to it yet — the same guard the edit form applies, since
+    this endpoint changes exactly the same thing. None when it may go ahead."""
+    effect = bib_change_effect(competition, old_bib, new_bib)
+    if effect is None or confirmed:
+        return None
+    lines = []
+    if effect["leaving"]:
+        lines.append(ngettext(
+            "%(count)s recorded run stays with bib %(bib)s and stops being this participant's.",
+            "%(count)s recorded runs stay with bib %(bib)s and stop being this participant's.",
+            effect["leaving"],
+        ) % {"count": effect["leaving"], "bib": old_bib})
+    if effect["arriving"]:
+        lines.append(ngettext(
+            "%(count)s run already recorded under bib %(bib)s becomes this participant's.",
+            "%(count)s runs already recorded under bib %(bib)s become this participant's.",
+            effect["arriving"],
+        ) % {"count": effect["arriving"], "bib": new_bib})
+    return JsonResponse({
+        "ok": False,
+        "confirm": " ".join(lines),
+        "error": gettext("This moves recorded times."),
+    })
 
 
 def participant_check(request):

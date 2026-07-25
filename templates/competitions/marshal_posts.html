@@ -16,6 +16,7 @@
     {{ config|json_script:"marshal-config" }}
 
     <div class="marshal" data-marshal>
+      {% include "timing/_live_connection.html" %}
       <div class="marshal-select" data-select-bar>
         <label class="marshal-select-label" for="marshal-post-select">{% trans "Your post" %}</label>
         <select id="marshal-post-select" data-post-select></select>
@@ -58,6 +59,7 @@
       };
       window.MARSHAL_CSRF = "{{ csrf_token }}";
     </script>
+    <script src="{% static 'js/live_socket.js' %}"></script>
     <script src="{% static 'js/marshal_posts.js' %}"></script>
   {% endif %}
 {% endblock %}

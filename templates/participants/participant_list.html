@@ -158,11 +158,22 @@
         const field = detail.querySelector("[data-bib-input], .pd-bib-input");
         const msg = detail.querySelector("[data-bib-msg]");
         if (!field || !field.dataset.dirty) return true;
-        const res = await fetch(URLS.setBib, {
+        const post = (confirm) => fetch(URLS.setBib, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-          body: JSON.stringify({ participant: row.dataset.participant, bib: field.value.trim() }),
+          body: JSON.stringify({
+            participant: row.dataset.participant, bib: field.value.trim(), confirm: confirm,
+          }),
         }).then((r) => r.json()).catch(() => ({ ok: false, error: "{% trans 'Could not save.'|escapejs %}" }));
+        let res = await post(false);
+        // A bib carries its recorded times with it (DAT-2), so the server refuses
+        // a move like that until it has been said out loud and agreed to.
+        if (!res.ok && res.confirm) {
+          if (!window.confirm(res.confirm + "\n\n{% trans 'Change the bib anyway?'|escapejs %}")) {
+            return false;
+          }
+          res = await post(true);
+        }
         if (res.ok) {
           delete field.dataset.dirty;
           field.classList.remove("pd-bib-input--error");

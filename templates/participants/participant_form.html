@@ -131,6 +131,42 @@
     </div>
   </form>
 
+  {% comment %}A recorded run is keyed by the bib number, not by the entry, so
+  changing the number moves times: the ones already recorded stay with the old
+  number, and anything recorded under the new one becomes this participant's.
+  The view refuses the save until this has been agreed to (see
+  apps/participants/bibs.py) and re-renders the form with the dialog open.{% endcomment %}
+  {% if confirm_bib_change %}
+    <div class="modal-overlay" id="bib-change-modal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bib-change-title">
+        <h2 class="modal-title" id="bib-change-title">{% trans "Move recorded times?" %}</h2>
+        <div class="modal-body">
+          {% if confirm_bib_change.leaving %}
+            <p>{% blocktrans count n=confirm_bib_change.leaving with bib=confirm_bib_change.old_bib %}<strong>{{ n }}</strong> recorded run stays with bib {{ bib }} and stops being this participant's.{% plural %}<strong>{{ n }}</strong> recorded runs stay with bib {{ bib }} and stop being this participant's.{% endblocktrans %}</p>
+          {% endif %}
+          {% if confirm_bib_change.arriving %}
+            <p>{% blocktrans count n=confirm_bib_change.arriving with bib=confirm_bib_change.new_bib %}<strong>{{ n }}</strong> run already recorded under bib {{ bib }} becomes this participant's.{% plural %}<strong>{{ n }}</strong> runs already recorded under bib {{ bib }} become this participant's.{% endblocktrans %}</p>
+          {% endif %}
+          <p>{% trans "Times are recorded against the number on the car, so they follow the number rather than the person." %}</p>
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="button button--danger" form="participant-form"
+                  name="confirm_bib_change" value="1">{% trans "Change the bib" %}</button>
+          <button type="button" class="button button--secondary" data-bib-change-cancel>{% trans "Cancel" %}</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        const modal = document.getElementById("bib-change-modal");
+        const cancel = modal.querySelector("[data-bib-change-cancel]");
+        // Cancel leaves the form exactly as it was posted, so the bib can be put
+        // back (or anything else corrected) before trying again.
+        cancel.addEventListener("click", () => { modal.hidden = true; });
+      })();
+    </script>
+  {% endif %}
+
   {{ class_ranges|json_script:"class-ranges-data" }}
   {{ club_options|json_script:"club-options-data" }}
   {{ email_domains|json_script:"email-domains-data" }}

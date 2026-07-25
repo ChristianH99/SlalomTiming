@@ -241,21 +241,14 @@
     }
   }
 
-  function connect() {
-    const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${scheme}://${window.location.host}/ws/timing/live/`);
-    ws.addEventListener("open", () => { if (dot) dot.classList.add("connected"); });
-    ws.addEventListener("message", (event) => {
-      let msg = {};
-      try { msg = JSON.parse(event.data); } catch (e) { return; }
-      if (msg.event === "refresh") refresh();
-    });
-    ws.addEventListener("close", () => {
-      if (dot) dot.classList.remove("connected");
-      setTimeout(connect, 2000);
-    });
-  }
-
   render();
-  connect();
+  // Socket lifecycle and the re-fetch after an outage: see live_socket.js. This
+  // page shows its state in the heading dot rather than the shared banner, so it
+  // drives the dot from the module's state callback.
+  window.liveSocket({
+    onRefresh: refresh,
+    onState: (state) => {
+      if (dot) dot.classList.toggle("connected", state === "online");
+    },
+  });
 })();

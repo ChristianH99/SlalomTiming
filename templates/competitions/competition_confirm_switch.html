@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% comment %}Asked before the active competition changes while other people are
+signed in. There is one active competition for the whole installation, so this
+is everybody's screen, not just yours — the people it would move are named here
+(apps/common.other_signed_in_users), and the server refuses the switch without
+`confirm_switch`.{% endcomment %}
+{% block title %}{% trans "Change the current event" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Change the current event" %}{% endblock %}
+{% block content %}
+  <h1>{% blocktrans with name=object.name %}Make {{ name }} the current event?{% endblocktrans %}</h1>
+
+  <div class="delete-warning">
+    <p>
+      {% blocktrans count count=others|length %}<strong>{{ count }}</strong> other person is signed in right now.{% plural %}<strong>{{ count }}</strong> other people are signed in right now.{% endblocktrans %}
+      {% trans "Timing, results and the marshal posts all follow the current event, so their screens change too — including anyone in the middle of timing a run." %}
+    </p>
+    <ul>
+      {% for user in others %}
+        <li>{{ user.get_full_name|default:user.get_username }}</li>
+      {% endfor %}
+    </ul>
+    {% if previous %}
+      <p>{% blocktrans with name=previous.name %}Nothing recorded for <strong>{{ name }}</strong> is lost — it stays as it is and you can switch back at any time.{% endblocktrans %}</p>
+    {% endif %}
+  </div>
+
+  <form method="post" action="{% url 'competitions:select' object.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="confirm_switch" value="1">
+    <button class="button" type="submit">{% trans "Change the current event" %}</button>
+    <a href="{% url 'competitions:list' %}">{% trans "Cancel" %}</a>
+  </form>
+{% endblock %}

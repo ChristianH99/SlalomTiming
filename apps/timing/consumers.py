@@ -42,5 +42,17 @@ class TimingLiveConsumer(AsyncJsonWebsocketConsumer):
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(LIVE_GROUP, self.channel_name)
 
+    async def receive_json(self, content, **kwargs):
+        """The only thing a client sends is a heartbeat. A socket can die without
+        a close frame — a phone that walks out of Wi-Fi range gets no TCP FIN —
+        and the page would then sit there looking live while nothing arrives, so
+        live_socket.js pings and treats silence as a dead link. Anything else is
+        ignored rather than raising (the base class's receive_json would)."""
+        if isinstance(content, dict) and content.get("action") == "ping":
+            await self.send_json({"event": "pong"})
+
     async def timing_refresh(self, event):
         await self.send_json({"event": "refresh"})
+
+    async def timing_competition(self, event):
+        await self.send_json({"event": "competition", "name": event.get("name", "")})

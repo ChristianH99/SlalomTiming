@@ -27,7 +27,14 @@ singleinstance.acquire()
 from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
+from apps.timing import cp540  # noqa: E402
 from apps.timing.routing import websocket_urlpatterns  # noqa: E402
+
+# A restart must not quietly leave the rig deaf. The reader thread dies with the
+# process, so if the operator left the device connected it is started again here
+# — the same place the single-process rule is enforced, and the only entry point
+# that is actually a running server.
+cp540.autostart()
 
 application = ProtocolTypeRouter(
     {

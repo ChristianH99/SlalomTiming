@@ -100,9 +100,13 @@ class TimingSettingsView(UpdateView):
         # other than the CP540 stops its reader.
         if settings.device != TimingSettings.Device.CP540:
             cp540.reader.stop()
+            self._remember_reader(settings, False)
 
         if action == "connect" and settings.device == TimingSettings.Device.CP540:
             cp540.reader.start(settings.ip_address, settings.port)
+            # The reader itself is process state; this is what survives a restart
+            # so the link comes back on its own (cp540.autostart, from asgi.py).
+            self._remember_reader(settings, True)
             messages.info(
                 self.request,
                 _("Connecting to the Tag Heuer CP540 at %(ip)s:%(port)s…")
@@ -110,10 +114,17 @@ class TimingSettingsView(UpdateView):
             )
         elif action == "disconnect":
             cp540.reader.stop()
+            self._remember_reader(settings, False)
             messages.info(self.request, _("Disconnected from the timing device."))
         else:
             messages.success(self.request, _("Timing settings saved."))
         return response
+
+    @staticmethod
+    def _remember_reader(settings, enabled):
+        if settings.reader_enabled != enabled:
+            settings.reader_enabled = enabled
+            settings.save(update_fields=["reader_enabled"])
 
 
 def cp540_status(request):

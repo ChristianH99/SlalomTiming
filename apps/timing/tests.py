@@ -3,7 +3,7 @@ import json
 from decimal import Decimal
 
 import pytest
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 from django.urls import reverse
 
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
@@ -1451,3 +1451,184 @@ def test_rejected_pairing_leaves_the_dragged_time_on_the_rail(client):
     assert resp["rejected"] is True
     early.refresh_from_db()
     assert early.ignored is True
+
+
+# --- Live connection: the socket the operator is trusting -------------------
+# OPS-3/OPS-4. Every live view used to open its own socket that neither showed
+# its state nor re-fetched after an outage, so a drop left a frozen screen and
+# the signals that arrived meanwhile stayed invisible. The lifecycle now lives in
+# static/js/live_socket.js; these pin the parts the server owns.
+
+LIVE_VIEW_TEMPLATES = (
+    "timing/live.html",
+    "timing/auto.html",
+    "competitions/marshal_posts.html",
+)
+
+
+@pytest.mark.parametrize("name", LIVE_VIEW_TEMPLATES)
+def test_live_views_show_the_connection_state(name):
+    """A view that follows the event live must carry the connection indicator —
+    a frozen screen is indistinguishable from a live one without it."""
+    from pathlib import Path
+
+    from django.conf import settings
+
+    source = (Path(settings.BASE_DIR) / "templates" / name).read_text(encoding="utf-8")
+    assert "timing/_live_connection.html" in source
+    assert "js/live_socket.js" in source
+
+
+def test_every_live_view_shares_one_socket_implementation():
+    """Nobody re-opens a raw socket: the reconnect, the banner and the re-fetch
+    after an outage only exist in live_socket.js, so a view that rolls its own
+    quietly loses all three."""
+    from pathlib import Path
+
+    from django.conf import settings
+
+    js_dir = Path(settings.BASE_DIR) / "static" / "js"
+    for name in ("timing_live.js", "auto_timing.js", "marshal_posts.js",
+                 "dashboard_overview.js"):
+        source = (js_dir / name).read_text(encoding="utf-8")
+        assert "new WebSocket(" not in source, f"{name} opens its own socket"
+        assert "window.liveSocket(" in source, f"{name} doesn't use the shared socket"
+
+
+def _live_socket_scenario(user, messages):
+    """Drive TimingLiveConsumer through a list of client messages, returning what
+    it sent back."""
+    from channels.testing import WebsocketCommunicator
+
+    from .consumers import TimingLiveConsumer
+
+    async def run():
+        comm = WebsocketCommunicator(TimingLiveConsumer.as_asgi(), "/ws/timing/live/")
+        comm.scope["user"] = user
+        connected, _ = await comm.connect()
+        assert connected
+        replies = []
+        for message in messages:
+            await comm.send_json_to(message)
+            if await comm.receive_nothing(timeout=0.2):
+                replies.append(None)
+            else:
+                replies.append(await comm.receive_json_from())
+        await comm.disconnect()
+        return replies
+
+    return async_to_sync(run)()
+
+
+def test_live_socket_answers_a_heartbeat(django_user_model):
+    """A socket can die without a close frame (a phone leaving Wi-Fi gets no TCP
+    FIN), so the client pings and treats silence as a dead link. Without a reply
+    it would tear down a perfectly good connection every 30 s."""
+    user = django_user_model.objects.create_user(username="pinger", password="x")
+    assert _live_socket_scenario(user, [{"action": "ping"}]) == [{"event": "pong"}]
+
+
+def test_live_socket_ignores_anything_else_it_is_sent(django_user_model):
+    """The base consumer's receive_json raises, which would drop the socket — and
+    the operator's screen with it."""
+    user = django_user_model.objects.create_user(username="babbler", password="x")
+    assert _live_socket_scenario(user, [{"action": "nonsense"}, {"action": "ping"}]) == \
+        [None, {"event": "pong"}]
+
+
+def test_a_changed_event_reaches_the_open_views_by_name(django_user_model):
+    """DAT-5's other half: a plain refresh would have every open view quietly
+    re-render as a different event, so the name travels with the nudge."""
+    from channels.testing import WebsocketCommunicator
+
+    from .consumers import TimingLiveConsumer
+    from .services import notify_competition_changed
+
+    user = django_user_model.objects.create_user(username="watcher", password="x")
+
+    async def run():
+        comm = WebsocketCommunicator(TimingLiveConsumer.as_asgi(), "/ws/timing/live/")
+        comm.scope["user"] = user
+        connected, _ = await comm.connect()
+        assert connected
+        await sync_to_async(notify_competition_changed)("Autumn Slalom")
+        message = await comm.receive_json_from()
+        await comm.disconnect()
+        return message
+
+    assert async_to_sync(run)() == {"event": "competition", "name": "Autumn Slalom"}
+
+
+# --- OPS-5: the device connection survives a restart ------------------------
+# The reader thread dies with the process, so a restart used to leave the CP540
+# still selected on the settings page with nothing reading it and nobody told.
+# TimingSettings.reader_enabled is the bit that outlives the process; asgi.py
+# acts on it through cp540.autostart().
+
+@pytest.fixture
+def no_real_socket(monkeypatch):
+    """Record what the reader was asked to do instead of opening a TCP socket."""
+    from . import cp540
+
+    calls = []
+    monkeypatch.setattr(cp540.reader, "start", lambda ip, port: calls.append((ip, port)))
+    monkeypatch.setattr(cp540.reader, "stop", lambda: calls.append("stop"))
+    return calls
+
+
+def _settings_post(client, **overrides):
+    data = {"device": "cp540", "start_channel": "1", "finish_channel": "2",
+            "ip_address": "192.168.1.50", "port": "7000"}
+    data.update(overrides)
+    return client.post(reverse("timing:settings"), data)
+
+
+def test_connect_is_remembered_across_a_restart(client, no_real_socket):
+    _settings_post(client, action="connect")
+    assert TimingSettings.load().reader_enabled is True
+
+
+def test_disconnect_is_remembered_too(client, no_real_socket):
+    _settings_post(client, action="connect")
+    _settings_post(client, action="disconnect")
+    assert TimingSettings.load().reader_enabled is False
+
+
+def test_selecting_another_device_clears_the_connection(client, no_real_socket):
+    """Only one source may write at a time — a restart must not resurrect a
+    reader for a device that is no longer selected."""
+    _settings_post(client, action="connect")
+    _settings_post(client, device="simulator", action="save")
+    assert TimingSettings.load().reader_enabled is False
+
+
+def test_autostart_reconnects_a_device_left_connected(no_real_socket):
+    from . import cp540
+
+    TimingSettings.objects.create(device="cp540", ip_address="10.0.0.4", port=7100,
+                                  reader_enabled=True)
+    assert cp540.autostart() is True
+    assert no_real_socket == [("10.0.0.4", 7100)]
+
+
+@pytest.mark.parametrize("fields", [
+    {"device": "cp540", "reader_enabled": False},    # operator had disconnected
+    {"device": "simulator", "reader_enabled": True},  # another device selected since
+    {"device": "cp540", "reader_enabled": True, "ip_address": None},   # nowhere to dial
+])
+def test_autostart_leaves_everything_else_alone(no_real_socket, fields):
+    from . import cp540
+
+    TimingSettings.objects.create(**{"ip_address": "10.0.0.4", "port": 7100, **fields})
+    assert cp540.autostart() is False
+    assert no_real_socket == []
+
+
+def test_autostart_never_stops_the_server_coming_up(monkeypatch):
+    """A database that isn't migrated yet means no autostart — not a server that
+    refuses to boot."""
+    from . import cp540
+    from .models import TimingSettings as Model
+
+    monkeypatch.setattr(Model, "load", classmethod(lambda cls: 1 / 0))
+    assert cp540.autostart() is False

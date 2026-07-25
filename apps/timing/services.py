@@ -32,10 +32,22 @@ def register_server_loop(loop):
 def notify_live():
     """Nudge every open live-timing view to re-fetch — safe to call from a
     request handler *or* a background thread (the CP540 reader)."""
+    _send({"type": "timing.refresh"})
+
+
+def notify_competition_changed(name):
+    """Tell every open live view that the *active competition* changed under it.
+
+    A plain refresh nudge would make each of them quietly re-render as a
+    different event — the same screen, other people's times. This carries the
+    new event's name so the page can say what happened instead."""
+    _send({"type": "timing.competition", "name": name})
+
+
+def _send(message):
     layer = get_channel_layer()
     if layer is None:
         return
-    message = {"type": "timing.refresh"}
     loop = _server_loop
     if loop is not None and loop.is_running():
         # Deliver on the loop the channel layer lives on, whichever thread we're

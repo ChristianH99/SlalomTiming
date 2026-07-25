@@ -61,8 +61,16 @@ apps/accounts/           Access control. Login required everywhere and page-leve
 apps/common.py           Helpers shared across apps: safe_next() resolves the POSTed ?next to
                          an in-app URL (rejecting off-site ones), so the unsaved-changes
                          modal's "Save changes" lands where the user was navigating.
+                         other_signed_in_users() reads the live session table — how a page
+                         owning an installation-wide setting knows whether changing it
+                         would move somebody else's screen (see select_competition).
 apps/competitions/       Competition, CompetitionType, CompetitionClass; active-competition
-                         selection. CompetitionType is the discipline *and* the rules its
+                         selection — which is one global flag for the whole installation, so
+                         select_competition() names the other people signed in and refuses
+                         without `confirm_switch` (competition_confirm_switch.html), then
+                         announces the new event by name over the timing WebSocket
+                         (services.notify_competition_changed) rather than letting every open
+                         view quietly re-render as somebody else's event. CompetitionType is the discipline *and* the rules its
                          competitions run under, edited on a per-type Settings page
                          (types/<pk>/settings/): penalties on/off plus four whole-second
                          amounts (mandatory only while penalties are on — the form clears
@@ -144,10 +152,20 @@ apps/participants/
                          competition's) and renders only the groups that type collects; the
                          server blanks anything it doesn't. The required marker comes from
                          PARTICIPANT_INFO's static mandatory flag rather than field.required.
+  bibs.py                What a bib carries. TimedRun.bib_number is a loose integer, so a run
+                         belongs to whoever wears the number: changing it hands every time
+                         recorded under it to the next holder and takes on any time recorded
+                         under the new one. bib_change_effect() counts both sides (a
+                         placeholder row with no time on it doesn't count), and both doors
+                         that can change a bib — the edit form and the list's inline field —
+                         refuse until it has been confirmed.
   views.py               CRUD views + participant_check duplicate-detection endpoint. The list
                          is scoped to the active competition's type and only shows the columns
                          that type collects (club, licence); with no competition selected it
                          prompts to pick one and shows nothing, and adding is blocked.
+                         ParticipantUpdateView re-renders its form with `confirm_bib_change`
+                         (the modal) and participant_set_bib answers {"confirm": …} until the
+                         caller sends `confirm` — see bibs.py.
 apps/timing/            The current timing path is TimingSignal -> arrangement -> TimedRun,
                         surfaced on the live Manual timing view (`timing/manual/`, name `manual`) and the
                         Auto timing view — which share the same runs (see the sync below). The old
@@ -156,7 +174,9 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          single-digit start/finish channel, IP + TCP port for the CP540, plus
                          ignore_incoming — the red operator "Lock" switch on the timing pages: while
                          on, every incoming signal is stored ignored [straight to the ignore list]
-                         instead of placed into a run, applying to every device/simulator),
+                         instead of placed into a run, applying to every device/simulator, and
+                         reader_enabled — whether the operator left the device connected, the one
+                         bit of the reader that outlives the process; see cp540.autostart),
                          TimingSignal (the raw device
                          inbox — running number, port, is_manual, device_time; stamped with the
                          active competition; `ignored`; `entered` == operator typed the time by
@@ -254,7 +274,11 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          lose every later time silently. Each state change nudges the live views
                          (_set_status → notify_live), and link_state() is what they render: for a
                          device that must hold a connection, whether it has one. The simulator
-                         holds none, so it never alarms.
+                         holds none, so it never alarms. The thread itself dies with the process,
+                         so autostart() re-establishes it from TimingSettings.reader_enabled —
+                         called from config/asgi.py (the one entry point that is a running
+                         server), never from AppConfig.ready(), and it never raises: an
+                         unmigrated database means no autostart, not a server that won't boot.
   views.py               DashboardView (organiser overview) + dashboard-state JSON endpoint;
                          Settings page; standalone Simulator; live Manual timing view + a JSON
                          arrangement endpoint and mutate endpoints (run-update by run id — marks
@@ -296,13 +320,21 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
   connectors/            (legacy) TimingDeviceConnector ABC + SimulatorConnector for the old
                          connector-loop dashboard; get_connector() reads settings.TIMING_CONNECTOR.
   services.py            run_ingestion() [legacy] + Channels group names (timing_updates,
-                         timing_live).
+                         timing_live) + the two nudges every live view listens for:
+                         notify_live() ("re-fetch") and notify_competition_changed(name) ("the
+                         active competition moved under you"), both safe from a request handler
+                         or a background thread.
   consumers.py           TimingConsumer (legacy dashboard) + TimingLiveConsumer (pushes refresh
-                         nudges to open live views, group "timing_live").
+                         and competition-changed nudges to open live views, group
+                         "timing_live"). It also answers the client's heartbeat with a pong: a
+                         socket can die without a close frame, and a page that can't tell is a
+                         frozen screen with a green light on it.
   management/commands/run_timing_connector.py   [legacy] runs the connector loop
 templates/timing/        dashboard.html (organiser overview), settings.html, simulator.html
                          (standalone, no app shell), live.html (Manual timing), auto.html (Auto timing),
-                         _device_alarm.html (the device-link banner both timing pages include)
+                         _device_alarm.html (the device-link banner both timing pages include),
+                         _live_connection.html (the WebSocket-connection indicator every live
+                         view includes — Marshal Posts too, which is why it lives here)
 static/js/               dashboard_overview.js (organiser Dashboard: renders the stat tiles,
                          progress ring, per-class board and current-competitor card from the
                          dashboard-state JSON, re-fetching on each timing_live WebSocket nudge) +
@@ -320,6 +352,13 @@ static/js/               dashboard_overview.js (organiser Dashboard: renders the
                          the "submitted" toast waits for the server rather than claiming it early;
                          a 409 means the run is already locked and is dropped quietly.
                          device_alarm.js renders the shared device-link banner from `device_link`.
+                         live_socket.js owns the WebSocket for all four live views (no other
+                         file may call `new WebSocket` — a test enforces it): reconnect with
+                         backoff, a heartbeat so a link that died without a close frame is
+                         noticed, the connection indicator, the "current event was changed"
+                         bar, and — the point — a re-fetch on every reconnect, since a signal
+                         that arrived during an outage is otherwise invisible until the next
+                         one happens to arrive.
 apps/results/           A "Results" landing page (index) listing every running class + the
                         Overall pages, per-class ranked tables, cross-class Overall tables, and a
                         Competition-Setup "Results" sub-page that configures the columns.
@@ -526,7 +565,16 @@ templates/transfer/      export.html (event + type tiles with what each file wou
   (polling timing:cp540-status) shows the device stream verbatim for debugging. The reader
   reconnects on its own after a drop, so the pill also reads "Reconnecting…"; while it is not
   connected, both timing pages carry a red **device-link banner** (`_device_alarm.html`) saying
-  times are not being recorded — the operator is never left timing against a dead link.
+  times are not being recorded — the operator is never left timing against a dead link. Connecting
+  is remembered (`TimingSettings.reader_enabled`), so a server restart mid-event brings the link
+  back by itself (`cp540.autostart` from `config/asgi.py`) instead of leaving the device selected
+  and nothing reading it; only Disconnect (or selecting another device) turns that off.
+
+Every live view — Manual timing, Auto timing, Marshal Posts and the Dashboard — also shows whether
+its own **WebSocket** is up (`_live_connection.html`: a quiet "Live" pill, a red bar while it is
+not), reconnects with backoff, and **re-fetches on every reconnect**, because a signal that arrived
+during the outage is otherwise invisible until the next one happens to arrive. All of that is
+`static/js/live_socket.js`; no view opens a socket of its own.
 - **Simulator** (`timing/simulator/`) — a standalone new-tab device emulator: a running clock, an
   auto-incrementing running number (with reset), a 2×4 pad (ports 1–4 light barrier, M1–M4 manual
   → same port, is_manual), and an on-page log. Each press POSTs a signal to `timing:signal`.

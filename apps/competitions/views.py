@@ -11,7 +11,7 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
-from apps.common import safe_next
+from apps.common import other_signed_in_users, safe_next
 from apps.timing.models import MarshalPenalty
 
 from . import startpattern, taskspec
@@ -506,15 +506,37 @@ class CompetitionDeleteView(DeleteView):
 
 @require_POST
 def select_competition(request, pk):
+    """Make one competition the active one.
+
+    There is exactly one active competition for the whole installation, so this
+    is not a private choice: it changes what every other timing screen, results
+    table and marshal post is showing, instantly. On a single-operator laptop
+    that is what you want; with other people signed in it is a trap, so they are
+    named and the switch is confirmed first — and once it happens, every open
+    live view is told, rather than quietly re-rendering as another event.
+    """
     competition = get_object_or_404(Competition, pk=pk)
+    previous = Competition.get_current()
+    if previous is not None and previous.pk == competition.pk:
+        return redirect("competitions:list")
+
+    others = other_signed_in_users(request)
+    if others and not request.POST.get("confirm_switch"):
+        return render(request, "competitions/competition_confirm_switch.html", {
+            "object": competition,
+            "previous": previous,
+            "others": others,
+        })
+
     with transaction.atomic():
         Competition.objects.exclude(pk=pk).update(is_active=False)
         competition.is_active = True
         competition.save(update_fields=["is_active"])
-    # Timing is scoped to the active competition, so tell any open live-timing view
-    # to re-fetch — it must not keep showing the previous competition's times.
-    from apps.timing.views import broadcast_live
-    broadcast_live()
+    # Timing is scoped to the active competition, so tell any open live view — it
+    # must not keep showing the previous competition's times, and the people
+    # watching have to know the ground moved rather than find out from the times.
+    from apps.timing.services import notify_competition_changed
+    notify_competition_changed(competition.name)
     return redirect("competitions:list")
 
 

@@ -1,0 +1,12 @@
+{% load i18n %}
+{% comment %}The live-connection indicator, shown on every view that follows the
+event as it runs (Manual timing, Auto timing, Marshal Posts). A dropped
+WebSocket leaves a screen that is frozen but looks exactly like a live one, so
+the state is always on the page rather than only when it breaks: a quiet "Live"
+pill while the socket is up, a loud bar while it is not. Rendered by
+static/js/live_socket.js — it starts in the offline state and the socket's own
+`open` clears it.{% endcomment %}
+<div class="live-conn live-conn--offline" data-live-connection role="status" aria-live="polite" hidden>
+  <span class="live-conn-dot" aria-hidden="true"></span>
+  <span class="live-conn-text" data-live-connection-text></span>
+</div>

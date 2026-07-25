@@ -278,6 +278,42 @@ class CP540Reader:
 reader = CP540Reader()
 
 
+def autostart():
+    """Bring the reader back up if the operator left the device connected.
+
+    The reader thread is process state, so a restart — a crash, a laptop reboot,
+    a release mid-event — used to leave the CP540 still *selected* on the
+    settings page with nothing actually reading it, and no reconnect and no word
+    to anybody. TimingSettings.reader_enabled is the bit that survives the
+    process, and this is what acts on it.
+
+    Called from config/asgi.py, the one entry point a server goes through (see
+    singleinstance) — never from AppConfig.ready(), which would also fire for
+    migrate, collectstatic and the test suite. Nothing here may stop the server
+    coming up: a database that isn't migrated yet just means no autostart.
+    """
+    import logging
+
+    log = logging.getLogger(__name__)
+    try:
+        from .models import TimingSettings
+
+        settings = TimingSettings.load()
+        if settings.device != TimingSettings.Device.CP540 or not settings.reader_enabled:
+            return False
+        if not settings.ip_address or not settings.port:
+            return False
+        reader.start(settings.ip_address, settings.port)
+    except Exception:
+        # An unmigrated or unreachable database, mostly. The operator can still
+        # connect by hand, and the timing pages' device alarm says the link is down.
+        log.warning("Could not restore the timing device connection", exc_info=True)
+        return False
+    log.info("Restoring the timing device connection to %s:%s",
+             settings.ip_address, settings.port)
+    return True
+
+
 def link_state(settings=None):
     """The device link as the live timing pages show it. A device that has to
     hold a connection and hasn't got one is an alarm: every time that fires while
