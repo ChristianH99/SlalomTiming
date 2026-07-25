@@ -1,0 +1,46 @@
+# Caddy in front of Slalom Timing — TLS termination + one upstream.
+#
+#   caddy run --config deploy/Caddyfile
+#
+# Why a proxy at all: Daphne speaks plain HTTP, and a race-day Wi-Fi network with
+# marshals' phones on it is not a trusted network — without TLS every session
+# cookie and password on it is readable off the air.
+#
+# `tls internal` makes Caddy issue the certificate from its own local CA, which
+# needs no internet and no public domain. Install that CA once on every device
+# that will open the app (`caddy trust` on the server prints where the root
+# certificate lives; phones need it imported manually) or browsers will warn.
+# With a real public hostname, delete the `tls internal` line and Caddy will get a
+# Let's Encrypt certificate instead.
+
+timing.local {
+	tls internal
+
+	# WebSockets (the live timing views) need no special handling — Caddy proxies
+	# the upgrade through as-is.
+	reverse_proxy 127.0.0.1:8000 {
+		# Django reads this to know the browser spoke HTTPS even though this hop
+		# is plain HTTP (SECURE_PROXY_SSL_HEADER in config/settings.py).
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# Optional: serve the two file trees from Caddy instead of the Python process.
+	# If you enable this, also set DJANGO_SERVE_MEDIA=False.
+	#
+	# handle_path /static/* {
+	# 	root * /srv/slalomtiming/staticfiles
+	# 	file_server
+	# }
+	# handle_path /media/* {
+	# 	root * /srv/slalomtiming/media
+	# 	file_server
+	# }
+
+	# An event archive can be tens of megabytes; the default 10 MB body limit
+	# would reject the import upload.
+	request_body {
+		max_size 100MB
+	}
+
+	encode gzip
+}

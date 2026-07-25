@@ -36,14 +36,26 @@ def _env_list(name):
 # are NOT safe to expose on a network.
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-qvzii-zuntaf-+wv0yuv32g2vz%1)@mo4d7_a8n(bycgw&_@4o',
-)
+INSECURE_DEV_SECRET_KEY = 'django-insecure-qvzii-zuntaf-+wv0yuv32g2vz%1)@mo4d7_a8n(bycgw&_@4o'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', INSECURE_DEV_SECRET_KEY)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Defaults to True for local use; set DJANGO_DEBUG=False in any deployment.
 DEBUG = _env_bool('DJANGO_DEBUG', default=True)
+
+# The checked-in development key is public — every copy of this repository has it,
+# so sessions and password-reset tokens signed with it are forgeable. A deployment
+# that forgot DJANGO_SECRET_KEY must fail loudly here rather than run unsafely
+# (`check --deploy` only warns, and a warning is easy to miss on race morning).
+if not DEBUG and SECRET_KEY == INSECURE_DEV_SECRET_KEY:
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY is not set, so the insecure development key from the '
+        'repository would be used with DEBUG=False. Generate one with:\n'
+        '  uv run python -c "from django.core.management.utils import '
+        'get_random_secret_key as g; print(g())"'
+    )
 
 # Hosts/domains this site may serve. Required (non-empty) once DEBUG is off.
 ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS')
@@ -80,6 +92,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serves everything under STATIC_ROOT (compressed + far-future cached) from the
+    # app process itself. `runserver` stops serving /static/ once DEBUG is off, so
+    # without this a real deployment renders with no CSS and no JS at all. Must sit
+    # directly below SecurityMiddleware and above everything else.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     # Resolves the active language (session -> cookie -> Accept-Language ->
     # LANGUAGE_CODE) so {% trans %} and gettext render in the chosen language.
@@ -231,10 +248,32 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
-# Uploaded media (results-PDF header/footer logos). Stored locally; served by
-# Django in this single-process dev/local deployment (see config/urls.py).
+# Where `collectstatic` gathers every static file (this app's, the admin's) for
+# WhiteNoise to serve. Required — without it collectstatic refuses to run, and with
+# DEBUG off nothing serves /static/ at all. Gitignored; a deployment step, not a
+# source directory: run `manage.py collectstatic` on every release (see DEPLOYMENT.md).
+STATIC_ROOT = Path(os.environ.get('DJANGO_STATIC_ROOT') or BASE_DIR / 'staticfiles')
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    # Hashes each file's contents into its name (so a changed stylesheet can be
+    # cached forever yet never go stale on an operator's laptop) and pre-compresses
+    # it. The hashed names only apply once collectstatic has run with DEBUG off;
+    # in development the plain names are used.
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+
+# Uploaded media (results-PDF header/footer logos). Written at runtime, so
+# WhiteNoise (which indexes STATIC_ROOT at startup) can't serve them — Django does,
+# via config/urls.py. Set DJANGO_SERVE_MEDIA=False when a reverse proxy is
+# configured to serve MEDIA_ROOT itself.
 MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT') or BASE_DIR / 'media')
+SERVE_MEDIA = _env_bool('DJANGO_SERVE_MEDIA', default=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

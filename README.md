@@ -173,8 +173,26 @@ uv run python manage.py run_timing_connector   # timing connector loop (see abov
 uv run python manage.py makemigrations
 uv run python manage.py migrate
 uv run python manage.py createsuperuser
+uv run python manage.py collectstatic          # required before any DEBUG=False run
 uv run pytest                                  # test suite (pytest-django)
 ```
+
+## Running a real event
+
+`runserver` is a development server. For an actual event — one machine at the venue, marshals'
+phones and a dashboard on the network — follow **[DEPLOYMENT.md](DEPLOYMENT.md)**: it covers the
+configuration, the release steps, the race-morning checklist and what to do when something is
+wrong. The ready-made pieces are in `deploy/`:
+
+```bash
+powershell -ExecutionPolicy Bypass -File deploy\start-server.ps1   # Windows laptop
+sudo systemctl enable --now slalomtiming                           # Linux (deploy/slalomtiming.service)
+caddy run --config deploy/Caddyfile                                # TLS in front of it
+```
+
+All three run exactly **one** Daphne process. That is a hard requirement, not a preference: the
+live-update channel layer, the CP540 reader thread and its event loop live in the process, so a
+second worker silently splits the event in half. A second start is refused (`run/server.lock`).
 
 ## Adding a real device connector
 
@@ -201,18 +219,23 @@ apps/timing/             TimingSignal -> arrangement -> TimedRun timing path, th
 apps/results/            Ranked per-class results (top-level "Results" section) computed from the
                          runs by each class's scoring method, plus a Competition-Setup sub-page
                          choosing which participant-info columns the tables show
-templates/, static/      shared base template + per-app templates, plain CSS/JS
+templates/, static/      shared base template + per-app templates, plain CSS/JS, self-hosted fonts
+deploy/                  systemd unit, Windows start script and Caddyfile for a real deployment
 ```
 
 ## Notes
 
-- `CHANNEL_LAYERS` uses `InMemoryChannelLayer` — fine for a single local process. Switch
+- `CHANNEL_LAYERS` uses `InMemoryChannelLayer` — fine for a single local process, which is
+  why only one server process may run (`config/singleinstance.py` enforces it). Switch
   to `channels_redis` only if this ever needs to run multi-process/multi-host.
 - Every timing pulse is written to the database (`TimingEvent`) before it is broadcast,
   so a dropped WebSocket or crashed dashboard never loses timing data.
 - `TimingEvent` bib numbers are matched against the current competition's `EventEntry`
   bibs at ingestion time to resolve a display name; the participant link is nullable
   since a pulse may arrive before a bib is registered.
-- This is a development configuration (`DEBUG = True`, checked-in dev `SECRET_KEY`). Set
-  a real secret key, `DEBUG = False` and `ALLOWED_HOSTS` before any network exposure.
+- Out of the box this is a development configuration (`DEBUG = True`, checked-in dev
+  `SECRET_KEY`). Every deployment setting comes from the environment — see `.env.example`
+  and [DEPLOYMENT.md](DEPLOYMENT.md). With `DEBUG=False` the app refuses to start on the
+  checked-in key, serves static files through WhiteNoise (so `collectstatic` must have run)
+  and self-hosts its fonts, so it needs no internet at a venue.
 ```

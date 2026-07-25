@@ -9,6 +9,7 @@ dependencies = [
     "django>=6.0",
     "reportlab>=4.0",
     "pillow>=10.0",
+    "whitenoise>=6.6",
 ]
 
 [dependency-groups]

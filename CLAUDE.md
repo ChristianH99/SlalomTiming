@@ -24,7 +24,14 @@ participants / entering penalties) — no rewrite planned, just wider access + a
 ## Layout
 
 ```
-config/                  Django project (settings, urls, asgi/wsgi)
+config/                  Django project (settings, urls, asgi/wsgi). singleinstance.py takes an
+                         exclusive lock on run/server.lock from asgi.py, so only one server process
+                         ever serves an event (the channel layer, the CP540 reader thread and its
+                         event loop are all per-process — a second worker splits the live updates
+                         silently). Refused in a deployment, warned about while DEBUG is on.
+                         tests.py holds the deployment tests (the DEBUG=False-only failures).
+deploy/                  Serving the app for real: systemd unit, Windows start-server.ps1 and a
+                         Caddyfile — all pinned to exactly one Daphne process. Run-book: DEPLOYMENT.md
 apps/common.py           Helpers shared across apps: safe_next() resolves the POSTed ?next to
                          an in-app URL (rejecting off-site ones), so the unsaved-changes
                          modal's "Save changes" lands where the user was navigating.
@@ -516,6 +523,7 @@ uv run python manage.py run_timing_connector   # start the configured timing con
 uv run python manage.py makemigrations
 uv run python manage.py migrate
 uv run python manage.py createsuperuser
+uv run python manage.py collectstatic    # required for any DEBUG=False run (see DEPLOYMENT.md)
 uv run pytest                            # tests (pytest-django)
 ```
 
@@ -523,12 +531,36 @@ uv run pytest                            # tests (pytest-django)
 (they read `TimingSignal` -> `TimedRun` and update live over the `timing_live` WebSocket group). The
 legacy `run_timing_connector` loop is only needed to feed the *old* `TimingEvent` connector-loop path.
 
+## Deployment
+
+`runserver` is for development only. A real event runs **one** Daphne process, optionally behind
+Caddy for TLS — the whole procedure (install, configure, release, race-morning checklist,
+troubleshooting) is in **DEPLOYMENT.md**, with the artefacts in `deploy/`. What differs from dev:
+
+- **Static files are served by WhiteNoise**, not by `runserver`, so `manage.py collectstatic` into
+  `STATIC_ROOT` (`staticfiles/`, gitignored) is a required release step — skip it and every page
+  renders unstyled with dead timing views. Names are content-hashed
+  (`CompressedManifestStaticFilesStorage`), so a changed stylesheet can never go stale on an
+  operator's laptop; in DEBUG the plain names are used.
+- **Uploaded media** (results-PDF logos) is written at runtime, so WhiteNoise can't serve it —
+  `config/urls.py` wires `django.views.static.serve` for `/media/` in *both* modes
+  (`DJANGO_SERVE_MEDIA=False` hands it to a reverse proxy instead).
+- **Fonts are self-hosted** (`static/fonts/*.woff2` + `static/css/fonts.css`, licence in
+  `static/fonts/OFL.txt`). Never reintroduce a `fonts.googleapis.com` link: a venue has no uplink,
+  and it would send every visitor's IP to a third party. `config/tests.py` fails if one appears.
+- **The secret key** must come from `DJANGO_SECRET_KEY` — settings raises `ImproperlyConfigured`
+  when `DEBUG` is off and the checked-in development key would be used.
+- Environment variables are documented in `.env.example`; nothing loads it automatically.
+
 ## Notes
 
 - `CHANNEL_LAYERS` uses `InMemoryChannelLayer` — fine for a single local process. Switch to
   `channels_redis` only if this ever needs to run multi-process/multi-host. Its queues are bound to
   the server's event loop, so a background thread (the CP540 reader) can't `group_send` directly — a
-  live consumer records the loop and `services.notify_live` schedules nudges onto it.
+  live consumer records the loop and `services.notify_live` schedules nudges onto it. That
+  single-process requirement is enforced, not assumed: `config/singleinstance.py` (called from
+  `config/asgi.py`) locks `run/server.lock`, so a second server is refused in a deployment. It steps
+  aside on its own if the channel layer is ever swapped for a cross-process one.
 - SQLite runs in **WAL mode** with a 30 s busy timeout (`OPTIONS['timeout']` in settings +
   per-connection PRAGMAs in `apps/timing/apps.py`), so the CP540 reader thread and web requests
   writing at once don't collide into "database is locked" and drop a time. A time that still can't be

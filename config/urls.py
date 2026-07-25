@@ -14,11 +14,13 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+import re
+
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 from django.views.i18n import JavaScriptCatalog
+from django.views.static import serve
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -37,6 +39,18 @@ urlpatterns = [
     path('', include('apps.timing.urls')),
 ]
 
-# Serve uploaded logos locally (single-process dev/local deployment).
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Serve uploaded logos (results-PDF headers/footers). Unlike static files these are
+# written at runtime, so WhiteNoise — which indexes STATIC_ROOT once at startup —
+# can't serve them; with DEBUG off and this route absent the logo previews 404.
+# django.views.static.serve is slow for large media, but this is a handful of small
+# logos on a single-event LAN app. Point a reverse proxy at MEDIA_ROOT and set
+# DJANGO_SERVE_MEDIA=False to take it out of the Python process.
+# (django.conf.urls.static.static() can't be used: it returns nothing unless DEBUG.)
+if settings.SERVE_MEDIA:
+    urlpatterns += [
+        re_path(
+            r'^%s(?P<path>.*)$' % re.escape(settings.MEDIA_URL.lstrip('/')),
+            serve,
+            {'document_root': settings.MEDIA_ROOT},
+        ),
+    ]

@@ -17,6 +17,13 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 # Django's app registry is populated first.
 django_asgi_app = get_asgi_application()
 
+from config import singleinstance  # noqa: E402
+
+# One event, one server process (channel layer, CP540 reader and event loop are all
+# per-process). This is the only entry point a server goes through, so the rule is
+# enforced where it's real — management commands and tests never reach it.
+singleinstance.acquire()
+
 from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 

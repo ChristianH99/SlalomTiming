@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{% trans "Slalom Timing" %}{% endblock %}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+  {% comment %}Inter + Manrope are served from static/fonts/ — a venue has no uplink,
+  and a font request to Google would also send every visitor's IP to a third party.{% endcomment %}
+  <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
   {% comment %}Defines gettext()/interpolate() in the browser from the compiled
   djangojs catalog, so the static/js scripts render in the active language. Must

@@ -69,6 +69,12 @@ db.sqlite3-shm
 # Uploaded media (results-PDF logos)
 /media/
 
+# collectstatic output (built at deploy time from static/ + the apps' own files)
+/staticfiles/
+
+# The single-server lock (config/singleinstance.py)
+/run/
+
 # Flask stuff:
 instance/
 .webassets-cache
