@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     'apps.participants',
     'apps.timing',
     'apps.results',
+    'apps.transfer',
 ]
 
 MIDDLEWARE = [

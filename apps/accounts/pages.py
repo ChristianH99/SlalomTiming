@@ -21,6 +21,7 @@ PAGES = [
     ("timing", _("Timing")),
     ("marshal_posts", _("Marshal Posts")),
     ("results", _("Results")),
+    ("import_export", _("Import / Export")),
 ]
 
 PAGE_KEYS = [key for key, _ in PAGES]
@@ -71,6 +72,13 @@ PAGE_URLS = {
             "index", "class", "overall", "tie-resolve", "pdf-logo-remove",
             "export-all", "export-sample", "export-overall", "export-class",
         )
+    },
+    # Moving whole events and every participant's personal data in and out of the
+    # system is its own responsibility — deliberately not folded into Competition
+    # Setup, so it can be granted (or withheld) on its own.
+    "import_export": {
+        ("transfer", name)
+        for name in ("export", "import", "review", "cancel", "csv-sample")
     },
 }
 

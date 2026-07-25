@@ -33,6 +33,7 @@ urlpatterns = [
     path('competitions/', include('apps.competitions.urls')),
     path('participants/', include('apps.participants.urls')),
     path('results/', include('apps.results.urls')),
+    path('transfer/', include('apps.transfer.urls')),
     path('', include('apps.timing.urls')),
 ]
 

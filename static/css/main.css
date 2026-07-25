@@ -3106,3 +3106,68 @@ textarea:focus-visible,
 .access-new-user-roles { margin-bottom: 0.5rem; }
 .access-new-user-roles .pdf-label { display: block; margin-bottom: 0.5rem; }
 .access-denied { max-width: 34rem; }
+
+/* --- Import / Export ------------------------------------------------------ */
+
+/* Export tiles carry their own little form (the timing switch + the button),
+   stacked so the switch never crowds the action. */
+.transfer-export-form { display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start; }
+.transfer-upload { max-width: 34rem; }
+.transfer-cancel { margin-top: 1rem; }
+
+/* The file picker. `form input` gives every input a generous padding, which on a
+   file input stacks on top of the browser's own chooser button and leaves a very
+   tall box — so the padding comes back off and the height is set from the line. */
+.transfer-file {
+  display: block; box-sizing: border-box;
+  width: 100%; max-width: 26rem;
+  padding: 0.3rem 0.4rem; font-size: 0.85rem;
+}
+.transfer-file::file-selector-button {
+  margin-right: 0.7rem; padding: 0.3rem 0.7rem;
+  font: inherit; color: var(--text-dark); cursor: pointer;
+  background: var(--snow); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.transfer-file::file-selector-button:hover { border-color: var(--ink); }
+
+/* .settings-section is a stretching flex column, so a plain button in it would
+   span the full width; these stay their own size. */
+.transfer-sample, .transfer-upload .actions, .transfer-columns { align-self: flex-start; }
+
+/* The CSV column reference: folded away by default so the Import page stays a
+   page of two file pickers, and opened automatically when a file was refused. */
+.transfer-columns > summary {
+  cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-mid);
+}
+.transfer-columns > summary:hover { color: var(--ink); }
+.transfer-columns[open] > summary { margin-bottom: 0.8rem; }
+.transfer-columns .hint { margin: 0.6rem 0; }
+.transfer-subhead {
+  font-family: 'Manrope', sans-serif; font-weight: 700;
+  font-size: 1rem; margin: 0; color: var(--text-dark);
+}
+
+/* CSV import: the column specification and the per-line complaints. */
+.transfer-csv-columns, .transfer-csv-error-table { width: auto; min-width: min(100%, 32rem); }
+.transfer-csv-columns code { font-size: 0.85em; }
+.transfer-csv-columns th[scope="row"], .transfer-csv-error-table th[scope="row"] {
+  font-weight: 600; color: var(--text-mid); white-space: nowrap;
+}
+.transfer-csv-example { color: var(--text-mid); }
+.transfer-csv-errors { border-left: 3px solid var(--flame); }
+.transfer-csv-result { border-left: 3px solid var(--glacier); }
+
+/* One participant the import can't place on its own. */
+.transfer-conflict { border-left: 3px solid var(--flame); }
+.transfer-conflict-head { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.5rem; }
+.transfer-conflict-name { font-family: 'Manrope', sans-serif; font-weight: 700;
+  font-size: 1rem; margin: 0; color: var(--text-dark); }
+.transfer-option { margin: 0.7rem 0 0.4rem; align-items: flex-start; }
+.transfer-option span { line-height: 1.4; }
+
+/* The field-by-field choice: every differing detail is one row, with the
+   existing and the imported value as the two pickable cells. */
+.transfer-diff { width: auto; min-width: min(100%, 34rem); margin: 0 0 0.6rem 1.6rem; }
+.transfer-diff th[scope="row"] { font-weight: 600; color: var(--text-mid); white-space: nowrap; }
+.transfer-pick { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+.transfer-pick input { margin: 0; flex: none; }

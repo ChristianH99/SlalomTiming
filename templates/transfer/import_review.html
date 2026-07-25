@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Review import" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Review import" %}{% endblock %}
+{% block content %}
+  <h1 class="page-heading">{% trans "Review import" %}</h1>
+  <p class="hint">
+    {% blocktrans %}What <strong>{{ filename }}</strong> would add to this system. Nothing has been changed yet.{% endblocktrans %}
+  </p>
+
+  <div class="settings-section">
+    <h2 class="form-section">
+      {% if plan.is_event %}
+        {% blocktrans with name=plan.competition_name %}Event: {{ name }}{% endblocktrans %}
+      {% else %}
+        {% blocktrans with name=plan.type_name %}Competition type: {{ name }}{% endblocktrans %}
+      {% endif %}
+    </h2>
+    <div class="tile-classes">
+      <span class="status-pill">{% blocktrans count counter=plan.counts.participants %}{{ counter }} participant{% plural %}{{ counter }} participants{% endblocktrans %}</span>
+      {% if plan.is_event %}
+        <span class="status-pill">{% blocktrans count counter=plan.counts.entries %}{{ counter }} starter{% plural %}{{ counter }} starters{% endblocktrans %}</span>
+        <span class="status-pill">{% blocktrans count counter=plan.counts.classes %}{{ counter }} class{% plural %}{{ counter }} classes{% endblocktrans %}</span>
+        <span class="status-pill">{% blocktrans count counter=plan.counts.runs %}{{ counter }} run{% plural %}{{ counter }} runs{% endblocktrans %}</span>
+        {% if plan.counts.marshal_posts %}
+          <span class="status-pill">{% blocktrans count counter=plan.counts.marshal_posts %}{{ counter }} marshal post{% plural %}{{ counter }} marshal posts{% endblocktrans %}</span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="post" class="settings-form">
+    {% csrf_token %}
+
+    <h2 class="form-section">{% trans "Competition type" context "transfer" %}</h2>
+    <div class="settings-section">
+      {% if type_actions %}
+        <p class="hint">
+          {% blocktrans with name=plan.existing_type.name %}This system already has a competition type called <strong>{{ name }}</strong>.{% endblocktrans %}
+        </p>
+        {% for value, label in type_actions %}
+          <label class="pdf-radio">
+            <input type="radio" name="type_action" value="{{ value }}"
+                   {% if value == default_type_action %}checked{% endif %}>
+            <span>{{ label }}</span>
+          </label>
+        {% endfor %}
+      {% else %}
+        <p class="hint">
+          {% blocktrans with name=plan.type_name %}The competition type <strong>{{ name }}</strong> will be created, with the rules stored in the file.{% endblocktrans %}
+        </p>
+      {% endif %}
+    </div>
+
+    {% if plan.is_event %}
+      <div class="settings-section">
+        <label class="switch">
+          <input type="checkbox" name="activate">
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+          <span class="switch-text">{% trans "Make the imported event the current one" %}</span>
+        </label>
+      </div>
+    {% endif %}
+
+    <h2 class="form-section">{% trans "Participants" %}</h2>
+    <div class="settings-section">
+      <div class="tile-classes">
+        <span class="status-pill">{% blocktrans count counter=summary.new %}{{ counter }} new{% plural %}{{ counter }} new{% endblocktrans %}</span>
+        <span class="status-pill">{% blocktrans count counter=summary.identical %}{{ counter }} already registered{% plural %}{{ counter }} already registered{% endblocktrans %}</span>
+        {% if summary.conflict %}
+          <span class="status-pill status-pill--active">{% blocktrans count counter=summary.conflict %}{{ counter }} to review{% plural %}{{ counter }} to review{% endblocktrans %}</span>
+        {% endif %}
+      </div>
+      <p class="hint">
+        {% trans "New participants are registered. Ones that match an existing record exactly are reused, so nobody is duplicated." %}
+      </p>
+    </div>
+
+    {% if conflicts %}
+      <h2 class="form-section">{% trans "Participants to review" %}</h2>
+      <p class="hint">{% trans "These look like people this system already knows, but the records disagree. Decide for each whether they are the same person, and which details to keep." %}</p>
+
+      {% for match in conflicts %}
+        <div class="settings-section transfer-conflict">
+          <div class="transfer-conflict-head">
+            <h3 class="transfer-conflict-name">{{ match.name }}</h3>
+            <span class="hint">{{ match.values.date_of_birth }}</span>
+          </div>
+
+          {% for candidate in match.candidates %}
+            <label class="pdf-radio transfer-option">
+              <input type="radio" name="choice-{{ match.ref }}" value="merge:{{ candidate.pk }}"
+                     {% if forloop.first %}checked{% endif %}>
+              <span>
+                {% blocktrans with name=candidate.participant %}Same person as <strong>{{ name }}</strong>{% endblocktrans %}
+                <span class="hint">({{ candidate.reason_label }})</span>
+              </span>
+            </label>
+            <table class="results-table transfer-diff">
+              <thead>
+                <tr>
+                  <th>{% trans "Detail" %}</th>
+                  <th>{% trans "Already registered" %}</th>
+                  <th>{% trans "In the file" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for diff in candidate.diffs %}
+                  <tr>
+                    <th scope="row">{{ diff.label }}</th>
+                    <td>
+                      <label class="transfer-pick">
+                        <input type="radio" name="field-{{ match.ref }}-{{ candidate.pk }}-{{ diff.field }}" value="existing">
+                        <span>{{ diff.existing|default:"—" }}</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="transfer-pick">
+                        <input type="radio" name="field-{{ match.ref }}-{{ candidate.pk }}-{{ diff.field }}" value="imported" checked>
+                        <span>{{ diff.imported|default:"—" }}</span>
+                      </label>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endfor %}
+
+          <label class="pdf-radio transfer-option">
+            <input type="radio" name="choice-{{ match.ref }}" value="create">
+            <span>{% trans "A different person — register separately" %}</span>
+          </label>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="actions">
+      <button class="button" type="submit">{% trans "Import" %}</button>
+    </div>
+  </form>
+
+  <form method="post" action="{% url 'transfer:cancel' %}" class="transfer-cancel">
+    {% csrf_token %}
+    <button class="link-button link-button--danger" type="submit">{% trans "Cancel import" %}</button>
+  </form>
+{% endblock %}

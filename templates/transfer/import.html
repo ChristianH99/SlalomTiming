@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Import" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Import" %}{% endblock %}
+{% block content %}
+  <h1 class="page-heading">{% trans "Import" %}</h1>
+
+  <h2 class="form-section">{% trans "Slalom Timing export file" %}</h2>
+  <form method="post" enctype="multipart/form-data" class="settings-form transfer-upload">
+    {% csrf_token %}
+    <div class="settings-section">
+      <p class="hint">{% trans "Read an export file written by another Slalom Timing system. Nothing is changed until you have reviewed what the file would do." %}</p>
+      <label class="settings-label" for="archive">{% trans "Export file (.zip)" %}</label>
+      <input class="transfer-file" type="file" name="archive" id="archive" accept=".zip,application/zip" required>
+      <div class="actions">
+        <button class="button" type="submit">{% trans "Read file" %}</button>
+      </div>
+    </div>
+  </form>
+
+  <h2 class="form-section">{% trans "Participant list" %}</h2>
+
+  {% if not competition %}
+    <div class="settings-section">
+      <p class="hint">
+        {% trans "Participants are registered into the competition currently being run, and none is selected." %}
+        <a href="{% url 'competitions:list' %}">{% trans "Choose one" %}</a>
+      </p>
+    </div>
+  {% else %}
+
+    {% if csv_result %}
+      <div class="settings-section transfer-csv-result">
+        <h3 class="transfer-subhead">{% trans "Participants imported" %}</h3>
+        <div class="tile-classes">
+          <span class="status-pill">{% blocktrans count counter=csv_result.entries %}{{ counter }} starter registered{% plural %}{{ counter }} starters registered{% endblocktrans %}</span>
+          <span class="status-pill">{% blocktrans count counter=csv_result.created %}{{ counter }} new participant{% plural %}{{ counter }} new participants{% endblocktrans %}</span>
+          <span class="status-pill">{% blocktrans count counter=csv_result.reused %}{{ counter }} already known{% plural %}{{ counter }} already known{% endblocktrans %}</span>
+          {% if csv_result.auto_bibs %}
+            <span class="status-pill">{% blocktrans count counter=csv_result.auto_bibs %}{{ counter }} bib assigned automatically{% plural %}{{ counter }} bibs assigned automatically{% endblocktrans %}</span>
+          {% endif %}
+        </div>
+        <p class="hint">
+          {% blocktrans with first=csv_result.first_bib last=csv_result.last_bib %}Bib numbers {{ first }}–{{ last }}.{% endblocktrans %}
+          <a href="{% url 'participants:list' %}">{% trans "Open the participant list" %}</a>
+        </p>
+      </div>
+    {% endif %}
+
+    {% if csv_report and csv_report.errors %}
+      <div class="settings-section transfer-csv-errors">
+        <h3 class="transfer-subhead">{% trans "The file was not imported" %}</h3>
+        <p class="hint">{% trans "Nothing has been changed. Fix the file and upload it again — every line has to be complete before any of it is registered." %}</p>
+        <table class="results-table transfer-csv-error-table">
+          <thead>
+            <tr>
+              <th>{% trans "Line" %}</th>
+              <th>{% trans "Problem" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for line, message in csv_report.errors %}
+              <tr>
+                <th scope="row">{% if line %}{{ line }}{% else %}{% trans "File" %}{% endif %}</th>
+                <td>{{ message }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="settings-form transfer-upload">
+      {% csrf_token %}
+      <div class="settings-section">
+        <p class="hint">
+          {% blocktrans with name=competition.name %}Registers the people in the file for <strong>{{ name }}</strong>. Somebody already registered under this competition's type — same name and date of birth — is reused instead of being added twice.{% endblocktrans %}
+        </p>
+
+        <details class="transfer-columns" {% if csv_report and csv_report.errors %}open{% endif %}>
+          <summary>{% trans "Which columns the file needs" %}</summary>
+          <p class="hint">{% trans "The first line of the file names the columns. Required columns must be present and filled on every line; the rest may be left out. Comma, semicolon and tab separators are all accepted." %}</p>
+          <table class="results-table transfer-csv-columns">
+            <thead>
+              <tr>
+                <th>{% trans "Column" %}</th>
+                <th>{% trans "Detail" %}</th>
+                <th>{% trans "Required" %}</th>
+                <th>{% trans "Example" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for column in columns %}
+                <tr>
+                  <th scope="row"><code>{{ column.key }}</code></th>
+                  <td>{{ column.label }}</td>
+                  <td>
+                    {% if column.mandatory %}
+                      <span class="status-pill status-pill--active">{% trans "Required" %}</span>
+                    {% else %}
+                      <span class="tile-muted">{% trans "Optional" %}</span>
+                    {% endif %}
+                  </td>
+                  <td class="transfer-csv-example">{{ column.example|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <p class="hint">{% trans "Leave the bib column out (or empty) and the next free numbers are assigned." %}</p>
+        </details>
+
+        <a class="button button--secondary button--small transfer-sample" href="{% url 'transfer:csv-sample' %}">{% trans "Download sample file" %}</a>
+
+        <label class="settings-label" for="csv">{% trans "Participant file (.csv)" %}</label>
+        <input class="transfer-file" type="file" name="csv" id="csv" accept=".csv,text/csv" required>
+        <div class="actions">
+          <button class="button" type="submit">{% trans "Import participants" %}</button>
+        </div>
+      </div>
+    </form>
+  {% endif %}
+{% endblock %}

@@ -66,6 +66,13 @@
           {% endfor %}
         </div>
         {% endif %}
+        {% if 'import_export' in nav_pages %}
+        <a class="shell-nav-item shell-nav-parent{% if app_name == 'transfer' %} active{% endif %}" href="{% url 'transfer:export' %}">{% trans "Import / Export" %}</a>
+        <div class="shell-nav-sub">
+          <a class="shell-nav-subitem{% if url_name == 'export' %} active{% endif %}" href="{% url 'transfer:export' %}">{% trans "Export" context "transfer" %}</a>
+          <a class="shell-nav-subitem{% if url_name == 'import' or url_name == 'review' %} active{% endif %}" href="{% url 'transfer:import' %}">{% trans "Import" %}</a>
+        </div>
+        {% endif %}
         {% endwith %}
       </nav>
       <div class="shell-sidebar-footer">

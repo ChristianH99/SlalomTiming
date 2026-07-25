@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Import finished" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Import finished" %}{% endblock %}
+{% block content %}
+  <h1 class="page-heading">{% trans "Import finished" %}</h1>
+
+  <div class="settings-section">
+    {% if result.competition %}
+      <p class="hint">
+        {% blocktrans with name=result.competition.name %}The event <strong>{{ name }}</strong> was imported.{% endblocktrans %}
+      </p>
+    {% else %}
+      <p class="hint">
+        {% blocktrans with name=result.competition_type.name %}The competition type <strong>{{ name }}</strong> was imported.{% endblocktrans %}
+      </p>
+    {% endif %}
+
+    <div class="tile-classes">
+      <span class="status-pill">{% blocktrans count counter=result.created_participants %}{{ counter }} participant registered{% plural %}{{ counter }} participants registered{% endblocktrans %}</span>
+      <span class="status-pill">{% blocktrans count counter=result.merged_participants %}{{ counter }} merged{% plural %}{{ counter }} merged{% endblocktrans %}</span>
+      <span class="status-pill">{% blocktrans count counter=result.reused_participants %}{{ counter }} already registered{% plural %}{{ counter }} already registered{% endblocktrans %}</span>
+      {% if result.competition %}
+        <span class="status-pill">{% blocktrans count counter=result.entries %}{{ counter }} starter{% plural %}{{ counter }} starters{% endblocktrans %}</span>
+        <span class="status-pill">{% blocktrans count counter=result.runs %}{{ counter }} run{% plural %}{{ counter }} runs{% endblocktrans %}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if result.warnings %}
+    <ul class="notice-list">
+      {% for warning in result.warnings %}
+        <li class="notice notice--warning">{{ warning }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <div class="actions">
+    {% if result.competition %}
+      <a class="button" href="{% url 'competitions:list' %}">{% trans "Go to competitions" %}</a>
+    {% else %}
+      <a class="button" href="{% url 'competitions:type-list' %}">{% trans "Go to competition types" %}</a>
+    {% endif %}
+    <a class="button button--secondary" href="{% url 'transfer:import' %}">{% trans "Import another file" %}</a>
+  </div>
+{% endblock %}

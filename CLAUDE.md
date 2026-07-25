@@ -325,6 +325,98 @@ templates/results/       index.html (class + Overall cards), results_class.html,
                          ranks editable, and Save posts to results:tie-resolve. Overall pages split by
                          scoring method AND counted-run count; the sidebar lists them above the
                          per-class pages.
+apps/transfer/          Moving data between Slalom Timing systems: an Export page and a
+                        three-step Import wizard (top-level sidebar item "Import / Export",
+                        its own access-control page key `import_export`). No models — the
+                        wizard's state is a staged file plus the session. Two export scopes:
+                        a whole **event** (competition + type + classes + marshal posts +
+                        participants/entries/assignments + timing + results config) and a whole
+                        **competition type** (the type + every participant registered under it,
+                        no event). An export is a `.zip`: `data.json` plus `media/` for the
+                        results-PDF logos, so it is self-contained on a machine that has no
+                        access to the source's MEDIA_ROOT.
+  schema.py              The document's shape: format/version, the per-model field lists, and
+                         dump()/load(). Every row carries a `ref` — its pk on the *source*
+                         system, used only as a local id — because an import must remap all pks
+                         onto the target's own (Django's own deserializer restores the original
+                         pks, which would clobber unrelated rows). Values are encoded by JSON and
+                         decoded back through the model field's own to_python(), so the two
+                         directions can't drift. Deliberately not carried: auto timestamps,
+                         MarshalPost.claim_token/claim_seen (which *device* holds a post) and
+                         Competition.is_active (an import must never take over the running event).
+                         TimingSignal.received_at *is* carried — arrangement.py orders runs by
+                         arrival, so dropping it would reshuffle an imported event.
+  archive.py             The .zip read/write, and the one place a hand-picked file meets the app:
+                         every way it can be wrong (not a zip, not ours, newer version) comes back
+                         as a TransferError sentence. Its JSON encoder subclasses DjangoJSONEncoder
+                         to *undo* that class's ECMA-262 truncation of times to milliseconds —
+                         this is a timing system, so device_time/received_at must round-trip exact.
+  merge.py               Deciding what an imported participant means here (the novel part).
+                         Each incoming row is matched against the participants already registered
+                         under the same type on two rules — same name + date of birth, or same
+                         licence number — and classified NEW / IDENTICAL (reuse the row untouched)
+                         / CONFLICT (recognisable but the records disagree, or several candidates).
+                         A licence match with a different name is offered but never auto-merged.
+                         Comparison is case- and whitespace-insensitive. A CONFLICT is resolved by
+                         the operator: keep them apart, or merge and pick a winner per differing
+                         field (Difference carries a translated label for the review table).
+  importers.py           plan() inspects a document without writing (the review step renders it);
+                         commit() writes it in one transaction. Builds a `ref -> new object` map
+                         per section and looks every FK up through it. Two places hide pks *inside*
+                         text and are remapped explicitly — the Auto timing order's slot keys and a
+                         ManualTieResolution's scope/members — since a stale pk there silently
+                         misorders an imported event instead of failing. A type that already exists
+                         by name can be reused / overwritten from the file / registered separately.
+                         Two incoming competitors merged onto one participant would break
+                         one-entry-per-competition, so the second keeps the first's entry and the
+                         operator is warned.
+  csvimport.py           The *other* import, offered by the same Import page (no sub-page of
+                         its own): registering a list of participants for the **active**
+                         competition from a spreadsheet. No pk remapping and no merge wizard — a CSV is
+                         written by a human, so instead it is unforgiving up front: the file is
+                         checked whole and imported only if every line is good, and every
+                         complaint carries the spreadsheet line number (the header is line 1).
+                         All checks run even after one fails, so one upload lists everything
+                         wrong. Which columns a file needs is not fixed — columns_for() follows
+                         the active competition's type via CompetitionType.PARTICIPANT_INFO,
+                         exactly like the participant form, and sample_csv() hands out a matching
+                         example (semicolon-separated + BOM, so Excel opens it in columns).
+                         Headers are matched loosely (case/punctuation plus an ALIASES table),
+                         dates in ISO or German form, and the file may be UTF-8 or cp1252.
+                         A participant already registered under the type with the same name and
+                         date of birth is *reused*, never duplicated; someone already entered in
+                         the competition is an error. Bibs are optional — rows without one are
+                         given the lowest free numbers (_bib_allocator fills gaps).
+                         Not handled: class assignment. Imported starters get a bib but no
+                         ClassAssignment, so a Manual-assignment competition still needs them
+                         assigned afterwards.
+  staging.py             Where an uploaded archive waits between the wizard's steps: a temp file
+                         under a random token that only the session knows. Archives carry personal
+                         data, so a staged file is deleted on commit/cancel and stale ones swept.
+  views.py               ExportView (page + the .zip download), ImportView — the one Import page,
+                         offering both kinds of file and dispatching on which file field was
+                         submitted: an *archive* is step 1 of the wizard (parsed on upload so a
+                         wrong one is rejected while the file picker is still in front of the
+                         operator), a *participant CSV* is registered on the spot and re-renders
+                         the page with the result or the per-line faults. Only the CSV half needs
+                         an active competition, so the page still works without one.
+                         ImportReviewView (step 2: renders the plan, and
+                         on POST commits), cancel_import. The review form names its inputs by the
+                         incoming participant's ref — `choice-<ref>` ("create" / "merge:<pk>") and
+                         `field-<ref>-<pk>-<name>` per differing field, keyed by candidate so
+                         switching candidate can't inherit the other's choices. Anything absent
+                         keeps that match's default, so an untouched review screen does the
+                         obvious thing.
+templates/transfer/      export.html (event + type tiles with what each file would contain),
+                         import.html — both file pickers on one page: the export archive, then
+                         the participant list, which doubles as the CSV specification (a folded
+                         <details> holding the column table — name / detail / required / example
+                         — for the active competition's type, opened automatically when a file
+                         was refused, plus the sample download and, after a POST, either the
+                         result or the per-line list of what was wrong) —, import_review.html
+                         (counts, the competition-type choice, and one block per participant to
+                         review: candidate radios plus a field-by-field existing/imported diff
+                         table) and import_done.html.
 ```
 
 ### Timing UI (under the sidebar "Timing" menu)

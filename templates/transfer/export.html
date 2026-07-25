@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Export" context "transfer" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Export" context "transfer" %}{% endblock %}
+{% block content %}
+  <h1 class="page-heading">{% trans "Export" context "transfer" %}</h1>
+  <p class="hint">{% trans "Write a part of this system to a file that another Slalom Timing system can import." %}</p>
+
+  <h2 class="form-section">{% trans "Events" %}</h2>
+  <p class="hint">{% trans "The whole event: its type and rules, classes, marshal posts, everyone entered with their bibs, the timing captured and the results setup." %}</p>
+
+  <div class="competition-tiles">
+    {% for row in competitions %}
+      <div class="competition-tile{% if row.competition.is_active %} competition-tile--active{% endif %}">
+        <div class="tile-body">
+          <div class="tile-head">
+            <h3 class="tile-name">{{ row.competition.name }}</h3>
+            {% if row.competition.is_active %}
+              <span class="status-pill status-pill--active">{% trans "Current" %}</span>
+            {% endif %}
+          </div>
+          <div class="tile-meta">
+            <span>{{ row.competition.competition_type.name }}</span>
+            <span class="tile-dot">·</span>
+            <span>{{ row.competition.date|date:"d.m.Y" }}</span>
+          </div>
+          <div class="tile-classes">
+            <span class="status-pill">{% blocktrans count counter=row.summary.entries %}{{ counter }} starter{% plural %}{{ counter }} starters{% endblocktrans %}</span>
+            <span class="status-pill">{% blocktrans count counter=row.summary.classes %}{{ counter }} class{% plural %}{{ counter }} classes{% endblocktrans %}</span>
+            <span class="status-pill">{% blocktrans count counter=row.summary.runs %}{{ counter }} run{% plural %}{{ counter }} runs{% endblocktrans %}</span>
+            {% if row.summary.marshal_posts %}
+              <span class="status-pill">{% blocktrans count counter=row.summary.marshal_posts %}{{ counter }} marshal post{% plural %}{{ counter }} marshal posts{% endblocktrans %}</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="tile-actions">
+          <form method="post" class="transfer-export-form">
+            {% csrf_token %}
+            <input type="hidden" name="target" value="competition">
+            <input type="hidden" name="pk" value="{{ row.competition.pk }}">
+            <label class="switch">
+              <input type="checkbox" name="include_timing" checked>
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+              <span class="switch-text">{% trans "Include timing data" %}</span>
+            </label>
+            <button class="button button--small" type="submit">{% trans "Export event" %}</button>
+          </form>
+        </div>
+      </div>
+    {% empty %}
+      <p class="empty-state">{% trans "No competitions to export yet." %}</p>
+    {% endfor %}
+  </div>
+
+  <h2 class="form-section">{% trans "Competition types" %}</h2>
+  <p class="hint">{% trans "A discipline and its rules, plus every participant registered under it — without any event or bibs." %}</p>
+
+  <div class="competition-tiles">
+    {% for row in types %}
+      <div class="competition-tile">
+        <div class="tile-body">
+          <div class="tile-head">
+            <h3 class="tile-name">{{ row.type.name }}</h3>
+          </div>
+          <div class="tile-classes">
+            <span class="status-pill">{% blocktrans count counter=row.summary.participants %}{{ counter }} participant{% plural %}{{ counter }} participants{% endblocktrans %}</span>
+            <span class="status-pill">{% blocktrans count counter=row.summary.competitions %}{{ counter }} competition{% plural %}{{ counter }} competitions{% endblocktrans %}</span>
+          </div>
+        </div>
+        <div class="tile-actions">
+          <form method="post" class="transfer-export-form">
+            {% csrf_token %}
+            <input type="hidden" name="target" value="type">
+            <input type="hidden" name="pk" value="{{ row.type.pk }}">
+            <button class="button button--small" type="submit">{% trans "Export type" %}</button>
+          </form>
+        </div>
+      </div>
+    {% empty %}
+      <p class="empty-state">{% trans "No competition types to export yet." %}</p>
+    {% endfor %}
+  </div>
+{% endblock %}
