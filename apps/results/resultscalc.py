@@ -69,10 +69,13 @@ class CompetitorResult:
 # ----- persisting Auto timing's positional identity onto its runs -----
 
 def sync_identities(competition):
-    """Fold Auto timing's slot binding onto the runs so results read one
-    representation. Delegates to ``autotiming.sync_bindings`` — the same routine
-    the Auto timing view runs — so a run's identity and penalties match whichever
-    screen recorded it."""
+    """Fold Auto timing's slot binding onto the runs *and persist it*. Delegates to
+    ``autotiming.sync_bindings`` — the same routine the timing views' write paths
+    run — so a run's identity matches whichever screen recorded it.
+
+    Reading results does **not** need this: ``RunIndex`` binds the runs it has just
+    read, in memory. Rendering a table is a GET and must not take the write lock
+    the timing rig needs (see autotiming.sync_bindings)."""
     autotiming.sync_bindings(competition)
 
 
@@ -86,18 +89,38 @@ def run_penalty_seconds(run, competition):
     return autotiming.penalty_seconds(run, competition)
 
 
-def _run_totals(competition, bib, cclass, occurrence, precision, run_type):
+class RunIndex:
+    """The competition's recorded runs, read in one query and grouped by the slot
+    they belong to (bib, class, occurrence, run type).
+
+    A results table asked the database for a competitor's runs twice over — once
+    for the counted runs and once for the practice ones — per competitor, per
+    class: 149 queries for a 40-strong class, 629 for 200, and the "export
+    everything" PDF multiplies that by the class count. A whole event's runs are
+    one query, so they are read once and the table is assembled from memory.
+    """
+
+    def __init__(self, competition):
+        runs = autotiming.all_runs(competition)
+        # Auto timing identifies a run by its place in the start order, not by a
+        # typed bib. Bind these copies before grouping them, so a positionally
+        # timed run is filed under the competitor it belongs to — in memory, so
+        # rendering a table stays a pure read (see sync_identities).
+        autotiming.apply_bindings(competition, runs)
+        self._by_slot = {}
+        for run in runs:
+            key = (run.bib_number, run.competition_class_id,
+                   run.class_occurrence, run.run_type)
+            self._by_slot.setdefault(key, []).append(run)
+
+    def runs(self, bib, cclass, occurrence, run_type):
+        return self._by_slot.get((bib, cclass.pk, occurrence, run_type), ())
+
+
+def _run_totals(competition, index, bib, cclass, occurrence, precision, run_type):
     """``{run_number: RunResult}`` for a competitor's finished runs of ``run_type``.
     When a run number was recorded more than once the lowest total is kept."""
-    runs = (
-        TimedRun.objects.filter(
-            competition=competition, bib_number=bib,
-            competition_class=cclass, class_occurrence=occurrence,
-            run_type=run_type,
-        )
-        .select_related("start_signal", "finish_signal")
-        .prefetch_related("marshal_penalties")
-    )
+    runs = index.runs(bib, cclass, occurrence, run_type)
     by_number = {}
     for run in runs:
         rt = calc.resolved_run_time(run, precision)
@@ -128,9 +151,9 @@ def _score(method, totals):
     return sum(totals)  # AGGREGATE
 
 
-def _competitor(competition, cclass, entry, occurrence, precision):
+def _competitor(competition, index, cclass, entry, occurrence, precision):
     by_number = _run_totals(
-        competition, entry.bib_number, cclass, occurrence, precision,
+        competition, index, entry.bib_number, cclass, occurrence, precision,
         TimedRun.RunType.COUNTED,
     )
     counted = cclass.counted_runs or 0
@@ -139,7 +162,7 @@ def _competitor(competition, cclass, entry, occurrence, precision):
         for number in range(1, counted + 1)
     ]
     practice_by_number = _run_totals(
-        competition, entry.bib_number, cclass, occurrence, precision,
+        competition, index, entry.bib_number, cclass, occurrence, precision,
         TimedRun.RunType.PRACTICE,
     )
     training = [
@@ -354,13 +377,16 @@ def compute_class_results(competition, cclass):
         for entry in competition.entries.select_related("participant").all()
     }
     starters = competition.starters_by_class().get(cclass.pk, [])
+    index = RunIndex(competition)
     competitors = []
     for starter in starters:
         entry_pk, _, occurrence = starter.key
         entry = entries.get(entry_pk)
         if entry is None:
             continue
-        competitors.append(_competitor(competition, cclass, entry, occurrence, precision))
+        competitors.append(
+            _competitor(competition, index, cclass, entry, occurrence, precision)
+        )
 
     scope = class_scope(cclass)
     complete = [c for c in competitors if c.complete]
@@ -437,6 +463,7 @@ def compute_overall_results(competition, method, counted_runs):
         if cc.scoring_method == method and (cc.counted_runs or 0) == counted_runs
     ]
     by_class = competition.starters_by_class()
+    index = RunIndex(competition)
     competitors = []
     for cclass in classes:
         for starter in by_class.get(cclass.pk, []):
@@ -445,7 +472,7 @@ def compute_overall_results(competition, method, counted_runs):
             if entry is None:
                 continue
             competitors.append(
-                _competitor(competition, cclass, entry, occurrence, precision)
+                _competitor(competition, index, cclass, entry, occurrence, precision)
             )
 
     scope = overall_scope(method, counted_runs)

@@ -199,9 +199,18 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          identity matches — so a run pre-entered on Manual timing shows pre-filled and
                          incoming device times step over it — and the remaining *auto* runs bind to
                          the still-empty slots positionally (n-th started auto run = n-th free slot).
-                         sync_bindings() then persists each auto run's slot identity (bib/class/run)
-                         back onto the TimedRun, so the Manual view reads the same competitor — the
-                         Auto→Manual half of the sync. Penalties aren't cached: they're computed live
+                         apply_bindings() then folds each auto run's slot identity (bib/class/run)
+                         onto the TimedRun objects *in memory*, so the Manual view reads the same
+                         competitor — the Auto→Manual half of the sync — and sync_bindings()
+                         persists it. Which of the two you want is the rule: **a reader binds, a
+                         writer persists.** Rendering is a GET and must not take the write lock the
+                         timing rig's own thread needs to record a time (several open browsers
+                         refreshing on one nudge raced each other on those rows), so every read
+                         path — both timing views, the Dashboard, results, the PDFs — calls
+                         apply_bindings on the runs it is about to render, and only ingest, a
+                         reorder and the operator's edits (views._rebind_and_broadcast) call
+                         sync_bindings. Both take an optional `runs` list (autotiming.all_runs) so
+                         one read serves the whole request. Penalties aren't cached: they're computed live
                          from the posts + the run's own counts (penalty_seconds), so both views agree.
                          current_run()/current_index() pick the run with the latest timing
                          activity (last start, or a finish that just came in for an earlier starter),
@@ -291,8 +300,19 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          parsing in _parse_duration (an over-long Decimal makes *every later read*
                          of that row raise, which used to 500 both timing views and the dashboard
                          for the rest of the event), and MAX_PENALTY_COUNT in _as_count/_as_signed.
-                         serialize_arrangement()/timing_signal both run sync_bindings so the two
-                         views stay in step; serialize_arrangement (and autotiming.serialize) also
+                         serialize_arrangement() applies the Auto binding to the rows it renders so
+                         the two views stay in step, and the endpoints that *move* that binding
+                         persist it through _rebind_and_broadcast (see autotiming.sync_bindings).
+                         _RowContext is why the table is affordable: the rows used to resolve their
+                         own bib, their participant's classes and "is this run already recorded?"
+                         once per row *and per dropdown option* — 293 queries at 40 starters, 1413
+                         at 200, re-fetched by every open browser on every incoming time. The
+                         context reads the entries and the runs once and answers from memory, so
+                         the cost is flat in the size of the field (16 queries either way); the
+                         mutate endpoints build one with _RowContext.load() *after* their save,
+                         because over-max counts the row being saved. A context is a snapshot —
+                         never build one before the writes of a request. serialize_arrangement (and
+                         autotiming.serialize) also
                          carry `device_link` (cp540.link_state) so a lost device raises its alarm
                          on the timing pages, not only on the settings page. timing_signal ingests device posts (csrf-exempt, since a
                          real device can't send a token) and nudges live views to refresh — but it is
@@ -378,9 +398,15 @@ apps/results/           A "Results" landing page (index) listing every running c
                          scope ("class:<pk>" / "overall:<method>:<runs>") + the member set — an
                          ordered [entry_pk, occurrence, rank] list that applies only while the same
                          competitors are still tied (else ignored).
-  resultscalc.py         The scoring/ranking engine. sync_identities() delegates to
-                         autotiming.sync_bindings() (the same routine the timing views run), so
-                         results read one representation. run_penalty_seconds() is the single penalty
+  resultscalc.py         The scoring/ranking engine. RunIndex reads the event's runs *once* and
+                         groups them by (bib, class, occurrence, run type), binding Auto timing's
+                         positional identity onto them in memory (autotiming.apply_bindings) so
+                         results read one representation — rendering a table, or a PDF, is a pure
+                         read. Every competitor's runs used to be fetched twice over, counted then
+                         practice, per competitor per class: 149 queries for a 40-strong class, 629
+                         for 200, and "export everything" multiplied that by the class count.
+                         sync_identities() is the *persisting* half (autotiming.sync_bindings) and
+                         is not needed to display anything. run_penalty_seconds() is the single penalty
                          source (marshal-post totals + timekeeper adjust when penalties_by_marshal_posts,
                          else the run's own counts). _competitor() gathers a competitor's counted and
                          practice (training) runs and their total_time (run + penalties). scores by
@@ -714,6 +740,37 @@ Failed logins are throttled and logged (`apps/accounts/throttle.py`). Still open
 and deliberately not done yet: no CSP (`SEC-11`), no audit trail of who changed a result
 (`SEC-9`), the duplicate-check endpoint isn't scoped to the competition type (`SEC-7`), and the
 WebSocket consumers check login but not role (`SEC-12`).
+
+## Performance
+
+The live endpoints are re-fetched by **every open browser on every incoming time**, so their cost
+is paid once per competitor crossing a beam per screen. Two rules keep that affordable, and both
+are pinned by tests (`test_live_endpoint_cost_does_not_grow_with_the_field`,
+`test_live_endpoints_never_write`, and the results equivalents) because neither failure is visible
+until an event is big enough to hurt:
+
+- **The cost must not grow with the field.** Anything per row, per competitor or per dropdown
+  option belongs in a batch read: `views._RowContext` (Manual timing), `resultscalc.RunIndex`
+  (results), `autotiming.all_runs` + one `apply_bindings` pass (Auto timing, Dashboard).
+- **A read must not write.** See `autotiming.sync_bindings` — a GET that writes takes the lock the
+  CP540 reader thread needs to record a time, and several browsers refreshing on one nudge raced
+  each other on the same rows.
+
+Measured on a real Daphne process, 200 starters with 400 runs already recorded (the state a club
+event reaches by mid-afternoon), before → after the stage-5 work:
+
+| | before | after |
+|---|---|---|
+| `timing:arrangement`, one client | 1415 ms (1413 queries) | **95 ms** (16 queries) |
+| `results:class`, 200 competitors | 629 queries | **29 queries** |
+| six clients refreshing flat out, worst recorded signal | 1851 ms | **796 ms** |
+
+No signal was lost and no refresh failed in either run, so `REL-8` (SQLite vs a live multi-user
+event) is **survivable at 200 starters** and does not force Postgres. The remaining headroom is
+payload, not queries: `timing:auto-state` ships ~1.1 MiB per refresh because a nudge carries no
+payload and each client re-downloads everything (`PRF-6`) — that is the next lever if a bigger
+field ever needs one. The harness that produced these numbers is a scratchpad script, not part of
+the repo; re-create it from this table's shape if you need to re-measure.
 
 ## Notes
 

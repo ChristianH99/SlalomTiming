@@ -53,6 +53,18 @@ def broadcast_live():
     notify_live()
 
 
+def _rebind_and_broadcast(competition):
+    """For an edit that changes *which* runs exist or who owns them — a new
+    placeholder, an ignored time, a re-pairing, an operator taking a row over.
+    Each of those moves the start-order binding, so the stored slot identity is
+    refreshed here, on the write, before the views are nudged: they bind in memory
+    when they render and no longer persist it themselves (see
+    autotiming.sync_bindings). Penalty and lock edits don't move it and just
+    broadcast."""
+    autotiming.sync_bindings(competition)
+    broadcast_live()
+
+
 class DashboardView(TemplateView):
     """The organiser overview: a live, read-only status view of the whole event
     (overall run progress, per-class state, the competitor on course, headline
@@ -206,6 +218,9 @@ def auto_reorder(request):
     known = {slot["key"] for slot in autotiming.computed_slots(competition)}
     competition.auto_timing_order = [key for key in posted if key in known]
     competition.save(update_fields=["auto_timing_order"])
+    # A different order binds runs to different competitors — persist it here, on
+    # the write, because the readers no longer do (see autotiming.sync_bindings).
+    autotiming.sync_bindings(competition)
     broadcast_live()
     return JsonResponse({"ok": True})
 
@@ -218,6 +233,7 @@ def auto_reset_order(request):
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     competition.auto_timing_order = []
     competition.save(update_fields=["auto_timing_order"])
+    autotiming.sync_bindings(competition)
     broadcast_live()
     return JsonResponse({"ok": True})
 
@@ -629,14 +645,14 @@ def timing_run_update(request):
     if run is None:
         return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
 
+    ctx = _RowContext.load(competition)
     if "bib_number" in payload:
         # A new bib re-resolves the class (clearing the bib clears the class), and
         # resets the run so it re-derives for the new participant. The default
         # class is the participant's first slot they haven't yet completed.
         run.bib_number = _as_positive_int(payload.get("bib_number"))
         run.run_type, run.run_number = "", None
-        entry = _resolve_entry(competition, run.bib_number)
-        slot = _default_class_slot(competition, entry.participant if entry else None, run)
+        slot = _default_class_slot(ctx, ctx.participant(run.bib_number), run)
         run.competition_class, run.class_occurrence = slot if slot else (None, 0)
     if "class_key" in payload:
         run.competition_class, run.class_occurrence = _parse_class_key(
@@ -648,7 +664,7 @@ def timing_run_update(request):
     # Once a class is set (auto or manual) and the run wasn't set explicitly here,
     # default the run to the next not-yet-done one, in order P then C.
     if "run_value" not in payload and run.competition_class and not run.run_type:
-        nxt = _next_undone_run(competition, run)
+        nxt = _next_undone_run(ctx, run)
         if nxt:
             run.run_type, run.run_number = nxt
     for field in ("pylon_count", "task_count", "stopline_count"):
@@ -658,8 +674,10 @@ def timing_run_update(request):
     # timing order and the auto binding won't reassign it.
     run.manual_entry = True
     run.save()
-    broadcast_live()
-    return JsonResponse({"ok": True, "row": _serialize_run(run, competition, competition.competition_type)})
+    _rebind_and_broadcast(competition)
+    # Re-read after the save: over-max counts this row too, so the snapshot the
+    # response is built from has to be the one that includes the change.
+    return JsonResponse({"ok": True, "row": _serialize_run(run, _RowContext.load(competition))})
 
 
 @require_POST
@@ -679,7 +697,7 @@ def timing_ignore(request):
         arrangement.detach(signal)
     else:
         arrangement.ingest(signal, TimingSettings.load())
-    broadcast_live()
+    _rebind_and_broadcast(competition)
     return JsonResponse({"ok": True})
 
 
@@ -707,7 +725,7 @@ def timing_pair(request):
         if signal.ignored:
             signal.ignored = False
             signal.save(update_fields=["ignored"])
-        broadcast_live()
+        _rebind_and_broadcast(competition)
     return JsonResponse({"ok": ok, "rejected": not ok})
 
 
@@ -721,7 +739,7 @@ def timing_add_run(request):
     # An operator-created row: owned from the start so the Auto view treats it as
     # a pre-entry rather than an auto-bound slot.
     TimedRun.objects.create(competition=competition, manual_entry=True)
-    broadcast_live()
+    _rebind_and_broadcast(competition)
     return JsonResponse({"ok": True})
 
 
@@ -737,7 +755,7 @@ def timing_delete_run(request):
     ).first()
     if run is not None:
         run.delete()
-        broadcast_live()
+        _rebind_and_broadcast(competition)
     return JsonResponse({"ok": True})
 
 
@@ -776,8 +794,8 @@ def timing_set_time(request):
         run.manual_entry = True
         run.save(update_fields=[field, "manual_entry", "updated_at"])
         _discard_displaced(occupant)
-        broadcast_live()
-        return JsonResponse({"ok": True, "row": _serialize_run(run, competition, competition.competition_type)})
+        _rebind_and_broadcast(competition)
+        return JsonResponse({"ok": True, "row": _serialize_run(run, _RowContext.load(competition))})
 
     device_time = _parse_device_time(str(raw).strip())
     if device_time is None:
@@ -802,15 +820,21 @@ def timing_set_time(request):
     run.manual_entry = True
     run.save(update_fields=[field, "manual_entry", "updated_at"])
     _discard_displaced(occupant, keep_id=signal.id)
-    broadcast_live()
-    return JsonResponse({"ok": True, "row": _serialize_run(run, competition, competition.competition_type)})
+    _rebind_and_broadcast(competition)
+    return JsonResponse({"ok": True, "row": _serialize_run(run, _RowContext.load(competition))})
 
 
 def _run_from_slot(competition, slot_key):
     """Find (or create) the run for an Auto-timing start-order slot, so a time can
     be keyed onto an upcoming competitor who has no run yet. The slot key is
     ``entry:class:occurrence:run_type:run_number`` (see autotiming.slot_key). A
-    created run is operator-owned so it claims its slot and device times skip it."""
+    created run is operator-owned so it claims its slot and device times skip it.
+
+    The stored binding is refreshed first: this looks an existing run up *by that
+    identity*, and since the live views stopped persisting what they render (see
+    autotiming.sync_bindings) a stale row here would mean a second run created for
+    a competitor who already has one."""
+    autotiming.sync_bindings(competition)
     parts = str(slot_key or "").split(":")
     if len(parts) != 5:
         return None
@@ -875,8 +899,8 @@ def timing_set_runtime(request):
         run.manual_run_time = seconds
     run.manual_entry = True
     run.save(update_fields=["manual_run_time", "manual_entry", "updated_at"])
-    broadcast_live()
-    return JsonResponse({"ok": True, "row": _serialize_run(run, competition, competition.competition_type)})
+    _rebind_and_broadcast(competition)
+    return JsonResponse({"ok": True, "row": _serialize_run(run, _RowContext.load(competition))})
 
 
 def _parse_duration(raw):
@@ -907,15 +931,118 @@ def _parse_duration(raw):
 
 # ----- serialization -----
 
+class _RowContext:
+    """What the Manual timing rows need to know about the rest of the competition —
+    who is registered, and which runs are already recorded — read **once per
+    request** instead of once per row.
+
+    Every row used to resolve its own bib (a query), its participant's classes
+    (another), then ask "is this already recorded?" once per class option, once
+    more for the run options and once again to count over-max. At 40 starters that
+    was 293 queries for a table every open browser re-fetches on every incoming
+    time — and it grew with the field (1413 at 200). The whole competition is three
+    queries, so it is read whole and answered from memory.
+
+    A context is a snapshot: build it *after* the writes of a request, not before.
+    """
+
+    def __init__(self, competition, runs):
+        self.competition = competition
+        self.ctype = competition.competition_type
+        self.precision = self.ctype.timing_precision
+        self._entries = {
+            entry.bib_number: entry
+            for entry in EventEntry.objects.filter(competition=competition)
+            .select_related("participant")
+            # ManualAssignment.classes_for walks these in Python, so prefetching
+            # them makes participant_slots() free.
+            .prefetch_related("participant__class_assignments__competition_class")
+        }
+        # (bib, class pk, occurrence) -> the runs recorded in that slot. The key a
+        # row asks about is a *candidate* class (a dropdown option), not
+        # necessarily the run's own — hence the class in the key.
+        self._by_slot = {}
+        for other in runs:
+            key = (other.bib_number, other.competition_class_id, other.class_occurrence)
+            self._by_slot.setdefault(key, []).append(other)
+        self._slots = {}  # participant pk -> [(class, occurrence)]
+
+    @classmethod
+    def load(cls, competition):
+        """A context for a caller that hasn't already read the runs — the mutate
+        endpoints, which serialize their one changed row back."""
+        return cls(
+            competition,
+            TimedRun.objects.filter(competition=competition).only(
+                "id", "bib_number", "competition_class", "class_occurrence",
+                "run_type", "run_number",
+            ),
+        )
+
+    def entry(self, bib):
+        return self._entries.get(bib) if bib else None
+
+    def participant(self, bib):
+        entry = self.entry(bib)
+        return entry.participant if entry else None
+
+    def participant_slots(self, participant):
+        """The participant's class slots, in order, as (class, occurrence). A class
+        they're entered into more than once yields one slot per entry."""
+        if participant is None:
+            return []
+        slots = self._slots.get(participant.pk)
+        if slots is None:
+            seen, slots = {}, []
+            for cclass in self.competition.classes_for_participant(participant):
+                occurrence = seen.get(cclass.pk, 0)
+                seen[cclass.pk] = occurrence + 1
+                slots.append((cclass, occurrence))
+            self._slots[participant.pk] = slots
+        return slots
+
+    def recorded_runs(self, run, cclass, occurrence):
+        """The (run_type, run_number) pairs already recorded for this run's bib in
+        this class occurrence, on rows other than ``run``."""
+        if not run.bib_number:
+            return set()
+        return {
+            (other.run_type, other.run_number)
+            for other in self._by_slot.get((run.bib_number, cclass.pk, occurrence), ())
+            if other.pk != run.pk and other.run_type and other.run_number
+        }
+
+    def class_complete(self, run, cclass, occurrence):
+        """Whether every run this class grants is already recorded for this bib in
+        this occurrence."""
+        total = (cclass.practice_runs or 0) + (cclass.counted_runs or 0)
+        if total == 0:
+            return False
+        return len(self.recorded_runs(run, cclass, occurrence)) >= total
+
+    def runs_of_type(self, run, cclass, occurrence, run_type):
+        """How many runs of ``run_type`` this bib has in this class occurrence —
+        ``run`` itself included, which is what over-max counts."""
+        return sum(
+            1
+            for other in self._by_slot.get((run.bib_number, cclass.pk, occurrence), ())
+            if other.run_type == run_type
+        )
+
+
 def serialize_arrangement(competition):
-    # Keep the Manual view in step with the Auto order: bibs/classes/runs (and
-    # marshal penalties) an auto-bound run picked up show here too.
-    autotiming.sync_bindings(competition)
     ctype = competition.competition_type
     ignored = (
         competition.timing_signals.filter(ignored=True).order_by("-received_at")
     )
     settings = TimingSettings.load()
+    rows = arrangement.rows(competition)
+    # Keep the Manual view in step with the Auto order: bibs/classes/runs (and
+    # marshal penalties) an auto-bound run picked up show here too. Bound on the
+    # rows about to be rendered, in memory — this is a GET, and it must not take
+    # the write lock the timing rig needs (see autotiming.sync_bindings).
+    autotiming.apply_bindings(competition, rows)
+    ctx = _RowContext(competition, rows)
     return {
         "penalties_enabled": ctype.penalties_enabled,
         "precision": ctype.timing_precision,
@@ -925,7 +1052,7 @@ def serialize_arrangement(competition):
         # here rather than only on the settings page.
         "device_link": cp540.link_state(settings),
         "multi_class": competition.allows_multiple_classes_effective(),
-        "rows": [_serialize_run(run, competition, ctype) for run in arrangement.rows(competition)],
+        "rows": [_serialize_run(run, ctx) for run in rows],
         "ignored": [
             {
                 "id": signal.id,
@@ -938,13 +1065,13 @@ def serialize_arrangement(competition):
     }
 
 
-def _serialize_run(run, competition, ctype):
-    precision = ctype.timing_precision
+def _serialize_run(run, ctx):
+    competition, ctype = ctx.competition, ctx.ctype
+    precision = ctx.precision
     start, finish = run.start_signal, run.finish_signal
     rt = calc.resolved_run_time(run, precision)
-    entry = _resolve_entry(competition, run.bib_number)
-    participant = entry.participant if entry else None
-    slots = _class_slots(competition, participant, run)
+    participant = ctx.participant(run.bib_number)
+    slots = _class_slots(ctx, participant, run)
     class_key = _class_key(run) if run.competition_class_id else None
     class_label = next(
         (slot["label"] for slot in slots if slot["value"] == class_key),
@@ -974,13 +1101,13 @@ def _serialize_run(run, competition, ctype):
             "class_name": class_label,
             "class_options": slots,
             "run_value": _run_value(run),
-            "run_options": _run_options(competition, run),
+            "run_options": _run_options(ctx, run),
             "pylon_count": run.pylon_count,
             "task_count": run.task_count,
             "stopline_count": run.stopline_count,
             "penalty": penalty,
             "total": total,
-            "over_max": _over_max(competition, run),
+            "over_max": _over_max(ctx, run),
         },
     }
 
@@ -1006,28 +1133,13 @@ def _format_device_time(t, precision):
     return f"{t:%H:%M:%S}." + str(frac).zfill(precision)
 
 
-def _recorded_runs(competition, run, cclass, occurrence):
-    """The (run_type, run_number) pairs already recorded for this bib in this
-    class occurrence, on rows other than `run`."""
-    if not run.bib_number:
-        return set()
-    return {
-        (other.run_type, other.run_number)
-        for other in TimedRun.objects.filter(
-            competition=competition, bib_number=run.bib_number,
-            competition_class=cclass, class_occurrence=occurrence,
-        ).exclude(pk=run.pk)
-        if other.run_type and other.run_number
-    }
-
-
-def _next_undone_run(competition, run):
+def _next_undone_run(ctx, run):
     """The next run (P1, P2, …, C1, …) not yet recorded for this run's bib in its
     class occurrence."""
     cclass = run.competition_class
     if cclass is None:
         return None
-    used = _recorded_runs(competition, run, cclass, run.class_occurrence)
+    used = ctx.recorded_runs(run, cclass, run.class_occurrence)
     for run_type, count in (
         ("practice", cclass.practice_runs or 0),
         ("counted", cclass.counted_runs or 0),
@@ -1036,16 +1148,6 @@ def _next_undone_run(competition, run):
             if (run_type, number) not in used:
                 return (run_type, number)
     return None
-
-
-def _resolve_entry(competition, bib):
-    if bib is None:
-        return None
-    return (
-        EventEntry.objects.select_related("participant")
-        .filter(competition=competition, bib_number=bib)
-        .first()
-    )
 
 
 def _class_key(run):
@@ -1063,23 +1165,11 @@ def _parse_class_key(value, competition):
     return cclass, occurrence
 
 
-def _participant_slots(competition, participant):
-    """The participant's class slots, in order, as (class, occurrence). A class
-    they're entered into more than once yields one slot per entry."""
-    classes = list(competition.classes_for_participant(participant)) if participant else []
-    seen, slots = {}, []
-    for cclass in classes:
-        occurrence = seen.get(cclass.pk, 0)
-        seen[cclass.pk] = occurrence + 1
-        slots.append((cclass, occurrence))
-    return slots
-
-
-def _class_slots(competition, participant, run):
+def _class_slots(ctx, participant, run):
     """Serialized class options for the participant: one per class slot, with a
     "(1)/(2)" suffix on classes entered more than once, and disabled once all of
     that slot's runs are recorded."""
-    slots = _participant_slots(competition, participant)
+    slots = ctx.participant_slots(participant)
     totals = Counter(cclass.pk for cclass, _ in slots)
     options = []
     for cclass, occurrence in slots:
@@ -1087,37 +1177,28 @@ def _class_slots(competition, participant, run):
         options.append({
             "value": f"{cclass.pk}:{occurrence}",
             "label": label,
-            "disabled": _class_complete(competition, run, cclass, occurrence),
+            "disabled": ctx.class_complete(run, cclass, occurrence),
         })
     return options
 
 
-def _class_complete(competition, run, cclass, occurrence):
-    """Whether every run this class grants is already recorded for this bib in
-    this occurrence."""
-    total = (cclass.practice_runs or 0) + (cclass.counted_runs or 0)
-    if total == 0:
-        return False
-    return len(_recorded_runs(competition, run, cclass, occurrence)) >= total
-
-
-def _default_class_slot(competition, participant, run):
+def _default_class_slot(ctx, participant, run):
     """The first class slot the participant hasn't completed (falls back to the
     first slot if all are done), or None if they have no classes."""
-    slots = _participant_slots(competition, participant)
+    slots = ctx.participant_slots(participant)
     for cclass, occurrence in slots:
-        if not _class_complete(competition, run, cclass, occurrence):
+        if not ctx.class_complete(run, cclass, occurrence):
             return (cclass, occurrence)
     return slots[0] if slots else None
 
 
-def _run_options(competition, run):
+def _run_options(ctx, run):
     """Run choices for this run's class occurrence, with any already recorded for
     this bib marked disabled (e.g. P1 is disabled once this bib has a P1)."""
     cclass = run.competition_class
     if cclass is None:
         return []
-    used = _recorded_runs(competition, run, cclass, run.class_occurrence)
+    used = ctx.recorded_runs(run, cclass, run.class_occurrence)
     options = []
     for run_type, short, count in (
         ("practice", "P", cclass.practice_runs or 0),
@@ -1138,7 +1219,7 @@ def _run_value(run):
     return ""
 
 
-def _over_max(competition, run):
+def _over_max(ctx, run):
     """Whether more runs of this type are assigned for this bib in this class
     occurrence than the class grants."""
     if not run.bib_number or not run.competition_class or not run.run_type:
@@ -1147,13 +1228,7 @@ def _over_max(competition, run):
     allowance = cclass.practice_runs if run.run_type == "practice" else cclass.counted_runs
     if allowance is None:
         return False
-    used = TimedRun.objects.filter(
-        competition=competition,
-        bib_number=run.bib_number,
-        competition_class=cclass,
-        class_occurrence=run.class_occurrence,
-        run_type=run.run_type,
-    ).count()
+    used = ctx.runs_of_type(run, cclass, run.class_occurrence, run.run_type)
     return used > allowance
 
 

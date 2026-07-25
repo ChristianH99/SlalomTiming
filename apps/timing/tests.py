@@ -1632,3 +1632,90 @@ def test_autostart_never_stops_the_server_coming_up(monkeypatch):
 
     monkeypatch.setattr(Model, "load", classmethod(lambda cls: 1 / 0))
     assert cp540.autostart() is False
+
+
+# ----- what the live endpoints are allowed to cost -----
+#
+# These three are re-fetched by *every open browser* on *every* incoming time, so
+# their cost is paid once per competitor crossing a beam per screen. They each used
+# to grow with the field — the Manual timing table did a query per row and per
+# dropdown option (293 queries at 40 starters, 1413 at 200) — which is invisible
+# until an event is big enough to matter. Pinned here as the two properties that
+# actually hold: the cost does not grow with the field, and a read does not write.
+
+LIVE_ENDPOINTS = ("timing:arrangement", "timing:auto-state", "timing:dashboard-state")
+
+
+def _field_of(competition, cclass, first_bib, last_bib):
+    """Register bibs first_bib..last_bib and time a full run for each."""
+    base = datetime.datetime(2026, 5, 1, 10, 0, 0)
+    for bib in range(first_bib, last_bib + 1):
+        participant = make_participant(competition.competition_type, bib, competition)
+        ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+        offset = bib * 60
+        signal_in(competition, 1, (base + datetime.timedelta(seconds=offset)).strftime("%H:%M:%S.%f")[:-3], running=bib)
+        signal_in(competition, 2, (base + datetime.timedelta(seconds=offset + 35)).strftime("%H:%M:%S.%f")[:-3], running=bib)
+
+
+def _query_count(client, name):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as ctx:
+        response = client.get(reverse(name))
+    assert response.status_code == 200
+    return ctx.captured_queries
+
+
+def _writes(queries):
+    return [
+        q["sql"] for q in queries
+        if q["sql"].lstrip().upper().startswith(("UPDATE", "INSERT", "DELETE"))
+    ]
+
+
+def _competition_with_field(size):
+    comp = make_active_competition()
+    cclass = comp.classes.get(name="1")
+    cclass.is_running, cclass.run_position = True, 1
+    cclass.practice_runs, cclass.counted_runs = 1, 2
+    cclass.save()
+    comp.start_pattern = [{"window": None, "chips": ["practice", "counted"]}]
+    comp.save(update_fields=["start_pattern"])
+    _field_of(comp, cclass, 1, size)
+    return comp, cclass
+
+
+@pytest.mark.parametrize("name", LIVE_ENDPOINTS)
+def test_live_endpoint_cost_does_not_grow_with_the_field(client, name):
+    comp, cclass = _competition_with_field(5)
+    small = len(_query_count(client, name))
+    _field_of(comp, cclass, 6, 40)          # same event, eight times the field
+    large = len(_query_count(client, name))
+    assert large == small, (
+        f"{name} costs {small} queries for 5 starters but {large} for 40 — it is "
+        f"scaling with the field again"
+    )
+
+
+@pytest.mark.parametrize("name", LIVE_ENDPOINTS)
+def test_live_endpoints_never_write(client, name):
+    """A GET must not take the write lock the timing rig needs to record a time,
+    and several browsers refreshing on the same nudge must not race each other on
+    the same rows. The start-order binding is applied in memory when rendering;
+    only the write paths persist it (autotiming.sync_bindings)."""
+    comp, cclass = _competition_with_field(6)
+    # Strip the identity ingest persisted, so binding has real work to do and a
+    # tempting reason to save it.
+    TimedRun.objects.filter(competition=comp).update(
+        bib_number=None, competition_class=None, run_type="", run_number=None)
+    assert _writes(_query_count(client, name)) == []
+
+
+def test_a_reading_view_still_shows_the_bound_competitor(client):
+    """The other half of the rule above: not writing must not mean not binding."""
+    comp, cclass = _competition_with_field(4)
+    TimedRun.objects.filter(competition=comp).update(
+        bib_number=None, competition_class=None, run_type="", run_number=None)
+    rows = client.get(reverse("timing:arrangement")).json()["rows"]
+    assert [r["run"]["bib_number"] for r in rows if r["run"]["bib_number"]]

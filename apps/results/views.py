@@ -364,7 +364,6 @@ class ResultsExportClassView(ActiveCompetitionMixin, View):
         cclass = get_object_or_404(
             CompetitionClass, pk=pk, competition=competition, is_running=True
         )
-        resultscalc.sync_identities(competition)
         layout = ResultsPdfLayout.for_competition(competition)
         section = class_section(competition, cclass)
         return _pdf_response(competition, layout, [section],
@@ -383,7 +382,6 @@ class ResultsExportOverallView(ActiveCompetitionMixin, View):
         groups = {(g["method"], g["counted_runs"]) for g in resultscalc.overall_groups(competition)}
         if (method, runs) not in groups:
             raise Http404("No such Overall group.")
-        resultscalc.sync_identities(competition)
         layout = ResultsPdfLayout.for_competition(competition)
         section = overall_section(competition, method, runs)
         return _pdf_response(competition, layout, [section],
@@ -397,7 +395,6 @@ class ResultsExportAllView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             raise Http404("No active competition.")
-        resultscalc.sync_identities(competition)
         sections = []
         if ResultColumnSettings.overall_enabled(competition):
             for g in resultscalc.overall_groups(competition):
@@ -520,9 +517,6 @@ class ResultsClassView(ActiveCompetitionMixin, View):
         cclass = get_object_or_404(
             CompetitionClass, pk=pk, competition=competition, is_running=True
         )
-        # Fold Auto timing's positional binding into stored run identity so both
-        # timing paths feed the same table.
-        resultscalc.sync_identities(competition)
         section = class_section(competition, cclass)
         return render(request, self.template_name, {
             "object": competition,
@@ -553,7 +547,6 @@ class ResultsOverallView(ActiveCompetitionMixin, View):
         if (method, runs) not in groups:
             raise Http404("No such Overall group.")
 
-        resultscalc.sync_identities(competition)
         section = overall_section(competition, method, runs)
         return render(request, self.template_name, {
             "object": competition,

@@ -145,7 +145,18 @@ def _slot_identity(slot):
             slot["run_type"], slot["run_number"])
 
 
-def bind_runs(competition):
+def all_runs(competition):
+    """The competition's runs, with everything binding and serializing them needs.
+    Passed back into ``bind_runs`` by callers that go on to render these very
+    objects, so one read serves the whole request."""
+    return list(
+        TimedRun.objects.filter(competition=competition)
+        .select_related("start_signal", "finish_signal")
+        .prefetch_related("marshal_penalties")
+    )
+
+
+def bind_runs(competition, runs=None):
     """Align recorded runs to the start order. Returns ``(slots, aligned,
     orphans)`` where ``aligned[i]`` is the run occupying ``slots[i]`` (or None),
     and ``orphans`` are started runs the order has no place for.
@@ -153,20 +164,19 @@ def bind_runs(competition):
     A *manual* run (operator-owned identity) claims the slot its identity matches —
     so a run pre-entered on Manual timing shows up pre-filled in its place and the
     positional binding steps over it. The remaining *auto* runs (started, not
-    operator-owned) fill the still-empty slots in start order."""
+    operator-owned) fill the still-empty slots in start order.
+
+    ``runs`` binds run objects the caller already holds instead of re-reading them
+    — the caller then renders the same objects ``apply_bindings`` wrote onto."""
     slots = ordered_slots(competition)
-    all_runs = list(
-        TimedRun.objects.filter(competition=competition)
-        .select_related("start_signal", "finish_signal")
-        .prefetch_related("marshal_penalties")
-    )
+    known = all_runs(competition) if runs is None else list(runs)
     aligned = [None] * len(slots)
 
     slots_by_key = {}
     for i, slot in enumerate(slots):
         slots_by_key.setdefault(_slot_identity(slot), []).append(i)
 
-    for run in all_runs:
+    for run in known:
         if not run.manual_entry:
             continue
         for i in slots_by_key.get(_run_identity(run), []):
@@ -176,7 +186,7 @@ def bind_runs(competition):
 
     placed_ids = {run.id for run in aligned if run is not None}
     auto_started = sorted(
-        (r for r in all_runs if r.start_signal_id and r.id not in placed_ids),
+        (r for r in known if r.start_signal_id and r.id not in placed_ids),
         key=lambda r: (r.start_signal.received_at, r.start_signal.id),
     )
     pool = iter(auto_started)
@@ -187,13 +197,21 @@ def bind_runs(competition):
     return slots, aligned, orphans
 
 
-def sync_bindings(competition):
-    """Persist each auto run's bound-slot identity (bib / class / run) onto the run
-    so the Manual timing view reads the same competitor the Auto view derives.
+def apply_bindings(competition, runs=None):
+    """Fold each auto run's bound-slot identity (bib / class / run) onto the run
+    objects **in memory**, and return ``(slots, aligned, orphans, dirty)`` where
+    ``dirty`` is ``[(run, changed field names)]`` for the rows whose stored copy no
+    longer matches.
+
     Penalties are *not* copied — both views compute them the one canonical way from
     the posts + the run's own counts (see penalty_seconds), so nothing to cache.
-    Manual (operator-owned) runs are left untouched — their identity is authored."""
-    slots, aligned, _ = bind_runs(competition)
+    Manual (operator-owned) runs are left untouched — their identity is authored.
+
+    Nothing here writes. A reader binds the objects it is about to render and
+    leaves the database alone; only ``sync_bindings`` persists (see there for why)."""
+    slots, aligned, orphans = bind_runs(competition, runs)
+    classes = None  # {pk: CompetitionClass}, read only if a class actually moves
+    dirty = []
     for i, run in enumerate(aligned):
         if run is None or run.manual_entry:
             continue
@@ -208,14 +226,41 @@ def sync_bindings(competition):
         changed = [f for f, v in wanted.items() if getattr(run, f) != v]
         if changed:
             for f in changed:
+                if f == "competition_class_id":
+                    if classes is None:
+                        classes = {cc.pk: cc for cc in competition.classes.all()}
+                    # Assign the object, not the bare id: setting the id alone
+                    # empties the select_related cache, and every caller that then
+                    # reads run.competition_class (the row's class name, its run
+                    # options) pays a query for it — per row.
+                    cclass = classes.get(wanted[f])
+                    if cclass is not None:
+                        run.competition_class = cclass
+                        continue
                 setattr(run, f, wanted[f])
-            run.save(update_fields=[*changed, "updated_at"])
+            dirty.append((run, changed))
+    return slots, aligned, orphans, dirty
 
 
-def current_run(competition):
+def sync_bindings(competition):
+    """Persist the bound-slot identity onto the runs, so the surfaces that read a
+    ``TimedRun`` on its own — the Manual timing view's other rows, an export, a
+    slot lookup — see the same competitor the Auto view derives.
+
+    Called from the paths that *change* the binding: a signal arriving (ingest), a
+    reorder, and the operator's edits. Never from a GET — a read that writes takes
+    the same lock the timing rig's own thread needs to record a time, and several
+    open browsers refreshing on the same nudge raced each other on these rows. The
+    readers bind in memory instead (``apply_bindings``)."""
+    _, _, _, dirty = apply_bindings(competition)
+    for run, changed in dirty:
+        run.save(update_fields=[*changed, "updated_at"])
+
+
+def current_run(competition, runs=None):
     """The competitor being timed now — the bound run with the latest timing
     activity — with its slot. ``(None, None)`` before anyone has started."""
-    slots, aligned, orphans = bind_runs(competition)
+    slots, aligned, orphans, _ = apply_bindings(competition, runs)
     runs_in_order = aligned + orphans
     index = current_index(runs_in_order)
     if index < 0:
@@ -230,12 +275,13 @@ def serialize(competition):
     from . import cp540
     from .models import TimingSettings
 
-    sync_bindings(competition)
     settings = TimingSettings.load()
     ctype = competition.competition_type
     precision = ctype.timing_precision
     marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
-    slots, aligned, orphans = bind_runs(competition)
+    # One read, one bind: the start order used to be replayed three times per
+    # request (sync_bindings, then bind_runs again, then current_run).
+    slots, aligned, orphans, _ = apply_bindings(competition)
     posts = list(competition.marshal_posts.all())
     runs_in_order = aligned + orphans  # index lines up with the items below
     items = [

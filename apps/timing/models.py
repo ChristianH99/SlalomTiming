@@ -106,6 +106,14 @@ class TimingSignal(models.Model):
 
     class Meta:
         ordering = ["-received_at"]
+        indexes = [
+            # The Ignored-times panel, re-read by both timing pages on every
+            # nudge: filter(competition, ignored).order_by("-received_at").
+            models.Index(
+                fields=["competition", "ignored", "-received_at"],
+                name="timingsignal_comp_ign_idx",
+            ),
+        ]
 
     def __str__(self):
         port = f"M{self.port}" if self.is_manual else str(self.port)
@@ -176,6 +184,27 @@ class TimedRun(models.Model):
     stopline_adjust = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            # Every incoming signal scans this table before it can be placed:
+            # arrangement.ingest looks for the oldest empty placeholder and
+            # _oldest_open_run/effective_role for a run still waiting on its
+            # finish. That happens on the timing rig's own thread while browsers
+            # are reading, so it is the one lookup worth an index even at club
+            # field sizes.
+            models.Index(
+                fields=["competition", "start_signal", "finish_signal"],
+                name="timedrun_comp_slots_idx",
+            ),
+            # Resolving a competitor's run by identity (a start-order slot, a
+            # run already recorded for a bib).
+            models.Index(
+                fields=["competition", "bib_number", "competition_class",
+                        "class_occurrence", "run_type"],
+                name="timedrun_comp_identity_idx",
+            ),
+        ]
 
     def __str__(self):
         anchor = self.start_signal or self.finish_signal

@@ -30,16 +30,20 @@ def serialize(competition):
     run progress, per-class status, and the competitor on course now."""
     ctype = competition.competition_type
     precision = ctype.timing_precision
-    # Persist Auto timing's positional identities first, so a pattern-bound run
-    # carries the bib/class/run its recorded-run tally is matched by.
-    autotiming.sync_bindings(competition)
+    # Fold Auto timing's positional identities onto the runs first, so a
+    # pattern-bound run carries the bib/class/run its recorded-run tally is
+    # matched by. In memory, on the copies this overview is built from: it is a
+    # read, and the projector it is left open on must not be taking the write
+    # lock the timing rig needs (see autotiming.sync_bindings).
+    runs = autotiming.all_runs(competition)
+    autotiming.apply_bindings(competition, runs)
 
-    started_ids, finished_ids = _recorded_run_ids(competition, precision)
+    started_ids, finished_ids = _recorded_run_ids(runs, precision)
     classes = _classes(competition, started_ids, finished_ids)
     expected = sum(c["total"] for c in classes)
     finished = sum(c["finished"] for c in classes)
 
-    current = _current(competition, precision)
+    current = _current(competition, precision, runs)
     stats = _stats(competition, classes, expected, finished, ctype)
 
     return {
@@ -60,17 +64,12 @@ def _percent(part, whole):
     return round(part / whole * 100) if whole else 0
 
 
-def _recorded_run_ids(competition, precision):
+def _recorded_run_ids(runs, precision):
     """Two sets of run identities ``(bib, class_pk, occurrence, run_type,
     run_number)`` over the competition's recorded runs: those *started* (a start
     signal, or a resolved time) and those *finished* (a resolved time). Keyed by
     identity so they match the expected runs regardless of how they were timed."""
     started, finished = set(), set()
-    runs = (
-        TimedRun.objects.filter(competition=competition)
-        .select_related("start_signal", "finish_signal")
-        .prefetch_related("marshal_penalties")
-    )
     for run in runs:
         if run.competition_class_id is None or not run.run_type or run.run_number is None:
             continue
@@ -129,12 +128,12 @@ def _classes(competition, started_ids, finished_ids):
     return classes
 
 
-def _current(competition, precision):
+def _current(competition, precision, runs):
     """The competitor on course now (the run with the latest timing activity), or
     None before anyone has started. Its identity is read from the run itself, so it
     works whether the run was bound by the start order or typed on Manual timing.
     Times and penalties are only meaningful once the run has finished."""
-    run, _slot = autotiming.current_run(competition)
+    run, _slot = autotiming.current_run(competition, runs)
     if run is None:
         return None
     entry = _entry(competition, run.bib_number)

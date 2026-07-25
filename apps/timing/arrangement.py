@@ -189,9 +189,11 @@ def rows(competition):
     signal), so fresh times appear at the top without scrolling. Placeholders (no
     times yet) sort above all timed rows, newest-added first."""
     runs = list(
-        TimedRun.objects.filter(competition=competition).select_related(
-            "start_signal", "finish_signal", "competition_class"
-        )
+        TimedRun.objects.filter(competition=competition)
+        .select_related("start_signal", "finish_signal", "competition_class")
+        # Each row's total resolves its penalties (autotiming.penalty_seconds),
+        # which reads these — a query per row without the prefetch.
+        .prefetch_related("marshal_penalties")
     )
     runs.sort(key=_sort_key, reverse=True)
     return runs

@@ -554,3 +554,55 @@ def test_class_results_page_renders(client):
     response = client.get(reverse("results:class", args=[cclass.pk]))
     assert response.status_code == 200
     assert b"Class T1" in response.content
+
+
+# ----- what a results table is allowed to cost -----
+
+def _entered_field(competition, cclass, first_bib, last_bib):
+    for bib in range(first_bib, last_bib + 1):
+        make_competitor(competition, cclass, bib)
+        add_run(competition, cclass, bib, 1, 30 + bib)
+        add_run(competition, cclass, bib, 2, 31 + bib)
+
+
+def _queries_for(client, url):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as ctx:
+        response = client.get(url)
+    assert response.status_code == 200
+    return ctx.captured_queries
+
+
+def test_results_table_cost_does_not_grow_with_the_field(client):
+    """A results table used to ask the database for each competitor's runs twice
+    over — counted, then practice — per competitor, per class: 149 queries for a
+    40-strong class, 629 for 200, and "export everything" multiplied that by the
+    class count. One read of the event's runs serves the whole table."""
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    url = reverse("results:class", args=[cclass.pk])
+    _entered_field(competition, cclass, 1, 5)
+    small = len(_queries_for(client, url))
+    _entered_field(competition, cclass, 6, 40)
+    large = len(_queries_for(client, url))
+    assert large == small, (
+        f"results:class costs {small} queries for 5 competitors but {large} for 40"
+    )
+
+
+def test_reading_results_never_writes(client):
+    """Rendering a table (or a PDF) is a read. It must not take the write lock the
+    timing rig needs — see apps/timing/autotiming.sync_bindings."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    _entered_field(competition, cclass, 1, 5)
+    for url in (reverse("results:class", args=[cclass.pk]),
+                reverse("results:export-class", args=[cclass.pk])):
+        with CaptureQueriesContext(connection) as ctx:
+            assert client.get(url).status_code == 200
+        writes = [q["sql"] for q in ctx.captured_queries
+                  if q["sql"].lstrip().upper().startswith(("UPDATE", "INSERT", "DELETE"))]
+        assert writes == [], f"{url} wrote: {writes}"
