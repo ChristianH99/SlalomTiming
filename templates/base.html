@@ -8,9 +8,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
-  {# Defines gettext()/interpolate() in the browser from the compiled djangojs
-     catalog, so the static/js scripts render in the active language. Must load
-     before any app script that calls gettext(). #}
+  {% comment %}Defines gettext()/interpolate() in the browser from the compiled
+  djangojs catalog, so the static/js scripts render in the active language. Must
+  load before any app script that calls gettext(). A {# #} comment cannot span
+  lines — Django only strips it when it opens and closes on the same one, so a
+  multi-line attempt renders verbatim onto the page.{% endcomment %}
   <script src="{% url 'javascript-catalog' %}"></script>
 </head>
 <body>

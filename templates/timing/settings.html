@@ -30,8 +30,8 @@
         </label>
       </div>
 
-      {# Save persists the device and channel mapping. IP/port are saved with them,
-         but the CP540 is actually reached with Connect below. #}
+      {% comment %}Save persists the device and channel mapping. IP/port are saved
+      with them, but the CP540 is actually reached with Connect below.{% endcomment %}
       <div class="actions actions--start">
         <button class="button button--secondary" type="submit" name="action" value="save">{% trans "Save" %}</button>
         <a class="button" href="{% url 'timing:simulator' %}" target="_blank" rel="noopener"
