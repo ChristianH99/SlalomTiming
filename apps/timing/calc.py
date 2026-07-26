@@ -59,7 +59,11 @@ def total_penalty(run, competition_type):
 
 def format_precision(value, precision):
     """Fixed-decimal string of a Decimal/int at the given precision (blank for
-    None). The value is assumed already truncated — this only pads decimals."""
+    None). The value is assumed already truncated — this only pads decimals.
+
+    Not a display formatter: an elapsed time shown to anybody goes through
+    ``format_clock``. This is for the places that need the bare number.
+    """
     if value is None:
         return ""
     return f"{Decimal(value):.{precision}f}"
@@ -68,7 +72,13 @@ def format_precision(value, precision):
 def format_clock(value, precision):
     """A run/total time as ``mm:ss.xxx`` (fractional digits at `precision`), blank
     for None. The value is assumed already truncated. Minutes are zero-padded and
-    unbounded (a 75s time is ``01:15``). A negative value keeps its sign."""
+    unbounded (a 75s time is ``01:15``). A negative value keeps its sign.
+
+    **The one way an elapsed time is written in this app** — the timing views,
+    the Auto view, the Dashboard, the results tables and the PDFs all render a
+    run time through here, so the same quantity never appears in two notations
+    on two screens (or, as it used to, on the same one).
+    """
     if value is None:
         return ""
     v = Decimal(value)
@@ -80,3 +90,17 @@ def format_clock(value, precision):
         frac = f"{(v - whole):.{precision}f}"[2:]  # drop the leading "0."
         return f"{sign}{minutes:02d}:{seconds:02d}.{frac}"
     return f"{sign}{minutes:02d}:{seconds:02d}"
+
+
+def format_penalty(seconds):
+    """Penalty seconds as ``+5 s``, blank when there is none.
+
+    A penalty is a different quantity from a time — a whole-second amount added,
+    never measured — so it is written differently on purpose, and always the same
+    way. It is never rendered at the device's decimal precision: the amounts a
+    competition type carries are whole seconds, so ``+5.00 s`` claimed a
+    resolution the number does not have.
+    """
+    if not seconds:
+        return ""
+    return f"+{int(seconds)} s"

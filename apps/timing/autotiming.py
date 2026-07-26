@@ -303,7 +303,8 @@ def serialize(competition):
         # Centre on the run with the latest timing activity (last start, or a
         # finish that just came in for an earlier starter).
         "current_index": current_index(runs_in_order),
-        "ignored": _ignored(competition, precision),
+        "ignored": ignored_signals(competition, precision, settings),
+        "ignored_split": ignored_split(settings),
         "posts": [{"number": post.number} for post in posts],
     }
 
@@ -315,7 +316,7 @@ def _item(precision, ctype, marshal_mode, index, slot, run, posts):
     stored = {mp.marshal_post_id: mp for mp in run.marshal_penalties.all()} if run else {}
     lines = _penalty_lines(run, marshal_mode)
     seconds = _penalty_seconds(lines, ctype)
-    total_time = calc.format_precision(rt + seconds, precision) if rt is not None else ""
+    total_time = calc.format_clock(rt + seconds, precision) if rt is not None else ""
     return {
         "index": index,
         "key": slot["key"] if slot else None,
@@ -328,7 +329,7 @@ def _item(precision, ctype, marshal_mode, index, slot, run, posts):
         "run_id": run.id if run else None,
         "start": _signal(start, precision),
         "finish": _signal(finish, precision),
-        "run_time": calc.format_precision(rt, precision),
+        "run_time": calc.format_clock(rt, precision),
         "run_time_manual": bool(run and run.manual_run_time is not None),
         "total_time": total_time,
         # One line per penalty type: its non-editable base, the run field the Auto
@@ -456,19 +457,38 @@ def _signal(signal, precision):
             "manual": signal.is_manual, "entered": signal.entered}
 
 
-def _ignored(competition, precision):
-    from .models import TimingSettings
+def ignored_signals(competition, precision, settings):
+    """The ignored-times panel's contents, newest first. Shared by both timing
+    views so the rail is identical on each.
 
-    settings = TimingSettings.load()
+    ``received_at`` rides along because the chip's own time is the *device's*
+    clock, which on a real rig is not wall-clock (often 00:40:xx) — so on its own
+    it tells the operator nothing about when the signal turned up. The panel
+    renders the arrival as an age.
+    """
     return [
         {
             "id": signal.id,
             "role": signal.role(settings) or "",
             "time": format_device_time(signal.device_time, precision),
             "manual": signal.is_manual,
+            "received_at": signal.received_at.isoformat(),
         }
         for signal in competition.timing_signals.filter(ignored=True).order_by("-received_at")
     ]
+
+
+def ignored_split(settings):
+    """Whether the ignored panel's Start / Finish columns mean anything.
+
+    With one light barrier (start_channel == finish_channel) a signal's role is
+    decided by what the arrangement was doing when it arrived (see
+    arrangement.effective_role), not by its port — so an *ignored* signal has no
+    role at all, and ``signal.role()`` answers START for every one of them. The
+    panel used to split on that answer and pile everything into one column; now
+    it renders a single list instead of a column that is always empty.
+    """
+    return settings.start_channel != settings.finish_channel
 
 
 def format_device_time(t, precision):

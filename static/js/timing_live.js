@@ -19,6 +19,7 @@
   const lockLabel = document.getElementById("input-lock");
   const lockCheck = document.getElementById("input-lock-check");
   const lockText = document.getElementById("input-lock-text");
+  const lockNote = document.getElementById("input-lock-note");
 
   // ---- server calls -------------------------------------------------------
   async function postJSON(url, body) {
@@ -50,7 +51,8 @@
     if (child) td.append(child);
     return td;
   }
-  const colspan = () => (state.penalties_enabled ? 11 : 7);
+  // Start, Finish, Run time, Bib, Competitor, Class, Run, Total (+4 penalty cols).
+  const colspan = () => (state.penalties_enabled ? 12 : 8);
 
   // ---- rendering ----------------------------------------------------------
   function render() {
@@ -68,6 +70,14 @@
     lockCheck.checked = on;
     if (lockLabel) lockLabel.classList.toggle("input-lock--on", on);
     if (lockText) lockText.textContent = on ? gettext("Locked") : gettext("Lock");
+    // The consequence, in words, in both states — this switch decides whether
+    // the event's times are being kept at all.
+    if (lockNote) {
+      lockNote.textContent = on
+        ? gettext("Incoming times go straight to Ignored — nothing is being recorded.")
+        : gettext("Times are being recorded.");
+      lockNote.classList.toggle("input-lock-note--on", on);
+    }
   }
 
   // A thin strip below the header; hover reveals a + to add a placeholder row.
@@ -95,13 +105,14 @@
     tr.append(cell("tt-time", timeSlot(row.finish, "finish", run.id)));
     tr.append(runTimeCell(row));
     tr.append(cell("tt-bib", bibField(run)));
+    tr.append(nameCell(run));
     tr.append(cell("tt-class", classField(run)));
     tr.append(cell("tt-run-sel", runField(run)));
     if (state.penalties_enabled) {
       tr.append(cell("tt-pen", penaltyBox(run, "pylon_count")));
       tr.append(cell("tt-pen", penaltyBox(run, "task_count")));
       tr.append(cell("tt-pen", penaltyBox(run, "stopline_count")));
-      tr.append(cell("tt-pen-total", el("span", "pen-total", secs(run.penalty))));
+      tr.append(cell("tt-pen-total", el("span", "pen-total", run.penalty_text || "–")));
     }
     const totalCell = cell("tt-total", el("span", "run-total", run.total || "–"));
     // An empty placeholder can be removed.
@@ -231,9 +242,24 @@
         if (target) target.focus();
       });
     });
-    // Name line is always present so the row height never changes when it fills in.
-    wrap.append(input, el("span", "bib-name", run.name || ""));
+    wrap.append(input);
     return wrap;
+  }
+
+  // The competitor's name, in its own flexible column. An unresolved bib says so
+  // in words rather than leaving the cell blank next to a red input.
+  function nameCell(run) {
+    const td = cell("tt-name");
+    if (run.bib_unknown) {
+      const warn = el("span", "bib-name bib-name--unknown", gettext("Not registered"));
+      warn.title = gettext("No starter with this bib is registered (kept anyway).");
+      td.append(warn);
+    } else {
+      const name = el("span", "bib-name", run.name || "");
+      if (run.name) name.title = run.name;
+      td.append(name);
+    }
+    return td;
   }
 
   function classField(run) {
@@ -306,29 +332,20 @@
     return wrap;
   }
 
-  const secs = (n) => (n ? `${n}s` : "0s");
+  // ---- ignored times ------------------------------------------------------
+  // The rail itself is shared with Auto timing (static/js/ignored_panel.js); this
+  // view only supplies the drag/restore behaviour that differs between them.
+  const ignoredPanel = IgnoredPanel.create({
+    box: ignoredBox,
+    countEl: document.getElementById("ignored-count"),
+    moreEl: document.getElementById("ignored-more"),
+    onDragStart: (e, id, role, time) => onDragStart(e, id, role, time),
+    onDragEnd: () => clearDrag(),
+    onRestore: (id) => setIgnored(id, false).then(refresh),
+  });
 
-  // ---- ignored times: two columns (start, finish), chips stacked newest first --
   function renderIgnored() {
-    ignoredBox.querySelectorAll(".ignored-col").forEach((col) => {
-      const role = col.dataset.role;
-      const chips = state.ignored.filter((s) => s.role === role);
-      col.classList.toggle("ignored-col--empty", chips.length === 0);
-      col.querySelector(".ignored-col-list").replaceChildren(...chips.map(ignoredChip));
-    });
-  }
-
-  function ignoredChip(sig) {
-    const chip = el("div", "ignored-chip" + (sig.manual ? " ignored-chip--manual" : ""), sig.time);
-    chip.draggable = true;
-    chip.dataset.signalId = sig.id;
-    chip.dataset.role = sig.role;
-    chip.dataset.time = sig.time;
-    chip.title = gettext("Drag onto a run's slot · double-click to restore");
-    chip.addEventListener("dragstart", (e) => onDragStart(e, sig.id, sig.role, sig.time));
-    chip.addEventListener("dragend", clearDrag);
-    chip.addEventListener("dblclick", () => setIgnored(sig.id, false).then(refresh));
-    return chip;
+    ignoredPanel.render(state.ignored, state.ignored_split);
   }
 
   // ---- apply a single updated row (edit reply) ----------------------------

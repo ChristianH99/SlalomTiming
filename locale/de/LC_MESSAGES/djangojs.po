@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-25 19:21+0200\n"
+"POT-Creation-Date: 2026-07-25 21:42+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -15,120 +15,134 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: .\static\js\auto_timing.js:45
+#: .\static\js\auto_timing.js:46
 msgid "▲ current"
 msgstr "▲ Aktuell"
 
-#: .\static\js\auto_timing.js:46
+#: .\static\js\auto_timing.js:47
 msgid "▼ current"
 msgstr "▼ Aktuell"
 
-#: .\static\js\auto_timing.js:155 .\static\js\timing_live.js:70
+#: .\static\js\auto_timing.js:156 .\static\js\timing_live.js:72
 msgid "Locked"
 msgstr "Gesperrt"
 
-#: .\static\js\auto_timing.js:155 .\static\js\auto_timing.js:520
-#: .\static\js\timing_live.js:70
+#: .\static\js\auto_timing.js:156 .\static\js\auto_timing.js:562
+#: .\static\js\timing_live.js:72
 msgid "Lock"
 msgstr "Sperren"
 
-#: .\static\js\auto_timing.js:164
+#: .\static\js\auto_timing.js:161 .\static\js\timing_live.js:77
+msgid "Incoming times go straight to Ignored — nothing is being recorded."
+msgstr "Eingehende Zeiten gehen direkt in „Ignoriert“ — es wird nichts aufgezeichnet."
+
+#: .\static\js\auto_timing.js:162 .\static\js\timing_live.js:78
+msgid "Times are being recorded."
+msgstr "Zeiten werden aufgezeichnet."
+
+#: .\static\js\auto_timing.js:173
 msgid "Run"
 msgstr "Lauf"
 
-#: .\static\js\auto_timing.js:183
-msgid "(extra start)"
-msgstr "(zusätzlicher Start)"
+#: .\static\js\auto_timing.js:194 .\static\js\auto_timing.js:275
+msgid "Unattributed time"
+msgstr "Nicht zugeordnete Zeit"
 
-#: .\static\js\auto_timing.js:186
+#: .\static\js\auto_timing.js:201
 msgid "Click to bring this competitor into the tiles"
 msgstr "Klicken, um diesen Teilnehmer in die Kacheln zu holen"
 
-#: .\static\js\auto_timing.js:213
+#: .\static\js\auto_timing.js:228
 msgid "Current"
 msgstr "Aktuell"
 
-#: .\static\js\auto_timing.js:213
+#: .\static\js\auto_timing.js:228
 msgid "Previous"
 msgstr "Vorheriger"
 
-#: .\static\js\auto_timing.js:213
+#: .\static\js\auto_timing.js:228
 msgid "Next up"
 msgstr "Als Nächstes"
 
-#: .\static\js\auto_timing.js:246
+#: .\static\js\auto_timing.js:261
 msgid "Waiting for the first start…"
 msgstr "Warten auf den ersten Start…"
 
-#: .\static\js\auto_timing.js:253
+#: .\static\js\auto_timing.js:275
 msgid "(no starter)"
 msgstr "(kein Starter)"
 
-#: .\static\js\auto_timing.js:260
+#: .\static\js\auto_timing.js:284
 msgid "Start"
 msgstr "Start"
 
-#: .\static\js\auto_timing.js:261
+#: .\static\js\auto_timing.js:285
 msgid "Finish"
 msgstr "Ziel"
 
-#: .\static\js\auto_timing.js:263
+#: .\static\js\auto_timing.js:287
 msgid "Total"
 msgstr "Gesamt"
 
-#: .\static\js\auto_timing.js:275 .\static\js\auto_timing.js:276
+#: .\static\js\auto_timing.js:299 .\static\js\auto_timing.js:300
 msgid "Lock all posts"
 msgstr "Alle Posten sperren"
 
-#: .\static\js\auto_timing.js:306 .\static\js\dashboard_overview.js:143
+#: .\static\js\auto_timing.js:320
+msgid ""
+"This time has no competitor in the start order. Drag it onto the right "
+"starter's Start or Finish slot, or discard it."
+msgstr "Zu dieser Zeit gibt es keinen Starter in der Startreihenfolge. Ziehen Sie sie auf den Start oder das Ziel des richtigen Starters, oder verwerfen Sie sie."
+
+#: .\static\js\auto_timing.js:324
+msgid "Move to Ignored"
+msgstr "Nach „Ignoriert“ verschieben"
+
+#: .\static\js\auto_timing.js:348 .\static\js\dashboard_overview.js:143
 msgid "Run time"
 msgstr "Laufzeit"
 
-#: .\static\js\auto_timing.js:311 .\static\js\timing_live.js:158
+#: .\static\js\auto_timing.js:353 .\static\js\timing_live.js:169
 msgid "Double-click to type a run time"
 msgstr "Doppelklicken, um eine Laufzeit einzugeben"
 
-#: .\static\js\auto_timing.js:342
+#: .\static\js\auto_timing.js:384
 msgid "%(kind)s · double-click to edit"
 msgstr "%(kind)s · zum Bearbeiten doppelklicken"
 
-#: .\static\js\auto_timing.js:343 .\static\js\timing_live.js:144
+#: .\static\js\auto_timing.js:385 .\static\js\timing_live.js:155
 msgid "Typed in by hand"
 msgstr "Von Hand eingegeben"
 
-#: .\static\js\auto_timing.js:343
+#: .\static\js\auto_timing.js:385
 msgid "Drag to re-pair or to Ignored"
 msgstr "Ziehen zum erneuten Zuordnen oder auf „Ignoriert“"
 
-#: .\static\js\auto_timing.js:486 .\static\js\marshal_posts.js:69
+#: .\static\js\auto_timing.js:528 .\static\js\marshal_posts.js:69
 #: .\static\js\marshal_posts.js:149
 msgid "Post %(n)s"
 msgstr "Posten %(n)s"
 
-#: .\static\js\auto_timing.js:490
+#: .\static\js\auto_timing.js:532
 msgid "Task %(n)s"
 msgstr "Aufgabe %(n)s"
 
-#: .\static\js\auto_timing.js:495 .\static\js\marshal_posts.js:273
+#: .\static\js\auto_timing.js:537 .\static\js\marshal_posts.js:273
 msgid "Task"
 msgstr "Aufgabe"
 
-#: .\static\js\auto_timing.js:503 .\static\js\marshal_posts.js:212
+#: .\static\js\auto_timing.js:545 .\static\js\marshal_posts.js:212
 msgid "Stop line"
 msgstr "Stopplinie"
 
-#: .\static\js\auto_timing.js:508 .\static\js\auto_timing.js:575
+#: .\static\js\auto_timing.js:550 .\static\js\auto_timing.js:617
 #: .\static\js\marshal_posts.js:281
 msgid "Penalty"
 msgstr "Strafe"
 
-#: .\static\js\auto_timing.js:516
+#: .\static\js\auto_timing.js:558
 msgid "Unlock"
 msgstr "Entsperren"
-
-#: .\static\js\auto_timing.js:608
-msgid "Drag onto a slot · double-click to restore"
-msgstr "Auf einen Platz ziehen · zum Wiederherstellen doppelklicken"
 
 #: .\static\js\dashboard_overview.js:24
 msgid "Done"
@@ -210,72 +224,97 @@ msgstr "Auf der Strecke"
 msgid "Total time"
 msgstr "Gesamtzeit"
 
-#: .\static\js\dashboard_overview.js:146
+#: .\static\js\dashboard_overview.js:147
 msgid "Penalties"
 msgstr "Strafen"
 
-#: .\static\js\dashboard_overview.js:150
+#: .\static\js\dashboard_overview.js:151
 msgid "Timing in progress — result shown when the run finishes."
 msgstr "Zeitmessung läuft — das Ergebnis erscheint, wenn der Lauf beendet ist."
 
-#: .\static\js\dashboard_overview.js:151
+#: .\static\js\dashboard_overview.js:152
 msgid "Waiting for the start signal."
 msgstr "Warten auf das Startsignal."
 
-#: .\static\js\dashboard_overview.js:160
+#: .\static\js\dashboard_overview.js:161
 msgid "%(n)s × pylon"
 msgstr "%(n)s × Pylone"
 
-#: .\static\js\dashboard_overview.js:162
+#: .\static\js\dashboard_overview.js:163
 msgid "%(n)s × task"
 msgstr "%(n)s × Aufgabe"
 
-#: .\static\js\dashboard_overview.js:163
+#: .\static\js\dashboard_overview.js:164
 msgid "stop line"
 msgstr "Stopplinie"
 
-#: .\static\js\dashboard_overview.js:178
+#: .\static\js\dashboard_overview.js:179
 msgid "No running classes yet."
 msgstr "Noch keine laufenden Klassen."
 
-#: .\static\js\dashboard_overview.js:197
+#: .\static\js\dashboard_overview.js:198
 msgid "%(finished)s / %(total)s runs"
 msgstr "%(finished)s / %(total)s Läufe"
 
-#: .\static\js\dashboard_overview.js:199
+#: .\static\js\dashboard_overview.js:200
 msgid "no starters"
 msgstr "keine Starter"
 
-#: .\static\js\dashboard_overview.js:226
+#: .\static\js\dashboard_overview.js:227
 msgid "Updated %(time)s"
 msgstr "Aktualisiert %(time)s"
+
+#: .\static\js\ignored_panel.js:44
+msgid "just now"
+msgstr "gerade eben"
+
+#: .\static\js\ignored_panel.js:45
+msgid "%(n)s min"
+msgstr "%(n)s Min."
+
+#: .\static\js\ignored_panel.js:46
+msgid "%(n)s h"
+msgstr "%(n)s Std."
+
+#: .\static\js\ignored_panel.js:63
+msgid "Drag onto a run's slot · double-click to restore"
+msgstr "Auf den Platz eines Laufs ziehen · zum Wiederherstellen doppelklicken"
+
+#: .\static\js\ignored_panel.js:104
+msgid "Show fewer"
+msgstr "Weniger anzeigen"
+
+#: .\static\js\ignored_panel.js:105
+msgid "Show all (%(n)s)"
+msgstr "Alle anzeigen (%(n)s)"
 
 #: .\static\js\live_socket.js:42
 msgid "Live"
 msgstr "Live"
 
-
 #: .\static\js\live_socket.js:43
 msgid "Connection lost — this screen is not updating. Reconnecting…"
-msgstr "Verbindung verloren — dieser Bildschirm wird nicht aktualisiert. Neuverbindung läuft…"
-
+msgstr ""
+"Verbindung verloren — dieser Bildschirm wird nicht aktualisiert. "
+"Neuverbindung läuft…"
 
 #: .\static\js\live_socket.js:63
 msgid "Reload"
 msgstr "Neu laden"
 
-
 #: .\static\js\live_socket.js:69
 msgid ""
 "The current event was changed to “%(name)s”. This screen now shows that "
 "event."
-msgstr "Die aktuelle Veranstaltung wurde auf „%(name)s“ gewechselt. Dieser Bildschirm zeigt jetzt diese Veranstaltung."
-
+msgstr ""
+"Die aktuelle Veranstaltung wurde auf „%(name)s“ gewechselt. Dieser "
+"Bildschirm zeigt jetzt diese Veranstaltung."
 
 #: .\static\js\live_socket.js:70
 msgid "The current event was changed. This screen now shows another event."
-msgstr "Die aktuelle Veranstaltung wurde gewechselt. Dieser Bildschirm zeigt jetzt eine andere Veranstaltung."
-
+msgstr ""
+"Die aktuelle Veranstaltung wurde gewechselt. Dieser Bildschirm zeigt jetzt "
+"eine andere Veranstaltung."
 
 #: .\static\js\marshal_posts.js:78 .\static\js\marshal_posts.js:89
 msgid "Post %(n)s is in use on another device."
@@ -378,36 +417,36 @@ msgstr ""
 msgid "Could not save."
 msgstr "Konnte nicht gespeichert werden."
 
-#: .\static\js\timing_live.js:80
+#: .\static\js\timing_live.js:90
 msgid "Add a row for an upcoming starter"
 msgstr "Eine Zeile für einen kommenden Starter hinzufügen"
 
-#: .\static\js\timing_live.js:112
+#: .\static\js\timing_live.js:123
 msgid "Remove this row"
 msgstr "Diese Zeile entfernen"
 
-#: .\static\js\timing_live.js:132
+#: .\static\js\timing_live.js:143
 msgid "Double-click to type a time"
 msgstr "Doppelklicken, um eine Zeit einzugeben"
 
-#: .\static\js\timing_live.js:144
+#: .\static\js\timing_live.js:155
 msgid "Manual"
 msgstr "Manuell"
 
-#: .\static\js\timing_live.js:144
+#: .\static\js\timing_live.js:155
 msgid "Light barrier"
 msgstr "Lichtschranke"
 
-#: .\static\js\timing_live.js:145
+#: .\static\js\timing_live.js:156
 msgid "%(kind)s · drag to pair or to the Ignored panel · double-click to edit"
 msgstr ""
 "%(kind)s · ziehen zum Zuordnen oder auf das Feld „Ignoriert“ · zum "
 "Bearbeiten doppelklicken"
 
-#: .\static\js\timing_live.js:212
+#: .\static\js\timing_live.js:223 .\static\js\timing_live.js:255
 msgid "No starter with this bib is registered (kept anyway)."
 msgstr "Kein Starter mit dieser Startnummer registriert (trotzdem behalten)."
 
-#: .\static\js\timing_live.js:327
-msgid "Drag onto a run's slot · double-click to restore"
-msgstr "Auf den Platz eines Laufs ziehen · zum Wiederherstellen doppelklicken"
+#: .\static\js\timing_live.js:254
+msgid "Not registered"
+msgstr "Nicht gemeldet"

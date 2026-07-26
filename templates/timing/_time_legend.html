@@ -1,0 +1,20 @@
+{% load i18n %}
+{% comment %}What the colours on a time chip mean. These distinctions are
+load-bearing while timing — a manual trigger and a typed-in time are not the same
+evidence as a light-barrier reading — and they used to be explained only inside
+the "?" help modal, which nobody opens mid-run. So the key sits under the table,
+in the operator's eyeline, all the time. Shared by both timing views.{% endcomment %}
+<dl class="time-legend" aria-label="{% trans 'What the time colours mean' %}">
+  <div class="time-legend-item">
+    <dt><span class="time-chip" aria-hidden="true">00:00.000</span></dt>
+    <dd>{% trans "Light barrier — measured by the device." %}</dd>
+  </div>
+  <div class="time-legend-item">
+    <dt><span class="time-chip time-chip--manual" aria-hidden="true">00:00.000</span></dt>
+    <dd>{% trans "Manual trigger — someone pressed the device's button." %}</dd>
+  </div>
+  <div class="time-legend-item">
+    <dt><span class="time-chip time-chip--entered" aria-hidden="true">00:00.000</span></dt>
+    <dd>{% trans "Typed in by hand — the device gave no time." %}</dd>
+  </div>
+</dl>

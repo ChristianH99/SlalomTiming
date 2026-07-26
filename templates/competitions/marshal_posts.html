@@ -10,9 +10,9 @@
       <p class="hint">{% url 'competitions:penalties' as penalties_url %}{% blocktrans %}Turn on “Penalties set by marshal posts” and define the posts on the <a href="{{ penalties_url }}">Penalties</a> page first.{% endblocktrans %}</p>
     </div>
   {% else %}
-    {# json_script, not |safe: it escapes the characters that could end this
-       <script> element early, so a string ever added to the config can't become
-       markup. The page reads it back with JSON.parse(textContent). #}
+    {% comment %}json_script, not |safe: it escapes the characters that could end
+    this <script> element early, so a string ever added to the config can't become
+    markup. The page reads it back with JSON.parse(textContent).{% endcomment %}
     {{ config|json_script:"marshal-config" }}
 
     <div class="marshal" data-marshal>

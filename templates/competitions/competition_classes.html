@@ -2,10 +2,24 @@
 {% load i18n %}
 {% block title %}{% trans "Classes" %} – Slalom Timing{% endblock %}
 {% block topbar_title %}{% trans "Classes" %}{% endblock %}
+{% block topbar_actions %}
+  <button type="button" class="topbar-help" data-help-open title="{% trans 'How classes work' %}" aria-label="{% trans 'How classes work' %}">?</button>
+{% endblock %}
+{% block help_modal %}
+  <div class="modal-overlay help-modal" id="help-modal" hidden data-help-modal>
+    <div class="modal help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <button type="button" class="modal-close" data-help-close aria-label="{% trans 'Close' %}">×</button>
+      <h2 class="modal-title" id="help-title">{% trans "Classes" %}</h2>
+      <div class="modal-body">
+        <p>{% trans "Choose how participants are assigned to classes, then edit each class below." %}</p>
+        <p>{% url 'competitions:runorder' as runorder_url %}{% blocktrans %}Group them into runs on the <a href="{{ runorder_url }}">Run order</a> page.{% endblocktrans %}</p>
+      </div>
+    </div>
+  </div>
+{% endblock %}
 {% block content %}
   <h1 class="page-heading">{% trans "Classes" %}</h1>
-  <p class="hint">{% blocktrans with name=object.name %}Classes for <strong>{{ name }}</strong>. Choose how participants are assigned to classes, then edit each class below.{% endblocktrans %}
-    {% url 'competitions:runorder' as runorder_url %}{% blocktrans %}Group them into runs on the <a href="{{ runorder_url }}">Run order</a> page.{% endblocktrans %}</p>
+  <p class="hint">{% blocktrans with name=object.name %}Classes for <strong>{{ name }}</strong>.{% endblocktrans %}</p>
 
   <form method="post" data-unsaved-guard>
     {% csrf_token %}

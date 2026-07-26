@@ -1032,9 +1032,6 @@ class _RowContext:
 
 def serialize_arrangement(competition):
     ctype = competition.competition_type
-    ignored = (
-        competition.timing_signals.filter(ignored=True).order_by("-received_at")
-    )
     settings = TimingSettings.load()
     rows = arrangement.rows(competition)
     # Keep the Manual view in step with the Auto order: bibs/classes/runs (and
@@ -1053,15 +1050,10 @@ def serialize_arrangement(competition):
         "device_link": cp540.link_state(settings),
         "multi_class": competition.allows_multiple_classes_effective(),
         "rows": [_serialize_run(run, ctx) for run in rows],
-        "ignored": [
-            {
-                "id": signal.id,
-                "role": signal.role(settings) or "",
-                "time": _format_device_time(signal.device_time, ctype.timing_precision),
-                "manual": signal.is_manual,
-            }
-            for signal in ignored
-        ],
+        # The same rail as Auto timing, built by the same code so the two pages
+        # can't drift apart.
+        "ignored": autotiming.ignored_signals(competition, ctype.timing_precision, settings),
+        "ignored_split": autotiming.ignored_split(settings),
     }
 
 
@@ -1080,7 +1072,7 @@ def _serialize_run(run, ctx):
     # The one canonical penalty (marshal posts + the run's own counts + adjust), so
     # a penalty a marshal added to an operator-selected run adds up here too.
     penalty = autotiming.penalty_seconds(run, competition)
-    total = calc.format_precision(rt + penalty, precision) if rt is not None else ""
+    total = calc.format_clock(rt + penalty, precision) if rt is not None else ""
     return {
         "id": run.id,
         "start": _signal_ref(start, precision),
@@ -1088,7 +1080,7 @@ def _serialize_run(run, ctx):
         # A row with neither time (and no typed run time) is a placeholder awaiting
         # a starter.
         "placeholder": start is None and finish is None and run.manual_run_time is None,
-        "run_time": calc.format_precision(rt, precision),
+        "run_time": calc.format_clock(rt, precision),
         # The run time was typed in by hand, not measured — highlighted apart.
         "run_time_manual": run.manual_run_time is not None,
         "run": {
@@ -1106,6 +1098,9 @@ def _serialize_run(run, ctx):
             "task_count": run.task_count,
             "stopline_count": run.stopline_count,
             "penalty": penalty,
+            # The rendered form, so the table can't invent a fourth notation of
+            # its own — see calc.format_penalty.
+            "penalty_text": calc.format_penalty(penalty),
             "total": total,
             "over_max": _over_max(ctx, run),
         },

@@ -40,6 +40,7 @@
   const lockLabel = document.getElementById("input-lock");
   const lockCheck = document.getElementById("input-lock-check");
   const lockText = document.getElementById("input-lock-text");
+  const lockNote = document.getElementById("input-lock-note");
 
   // Scroll-to-current affordances, floated over the top/bottom of the list.
   const scrollUp = el("button", "auto-scroll-cue auto-scroll-cue--up", gettext("▲ current"));
@@ -153,6 +154,14 @@
     lockCheck.checked = on;
     if (lockLabel) lockLabel.classList.toggle("input-lock--on", on);
     if (lockText) lockText.textContent = on ? gettext("Locked") : gettext("Lock");
+    // The consequence, in words, in both states — this switch decides whether
+    // the event's times are being kept at all.
+    if (lockNote) {
+      lockNote.textContent = on
+        ? gettext("Incoming times go straight to Ignored — nothing is being recorded.")
+        : gettext("Times are being recorded.");
+      lockNote.classList.toggle("input-lock-note--on", on);
+    }
   }
 
   function renderList() {
@@ -178,12 +187,18 @@
       li.classList.add("auto-order-item--focused");
     if (item.finished) li.classList.add("auto-order-item--done");
     else if (item.started) li.classList.add("auto-order-item--running");
+    if (item.orphan) li.classList.add("auto-order-item--orphan");
     li.append(el("span", "auto-order-bib", "#" + (item.bib == null ? "?" : item.bib)));
     li.append(el("span", "auto-order-run", item.run_label || ""));
-    li.append(el("span", "auto-order-name", item.name || (item.orphan ? gettext("(extra start)") : "")));
+    const name = el("span", "auto-order-name" + (item.orphan ? " auto-order-name--orphan" : ""),
+      item.name || (item.orphan ? gettext("Unattributed time") : ""));
+    // The column is wide, but a long name can still run out of it — the full one
+    // is a hover away rather than lost.
+    if (item.name) name.title = item.name;
+    li.append(name);
     // The total (run + penalties) is the meaningful figure here.
     if (item.total_time) li.append(el("span", "auto-order-time", item.total_time));
-    li.title = gettext("Click to bring this competitor into the tiles");
+    if (!item.orphan) li.title = gettext("Click to bring this competitor into the tiles");
     // A plain click focuses this competitor in the tiles (dragging still reorders).
     li.addEventListener("click", () => focusItem(item.index));
     li.addEventListener("dragstart", onOrderDragStart);
@@ -247,14 +262,23 @@
       return div;
     }
 
+    // A run with no slot in the start order: a real time nobody owns. It used to
+    // render exactly like a competitor ("#? (kein Starter)"), which is the state
+    // an operator most needs help in — so it gets its own treatment and says what
+    // to do about it, rather than relying on knowing that times can be dragged.
+    if (item.orphan) div.classList.add("auto-tile--orphan");
+
     const head = el("div", "auto-tile-head");
     head.append(el("span", "auto-tile-bib", "#" + (item.bib == null ? "?" : item.bib)));
     const id = el("div", "auto-tile-id");
-    id.append(el("span", "auto-tile-name", item.name || gettext("(no starter)")));
+    id.append(el("span", "auto-tile-name" + (item.orphan ? " auto-tile-name--orphan" : ""),
+      item.orphan ? gettext("Unattributed time") : (item.name || gettext("(no starter)"))));
     const sub = [item.class_name, item.run_label].filter(Boolean).join(" · ");
     id.append(el("span", "auto-tile-sub", sub));
     head.append(id);
     div.append(head);
+
+    if (item.orphan) div.append(orphanHelp(item));
 
     const times = el("div", "auto-tile-times");
     times.append(timeBlock(gettext("Start"), item.start, item, "start"));
@@ -286,6 +310,24 @@
       }
     }
     return div;
+  }
+
+  // What to do with a time that belongs to nobody: put it on the right starter,
+  // or throw it away. Both were already possible; neither was said anywhere.
+  function orphanHelp(item) {
+    const box = el("div", "auto-orphan");
+    box.append(el("p", "auto-orphan-text", gettext(
+      "This time has no competitor in the start order. Drag it onto the right "
+      + "starter's Start or Finish slot, or discard it.")));
+    const ids = [item.start && item.start.id, item.finish && item.finish.id].filter(Boolean);
+    if (ids.length) {
+      const drop = el("button", "button button--secondary button--small", gettext("Move to Ignored"));
+      drop.type = "button";
+      drop.addEventListener("click", () =>
+        Promise.all(ids.map((id) => ignore(id, true))).then(refresh));
+      box.append(drop);
+    }
+    return box;
   }
 
   function figure(label, value, extra) {
@@ -589,27 +631,19 @@
     renderTiles();
   });
 
-  // Two columns (start, finish), chips stacked newest first — same as Manual timing.
-  function renderIgnored() {
-    ignoredBox.querySelectorAll(".ignored-col").forEach((col) => {
-      const role = col.dataset.role;
-      const chips = state.ignored.filter((s) => s.role === role);
-      col.classList.toggle("ignored-col--empty", chips.length === 0);
-      col.querySelector(".ignored-col-list").replaceChildren(...chips.map(ignoredChip));
-    });
-  }
+  // The rail itself is shared with Manual timing (static/js/ignored_panel.js);
+  // this view only supplies the drag/restore behaviour that differs between them.
+  const ignoredPanel = IgnoredPanel.create({
+    box: ignoredBox,
+    countEl: document.getElementById("ignored-count"),
+    moreEl: document.getElementById("ignored-more"),
+    onDragStart: (e, id, role, time) => onTimeDragStart(e, id, role, time),
+    onDragEnd: () => clearTimeDrag(),
+    onRestore: (id) => ignore(id, false).then(refresh),
+  });
 
-  function ignoredChip(sig) {
-    const chip = el("div", "ignored-chip" + (sig.manual ? " ignored-chip--manual" : ""), sig.time);
-    chip.draggable = true;
-    chip.dataset.signalId = sig.id;
-    chip.dataset.role = sig.role;
-    chip.dataset.time = sig.time;
-    chip.title = gettext("Drag onto a slot · double-click to restore");
-    chip.addEventListener("dragstart", (e) => onTimeDragStart(e, sig.id, sig.role, sig.time));
-    chip.addEventListener("dragend", clearTimeDrag);
-    chip.addEventListener("dblclick", () => ignore(sig.id, false).then(refresh));
-    return chip;
+  function renderIgnored() {
+    ignoredPanel.render(state.ignored, state.ignored_split);
   }
 
   // ---- scroll-to-current --------------------------------------------------

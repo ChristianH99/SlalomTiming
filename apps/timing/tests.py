@@ -487,7 +487,7 @@ def test_finish_pairs_with_oldest_open_start_newest_row_on_top():
     assert rows[0]["start"]["time"] == "10:00:05.000" and rows[0]["finish"] is None
     assert rows[1]["start"]["time"] == "10:00:00.000"
     assert rows[1]["finish"]["time"] == "10:00:12.500"
-    assert rows[1]["run_time"] == "12.500"
+    assert rows[1]["run_time"] == "00:12.500"   # mm:ss.xxx, the one time notation
 
 
 def test_start_does_not_adopt_earlier_orphan_finish():
@@ -876,9 +876,33 @@ def test_total_time_includes_penalties(client):
     run = run_of(sig)
     submit_penalty(client, run, pylons=2)            # 2 × 2s = 4s
     item = autotiming.serialize(comp)["items"][0]
-    assert item["run_time"] == "10.000"
-    assert item["total_time"] == "14.000"            # run + penalty seconds
+    assert item["run_time"] == "00:10.000"
+    assert item["total_time"] == "00:14.000"         # run + penalty seconds
     assert item["total_pylons"] == 2
+
+
+def test_every_view_writes_a_run_time_the_same_way(client):
+    """One quantity, one notation. The Manual view, the Auto view and the
+    Dashboard used to render plain seconds while results rendered mm:ss.xxx, so
+    the same run read three ways depending on which screen you were looking at
+    (UI-5). They all go through calc.format_clock now; this is the pin."""
+    comp, _ = auto_scenario()
+    comp.penalties_by_marshal_posts = True
+    comp.save(update_fields=["penalties_by_marshal_posts"])
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    sig = signal_in(comp, 1, "10:00:00.000", running=1)
+    signal_in(comp, 2, "10:01:03.250", running=1)   # 63.250 s — over a minute
+    submit_penalty(client, run_of(sig), pylons=1)   # 1 × 2 s
+
+    manual = serialize_arrangement(comp)["rows"][0]["run"]
+    auto = autotiming.serialize(comp)["items"][0]
+    current = client.get(reverse("timing:dashboard-state")).json()["current"]
+
+    assert auto["run_time"] == current["run_time"] == "01:03.250"
+    assert manual["total"] == auto["total_time"] == current["total_time"] == "01:05.250"
+    # A penalty is a different quantity, so it is written differently — but also
+    # only one way, and in the whole seconds it is actually measured in.
+    assert manual["penalty_text"] == current["penalty"] == "+2 s"
 
 
 def test_submitted_penalty_is_locked_until_unlocked(client):

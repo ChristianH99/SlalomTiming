@@ -87,7 +87,7 @@ def _run_cell(run, precision):
         return {"time": "", "penalty": ""}
     return {
         "time": calc.format_clock(run.run_time, precision),
-        "penalty": f"+{run.penalty} s" if run.penalty else "",
+        "penalty": calc.format_penalty(run.penalty),
     }
 
 

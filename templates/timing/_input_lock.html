@@ -1,10 +1,21 @@
 {% load i18n %}
 {% comment %}The red operator "Lock" switch: while on, every incoming time is sent
 straight to the ignore list. Wired up by timing_live.js / auto_timing.js from the
-serialized `input_locked` state, so it stays in sync across open views.{% endcomment %}
-<label class="input-lock" id="input-lock"
-       title="{% trans 'Send all incoming times straight to the ignore list' %}">
-  <span class="input-lock-text" id="input-lock-text">{% trans "Lock" %}</span>
-  <input type="checkbox" class="input-lock-check" id="input-lock-check">
-  <span class="input-lock-switch" aria-hidden="true"><span class="input-lock-knob"></span></span>
-</label>
+serialized `input_locked` state, so it stays in sync across open views.
+
+This is a safety-critical control, not a preference, so it says what it does on
+the page in both states — it used to be an unlabelled grey pill in the corner,
+whose whole explanation was a `title` nobody hovers mid-run.{% endcomment %}
+<div class="input-lock-block">
+  <label class="input-lock" id="input-lock"
+         title="{% trans 'Send all incoming times straight to the ignore list' %}">
+    <span class="input-lock-glyph" aria-hidden="true">🔒</span>
+    <span class="input-lock-text" id="input-lock-text">{% trans "Lock" %}</span>
+    <input type="checkbox" class="input-lock-check" id="input-lock-check"
+           aria-describedby="input-lock-note">
+    <span class="input-lock-switch" aria-hidden="true"><span class="input-lock-knob"></span></span>
+  </label>
+  <p class="input-lock-note" id="input-lock-note" role="status">
+    {% trans "Times are being recorded." %}
+  </p>
+</div>

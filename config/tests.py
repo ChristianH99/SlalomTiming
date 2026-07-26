@@ -99,6 +99,30 @@ class TestFonts:
         assert 'https://' not in sheet
 
 
+class TestTemplateComments:
+    """Django's ``{# #}`` is single-line only: its lexer matches ``{#.*?#}``
+    without DOTALL, so a comment that wraps is never recognised as one and its
+    text is rendered onto the page for the operator to read.
+
+    This has now escaped review twice — once before commit 5eef180, and again
+    while doing the design-system work, where a note above a ``<th>`` printed
+    itself above the timing table. Nothing was checking, so here is the check.
+    Multi-line commentary belongs in ``{% comment %}…{% endcomment %}``.
+    """
+
+    @pytest.mark.parametrize('template', sorted(TEMPLATE_DIR.rglob('*.html')), ids=str)
+    def test_no_multiline_hash_comments(self, template):
+        source = template.read_text(encoding='utf-8')
+        for index, opener in enumerate(source.split('{#')):
+            if index == 0:
+                continue
+            head = opener.split('#}')[0]
+            assert '\n' not in head, (
+                f'{template.name}: a {{# #}} comment spans lines, so Django will '
+                f'render it as text. Use {{% comment %}}: {head.strip()[:60]}…'
+            )
+
+
 class TestSecretKey:
     """SEC-15: the development key is public — every checkout has it."""
 

@@ -354,7 +354,11 @@ templates/timing/        dashboard.html (organiser overview), settings.html, sim
                          (standalone, no app shell), live.html (Manual timing), auto.html (Auto timing),
                          _device_alarm.html (the device-link banner both timing pages include),
                          _live_connection.html (the WebSocket-connection indicator every live
-                         view includes — Marshal Posts too, which is why it lives here)
+                         view includes — Marshal Posts too, which is why it lives here),
+                         _time_legend.html (what the time-chip colours mean — measured /
+                         manual trigger / typed by hand. Persistent, beside the table on both
+                         timing pages: they are load-bearing distinctions during timing and
+                         used to be explained only inside the "?" modal nobody opens mid-run)
 static/js/               dashboard_overview.js (organiser Dashboard: renders the stat tiles,
                          progress ring, per-class board and current-competitor card from the
                          dashboard-state JSON, re-fetching on each timing_live WebSocket nudge) +
@@ -372,6 +376,17 @@ static/js/               dashboard_overview.js (organiser Dashboard: renders the
                          the "submitted" toast waits for the server rather than claiming it early;
                          a 409 means the run is already locked and is dropped quietly.
                          device_alarm.js renders the shared device-link banner from `device_link`.
+                         ignored_panel.js owns the Ignored-times rail for *both* timing views
+                         (they used to carry a copy each, differing only in which drag handler
+                         they wired up). It splits Start/Finish only when the rig has two
+                         channels — `autotiming.ignored_split`; with one light barrier an
+                         ignored signal has no role, and asking `signal.role()` anyway put
+                         every chip under Start and left Finish permanently empty. Each chip
+                         also carries its *arrival* age, since a chip's own time is the device
+                         clock (not wall-clock, so it says nothing about when), and the list
+                         folds past a few per column with a count and a "show all". There is
+                         deliberately no clear-all: an ignored signal is still the only record
+                         the device fired, and this app does not delete recorded times.
                          live_socket.js owns the WebSocket for all four live views (no other
                          file may call `new WebSocket` — a test enforces it): reconnect with
                          backoff, a heartbeat so a link that died without a close frame is
@@ -620,21 +635,32 @@ during the outage is otherwise invisible until the next one happens to arrive. A
   **Double-click** a Start, Finish or Run time (or an empty slot) to type it in by hand when the device
   didn't fire — a keyed-in time is a green "entered" chip (run time green + underlined), distinct from a
   measured one, and the run's total honours it. Ignoring is a **drag** to the Ignored-times panel on the
-  right (a shared two-column Start/Finish list, `templates/timing/_ignored.html`, used on both timing
-  pages); drag a chip back onto a run's slot (or double-click it) to use it (rejected with a wiggle if it
+  right (`templates/timing/_ignored.html` + `static/js/ignored_panel.js`, shared with Auto timing);
+  drag a chip back onto a run's slot (or double-click it) to use it (rejected with a wiggle if it
   would put a start after its finish). A time keyed in over a measured one keeps the measured one on the
-  list. Column widths are fixed so entering a bib never shifts them, and the run table + Ignored panel are
-  centred on the page. Above the Ignored panel is a red **Lock** switch (`_input_lock.html`, fixed width
-  so toggling never resizes it; shared with Auto timing via `timing:input-lock`): while on it sends every
-  incoming time straight to the ignore list — a pause without disconnecting — pulsing red and syncing
-  across open views over the WebSocket. The page intro moved into a **help pop-up**: the topbar "?"
-  (base.html `topbar_actions` block) opens a page-internal modal (`help_modal` block); reusable by any
-  page.
+  list. The **competitor's name has its own column** and takes every pixel the fixed columns don't
+  need (`table-layout: fixed`, `.tt-name` unsized): it used to be a 7.5 rem line stacked under the bib
+  input, so the one thing that can't be reconstructed from the numbers around it was the one thing
+  being clipped — while three penalty steppers took three times that width. Every other column *is*
+  fixed, so entering a bib still never shifts them, and each is sized to its content because every rem
+  taken there is a rem the name doesn't get. Above the Ignored panel is a red **Lock** switch
+  (`_input_lock.html`, fixed width so toggling never resizes it; shared with Auto timing via
+  `timing:input-lock`): while on it sends every incoming time straight to the ignore list — a pause
+  without disconnecting — pulsing red and syncing across open views over the WebSocket. It states its
+  consequence in words in *both* states ("Times are being recorded." / "…nothing is being recorded."),
+  because off it was an unlabelled grey pill whose whole explanation was a `title` nobody hovers
+  mid-run. The page intro is in a **help pop-up**: the topbar "?" (base.html `topbar_actions` block)
+  opens a page-internal modal (`help_modal` block); reusable by any page, and now the convention for
+  every page-level explanation (see Design system).
 - **Auto timing** (`timing/auto/`) — the order-driven live view. The start order (run order × start
   pattern) runs down the left as draggable tiles ("#3 C1"), grouped by run with a "Run · <classes>"
   divider that sticks to the top of the list and is replaced by the next run's as it scrolls up (so the
   header names the run shown at the top, not the running one). Each tile shows the total time (run +
-  penalties), and dragging saves a persisted override (Reset order re-derives it). The list follows the
+  penalties), and dragging saves a persisted override — "Reset order", which *discards* that override,
+  is deliberately the quietest control on the page rather than the filled flame button it was, which
+  outranked the competitor on course. The column is wide enough for a real name (it capped at 20 rem,
+  of which the name got ~150 px) and the list uses the page's height rather than a flat 70vh, which is
+  what left the middle column standing half empty. The list follows the
   current starter automatically until the operator scrolls away; a "▲/▼ current" cue re-engages it.
   Incoming device times bind to the order positionally — no bib typing — while a run pre-entered on
   Manual timing claims its own slot (shown pre-filled) and incoming times step over it. The right shows
@@ -653,11 +679,15 @@ during the outage is otherwise invisible until the next one happens to arrive. A
   speech-bubble pop-up under it: a locked post shows +/-
   steppers to edit each task's pylons (and toggle the stop line) plus an **Unlock** button; an unlocked
   post shows the read-only breakdown and a **Lock** button. Ignore a wrong time by dragging it to the
-  Ignored-times panel (the same two-column Start/Finish list as Manual timing, with the red **Lock**
+  Ignored-times panel (the same rail as Manual timing, with the red **Lock**
   switch above it), and drag it back onto a slot to re-pair. A time chip can also be dragged from the
   current competitor onto another tile's Start/Finish slot — including an *upcoming* competitor with no
   run yet (their run is made from the slot key), moving a mis-attributed time onto the right starter.
-  The page intro is behind the topbar "?" help pop-up.
+  A run with **no slot in the start order** (more starts than the order expects) is a real time nobody
+  owns: it renders as a flame-framed alarm tile reading "Unattributed time", says in a sentence what to
+  do about it, and offers a one-click "Move to Ignored" — it used to render as `#? (kein Starter)` in
+  exactly the same card treatment as a competitor, with no route out beyond knowing that times can be
+  dragged. The page intro is behind the topbar "?" help pop-up.
 - **Marshal Posts** is a top-level sidebar item (below Timing) — the marshal's phone surface (see the
   competitions app). It reads the current competitor from Auto timing over the timing WebSocket and
   pushes every tap and the final submit back (with the per-task detail) so the boxes above fill and go
@@ -718,6 +748,45 @@ troubleshooting) is in **DEPLOYMENT.md**, with the artefacts in `deploy/`. What 
 - **The secret key** must come from `DJANGO_SECRET_KEY` — settings raises `ImproperlyConfigured`
   when `DEBUG` is off and the checked-in development key would be used.
 - Environment variables are documented in `.env.example`; nothing loads it automatically.
+
+## Design system
+
+Everything visual comes from the token block at the top of `static/css/main.css`. Four rules, and
+each exists because breaking it is what made the app read as several products stitched together:
+
+- **No raw colour, spacing or font-size outside the token block.** `--space-1…10` (a 4px grid) for
+  padding, gap and margin; `--text-2xs…4xl` for type; `--radius-*`; the palette plus the `--success`
+  and `--amber` families. A value that appears twice is a token. The scales are closed sets: a
+  component that needs a step which isn't there means the *scale* is missing a step. This replaced
+  33 distinct font sizes, 25 gaps and 25+ paddings, which is why the same relationship used to be
+  expressed slightly differently on every page.
+- **The app is light-only, and says so by staying silent.** `color-scheme` is deliberately *not*
+  declared. Naming a dark scheme without shipping dark rules is what made browsers paint inputs,
+  selects, date pickers and scrollbars dark against a permanently light page. A real dark theme
+  means redefining the tokens under `prefers-color-scheme` — and only then re-declaring
+  `color-scheme`.
+- **One measure, one exception.** `.content` is `--content-max` on every page. The two timing views
+  are operator screens rather than documents, so they take the whole display through
+  `{% block content_class %}content--wide{% endblock %}` — declared in the stylesheet, not injected
+  as an inline `<style>` override by whichever page felt cramped.
+- **A field label is sentence case; uppercase micro-caps are for things that aren't labels** (table
+  column headings, stat-tile captions, status pills, section eyebrows). Setup and Settings used to
+  shout theirs (`GERÄT`, `TRAININGSLÄUFE`) while every other page spoke normally — and all-caps is
+  worst exactly where German puts its longest compounds. Likewise **page-level explanation lives
+  behind the topbar "?"** (`topbar_actions` + `help_modal`, reusable by any page); only a hint
+  attached to a specific control stays in the body.
+
+Two more that are about *saying the same thing the same way*:
+
+- **`calc.format_clock` is the one way an elapsed time is written** — `mm:ss.xxx`, everywhere: both
+  timing views, the Dashboard, the results tables, the PDFs. `format_precision` is for callers that
+  need the bare number, not for display. A penalty is a different quantity (whole seconds added,
+  never measured) so it is written differently — and only one way, by `calc.format_penalty`
+  (`+5 s`). Pinned by `test_every_view_writes_a_run_time_the_same_way`.
+- **Django's `{# #}` is single-line only.** Its lexer matches `{#.*?#}` without DOTALL, so a comment
+  that wraps is rendered onto the page for the operator to read. This escaped review twice; multi-
+  line commentary goes in `{% comment %}…{% endcomment %}`, and `config/tests.py` now checks every
+  template.
 
 ## Security
 

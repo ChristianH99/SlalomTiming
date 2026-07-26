@@ -143,7 +143,8 @@
       body.append(figure(gettext("Run time"), c.run_time || "—"));
       body.append(figure(gettext("Total time"), c.total_time || "—", "primary"));
       if (state.penalties_enabled) {
-        body.append(figure(gettext("Penalties"), c.penalty ? `+${c.penalty}s` : "0"));
+        // Already rendered by calc.format_penalty — the notation lives there.
+        body.append(figure(gettext("Penalties"), c.penalty || "—"));
       }
     } else {
       const note = el("p", "dash-current-note",

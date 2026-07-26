@@ -2,9 +2,29 @@
 {% load i18n %}
 {% block title %}{% trans "Run order" %} – Slalom Timing{% endblock %}
 {% block topbar_title %}{% trans "Run order" %}{% endblock %}
+{% block topbar_actions %}
+  <button type="button" class="topbar-help" data-help-open title="{% trans 'How the run order works' %}" aria-label="{% trans 'How the run order works' %}">?</button>
+{% endblock %}
+{% comment %}Page-level explanation belongs behind the topbar "?" — the same
+convention the timing views use. What stays in the body is the one line that says
+which competition this is, and hints attached to a specific control.{% endcomment %}
+{% block help_modal %}
+  <div class="modal-overlay help-modal" id="help-modal" hidden data-help-modal>
+    <div class="modal help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <button type="button" class="modal-close" data-help-close aria-label="{% trans 'Close' %}">×</button>
+      <h2 class="modal-title" id="help-title">{% trans "Run order" %}</h2>
+      <div class="modal-body">
+        <p>{% url 'competitions:classes' as classes_url %}{% blocktrans %}Drag classes between runs to start them together, drop a class in the gap between runs to split it into its own run, and drag a run's handle to reorder. Only classes marked <em>Running</em> on the <a href="{{ classes_url }}">Classes</a> page appear here.{% endblocktrans %}</p>
+        <h3>{% trans "Start pattern" %}</h3>
+        <p>{% blocktrans %}The order participants take their runs inside a run. Each block plays its runs for a window of participants at a time — every participant in the window takes the first run, then the second, and so on — then slides on to the next window until everyone has been through it.{% endblocktrans %}</p>
+        <p>{% blocktrans %}Drag runs from the palette into a block, reorder them within a block, and drag a block's handle to move the whole block. Each participant's runs are used up in the order the blocks come, so a second <em>Counted</em> chip is their second counted run. The same pattern is replayed for every run above.{% endblocktrans %}</p>
+      </div>
+    </div>
+  </div>
+{% endblock %}
 {% block content %}
   <h1 class="page-heading">{% trans "Run order" %}</h1>
-  <p class="hint">{% url 'competitions:classes' as classes_url %}{% blocktrans with name=object.name %}The order runs start for <strong>{{ name }}</strong>. Drag classes between runs to start them together, drop a class in the gap between runs to split it into its own run, and drag a run's handle to reorder. Only classes marked <em>Running</em> on the <a href="{{ classes_url }}">Classes</a> page appear here.{% endblocktrans %}</p>
+  <p class="hint">{% blocktrans with name=object.name %}The order runs start for <strong>{{ name }}</strong>.{% endblocktrans %}</p>
 
   {% if run_groups_data %}
     <form method="post" data-unsaved-guard>
@@ -14,7 +34,7 @@
       <input type="hidden" name="run_order" id="run-order-data" value="[]">
 
       <h2 class="page-heading page-heading--sub">{% trans "Start pattern" %}</h2>
-      <p class="hint">{% blocktrans %}The order participants take their runs inside a run. Each block plays its runs for a window of participants at a time — every participant in the window takes the first run, then the second, and so on — then slides on to the next window until everyone has been through it. Drag runs from the palette into a block, reorder them within a block, and drag a block's handle to move the whole block. Each participant's runs are used up in the order the blocks come, so a second <em>Counted</em> chip is their second counted run. The same pattern is replayed for every run above.{% endblocktrans %}</p>
+      <p class="hint">{% trans "The order participants take their runs inside a run." %}</p>
 
       <div class="pattern-palette">
         <span class="pattern-palette-label">{% trans "Drag in:" %}</span>

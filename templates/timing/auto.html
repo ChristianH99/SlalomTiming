@@ -18,8 +18,8 @@
     </div>
   </div>
 {% endblock %}
+{% block content_class %}content--wide{% endblock %}
 {% block content %}
-  <style>.content { max-width: none; }</style>
   {% if not competition %}
     <div class="notice">
       <p>{% url 'competitions:list' as list_url %}{% blocktrans %}No competition is selected. Timing runs against the active competition, so <a href="{{ list_url }}">pick a competition</a> to time it.{% endblocktrans %}</p>
@@ -32,7 +32,11 @@
         <aside class="auto-order">
           <div class="auto-order-head">
             <h2 class="auto-col-title">{% trans "Start order" %}</h2>
-            <button type="button" class="button button--small" data-reset>{% trans "Reset order" %}</button>
+            {% comment %}Discards the manual start order, so it is the quietest
+            control on the page rather than a filled flame button outranking the
+            competitor on course.{% endcomment %}
+            <button type="button" class="button button--secondary button--small auto-order-reset"
+                    data-reset title="{% trans 'Discard the manual order and re-derive it from the run order' %}">{% trans "Reset order" %}</button>
           </div>
           <ol class="auto-order-list" id="auto-order-list"></ol>
           <p class="auto-empty hint" id="auto-empty" hidden>{% url 'competitions:runorder' as runorder_url %}{% blocktrans %}No start order yet — set the <a href="{{ runorder_url }}">run order</a> and register starters.{% endblocktrans %}</p>
@@ -40,6 +44,7 @@
 
         <section class="auto-stage">
           <div class="auto-tiles" id="auto-tiles"></div>
+          {% include "timing/_time_legend.html" %}
         </section>
 
         <aside class="auto-ignored">
@@ -69,6 +74,7 @@
     </script>
     <script src="{% static 'js/device_alarm.js' %}"></script>
     <script src="{% static 'js/live_socket.js' %}"></script>
+    <script src="{% static 'js/ignored_panel.js' %}"></script>
     <script src="{% static 'js/auto_timing.js' %}"></script>
   {% endif %}
 {% endblock %}
