@@ -58,6 +58,20 @@ apps/accounts/           Access control. Login required everywhere and page-leve
                          locked out past a limit, every attempt logged; views.LoginView is the
                          three hooks that use it. Counters clear on restart — acceptable because
                          the app is one process by design.
+                         context_processors.access exposes the caller's page keys, so the sidebar
+                         only lists what they may open (the gate itself is the middleware).
+Cross-cutting bits       Each app also carries the ordinary Django plumbing: admin.py (models
+                         registered for the Django admin — the fallback surface for anything the
+                         app's own screens don't edit), apps.py, urls.py and migrations/.
+                         apps/timing/routing.py is the WebSocket URL map (ws/timing/ → the legacy
+                         TimingConsumer, ws/timing/live/ → TimingLiveConsumer), reached from
+                         config/asgi.py. Two **context processors** run on every render (settings
+                         TEMPLATES): apps/competitions/context_processors.active_competition (the
+                         active competition plus its running classes and Overall groups, which is
+                         how the sidebar lists a Results sub-page each) and the accounts one above.
+                         **templatetags/**: apps/competitions/templatetags/competitions_tags.py
+                         (participant_classes — a participant's classes under the competition's
+                         assignment method) and apps/results/templatetags/pdf_markup.py.
 apps/common.py           Helpers shared across apps: safe_next() resolves the POSTed ?next to
                          an in-app URL (rejecting off-site ones), so the unsaved-changes
                          modal's "Save changes" lands where the user was navigating.
@@ -89,7 +103,15 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          apps/results/resultscalc.py),
                          plus position (list order) and run_position (which run it starts in;
                          classes sharing a run_position start together). Competition.run_groups()
-                         returns the ordered runs. Setup UI is a section: a tile list
+                         returns the ordered runs. Two class methods are about how a class *reads*
+                         and whether it works at all: display_name() writes it the one way every
+                         results heading and PDF does ("Class 7", but "Klasse 7" alone for a class
+                         already named that — the prefix used to double), and scoring_warning()
+                         names a setup that can never rank anybody (no counted runs; a regularity
+                         test over a single run, which scores the whole field 0 and is then
+                         silently ranked by fastest run). Both combinations are legal to save, so
+                         the warning is shown on the Classes tile and above the empty results
+                         table rather than refused. Setup UI is a section: a tile list
                          ("Manage competitions") + General / Classes / Run order / Penalties /
                          Results sub-pages that all edit the *active* competition (no pk in the
                          URL; the Results sub-page lives in apps/results).
@@ -129,7 +151,12 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          order, so one pattern serves classes with different run counts (a
                          participant out of that type sits the chip out). Competition.start_lists()
                          is the resulting per-run start order; shortfalls() flags runs a class
-                         grants that the pattern never plays. Edited on the Run order page below
+                         grants that the pattern never plays. A new competition is seeded with
+                         DEFAULT_BLOCKS (one block, the whole field at once, practice + counted +
+                         counted — the runs the default classes grant): with no pattern at all
+                         start_lists() schedules nothing, so Auto timing's start order and the
+                         dashboard's expected-run count were empty on a competition that looked
+                         fully set up. Edited on the Run order page below
                          the run grouping; the live preview re-implements the expansion in JS.
                          The preview can run on real starters or on made-up ones (one run of N,
                          bibs 1..N, taking the first run's first class's run counts) so a pattern
@@ -171,7 +198,11 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                         Auto timing view — which share the same runs (see the sync below). The old
                         TimingEvent + connector-loop dashboard is legacy and slated to be redone.
   models.py              TimingSettings (singleton: device [Tag Heuer CP540 / Simulator],
-                         single-digit start/finish channel, IP + TCP port for the CP540, plus
+                         start/finish channel — inputs 1–4 only, MIN_CHANNEL/MAX_CHANNEL, because
+                         every supported device numbers its inputs that way and a channel outside
+                         it could never match a signal (a finish channel of 7 silently meant
+                         nothing was ever a finish); the same number for both is one light barrier,
+                         IP + TCP port for the CP540, plus
                          ignore_incoming — the red operator "Lock" switch on the timing pages: while
                          on, every incoming signal is stored ignored [straight to the ignore list]
                          instead of placed into a run, applying to every device/simulator, and
@@ -220,11 +251,20 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          the operator keyed directly onto a run they own + the signed timekeeper adjust
                          (an auto-bound run's own counts are a stale cache, ignored); otherwise it is
                          the run's own counts. So a marshal penalty on an operator-selected run, or a
-                         penalty typed on Manual timing, shows in both views. serialize() builds the
+                         penalty typed on Manual timing, shows in both views. own_counts_apply() is
+                         the same rule asked the other way round — whether a run's own counts still
+                         reach its total — which is how the Manual view knows to disable steppers
+                         that would take a number and change nothing. serialize() builds the
                          page: per run the grand penalty totals, the
                          total time (run + penalty seconds), and per post a box with counts,
                          submitted/locked state and per-task detail. marshal_state() returns the
-                         current competitor + the post's detail.
+                         current competitor + the post's detail. Two small pieces of live state ride
+                         along in both payloads: barrier_phase() (single light barrier only — what
+                         the *next* pulse will count as, computed from the runs already read, since
+                         the phase is otherwise invisible and one stray pulse inverts it for the
+                         rest of the event) and _empty_reason() (with no start order, which piece of
+                         setup is missing — no running class, no pattern, nobody registered, or
+                         classes granting no runs — instead of one sentence blaming the run order).
   arrangement.py         Causal pairing of signals into runs: a finish joins the oldest open
                          start that began before it; a start never adopts an earlier orphan
                          finish. Ordering (which run is newest, which open start is oldest) is by
@@ -291,7 +331,10 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
   views.py               DashboardView (organiser overview) + dashboard-state JSON endpoint;
                          Settings page; standalone Simulator; live Manual timing view + a JSON
                          arrangement endpoint and mutate endpoints (run-update by run id — marks
-                         the run manual_entry —, ignore, pair [also takes a slot_key, so a time can be
+                         the run manual_entry, but only when the payload carries an *identity*
+                         field (IDENTITY_FIELDS: bib/class/run); a penalty stepper used to take the
+                         run over too, which pinned an auto-bound run to the slot it happened to be
+                         showing —, ignore, pair [also takes a slot_key, so a time can be
                          dragged onto an upcoming Auto competitor with no run yet], set-time [type a
                          start/finish by hand, displaced device time kept on the rail], set-runtime
                          [type a run time]; the slot_key path creates the run via _run_from_slot).
@@ -358,7 +401,9 @@ templates/timing/        dashboard.html (organiser overview), settings.html, sim
                          _time_legend.html (what the time-chip colours mean — measured /
                          manual trigger / typed by hand. Persistent, beside the table on both
                          timing pages: they are load-bearing distinctions during timing and
-                         used to be explained only inside the "?" modal nobody opens mid-run)
+                         used to be explained only inside the "?" modal nobody opens mid-run),
+                         _barrier_phase.html (single-light-barrier rigs only: what the next pulse
+                         will be read as, and that ignoring a stray time puts the sequence back)
 static/js/               dashboard_overview.js (organiser Dashboard: renders the stat tiles,
                          progress ring, per-class board and current-competitor card from the
                          dashboard-state JSON, re-fetching on each timing_live WebSocket nudge) +
@@ -375,7 +420,15 @@ static/js/               dashboard_overview.js (organiser Dashboard: renders the
                          can't land out of order. The board says "Sending…" / "not sent yet", and
                          the "submitted" toast waits for the server rather than claiming it early;
                          a 409 means the run is already locked and is dropped quietly.
-                         device_alarm.js renders the shared device-link banner from `device_link`.
+                         device_alarm.js renders the shared device-link banner from `device_link`;
+                         barrier_phase.js the single-barrier phase pill from `barrier`, both called
+                         from each view's own render pass.
+                         marshal_posts.js also *holds* a competitor change while the board has
+                         unsubmitted taps: the timekeeper's "current" follows the latest timing
+                         activity, so with two runners on course it flips back and forth, and
+                         swapping under the marshal's fingers would throw away what they had
+                         already judged. An amber bar offers the switch; a clean or submitted board
+                         still follows immediately.
                          ignored_panel.js owns the Ignored-times rail for *both* timing views
                          (they used to carry a copy each, differing only in which drag handler
                          they wired up). It splits Start/Finish only when the rig has two
@@ -410,9 +463,20 @@ apps/results/           A "Results" landing page (index) listing every running c
                          = general ∪ class additions; available_keys() filters the vocabulary to
                          what the type collects; overall_enabled() reads show_overall.
                          ManualTieResolution: a timekeeper's saved ordering of a tie group, keyed by
-                         scope ("class:<pk>" / "overall:<method>:<runs>") + the member set — an
-                         ordered [entry_pk, occurrence, rank] list that applies only while the same
-                         competitors are still tied (else ignored).
+                         scope ("class:<pk>" / "overall:<method>:<runs>") + the member set + the
+                         `score` they were tied on — an ordered [entry_pk, occurrence, rank] list
+                         that applies only while the same competitors are tied at the same score
+                         (else ignored; a decision about 60.00 s is not a decision about 58.00 s,
+                         and a row with no score predates the field and never applies). Nothing
+                         deleted a resolution whose tie had dissolved, so saving one now sweeps
+                         this scope's rows that no longer match a live tie (results:tie-resolve —
+                         a *write* path; recompute must never delete during a render).
+                         ResultsPdfLayout: the per-competition results-PDF header/footer — the
+                         editor's limited rich text (`header_html`/`footer_html`, wildcards
+                         unresolved), `orientation` (portrait / landscape / auto-fit), and the two
+                         optional logos with their rendered heights in mm. `increment_start_year`
+                         is what the `#increment` wildcard counts from. One row per competition,
+                         `for_competition()` returning a transient blank one when there is none.
   resultscalc.py         The scoring/ranking engine. RunIndex reads the event's runs *once* and
                          groups them by (bib, class, occurrence, run type), binding Auto timing's
                          positional identity onto them in memory (autotiming.apply_bindings) so
@@ -436,7 +500,9 @@ apps/results/           A "Results" landing page (index) listing every running c
                          orders them (tie_state "manual", green). tie_start/tie_size expose the group's
                          first rank + size so an edit knows the legal ranks. validate_resolution()
                          checks a posted order is a legal ranking (start fixed; each rank ties the
-                         previous or takes its own position — 1,2 or 1,1 but never 2,1).
+                         previous or takes its own position — 1,2 or 1,1 but never 2,1);
+                         live_tie_keys() is the set of tie groups a fresh table actually has, which
+                         is how the save path knows which stored resolutions are dead.
                          compute_class_results() ranks one class; overall_groups()
                          lists the distinct (scoring_method, counted_runs) groups (one Overall page
                          each) and compute_overall_results() ranks across a group's classes (dedup by
@@ -453,16 +519,56 @@ apps/results/           A "Results" landing page (index) listing every running c
                          General columns) all sync identities then compute. ResultsSettingsView: the
                          show_overall toggle, General columns, and per-class additions.
                          ResultsTieResolveView (JSON endpoint results:tie-resolve): recomputes the
-                         table, validates a posted manual ordering, saves the ManualTieResolution.
+                         table, validates a posted manual ordering, saves the ManualTieResolution
+                         (with the score it was made at, sweeping dead ones).
+                         The **PDF endpoints** all build sections and hand them to pdf.py:
+                         export-class (one class), export-overall (one Overall group), export-all
+                         (every running class + every Overall table in one file), export-sample
+                         (the made-up rows sample_section() builds, so the settings page can
+                         preview the layout before an event has any results) and pdf-logo-remove.
+                         A filename carries a class name, so it goes out as
+                         `filename*=UTF-8''<percent-encoded>` — interpolating it raw let a class
+                         named `A"; x` break Content-Disposition apart (SEC-6).
+                         class_section()/overall_section() are the shared payload: title,
+                         scoring_label, class_label (what `#class` resolves to), layout and rows.
+                         A class heading is cclass.display_name(), never "Class " + name.
                          All reuse competitions.ActiveCompetitionMixin. The two PDF logos are
                          assigned straight from request.FILES (there is no ModelForm here), so
                          _clean_logo() is what checks them at all: MAX_LOGO_BYTES, then Pillow's own
                          verification via forms.ImageField. A refused logo is a message and the rest
                          of the settings still save.
+  pdf.py                 The **results-PDF export**: the same tables, on A4, for the notice board.
+                         render_results_pdf() takes the *sections* views.class_section /
+                         overall_section already built (layout + row dicts — the screen and the
+                         paper are one computation, so they cannot disagree) and lays each on its
+                         own page(s) with ReportLab: a header row repeated on every page, columns
+                         scaled to span the full width from relative weights (_COLW), rows that
+                         only ever break *between* rows, and every body row the same height (each
+                         info field one line fitted to its column, run/total cells always two,
+                         all vertically centred) — the print of the fixed layout the web table
+                         uses. Each page carries the configured header (two optional logos
+                         left/right with the rich header text centred *between* them) and footer
+                         (rich text, export date/time in the machine's local zone bottom-left,
+                         page/total bottom-right). Orientation is the layout's, or auto-fit from
+                         the column count. Wildcards are resolved per section, because `#class`
+                         means the table on *that* page.
+  pdfmarkup.py           The header/footer's two halves. **Wildcards**: WILDCARDS is the token
+                         vocabulary (#name, #date, #event_date_long, #year, #increment,
+                         #discipline, #class) with the description the editor lists;
+                         wildcard_values() resolves them for a competition and resolve_wildcards()
+                         substitutes. **Rich text**: the editor's HTML is restricted to <b>, <br>
+                         and size spans (`pdf-sz-small/medium/large`; the footer keeps no sizes) —
+                         sanitize_header()/sanitize_footer() are the only door it goes through,
+                         and to_reportlab_markup() translates what survives into ReportLab's
+                         mini-markup. Three callers share it: the settings form's save, the
+                         *import* path (apps/transfer/importers._import_results) and the template
+                         filter below. Sanitising in one of those only is what made an imported
+                         file able to run script in the importer's session (SEC-1).
   templatetags/
     pdf_markup.py        pdf_header / pdf_footer: re-sanitise the stored PDF header/footer as the
                          settings page loads it back into its contenteditable. Replaces a bare
                          |safe on a column an *import* can also write — never put that back.
+  admin.py               The results models registered for the Django admin.
 templates/results/       index.html (class + Overall cards), results_class.html, results_overall.html
                          (both include _results_table.html, which renders the ranked + unranked
                          tables from _results_head.html and _results_midcells.html — the fixed
@@ -479,7 +585,17 @@ templates/results/       index.html (class + Overall cards), results_class.html,
                          editor (static/js/results_tie.js) — the tied rows become draggable and their
                          ranks editable, and Save posts to results:tie-resolve. Overall pages split by
                          scoring method AND counted-run count; the sidebar lists them above the
-                         per-class pages.
+                         per-class pages. A class whose setup can never rank anybody (no counted
+                         runs, or a regularity test over a single run) says so above its empty
+                         table — CompetitionClass.scoring_warning, the same sentence the Classes
+                         setup page shows on the tile.
+                         results_settings.html also carries the **PDF layout editor**: two
+                         contenteditable boxes (header/footer) with bold, three sizes and a
+                         wildcard insert list, the orientation choice, the two logo uploads with
+                         their heights, and a "sample PDF" button — all driven by
+                         static/js/results_pdf_editor.js, which only ever produces the restricted
+                         markup pdfmarkup.sanitize_* accepts (the server re-checks; the editor is
+                         convenience, not the guard).
 apps/transfer/          Moving data between Slalom Timing systems: an Export page and a
                         three-step Import wizard (top-level sidebar item "Import / Export",
                         its own access-control page key `import_export`). No models — the
@@ -505,6 +621,15 @@ apps/transfer/          Moving data between Slalom Timing systems: an Export pag
                          Competition.is_active (an import must never take over the running event).
                          TimingSignal.received_at *is* carried — arrangement.py orders runs by
                          arrival, so dropping it would reshuffle an imported event.
+  exporters.py           The writing half: which rows each scope collects and in what order.
+                         event_document() walks a competition (type, classes, marshal posts,
+                         participants + entries + class assignments, timing signals and runs and
+                         their marshal penalties, the results column settings / PDF layout / tie
+                         resolutions) and type_document() takes a competition type with every
+                         participant registered under it. Each returns `(document, media)` —
+                         media being the PDF logo files the archive carries alongside data.json —
+                         and filename() builds the download name (percent-encoded, the pattern
+                         results/views.py copies for its PDFs).
   archive.py             The .zip read/write, and the one place a hand-picked file meets the app:
                          every way it can be wrong (not a zip, not ours, newer version, damaged,
                          too big) comes back as a TransferError sentence. Its JSON encoder
@@ -597,7 +722,9 @@ templates/transfer/      export.html (event + type tiles with what each file wou
 ### Timing UI (under the sidebar "Timing" menu)
 
 - **Settings** (`timing/settings/`) — device + start/finish channel (Save is right there, next to
-  the channels). Selecting the CP540 reveals a "CP540 connection" block (IP + TCP port, defaults
+  the channels; inputs **1–4** only, since that is what the devices have, and the same number for
+  both means one light barrier alternating start/finish — the timing pages then show which of the
+  two the next pulse will be, because that phase is what a stray pulse inverts). Selecting the CP540 reveals a "CP540 connection" block (IP + TCP port, defaults
   192.168.1.50:7000, kept across device switches) with Connect/Disconnect: Connect starts the
   CP540 reader thread (apps/timing/cp540.py), Disconnect stops it, and each button greys out when it
   doesn't apply (already connected / already idle). IP/port are read-only while connected. Selecting
@@ -629,7 +756,10 @@ during the outage is otherwise invisible until the next one happens to arrive. A
   class the participant is entered into — a class entered more than once shows as "Klasse 2 (1)/(2)"
   (TimedRun.class_occurrence tracks which), each with its own runs; a run already recorded, or a class
   whose runs are all done, is disabled, and the default class advances to the first slot not yet
-  completed. Manual times are tinted vs light-barrier ones.
+  completed. Manual times are tinted vs light-barrier ones. In marshal mode a run the operator does
+  not own has its penalty steppers **disabled** with the reason on hover: the marshal posts own that
+  number and the run's own counts are ignored, so the steppers used to take a value that changed
+  nothing. Nudging a stepper also no longer takes a run over — only entering a bib/class/run does.
   Hover between the header and the top row for a **+** to pre-enter an upcoming starter (an empty
   placeholder row); incoming starts fill placeholders oldest-first, so times populate bottom-to-top.
   **Double-click** a Start, Finish or Run time (or an empty slot) to type it in by hand when the device
@@ -666,7 +796,10 @@ during the outage is otherwise invisible until the next one happens to arrive. A
   Manual timing claims its own slot (shown pre-filled) and incoming times step over it. The right shows
   the previous / current / next competitor with start, finish, run time and **total time**; **current**
   is the run with the latest timing activity (a fresh finish for an earlier starter surfaces it, not just
-  the last to start). Double-click a Start/Finish/Run time here too to key one in by hand (entered times
+  the last to start) — which with two runners genuinely on course does flip back and forth, so the
+  Marshal Posts board holds its competitor rather than following every flip (see below).
+  With an *empty* start order the column says which piece of setup is missing — no running class, no
+  start pattern, nobody registered, or classes granting no runs — and links to the page that fixes it. Double-click a Start/Finish/Run time here too to key one in by hand (entered times
   highlighted) — on an *upcoming* competitor with no run yet too: the slot's key creates the run
   (_run_from_slot), and keying a start makes them current. Scrolling the tiles (mouse wheel, one
   competitor per notch) or clicking a start-order tile browses the field without changing the current —
@@ -696,7 +829,11 @@ during the outage is otherwise invisible until the next one happens to arrive. A
   (heartbeated); the post shows "— in use" and can't be claimed on another device until released or the
   claim goes stale. A tap the network swallowed is not lost: it waits in a localStorage outbox and
   keeps being retried, the footer says "Sending…" / "not sent yet", and a submit that never reached
-  the server is delivered when the page next loads.
+  the server is delivered when the page next loads. The board follows the current competitor, but
+  **not while it holds unsubmitted taps**: two runners on course make "current" oscillate, and a
+  swap mid-judgement would discard what the marshal had already entered. An amber bar names the new
+  competitor and waits for a tap ("Switch"); submitting releases the hold, and if the timing side
+  flips back to the competitor being judged the offer simply disappears.
 
 ### Adding a real device connector
 
@@ -721,6 +858,9 @@ uv run python manage.py makemigrations
 uv run python manage.py migrate
 uv run python manage.py createsuperuser
 uv run python manage.py collectstatic    # required for any DEBUG=False run (see DEPLOYMENT.md)
+uv run python manage.py makemessages -l de --no-obsolete        # after touching any translatable string
+uv run python manage.py makemessages -d djangojs -l de --no-obsolete
+uv run python manage.py compilemessages -l de                   # .mo files are committed — always recompile
 uv run pytest                            # tests (pytest-django)
 ```
 

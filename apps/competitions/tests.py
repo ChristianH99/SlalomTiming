@@ -1164,3 +1164,97 @@ def test_switching_tells_every_open_live_view_which_event_it_now_shows(client, m
     client.post(reverse("competitions:select", kwargs={"pk": a.pk}))
 
     assert sent == [{"type": "timing.competition", "name": "Spring Slalom"}]
+
+
+# ----- stage 7: a competition that can actually be timed -----
+
+def test_a_new_competition_starts_with_a_usable_start_pattern():
+    # No pattern at all meant start_lists() scheduled nothing: an empty Auto timing
+    # start order and zero expected runs on the dashboard, on a competition that
+    # looked fully set up. The default matches the seeded classes' run counts.
+    competition = make_competition()
+    assert competition.start_pattern == startpattern.default_pattern()
+    cclass = competition.classes.first()
+    starter = startpattern.Starter(
+        key=(1, cclass.pk, 0), bib=1, name="A", class_name=cclass.name,
+        practice_runs=cclass.practice_runs, counted_runs=cclass.counted_runs,
+    )
+    slots = startpattern.expand(competition.start_pattern_blocks(), [starter])
+    assert [(s.run_type, s.run_number) for s in slots] == [
+        ("practice", 1), ("counted", 1), ("counted", 2),
+    ]
+    # …and it schedules every run those classes grant, with nothing left owed.
+    assert startpattern.shortfalls(competition.start_pattern_blocks(), [starter]) == []
+
+
+def test_an_explicit_pattern_is_never_overwritten():
+    ctype = CompetitionType.objects.create(name="Go-Cart")
+    pattern = [{"window": 2, "chips": ["counted"]}]
+    competition = Competition.objects.create(
+        competition_type=ctype, name="R", date=datetime.date(2026, 5, 1),
+        start_pattern=pattern,
+    )
+    assert competition.start_pattern == pattern
+
+
+# ----- stage 7: class configurations that can never rank -----
+
+def test_a_class_with_no_counted_runs_is_flagged():
+    competition = make_competition()
+    cclass = competition.classes.create(name="X", is_running=True, counted_runs=0)
+    assert "counted runs" in str(cclass.scoring_warning())
+
+
+def test_regularity_over_one_run_is_flagged():
+    competition = make_competition()
+    cclass = competition.classes.create(
+        name="X", is_running=True, counted_runs=1,
+        scoring_method=CompetitionClass.Scoring.REGULARITY,
+    )
+    assert "regularity" in str(cclass.scoring_warning()).lower()
+    cclass.counted_runs = 2
+    assert cclass.scoring_warning() == ""
+
+
+def test_only_a_running_class_is_flagged():
+    competition = make_competition()
+    cclass = competition.classes.create(name="X", is_running=False, counted_runs=0)
+    assert cclass.scoring_warning() == ""
+
+
+# ----- stage 7: how a class is titled -----
+
+def test_a_class_named_after_the_word_is_not_titled_twice():
+    competition = make_competition()
+    plain = competition.classes.create(name="7", is_running=True)
+    already = competition.classes.create(name="Klasse 7", is_running=True)
+    english = competition.classes.create(name="Class 8", is_running=True)
+    assert plain.display_name() == "Class 7"
+    assert already.display_name() == "Klasse 7"    # not "Class Klasse 7"
+    assert english.display_name() == "Class 8"
+
+
+# ----- stage 7: the German page says the same thing the English one does -----
+
+def test_run_order_palette_and_chips_use_the_same_words(client, settings):
+    # The palette is rendered by Django from RUN_TYPE_LABELS and the chips dropped
+    # from it by the page's own JS — untranslated labels meant dragging "Counted"
+    # and getting "Wertung".
+    settings.LANGUAGE_CODE = "de"
+    competition = make_competition()
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+    competition.classes.filter(name="1").update(is_running=True, run_position=0)
+    body = client.get(reverse("competitions:runorder")).content.decode()
+    palette = body.split('class="pattern-palette"', 1)[1].split("</div>", 1)[0]
+    assert "Training" in palette and "Wertung" in palette
+    assert "Practice" not in palette and "Counted" not in palette
+
+
+def test_a_german_class_heading_is_not_klasse_klasse(settings):
+    settings.LANGUAGE_CODE = "de"
+    competition = make_competition()
+    plain = competition.classes.create(name="7", is_running=True)
+    already = competition.classes.create(name="Klasse 7", is_running=True)
+    assert plain.display_name() == "Klasse 7"
+    assert already.display_name() == "Klasse 7"

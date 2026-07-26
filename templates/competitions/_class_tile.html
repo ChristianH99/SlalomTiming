@@ -37,6 +37,14 @@ by the Classes page JS according to the selected assignment method.{% endcomment
       </div>
     </div>
 
+    {% comment %}A configuration that can never rank anybody (see
+    CompetitionClass.scoring_warning). Rendered from the saved instance, so it
+    appears once the combination is actually stored rather than being a second
+    copy of the rule in JavaScript.{% endcomment %}
+    {% if class_form.instance.scoring_warning %}
+      <p class="class-tile-warning">{{ class_form.instance.scoring_warning }}</p>
+    {% endif %}
+
     <label class="switch class-repeat" data-manual-only>
       {{ class_form.allow_multiple_entries }}
       <span class="switch-track"><span class="switch-thumb"></span></span>

@@ -25,7 +25,7 @@
   <div class="results-index">
     {% for cc in classes %}
       <a class="results-index-card" href="{% url 'results:class' cc.pk %}">
-        <span class="results-index-name">{% blocktrans with name=cc.name %}Class {{ name }}{% endblocktrans %}</span>
+        <span class="results-index-name">{{ cc.display_name }}</span>
         <span class="results-index-meta">{{ cc.get_scoring_method_display }}</span>
       </a>
     {% empty %}

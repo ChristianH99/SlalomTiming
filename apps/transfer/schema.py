@@ -150,7 +150,10 @@ PDF_LAYOUT_FIELDS = [
     "image_right_height",
 ]
 
-TIE_RESOLUTION_FIELDS = ["scope", "members"]
+# `score` rides along because a resolution only applies to a tie *at that score*
+# (see ManualTieResolution); a document written before it existed simply lacks the
+# key and the row imports without one, which reads as "needs deciding again".
+TIE_RESOLUTION_FIELDS = ["scope", "members", "score"]
 
 
 class TransferError(Exception):

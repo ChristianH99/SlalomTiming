@@ -140,11 +140,24 @@
     renderIgnored();
     renderLock();
     if (window.renderDeviceAlarm) window.renderDeviceAlarm(state.device_link);
-    emptyEl.hidden = state.items.length > 0;
+    if (window.renderBarrierPhase) window.renderBarrierPhase(state.barrier);
+    renderEmpty();
     // Keep the current starter in view as the field advances, unless the
     // operator has scrolled away.
     if (following) scrollToCurrent(false);
     updateScrollCues();
+  }
+
+  // With no start order, say which piece of setup is missing rather than one
+  // sentence that names the run order whatever the real cause was. The server
+  // decides (autotiming._empty_reason); each cause has its own line in the page.
+  function renderEmpty() {
+    const empty = state.items.length === 0;
+    emptyEl.hidden = !empty;
+    const reason = state.empty_reason || "classes";
+    emptyEl.querySelectorAll("[data-empty-reason]").forEach((p) => {
+      p.hidden = !empty || p.dataset.emptyReason !== reason;
+    });
   }
 
   // The red operator lock: while on, incoming times go straight to the ignore list.
@@ -170,11 +183,21 @@
     state.items.forEach((item) => {
       if (item.group_index !== null && item.group_index !== lastGroup) {
         lastGroup = item.group_index;
-        nodes.push(el("li", "auto-order-divider", item.group_label || gettext("Run")));
+        nodes.push(groupDivider(item.group_label));
       }
       nodes.push(orderRow(item));
     });
     listEl.replaceChildren(...nodes);
+  }
+
+  // "Run · 5, 6". The word used to come from a CSS ::before, where no catalogue
+  // could reach it, so it stayed English on a German page; the muted styling is
+  // still CSS's job, hence the two spans.
+  function groupDivider(label) {
+    const li = el("li", "auto-order-divider");
+    li.append(el("span", "auto-order-divider-kind", gettext("Run") + (label ? " · " : "")));
+    if (label) li.append(document.createTextNode(label));
+    return li;
   }
 
   function orderRow(item, index) {

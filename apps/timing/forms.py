@@ -16,8 +16,14 @@ class TimingSettingsForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for name in ("start_channel", "finish_channel"):
-            # Single digit only: the browser rejects anything outside 0–9.
-            self.fields[name].widget.attrs.update({"min": "0", "max": "9", "inputmode": "numeric"})
+            # Every supported device has inputs 1–4; a channel outside that can
+            # never match a signal, so the browser refuses it and the model's own
+            # validators refuse it again on a post that skips the browser.
+            self.fields[name].widget.attrs.update({
+                "min": str(TimingSettings.MIN_CHANNEL),
+                "max": str(TimingSettings.MAX_CHANNEL),
+                "inputmode": "numeric",
+            })
         self.fields["port"].widget.attrs.update({"min": "1", "max": "65535", "inputmode": "numeric"})
 
     def clean(self):

@@ -23,6 +23,9 @@
   const nameEl = root.querySelector("[data-name]");
   const clubEl = root.querySelector("[data-club]");
   const lockEl = root.querySelector("[data-lock]");
+  const switchEl = root.querySelector("[data-switch]");
+  const switchTextEl = root.querySelector("[data-switch-text]");
+  const switchBtn = root.querySelector("[data-switch-go]");
   const deliveryEl = root.querySelector("[data-delivery]");
   const toastEl = root.querySelector("[data-toast]");
 
@@ -41,6 +44,9 @@
   let confirmedPost = null;   // the post number once its selection is locked in
   let currentRunId = null;    // the timing run the current entries attach to
   let locked = false;         // submitted → no edits until a timekeeper unlocks
+  // A competitor the timing side has moved on to while this board still holds
+  // unsubmitted taps — kept here rather than applied (see holdOrSwitch).
+  let pendingSwitch = null;
 
   // A per-device id so a post can only be held by one device at a time.
   const deviceToken = (() => {
@@ -113,6 +119,8 @@
     confirmedPost = select.value;
     currentRunId = null;
     locked = false;
+    pendingSwitch = null;
+    renderSwitch();
     buildBoard();
     fetchState();   // pull the current competitor for this post right away
   }
@@ -499,6 +507,8 @@
       if (currentRunId !== null) {
         currentRunId = null;
         locked = false;
+        pendingSwitch = null;
+        renderSwitch();
         buildBoard();
       }
       setStarter(null);
@@ -506,13 +516,12 @@
     }
     const penalty = data.penalty || {};
     if (data.run_id !== currentRunId) {
-      // New competitor: hydrate the board from any stored detail and lock state.
-      currentRunId = data.run_id;
-      locked = !!penalty.submitted;
-      buildBoard(penalty.detail);
-      setStarter({ bib: data.bib, name: data.name, club: data.club });
+      holdOrSwitch(data);
       return;
     }
+    // Back on the competitor this board is judging: the timing side's "current"
+    // oscillated away and returned (two runners on course), so drop the offer.
+    if (pendingSwitch) { pendingSwitch = null; renderSwitch(); }
     // Same competitor: only react when the lock state flips (a timekeeper
     // unlocked it, or our submit was confirmed) — otherwise leave in-progress
     // taps untouched. While something for this run is still unsent the server's
@@ -524,6 +533,54 @@
       buildBoard(penalty.detail);   // restore the submitted detail for editing
       applyEnabled();
     }
+  }
+
+  // A different competitor has become the current one. Normally the board just
+  // follows — but the timekeeper's "current" is whichever run had the latest
+  // timing activity, so with two runners on course it flips back and forth as
+  // their times land. Swapping then would discard taps the marshal has already
+  // made for the competitor in front of them, so while there is unsubmitted work
+  // the swap waits behind a bar they press when they are ready. A clean or
+  // already-submitted board follows immediately, as before.
+  function holdOrSwitch(data) {
+    if (boardHasEntries() && !locked && starter) {
+      pendingSwitch = data;
+      renderSwitch();
+      return;
+    }
+    applyStarter(data);
+  }
+
+  function applyStarter(data) {
+    const penalty = data.penalty || {};
+    currentRunId = data.run_id;
+    locked = !!penalty.submitted;
+    pendingSwitch = null;
+    buildBoard(penalty.detail);
+    setStarter({ bib: data.bib, name: data.name, club: data.club });
+    renderSwitch();
+  }
+
+  function boardHasEntries() {
+    if (stopLine) return true;
+    let entered = false;
+    state.forEach((cell) => { if (cell.mode !== "none") entered = true; });
+    return entered;
+  }
+
+  function renderSwitch() {
+    if (!switchEl) return;
+    switchEl.hidden = !pendingSwitch;
+    if (!pendingSwitch) return;
+    switchTextEl.textContent = interpolate(
+      gettext("Bib %(bib)s is on course now — submit or switch when you're ready."),
+      { bib: pendingSwitch.bib }, true);
+  }
+
+  if (switchBtn) {
+    switchBtn.addEventListener("click", () => {
+      if (pendingSwitch) applyStarter(pendingSwitch);
+    });
   }
 
   // Socket lifecycle, connection banner and the re-fetch after an outage: see

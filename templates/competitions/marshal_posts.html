@@ -33,6 +33,16 @@
           </span>
         </div>
 
+        {% comment %}The timekeeper's "current competitor" follows the latest timing
+        activity, so with two runners on course it can flip back and forth as their
+        times land. Swapping the board mid-judgement would throw away taps the
+        marshal has already made, so a swap waits behind this bar while there is
+        unsubmitted work — see marshal_posts.js.{% endcomment %}
+        <div class="marshal-switch" data-switch hidden>
+          <span class="marshal-switch-text" data-switch-text></span>
+          <button type="button" class="button button--small" data-switch-go>{% trans "Switch" %}</button>
+        </div>
+
         <div class="marshal-tasks" data-tasks></div>
 
         <div class="marshal-footer">

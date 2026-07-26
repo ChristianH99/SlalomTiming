@@ -61,6 +61,7 @@
     renderIgnored();
     renderLock();
     if (window.renderDeviceAlarm) window.renderDeviceAlarm(state.device_link);
+    if (window.renderBarrierPhase) window.renderBarrierPhase(state.barrier);
   }
 
   // The red operator lock: while on, incoming times go straight to the ignore list.
@@ -313,6 +314,14 @@
     input.value = run[field];
     input.dataset.rowKey = run.id;
     input.dataset.field = field;
+    // In marshal mode the marshal posts own an auto-bound run's penalty and its
+    // own counts are ignored — so the stepper is shown disabled with the reason,
+    // rather than accepting a number that changes nothing (see own_counts_apply).
+    const editable = run.penalties_editable !== false;
+    if (!editable) {
+      wrap.classList.add("pen-stepper--locked");
+      wrap.title = gettext("The marshal posts enter this run's penalties.");
+    }
     const commit = (value) => {
       const v = Math.max(0, parseInt(value, 10) || 0);
       input.value = v;
@@ -328,6 +337,7 @@
     plus.tabIndex = -1;
     plus.addEventListener("click", () => commit((parseInt(input.value, 10) || 0) + 1));
     input.addEventListener("change", () => commit(input.value));
+    if (!editable) [minus, input, plus].forEach((node) => { node.disabled = true; });
     wrap.append(minus, input, plus);
     return wrap;
   }

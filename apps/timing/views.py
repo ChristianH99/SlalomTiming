@@ -45,6 +45,10 @@ _DURATION_CHARS = re.compile(r"^[0-9:.]+$")
 # IntegerField. They are driven by steppers, so anything outside this range is a
 # broken client rather than an operator — clamped, so the run stays readable.
 MAX_PENALTY_COUNT = 999
+# The fields of a run-update that say *who this run belongs to*. Editing one of
+# these is what makes the run operator-owned (manual_entry); the penalty counts in
+# the same payload deliberately do not — see timing_run_update.
+IDENTITY_FIELDS = ("bib_number", "class_key", "run_value")
 
 
 def broadcast_live():
@@ -670,9 +674,13 @@ def timing_run_update(request):
     for field in ("pylon_count", "task_count", "stopline_count"):
         if field in payload:
             setattr(run, field, _as_count(payload.get(field)))
-    # The operator now owns this run's identity: it claims its slot in the Auto
-    # timing order and the auto binding won't reassign it.
-    run.manual_entry = True
+    # Only an *identity* edit takes the run over: from then on it claims its slot
+    # in the Auto timing order and the positional binding won't reassign it. A
+    # penalty stepper used to do the same, so nudging a pylon count on an
+    # auto-bound run silently pinned it to whatever slot it was showing — a side
+    # effect nobody expects from a "+" button.
+    if any(field in payload for field in IDENTITY_FIELDS):
+        run.manual_entry = True
     run.save()
     _rebind_and_broadcast(competition)
     # Re-read after the save: over-max counts this row too, so the snapshot the
@@ -1054,6 +1062,8 @@ def serialize_arrangement(competition):
         # can't drift apart.
         "ignored": autotiming.ignored_signals(competition, ctype.timing_precision, settings),
         "ignored_split": autotiming.ignored_split(settings),
+        # One light barrier: what the next pulse will be read as (see barrier_phase).
+        "barrier": autotiming.barrier_phase(settings, rows),
     }
 
 
@@ -1097,6 +1107,10 @@ def _serialize_run(run, ctx):
             "pylon_count": run.pylon_count,
             "task_count": run.task_count,
             "stopline_count": run.stopline_count,
+            # Whether this row's steppers still do anything: in marshal mode an
+            # auto-bound run's own counts are ignored, so they are disabled rather
+            # than quietly taking a number that never reaches the total.
+            "penalties_editable": autotiming.own_counts_apply(run, competition),
             "penalty": penalty,
             # The rendered form, so the table can't invent a fourth notation of
             # its own — see calc.format_penalty.

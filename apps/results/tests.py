@@ -10,7 +10,7 @@ from apps.participants.models import ClassAssignment, EventEntry, Participant
 from apps.timing.models import TimedRun, TimingSignal
 
 from . import resultscalc, views
-from .models import ResultColumnSettings, ResultsPdfLayout
+from .models import ManualTieResolution, ResultColumnSettings, ResultsPdfLayout
 
 pytestmark = pytest.mark.django_db
 
@@ -59,10 +59,15 @@ def add_run(competition, cclass, bib, run_number, seconds, occurrence=0, pylons=
     finish = TimingSignal.objects.create(
         competition=competition, running_number=bib, port=2, device_time=finish_time,
     )
+    # manual_entry: these runs carry a typed identity (bib/class/run), which is
+    # what the Manual timing view records. Without it they would be *auto* runs,
+    # and Auto timing binds those to the start order positionally — the identity
+    # set here would be overwritten by whatever slot they landed in.
     return TimedRun.objects.create(
         competition=competition, start_signal=start, finish_signal=finish,
         bib_number=bib, competition_class=cclass, class_occurrence=occurrence,
         run_type=TimedRun.RunType.COUNTED, run_number=run_number, pylon_count=pylons,
+        manual_entry=True,
     )
 
 
@@ -606,3 +611,50 @@ def test_reading_results_never_writes(client):
         writes = [q["sql"] for q in ctx.captured_queries
                   if q["sql"].lstrip().upper().startswith(("UPDATE", "INSERT", "DELETE"))]
         assert writes == [], f"{url} wrote: {writes}"
+
+
+# ----- stage 7: a tie resolution belongs to the score it was made at -----
+
+def _resolve(client, competition, cclass, ranks=(1, 2)):
+    e1 = EventEntry.objects.get(competition=competition, bib_number=1)
+    e2 = EventEntry.objects.get(competition=competition, bib_number=2)
+    return client.post(
+        reverse("results:tie-resolve"),
+        data={"scope": f"class:{cclass.pk}", "members": [
+            {"entry_pk": e1.pk, "occurrence": 0, "rank": ranks[0]},
+            {"entry_pk": e2.pk, "occurrence": 0, "rank": ranks[1]},
+        ]},
+        content_type="application/json",
+    )
+
+
+def test_a_resolution_records_the_score_it_was_made_at(client):
+    competition, cclass = _tie_setup()
+    _resolve(client, competition, cclass)
+    stored = ManualTieResolution.objects.get(competition=competition)
+    assert stored.score == Decimal("60.000")
+
+
+def test_a_resolution_does_not_reapply_at_a_different_score(client):
+    # The same two competitors tie again later at another score. That is a tie
+    # nobody has looked at, so it must come back as pending rather than inherit
+    # the decision made about the old one.
+    competition, cclass = _tie_setup()
+    _resolve(client, competition, cclass)
+    TimedRun.objects.filter(competition=competition, run_number=2).delete()
+    for bib in (1, 2):
+        add_run(competition, cclass, bib, 2, 40)   # now tied at 70, not 60
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [r.tie_state for r in results.ranked] == ["pending", "pending"]
+
+
+def test_saving_a_resolution_sweeps_ones_whose_tie_is_gone(client):
+    competition, cclass = _tie_setup()
+    _resolve(client, competition, cclass)
+    stale = ManualTieResolution.objects.create(
+        competition=competition, scope=f"class:{cclass.pk}",
+        members=[[9991, 0, 1], [9992, 0, 2]], score=Decimal("12.000"),
+    )
+    _resolve(client, competition, cclass, ranks=(1, 1))
+    assert not ManualTieResolution.objects.filter(pk=stale.pk).exists()
+    assert ManualTieResolution.objects.filter(competition=competition).count() == 1

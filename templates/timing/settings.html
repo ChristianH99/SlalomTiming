@@ -29,6 +29,7 @@
           <span class="field-error">{{ form.finish_channel.errors|join:" " }}</span>
         </label>
       </div>
+      <p class="hint">{% trans "Inputs 1–4, as the device numbers them. The same channel for both means one light barrier doing start and finish alternately." %}</p>
 
       {% comment %}Save persists the device and channel mapping. IP/port are saved
       with them, but the CP540 is actually reached with Connect below.{% endcomment %}

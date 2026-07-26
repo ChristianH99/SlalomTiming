@@ -232,7 +232,9 @@ def class_section(competition, cclass):
         include_class=False,
         score_heading=_score_heading(cclass.scoring_method),
     )
-    class_title = _("Class %(name)s") % {"name": cclass.name}
+    # "Class 1" for a class named "1", but "Klasse 1" alone for one already named
+    # that way — see CompetitionClass.display_name.
+    class_title = cclass.display_name()
     return {
         "title": class_title,
         "scoring_label": cclass.get_scoring_method_display(),
@@ -471,7 +473,7 @@ class ResultsPdfLogoRemoveView(ActiveCompetitionMixin, View):
     def post(self, request):
         competition = self.get_active()
         if competition is None:
-            return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+            return JsonResponse({"ok": False, "error": _("No active competition.")}, status=400)
         side = request.POST.get("side")
         field = {"left": "image_left", "right": "image_right"}.get(side)
         if field is None:
@@ -568,7 +570,7 @@ class ResultsTieResolveView(ActiveCompetitionMixin, View):
     def post(self, request):
         competition = self.get_active()
         if competition is None:
-            return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+            return JsonResponse({"ok": False, "error": _("No active competition.")}, status=400)
         try:
             payload = json.loads(request.body or b"{}")
             scope = payload["scope"]
@@ -577,28 +579,41 @@ class ResultsTieResolveView(ActiveCompetitionMixin, View):
                 for m in payload["members"]
             ]
         except (ValueError, KeyError, TypeError):
-            return JsonResponse({"ok": False, "error": "Malformed request."}, status=400)
+            return JsonResponse({"ok": False, "error": _("Malformed request.")}, status=400)
 
         resultscalc.sync_identities(competition)
         ranked = self._ranked_for_scope(competition, scope)
         if ranked is None:
-            return JsonResponse({"ok": False, "error": "Unknown results table."}, status=404)
+            return JsonResponse({"ok": False, "error": _("Unknown results table.")}, status=404)
         members, error = resultscalc.validate_resolution(ranked, posted)
         if error:
             return JsonResponse({"ok": False, "error": error}, status=400)
 
         keys = frozenset((m[0], m[1]) for m in members)
+        # The score the group is tied on: the decision is only about this value,
+        # so it is stored with it (see ManualTieResolution).
+        score = next(
+            (c.score for c in ranked if (c.entry_pk, c.occurrence) == (members[0][0], members[0][1])),
+            None,
+        )
+        live = resultscalc.live_tie_keys(ranked)
         with transaction.atomic():
-            existing = [
-                r for r in competition.tie_resolutions.filter(scope=scope)
-                if r.member_keys() == keys
-            ]
+            existing = []
+            for row in competition.tie_resolutions.filter(scope=scope):
+                row_keys = row.member_keys()
+                if row_keys == keys:
+                    existing.append(row)
+                elif row_keys not in live:
+                    # Its tie no longer exists: already ignored on render, and now
+                    # cleared out rather than left in the table for ever.
+                    row.delete()
             for stale in existing[1:]:
                 stale.delete()
             row = existing[0] if existing else ManualTieResolution(
                 competition=competition, scope=scope
             )
             row.members = members
+            row.score = score
             row.save()
         return JsonResponse({"ok": True})
 

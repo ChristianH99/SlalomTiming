@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-25 21:42+0200\n"
+"POT-Creation-Date: 2026-07-26 07:14+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -23,124 +23,128 @@ msgstr "▲ Aktuell"
 msgid "▼ current"
 msgstr "▼ Aktuell"
 
-#: .\static\js\auto_timing.js:156 .\static\js\timing_live.js:72
+#: .\static\js\auto_timing.js:169 .\static\js\timing_live.js:73
 msgid "Locked"
 msgstr "Gesperrt"
 
-#: .\static\js\auto_timing.js:156 .\static\js\auto_timing.js:562
-#: .\static\js\timing_live.js:72
+#: .\static\js\auto_timing.js:169 .\static\js\auto_timing.js:585
+#: .\static\js\timing_live.js:73
 msgid "Lock"
 msgstr "Sperren"
 
-#: .\static\js\auto_timing.js:161 .\static\js\timing_live.js:77
+#: .\static\js\auto_timing.js:174 .\static\js\timing_live.js:78
 msgid "Incoming times go straight to Ignored — nothing is being recorded."
-msgstr "Eingehende Zeiten gehen direkt in „Ignoriert“ — es wird nichts aufgezeichnet."
+msgstr ""
+"Eingehende Zeiten gehen direkt in „Ignoriert“ — es wird nichts aufgezeichnet."
 
-#: .\static\js\auto_timing.js:162 .\static\js\timing_live.js:78
+#: .\static\js\auto_timing.js:175 .\static\js\timing_live.js:79
 msgid "Times are being recorded."
 msgstr "Zeiten werden aufgezeichnet."
 
-#: .\static\js\auto_timing.js:173
+#: .\static\js\auto_timing.js:198
 msgid "Run"
 msgstr "Lauf"
 
-#: .\static\js\auto_timing.js:194 .\static\js\auto_timing.js:275
+#: .\static\js\auto_timing.js:217 .\static\js\auto_timing.js:298
 msgid "Unattributed time"
 msgstr "Nicht zugeordnete Zeit"
 
-#: .\static\js\auto_timing.js:201
+#: .\static\js\auto_timing.js:224
 msgid "Click to bring this competitor into the tiles"
 msgstr "Klicken, um diesen Teilnehmer in die Kacheln zu holen"
 
-#: .\static\js\auto_timing.js:228
+#: .\static\js\auto_timing.js:251
 msgid "Current"
 msgstr "Aktuell"
 
-#: .\static\js\auto_timing.js:228
+#: .\static\js\auto_timing.js:251
 msgid "Previous"
 msgstr "Vorheriger"
 
-#: .\static\js\auto_timing.js:228
+#: .\static\js\auto_timing.js:251
 msgid "Next up"
 msgstr "Als Nächstes"
 
-#: .\static\js\auto_timing.js:261
+#: .\static\js\auto_timing.js:284
 msgid "Waiting for the first start…"
 msgstr "Warten auf den ersten Start…"
 
-#: .\static\js\auto_timing.js:275
+#: .\static\js\auto_timing.js:298
 msgid "(no starter)"
 msgstr "(kein Starter)"
 
-#: .\static\js\auto_timing.js:284
+#: .\static\js\auto_timing.js:307 .\static\js\barrier_phase.js:19
 msgid "Start"
 msgstr "Start"
 
-#: .\static\js\auto_timing.js:285
+#: .\static\js\auto_timing.js:308 .\static\js\barrier_phase.js:19
 msgid "Finish"
 msgstr "Ziel"
 
-#: .\static\js\auto_timing.js:287
+#: .\static\js\auto_timing.js:310
 msgid "Total"
 msgstr "Gesamt"
 
-#: .\static\js\auto_timing.js:299 .\static\js\auto_timing.js:300
+#: .\static\js\auto_timing.js:322 .\static\js\auto_timing.js:323
 msgid "Lock all posts"
 msgstr "Alle Posten sperren"
 
-#: .\static\js\auto_timing.js:320
+#: .\static\js\auto_timing.js:343
 msgid ""
 "This time has no competitor in the start order. Drag it onto the right "
 "starter's Start or Finish slot, or discard it."
-msgstr "Zu dieser Zeit gibt es keinen Starter in der Startreihenfolge. Ziehen Sie sie auf den Start oder das Ziel des richtigen Starters, oder verwerfen Sie sie."
+msgstr ""
+"Zu dieser Zeit gibt es keinen Starter in der Startreihenfolge. Ziehen Sie "
+"sie auf den Start oder das Ziel des richtigen Starters, oder verwerfen Sie "
+"sie."
 
-#: .\static\js\auto_timing.js:324
+#: .\static\js\auto_timing.js:347
 msgid "Move to Ignored"
 msgstr "Nach „Ignoriert“ verschieben"
 
-#: .\static\js\auto_timing.js:348 .\static\js\dashboard_overview.js:143
+#: .\static\js\auto_timing.js:371 .\static\js\dashboard_overview.js:143
 msgid "Run time"
 msgstr "Laufzeit"
 
-#: .\static\js\auto_timing.js:353 .\static\js\timing_live.js:169
+#: .\static\js\auto_timing.js:376 .\static\js\timing_live.js:170
 msgid "Double-click to type a run time"
 msgstr "Doppelklicken, um eine Laufzeit einzugeben"
 
-#: .\static\js\auto_timing.js:384
+#: .\static\js\auto_timing.js:407
 msgid "%(kind)s · double-click to edit"
 msgstr "%(kind)s · zum Bearbeiten doppelklicken"
 
-#: .\static\js\auto_timing.js:385 .\static\js\timing_live.js:155
+#: .\static\js\auto_timing.js:408 .\static\js\timing_live.js:156
 msgid "Typed in by hand"
 msgstr "Von Hand eingegeben"
 
-#: .\static\js\auto_timing.js:385
+#: .\static\js\auto_timing.js:408
 msgid "Drag to re-pair or to Ignored"
 msgstr "Ziehen zum erneuten Zuordnen oder auf „Ignoriert“"
 
-#: .\static\js\auto_timing.js:528 .\static\js\marshal_posts.js:69
-#: .\static\js\marshal_posts.js:149
+#: .\static\js\auto_timing.js:551 .\static\js\marshal_posts.js:75
+#: .\static\js\marshal_posts.js:157
 msgid "Post %(n)s"
 msgstr "Posten %(n)s"
 
-#: .\static\js\auto_timing.js:532
+#: .\static\js\auto_timing.js:555
 msgid "Task %(n)s"
 msgstr "Aufgabe %(n)s"
 
-#: .\static\js\auto_timing.js:537 .\static\js\marshal_posts.js:273
+#: .\static\js\auto_timing.js:560 .\static\js\marshal_posts.js:281
 msgid "Task"
 msgstr "Aufgabe"
 
-#: .\static\js\auto_timing.js:545 .\static\js\marshal_posts.js:212
+#: .\static\js\auto_timing.js:568 .\static\js\marshal_posts.js:220
 msgid "Stop line"
 msgstr "Stopplinie"
 
-#: .\static\js\auto_timing.js:550 .\static\js\auto_timing.js:617
-#: .\static\js\marshal_posts.js:281
+#: .\static\js\auto_timing.js:573 .\static\js\auto_timing.js:640
+#: .\static\js\marshal_posts.js:289
 msgid "Penalty"
 msgstr "Strafe"
 
-#: .\static\js\auto_timing.js:558
+#: .\static\js\auto_timing.js:581
 msgid "Unlock"
 msgstr "Entsperren"
 
@@ -316,45 +320,49 @@ msgstr ""
 "Die aktuelle Veranstaltung wurde gewechselt. Dieser Bildschirm zeigt jetzt "
 "eine andere Veranstaltung."
 
-#: .\static\js\marshal_posts.js:78 .\static\js\marshal_posts.js:89
+#: .\static\js\marshal_posts.js:84 .\static\js\marshal_posts.js:95
 msgid "Post %(n)s is in use on another device."
 msgstr "Posten %(n)s wird auf einem anderen Gerät verwendet."
 
-#: .\static\js\marshal_posts.js:149
+#: .\static\js\marshal_posts.js:157
 msgid "Post %(n)s — in use"
 msgstr "Posten %(n)s — in Verwendung"
 
-#: .\static\js\marshal_posts.js:197
+#: .\static\js\marshal_posts.js:205
 msgid "Reduce penalty for task %(n)s"
 msgstr "Strafe für Aufgabe %(n)s verringern"
 
-#: .\static\js\marshal_posts.js:231
+#: .\static\js\marshal_posts.js:239
 msgid "Max penalty per task reached"
 msgstr "Maximale Strafe pro Aufgabe erreicht"
 
-#: .\static\js\marshal_posts.js:293
+#: .\static\js\marshal_posts.js:301
 msgid "Penalty: %(n)s s"
 msgstr "Strafe: %(n)s s"
 
-#: .\static\js\marshal_posts.js:308
+#: .\static\js\marshal_posts.js:316
 msgid "Waiting for the next starter…"
 msgstr "Warten auf den nächsten Starter…"
 
-#: .\static\js\marshal_posts.js:453
+#: .\static\js\marshal_posts.js:461
 msgid "The timekeeper's system would not take that entry."
 msgstr "Das System der Zeitnahme hat diese Eingabe nicht angenommen."
 
-#: .\static\js\marshal_posts.js:455
+#: .\static\js\marshal_posts.js:463
 msgid "Penalties submitted for bib %(bib)s"
 msgstr "Strafen für Startnummer %(bib)s übermittelt"
 
-#: .\static\js\marshal_posts.js:477
+#: .\static\js\marshal_posts.js:485
 msgid "Not sent yet — %(n)s waiting. Still trying…"
 msgstr "Noch nicht gesendet — %(n)s ausstehend. Wird weiter versucht…"
 
-#: .\static\js\marshal_posts.js:478
+#: .\static\js\marshal_posts.js:486
 msgid "Sending…"
 msgstr "Wird gesendet…"
+
+#: .\static\js\marshal_posts.js:576
+msgid "Bib %(bib)s is on course now — submit or switch when you're ready."
+msgstr "Startnr. %(bib)s ist jetzt auf der Strecke – senden oder wechseln Sie, wenn Sie so weit sind."
 
 #: .\static\js\participant_form.js:159
 msgid "Press Tab to complete %(email)s"
@@ -409,44 +417,46 @@ msgstr "Der erste Teilnehmer muss Platz %(start)s sein."
 
 #: .\static\js\results_tie.js:104
 msgid "Ranks must go in order — a tie keeps the lower number."
-msgstr ""
-"Die Plätze müssen der Reihe nach vergeben werden — bei Gleichstand gilt die "
-"niedrigere Zahl."
+msgstr "Die Ränge müssen der Reihe nach vergeben werden – bei Gleichstand bleibt die kleinere Zahl."
 
 #: .\static\js\results_tie.js:132 .\static\js\results_tie.js:135
 msgid "Could not save."
 msgstr "Konnte nicht gespeichert werden."
 
-#: .\static\js\timing_live.js:90
+#: .\static\js\timing_live.js:91
 msgid "Add a row for an upcoming starter"
 msgstr "Eine Zeile für einen kommenden Starter hinzufügen"
 
-#: .\static\js\timing_live.js:123
+#: .\static\js\timing_live.js:124
 msgid "Remove this row"
 msgstr "Diese Zeile entfernen"
 
-#: .\static\js\timing_live.js:143
+#: .\static\js\timing_live.js:144
 msgid "Double-click to type a time"
 msgstr "Doppelklicken, um eine Zeit einzugeben"
 
-#: .\static\js\timing_live.js:155
+#: .\static\js\timing_live.js:156
 msgid "Manual"
 msgstr "Manuell"
 
-#: .\static\js\timing_live.js:155
+#: .\static\js\timing_live.js:156
 msgid "Light barrier"
 msgstr "Lichtschranke"
 
-#: .\static\js\timing_live.js:156
+#: .\static\js\timing_live.js:157
 msgid "%(kind)s · drag to pair or to the Ignored panel · double-click to edit"
 msgstr ""
 "%(kind)s · ziehen zum Zuordnen oder auf das Feld „Ignoriert“ · zum "
 "Bearbeiten doppelklicken"
 
-#: .\static\js\timing_live.js:223 .\static\js\timing_live.js:255
+#: .\static\js\timing_live.js:224 .\static\js\timing_live.js:256
 msgid "No starter with this bib is registered (kept anyway)."
 msgstr "Kein Starter mit dieser Startnummer registriert (trotzdem behalten)."
 
-#: .\static\js\timing_live.js:254
+#: .\static\js\timing_live.js:255
 msgid "Not registered"
 msgstr "Nicht gemeldet"
+
+#: .\static\js\timing_live.js:323
+msgid "The marshal posts enter this run's penalties."
+msgstr "Die Strafen dieses Laufs erfassen die Streckenposten."

@@ -189,15 +189,22 @@ class ManualTieResolution(models.Model):
     ``scope`` names the results table the tie sits in — ``class:<pk>`` or
     ``overall:<method>:<runs>``. ``members`` is the resolved group, an ordered list
     of ``[entry_pk, occurrence, rank]``: the display order plus the rank each
-    competitor was given (equal ranks express an intentional shared placing). A
-    resolution applies only while the same set of competitors is still tied — the
-    member set is matched on recompute, so a stale one is simply ignored."""
+    competitor was given (equal ranks express an intentional shared placing).
+
+    A resolution applies only while the same competitors are tied **at the same
+    score**: the member set alone isn't enough, because a later run could put the
+    very same people on a different score and a decision made about 60.00 s would
+    silently order a tie at 58.00 s that nobody looked at. ``score`` is the value
+    they were tied on; a row without one (written before this was recorded) is
+    ignored and the tie goes back to needing a decision."""
 
     competition = models.ForeignKey(
         "competitions.Competition", on_delete=models.CASCADE, related_name="tie_resolutions"
     )
     scope = models.CharField(max_length=50)
     members = models.JSONField(default=list)
+    # Wide enough for an aggregate of several runs at millisecond resolution.
+    score = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

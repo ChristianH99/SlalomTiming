@@ -135,7 +135,10 @@ def test_dashboard_progress_without_start_pattern(client):
     # No start pattern: competitors turn up in any order, but the expected run
     # total is still known from the entries and their classes.
     comp = make_active_competition()
-    assert comp.start_pattern == []
+    # A new competition is seeded with the default pattern; clear it, because this
+    # is the free-order case — nobody has built a start order for the event.
+    comp.start_pattern = []
+    comp.save(update_fields=["start_pattern"])
     cclass = comp.classes.create(name="A", is_running=True, run_position=1,
                                  practice_runs=1, counted_runs=2)
     participant = make_participant(comp.competition_type, 1, comp)
@@ -1121,11 +1124,14 @@ def test_non_marshal_penalties_show_in_auto(client):
 
 def test_operator_owned_run_shows_its_own_penalties_in_marshal_mode(client):
     # The reported bug: in marshal mode a run the operator gave penalties to on the
-    # Manual view (manual_entry) must still show them in Auto timing.
+    # Manual view (manual_entry) must still show them in Auto timing. Ownership
+    # comes from selecting the competitor — a penalty on its own never takes a run
+    # over (see test_a_penalty_edit_does_not_take_over_a_run).
     comp, cls = auto_scenario()
     comp.penalties_by_marshal_posts = True
     comp.save(update_fields=["penalties_by_marshal_posts"])
     run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    post_json(client, "timing:run-update", run_id=run.id, bib_number="1")
     post_json(client, "timing:run-update", run_id=run.id, task_count=1, stopline_count=1)
     run.refresh_from_db()
     assert run.manual_entry is True
@@ -1135,6 +1141,33 @@ def test_operator_owned_run_shows_its_own_penalties_in_marshal_mode(client):
     autotiming.sync_bindings(comp)
     run.refresh_from_db()
     assert (run.task_count, run.stopline_count) == (1, 1)
+
+
+def test_a_penalty_edit_does_not_take_over_a_run(client):
+    # Nudging a penalty stepper used to mark the run operator-owned, which pins it
+    # to whichever slot it was showing and stops the positional binding moving it —
+    # a side effect nobody expects from a "+" button. Only an identity edit owns.
+    comp, _ = auto_scenario()
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    post_json(client, "timing:run-update", run_id=run.id, pylon_count=2)
+    run.refresh_from_db()
+    assert run.manual_entry is False
+    assert run.pylon_count == 2
+
+
+def test_marshal_mode_disables_the_steppers_that_do_nothing(client):
+    # In marshal mode an auto-bound run's own counts are ignored (the posts own the
+    # number), so the Manual view says so instead of accepting a value silently.
+    comp, _ = auto_scenario()
+    comp.penalties_by_marshal_posts = True
+    comp.save(update_fields=["penalties_by_marshal_posts"])
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    row = next(r for r in serialize_arrangement(comp)["rows"] if r["run"]["id"] == run.id)
+    assert row["run"]["penalties_editable"] is False
+    # The operator selecting the competitor takes the run over — then they do count.
+    post_json(client, "timing:run-update", run_id=run.id, bib_number="1")
+    row = next(r for r in serialize_arrangement(comp)["rows"] if r["run"]["id"] == run.id)
+    assert row["run"]["penalties_editable"] is True
 
 
 def test_marshal_penalties_add_up_on_an_operator_selected_run(client):
@@ -1743,3 +1776,60 @@ def test_a_reading_view_still_shows_the_bound_competitor(client):
         bib_number=None, competition_class=None, run_type="", run_number=None)
     rows = client.get(reverse("timing:arrangement")).json()["rows"]
     assert [r["run"]["bib_number"] for r in rows if r["run"]["bib_number"]]
+
+
+# ----- stage 7: the single-barrier phase, shown rather than guessed -----
+
+def test_a_two_channel_rig_has_no_phase_to_show():
+    comp = make_active_competition()
+    assert serialize_arrangement(comp)["barrier"] is None
+    assert autotiming.serialize(comp)["barrier"] is None
+
+
+def test_one_light_barrier_says_what_the_next_pulse_will_be():
+    # The role alternates in software, so one spurious pulse inverts it for the rest
+    # of the event. Both timing pages show the phase; this is what they render.
+    comp = make_active_competition()
+    settings = TimingSettings.load()
+    settings.start_channel = settings.finish_channel = 1
+    settings.save()
+    assert serialize_arrangement(comp)["barrier"]["next_role"] == "start"
+    signal_in(comp, 1, "10:00:00.000", running=1)          # a run is now open
+    assert serialize_arrangement(comp)["barrier"]["next_role"] == "finish"
+    assert autotiming.serialize(comp)["barrier"]["next_role"] == "finish"
+    signal_in(comp, 1, "10:00:30.000", running=2)          # closed again
+    assert serialize_arrangement(comp)["barrier"]["next_role"] == "start"
+
+
+def test_channel_outside_the_devices_inputs_is_refused(client):
+    # Every supported device has inputs 1–4; 7 could never match a signal, so the
+    # finish channel silently meant "nothing is ever a finish".
+    response = client.post(reverse("timing:settings"), {
+        "device": "simulator", "start_channel": "1", "finish_channel": "7", "ip_address": "",
+    })
+    assert response.status_code == 200
+    assert "finish_channel" in response.context["form"].errors
+    response = client.post(reverse("timing:settings"), {
+        "device": "simulator", "start_channel": "0", "finish_channel": "2", "ip_address": "",
+    })
+    assert "start_channel" in response.context["form"].errors
+
+
+# ----- stage 7: an empty start order says which piece of setup is missing -----
+
+def test_an_empty_start_order_names_what_is_missing(client):
+    comp = make_active_competition()          # classes seeded, none running
+    assert autotiming.serialize(comp)["empty_reason"] == "classes"
+
+    comp.classes.filter(name="1").update(is_running=True, run_position=0)
+    assert autotiming.serialize(comp)["empty_reason"] == "starters"
+
+    comp.start_pattern = []
+    comp.save(update_fields=["start_pattern"])
+    assert autotiming.serialize(comp)["empty_reason"] == "pattern"
+
+
+def test_a_start_order_with_starters_reports_no_reason():
+    comp, _ = auto_scenario()
+    data = autotiming.serialize(comp)
+    assert data["items"] and data["empty_reason"] == ""

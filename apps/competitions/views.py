@@ -358,7 +358,7 @@ class PenaltiesView(ActiveCompetitionMixin, View):
             competition.penalties_by_marshal_posts = True
             competition.save(update_fields=["penalties_by_marshal_posts"])
             self._reconcile_posts(competition, rows)
-        messages.success(request, "Penalties settings saved.")
+        messages.success(request, _("Penalties settings saved."))
         return redirect(safe_next(request, reverse("competitions:penalties")))
 
     @staticmethod

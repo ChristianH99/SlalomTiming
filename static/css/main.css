@@ -788,6 +788,15 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   border-left: 1px solid var(--border);
 }
 .class-tile-age[hidden], [data-manual-only][hidden] { display: none; }
+/* A class configured so it can never rank anybody (CompetitionClass.scoring_warning). */
+.class-tile-warning {
+  margin: 0;
+  padding-left: var(--space-5);
+  border-left: 3px solid var(--flame);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text-dark);
+}
 .field-mini {
   display: inline-flex;
   flex-direction: column;
@@ -2004,6 +2013,9 @@ textarea:focus-visible,
 .penalty-input { width: 1.9rem; text-align: center; appearance: textfield; -moz-appearance: textfield; }
 .penalty-input::-webkit-outer-spin-button,
 .penalty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+/* Marshal mode: the posts own this run's penalty, so its own steppers do nothing
+   and say so by being visibly out of service (see own_counts_apply). */
+.pen-stepper--locked { opacity: 0.45; cursor: not-allowed; }
 .pen-total { color: var(--text-mid); font-variant-numeric: tabular-nums; }
 
 /* ===== PENALTIES SETUP =====
@@ -2084,6 +2096,23 @@ textarea:focus-visible,
 .marshal-name { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 .marshal-name-main { font-weight: 700; color: var(--text-dark); }
 .marshal-name-club { font-size: var(--text-base); color: var(--text-light); }
+
+/* The waiting competitor bar: the timing side has moved on while this board still
+   holds unsubmitted taps. Amber, not red — nothing is wrong, the marshal just
+   decides when to move on (see marshal_posts.js holdOrSwitch). */
+.marshal-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-6);
+  background: var(--amber-bg);
+  border-left: 4px solid var(--amber);
+  border-radius: var(--radius-md);
+}
+.marshal-switch[hidden] { display: none; }
+.marshal-switch-text { flex: 1 1 12rem; color: var(--text-dark); }
 
 /* Big, thumb-sized tiles laid out in a grid that reflows to the screen width.
    Each cell stacks its task tile over a small reduce button. */
@@ -2322,6 +2351,23 @@ textarea:focus-visible,
   width: 100%;
 }
 .timing-live-main { flex: 1 1 auto; min-width: 0; }
+
+/* Single-light-barrier phase (templates/timing/_barrier_phase.html). Only a
+   one-channel rig shows it at all, so it is quiet by default and only the role
+   itself carries weight — that word is the thing being checked mid-run. */
+.barrier-phase {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3) var(--space-4);
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-xs); color: var(--text-mid);
+}
+.barrier-phase[hidden] { display: none; }
+.barrier-phase-role {
+  font-family: 'Manrope', sans-serif;
+  font-size: var(--text-sm); font-weight: 700; color: var(--ink);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.barrier-phase--finish .barrier-phase-role { color: var(--flame); }
+.barrier-phase-hint { color: var(--text-muted); }
 
 /* The time-colour key (templates/timing/_time_legend.html). Persistent and quiet
    — it has to be readable at a glance without competing with the table. */
@@ -2666,7 +2712,10 @@ textarea:focus-visible,
   color: var(--text-mid);
   border-bottom: 1px solid var(--border);
 }
-.auto-order-divider::before { content: "Run · "; color: var(--text-muted); }
+/* The word "Run" used to be a CSS ::before, which no catalogue can reach — the
+   dividers read "RUN · KLASSE 2" in an otherwise German page. auto_timing.js
+   writes it now; this only styles it. */
+.auto-order-divider-kind { color: var(--text-muted); }
 
 /* The total (run + penalties) is the emphasised figure. */
 .auto-runtime--total { color: var(--flame); }

@@ -1,0 +1,12 @@
+{% load i18n %}
+{% comment %}What the next pulse will count as, on a rig with a single light
+barrier. With one channel doing both jobs the role alternates in software
+(arrangement.effective_role), so the phase is live state the operator otherwise
+cannot see — one stray pulse inverts it and every later start is recorded as a
+finish. Hidden entirely on a two-channel rig, where the port decides the role.
+Filled by barrier_phase.js from the live payload's `barrier`.{% endcomment %}
+<div class="barrier-phase" id="barrier-phase" role="status" aria-live="polite" hidden>
+  <span class="barrier-phase-label">{% trans "One light barrier — next pulse:" %}</span>
+  <span class="barrier-phase-role" id="barrier-phase-role"></span>
+  <span class="barrier-phase-hint">{% trans "Wrong? Drag the stray time to Ignored to put the sequence back." %}</span>
+</div>

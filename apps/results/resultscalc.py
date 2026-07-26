@@ -21,6 +21,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from django.utils.translation import gettext
+
 from apps.competitions.models import CompetitionClass, CompetitionType
 from apps.timing import autotiming, calc
 from apps.timing.models import TimedRun
@@ -207,11 +209,17 @@ def _separated(a, b, tie_break):
     return False
 
 
-def _find_manual(manual, member_keys):
-    """The stored resolution whose member set exactly matches this tie group, or
-    None. ``manual`` is the competition's resolutions already filtered to the scope."""
+def _find_manual(manual, member_keys, score):
+    """The stored resolution for this tie group, or None. ``manual`` is the
+    competition's resolutions already filtered to the scope.
+
+    Both the member set *and* the score have to match: the same competitors can
+    end up tied again on a different score after another run, and a decision made
+    about that earlier score was never about this one. A resolution stored before
+    the score was recorded (``score is None``) never matches, so the tie is put
+    back to the timekeeper rather than resolved from a guess."""
     for res in manual:
-        if res.member_keys() == member_keys:
+        if res.score is not None and res.score == score and res.member_keys() == member_keys:
             return res
     return None
 
@@ -233,7 +241,7 @@ def _rank_group(group, tie_break, position, scope, manual):
         m.tie_start = position
         m.tie_size = len(group)
 
-    res = _find_manual(manual, keys)
+    res = _find_manual(manual, keys, group[0].score)
     if res is not None:
         by_key = {(m.entry_pk, m.occurrence): m for m in group}
         ordered = []
@@ -318,6 +326,21 @@ def overall_scope(method, counted_runs):
     return f"overall:{method}:{counted_runs}"
 
 
+def live_tie_keys(ranked):
+    """The member sets of the tie groups that exist in a freshly computed table —
+    what a stored resolution has to match to still mean anything. Used to sweep
+    resolutions whose group has dissolved: a stale row is already ignored on
+    render, but nothing ever deleted it, so they accumulated for the life of the
+    competition and travelled into every export."""
+    groups = {}
+    for competitor in ranked:
+        if competitor.tie_group:
+            groups.setdefault(competitor.tie_group, set()).add(
+                (competitor.entry_pk, competitor.occurrence)
+            )
+    return {frozenset(members) for members in groups.values()}
+
+
 def validate_resolution(ranked, posted):
     """Validate a posted manual ordering against the freshly computed ``ranked``.
 
@@ -335,16 +358,16 @@ def validate_resolution(ranked, posted):
     for entry_pk, occurrence, rank in posted:
         competitor = by_key.get((entry_pk, occurrence))
         if competitor is None:
-            return None, "Unknown competitor in the submitted order."
+            return None, gettext("Unknown competitor in the submitted order.")
         rows.append((competitor, int(rank)))
     if not rows:
-        return None, "No competitors submitted."
+        return None, gettext("No competitors submitted.")
 
     first = rows[0][0]
     if not first.tie_group or any(c.tie_group != first.tie_group for c, _ in rows):
-        return None, "Competitors are not all in the same tie group."
+        return None, gettext("Competitors are not all in the same tie group.")
     if len(rows) != first.tie_size:
-        return None, "The submitted order must cover the whole tie group."
+        return None, gettext("The submitted order must cover the whole tie group.")
 
     start = first.tie_start
     previous = None
@@ -352,9 +375,9 @@ def validate_resolution(ranked, posted):
     for index, (competitor, rank) in enumerate(rows):
         if index == 0:
             if rank != start:
-                return None, f"The first competitor must be rank {start}."
+                return None, gettext("The first competitor must be rank %(rank)s.") % {"rank": start}
         elif rank != previous and rank != start + index:
-            return None, "Ranks must go in order — a tie keeps the lower number."
+            return None, gettext("Ranks must go in order — a tie keeps the lower number.")
         members.append([competitor.entry_pk, competitor.occurrence, rank])
         previous = rank
     return members, None
@@ -432,7 +455,8 @@ def overall_groups(competition):
             "method": method,
             "counted_runs": runs,
             "method_label": labels.get(method, method),
-            "label": f"{labels.get(method, method)} · {runs} Runs",
+            "label": gettext("%(label)s · %(runs)s Runs") % {
+                "label": labels.get(method, method), "runs": runs},
             "classes": classes,
         })
     return descriptors

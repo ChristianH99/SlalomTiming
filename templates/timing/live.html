@@ -58,6 +58,7 @@
             <tbody id="timing-rows"></tbody>
           </table>
         </div>
+        {% include "timing/_barrier_phase.html" %}
         {% include "timing/_time_legend.html" %}
         </div>
         {% include "timing/_ignored.html" %}
@@ -81,6 +82,7 @@
       window.TIMING_CSRF = "{{ csrf_token }}";
     </script>
     <script src="{% static 'js/device_alarm.js' %}"></script>
+    <script src="{% static 'js/barrier_phase.js' %}"></script>
     <script src="{% static 'js/live_socket.js' %}"></script>
     <script src="{% static 'js/ignored_panel.js' %}"></script>
     <script src="{% static 'js/timing_live.js' %}"></script>

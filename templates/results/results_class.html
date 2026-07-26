@@ -4,11 +4,18 @@
 {% block topbar_title %}{% trans "Results" %}{% endblock %}
 {% block content %}
   <div class="results-header">
-    <h1 class="page-heading">{% blocktrans with name=cclass.name %}Class {{ name }}{% endblocktrans %}</h1>
+    <h1 class="page-heading">{{ cclass.display_name }}</h1>
     <span class="results-method">{{ scoring_label }}</span>
     <a class="button button--small results-export" href="{{ export_url }}" target="_blank" rel="noopener">{% trans "Export PDF" %}</a>
   </div>
   <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }}</p>
+
+  {% comment %}A class configured so that it can never rank anybody (no counted
+  runs, or a regularity test over a single run) otherwise just renders an empty
+  table with nothing saying why — see CompetitionClass.scoring_warning.{% endcomment %}
+  {% if cclass.scoring_warning %}
+    <p class="notice notice--warning">{{ cclass.scoring_warning }}</p>
+  {% endif %}
 
   {% include "results/_results_table.html" %}
 {% endblock %}

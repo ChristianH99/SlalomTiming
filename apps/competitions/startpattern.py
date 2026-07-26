@@ -25,15 +25,29 @@ the caller builds, so it can be imported from ``models.py`` without a cycle.
 from collections import Counter
 from dataclasses import dataclass
 
+from django.utils.translation import gettext_lazy as _
+
 PRACTICE = "practice"
 COUNTED = "counted"
 RUN_TYPES = (PRACTICE, COUNTED)
-RUN_TYPE_LABELS = {PRACTICE: "Practice", COUNTED: "Counted"}
+# Translated: the Run order page renders these on the palette the user drags
+# *from*, while the chips they drop are labelled by the page's own JS — so an
+# untranslated pair here meant dragging "Counted" and getting "Wertung".
+RUN_TYPE_LABELS = {PRACTICE: _("Practice"), COUNTED: _("Counted")}
 RUN_TYPE_SHORT = {PRACTICE: "P", COUNTED: "C"}
 
 # A window is a hand-entered number of starters; clamp it so a typo can't make
 # the preview expand into something enormous.
 MAX_WINDOW = 99
+
+# What a brand-new competition starts with: one block, the whole field at once,
+# a practice run and then two counted ones — an ordinary club slalom, and exactly
+# the runs CompetitionClass's own defaults grant (practice_runs=1, counted_runs=2).
+# A competition used to be created with *no* pattern, and a pattern that schedules
+# nothing means start_lists() returns nothing: an empty Auto timing start order,
+# zero expected runs on the dashboard, and no page saying why. The default is a
+# starting point, not a constraint — the Run order page rewrites it.
+DEFAULT_BLOCKS = ({"window": None, "chips": [PRACTICE, COUNTED, COUNTED]},)
 
 # Upper bound on the preview's made-up starters. Preview-only — never stored.
 MAX_DUMMY_STARTERS = 200
@@ -77,6 +91,12 @@ class Slot:
 
     def label(self):
         return f"#{self.starter.bib} {RUN_TYPE_SHORT[self.run_type]}{self.run_number}"
+
+
+def default_pattern():
+    """A fresh copy of DEFAULT_BLOCKS, safe to store on a model instance."""
+    return [{"window": block["window"], "chips": list(block["chips"])}
+            for block in DEFAULT_BLOCKS]
 
 
 def parse(data):

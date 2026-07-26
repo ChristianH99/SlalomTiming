@@ -1,4 +1,4 @@
-from django.core.validators import MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -17,15 +17,22 @@ class TimingSettings(models.Model):
         verbose_name=_("Device"),
         help_text=_("Which timing device signals are received from."),
     )
-    # Single-digit device channels (0–9): which physical channel carries the
-    # start pulse and which carries the finish pulse.
+    # Which physical channel carries the start pulse and which the finish. Every
+    # supported device (and the simulator) has inputs 1–4, so anything outside
+    # that can never match a signal: a finish channel of 7 silently meant no
+    # signal was ever a finish, with the setting sitting there looking valid.
+    # Both may name the *same* channel — that is a single light barrier doing
+    # both jobs (see arrangement.effective_role).
+    MIN_CHANNEL, MAX_CHANNEL = 1, 4
+    _channel = {"validators": [MinValueValidator(MIN_CHANNEL), MaxValueValidator(MAX_CHANNEL)]}
+
     start_channel = models.PositiveSmallIntegerField(
-        default=1, validators=[MaxValueValidator(9)],
-        help_text=_("Device channel that carries the start signal (0–9)."),
+        default=1, **_channel,
+        help_text=_("Device channel that carries the start signal (1–4)."),
     )
     finish_channel = models.PositiveSmallIntegerField(
-        default=2, validators=[MaxValueValidator(9)],
-        help_text=_("Device channel that carries the finish signal (0–9)."),
+        default=2, **_channel,
+        help_text=_("Device channel that carries the finish signal (1–4)."),
     )
     # Where to reach the CP540. Kept even while another device is selected, so the
     # address doesn't have to be re-typed when switching back (default 192.168.1.50).

@@ -21,7 +21,7 @@ from apps.competitions import startpattern
 from apps.participants.models import EventEntry
 
 from . import calc
-from .models import TimedRun
+from .models import TimedRun, TimingSignal
 
 
 def slot_key(entry_pk, class_pk, occurrence, run_type, run_number):
@@ -305,8 +305,27 @@ def serialize(competition):
         "current_index": current_index(runs_in_order),
         "ignored": ignored_signals(competition, precision, settings),
         "ignored_split": ignored_split(settings),
+        # One light barrier: what the next pulse will be read as (see barrier_phase).
+        "barrier": barrier_phase(settings, runs_in_order),
+        # Which piece of setup is missing when there is no start order — an empty
+        # list is otherwise indistinguishable from "nothing has started yet".
+        "empty_reason": _empty_reason(competition) if not items else "",
         "posts": [{"number": post.number} for post in posts],
     }
+
+
+def _empty_reason(competition):
+    """Why the start order is empty, as a key the page turns into a sentence:
+    no class is running, no start pattern is set, or nobody is registered in the
+    running classes. Only asked when there is nothing to show, so the extra reads
+    are over empty tables."""
+    if not competition.run_groups():
+        return "classes"
+    if not competition.start_pattern_blocks():
+        return "pattern"
+    if not any(starters for _run, starters in competition.starters_by_run()):
+        return "starters"
+    return "runs"
 
 
 def _item(precision, ctype, marshal_mode, index, slot, run, posts):
@@ -401,6 +420,21 @@ def penalty_seconds(run, competition):
     return _penalty_seconds(_penalty_lines(run, marshal_mode), ctype)
 
 
+def own_counts_apply(run, competition):
+    """Whether a run's *own* pylon/task/stop-line counts still reach its penalty.
+
+    In marshal mode they only do for a run the operator owns: for a purely
+    auto-bound run the marshal posts own the number and the run's own counts are a
+    stale cache that ``_penalty_lines`` ignores. The Manual timing view asks so it
+    can disable steppers that would otherwise accept a number and change nothing —
+    the operator could see a count they typed sitting there with no effect on the
+    total, with no cue and no disabled state.
+    """
+    ctype = competition.competition_type
+    marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
+    return not marshal_mode or bool(run.manual_entry)
+
+
 def penalty_counts(run, competition):
     """The run's grand ``(pylons, tasks, stop_line)`` penalty counts, resolved the
     same canonical way as ``penalty_seconds`` — for callers that show the tallies
@@ -476,6 +510,31 @@ def ignored_signals(competition, precision, settings):
         }
         for signal in competition.timing_signals.filter(ignored=True).order_by("-received_at")
     ]
+
+
+def barrier_phase(settings, runs):
+    """The rig's phase, for a **single light barrier** setup only (start_channel ==
+    finish_channel); ``None`` with two channels, where a signal's role is fixed by
+    the port it arrives on.
+
+    On one channel ``arrangement.effective_role`` alternates: a pulse closes the
+    open run if there is one, else it opens a new one. That makes the phase a
+    piece of live state nobody could see — one spurious or missed pulse inverts it
+    and every later start is read as a finish, for the rest of the event, with no
+    warning anywhere. So both timing pages show what the *next* pulse will count
+    as; when that reads wrong, ignoring the stray time (drag it to the Ignored
+    rail) deletes its half-open run and puts the phase back.
+
+    Computed from the runs the caller has already read — this is on the live path,
+    which must not grow a query per refresh."""
+    if settings.start_channel != settings.finish_channel:
+        return None
+    open_run = any(
+        run is not None and run.start_signal_id and not run.finish_signal_id
+        for run in runs
+    )
+    role = TimingSignal.Role.FINISH if open_run else TimingSignal.Role.START
+    return {"next_role": role.value}
 
 
 def ignored_split(settings):

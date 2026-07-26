@@ -1,7 +1,10 @@
 from collections import Counter
+from functools import lru_cache
 
+from django.conf import settings
 from django.db import models
-from django.utils.translation import gettext_lazy as _
+from django.utils import translation
+from django.utils.translation import gettext, gettext_lazy as _
 
 from . import startpattern, taskspec
 from .assignment import (
@@ -27,9 +30,11 @@ class CompetitionType(models.Model):
     class Precision(models.IntegerChoices):
         """Decimal places the timing device resolves to."""
 
-        TENTHS = 1, "1/10 s"
-        HUNDREDTHS = 2, "1/100 s"
-        THOUSANDTHS = 3, "1/1000 s"
+        # Translated: a device *name* ("Tag Heuer CP540") is the same word
+        # everywhere, but these are units and belong in the reader's language.
+        TENTHS = 1, _("1/10 s")
+        HUNDREDTHS = 2, _("1/100 s")
+        THOUSANDTHS = 3, _("1/1000 s")
 
     # Penalty amounts are only meaningful with penalties on, so they are nullable
     # at the DB level; the settings form makes them mandatory when the toggle is on.
@@ -174,6 +179,11 @@ class Competition(models.Model):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
+        if is_new and not self.start_pattern:
+            # Seeded with the default classes: without a pattern the start order
+            # is empty, so Auto timing and the dashboard would show nothing at
+            # all on a competition that is otherwise fully set up.
+            self.start_pattern = startpattern.default_pattern()
         super().save(*args, **kwargs)
         if is_new:
             CompetitionClass.objects.bulk_create(
@@ -305,6 +315,17 @@ class Competition(models.Model):
         return cls.objects.filter(is_active=True).first()
 
 
+@lru_cache(maxsize=1)
+def _class_words():
+    """The word "Class" in every language the app is translated into, lower-cased.
+    Language-independent, so it is computed once per process."""
+    words = set()
+    for code, _label in settings.LANGUAGES:
+        with translation.override(code):
+            words.add(gettext("Class").lower())
+    return frozenset(words)
+
+
 class CompetitionClass(models.Model):
     # Starter classes seeded on a brand-new competition; fully editable afterwards.
     DEFAULT_NAMES = ["1", "2", "3", "4", "5", "6", "E"]
@@ -348,6 +369,51 @@ class CompetitionClass(models.Model):
 
     def __str__(self):
         return f"{self.competition} – {self.name}"
+
+    def display_name(self):
+        """The class as it is written where it has to be named as a class — the
+        results index tiles, every results table heading and every exported PDF.
+
+        Classes are usually named just "1" or "E", so the word is prefixed. But
+        people also name a class "Klasse 1" outright, and the German catalogue
+        renders the prefix as "Klasse" — which read "Klasse Klasse 1" on every one
+        of those surfaces. A name that already opens with the word is shown alone,
+        checked against *every* language the app ships rather than only the active
+        one: the name was typed in the organiser's language, which is not
+        necessarily the language the page is being read in.
+        """
+        name = self.name.strip()
+        lowered = name.lower()
+        if any(lowered.startswith(word) for word in _class_words()):
+            return name
+        return gettext("Class %(name)s") % {"name": name}
+
+    def scoring_warning(self):
+        """Why this class, as configured, can't produce a ranking — or "" when it
+        can. Both combinations below are legal to set up and silently wrong
+        afterwards, which is the whole problem: nothing refuses them and the
+        results table simply comes out empty or meaningless.
+
+        * No counted runs: ``compute_class_results`` can never call anybody
+          complete, so the class ranks nobody, for ever.
+        * A regularity test over a single counted run: the score is max − min of
+          one number, so every competitor scores exactly 0, the whole field ties
+          and the tie-break orders them by fastest run — the class is quietly
+          scored as "best run" instead of as a regularity test.
+
+        Only a running class produces results, so only a running class is flagged.
+        """
+        if not self.is_running:
+            return ""
+        counted = self.counted_runs or 0
+        if counted == 0:
+            return _("No counted runs, so nobody in this class can be ranked.")
+        if self.scoring_method == self.Scoring.REGULARITY and counted == 1:
+            return _(
+                "A regularity test needs at least two counted runs — over a single "
+                "run every competitor scores 0 and the class is ranked by fastest run."
+            )
+        return ""
 
     def birth_year_range(self):
         """Birth years spanned by this class's age range, oldest (from age_to)
