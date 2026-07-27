@@ -5,5 +5,9 @@ ranked and unranked tables. Expects `row` and `layout`.{% endcomment %}
 {% if layout.address_keys %}<td class="rt-block">{% for line in row.address_lines %}<div class="rt-line">{{ line.text }}</div>{% endfor %}</td>{% endif %}
 {% if layout.has_vehicle %}<td class="rt-vehicle"><div class="rt-line">{{ row.vehicle }}</div></td>{% endif %}
 {% if layout.licence_keys %}<td class="rt-block">{% for line in row.licence_lines %}<div class="rt-line">{{ line.text }}</div>{% endfor %}</td>{% endif %}
-{% for cell in row.training %}<td class="rt-run rt-training"><div class="rt-line">{{ cell.time }}</div><div class="rt-line rt-pen">{{ cell.penalty }}</div></td>{% endfor %}
-{% for cell in row.counted %}<td class="rt-run"><div class="rt-line">{{ cell.time }}</div><div class="rt-line rt-pen">{{ cell.penalty }}</div></td>{% endfor %}
+{% comment %}A run cell is one of three things: a time with its penalty, the state
+code the run was closed with, or — in the not-yet-ranked table only — a button
+that marks it did-not-start (`dns_key` is the run's start-order slot, since a run
+nobody ever recorded has no id to name).{% endcomment %}
+{% for cell in row.training %}<td class="rt-run rt-training">{% include "results/_results_runcell.html" %}</td>{% endfor %}
+{% for cell in row.counted %}<td class="rt-run">{% include "results/_results_runcell.html" %}</td>{% endfor %}

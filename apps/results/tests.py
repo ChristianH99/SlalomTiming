@@ -238,7 +238,7 @@ def test_incomplete_listed_unranked():
     _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
     make_competitor(competition, cclass, 1)
     make_competitor(competition, cclass, 2)  # only one counted run recorded
-    make_competitor(competition, cclass, 3, status="dnf")  # complete but DNF
+    make_competitor(competition, cclass, 3, status="dnf")  # both runs timed, entry DNF
     add_run(competition, cclass, 1, 1, 30)
     add_run(competition, cclass, 1, 2, 30)
     add_run(competition, cclass, 2, 1, 30)  # missing run 2
@@ -247,7 +247,220 @@ def test_incomplete_listed_unranked():
 
     results = resultscalc.compute_class_results(competition, cclass)
     assert [r.bib for r in results.ranked] == [1]
-    assert {r.bib for r in results.unranked} == {2, 3}
+    # Only bib 2 is still *waiting* on a run. Bib 3's event is over — an entry-level
+    # did-not-finish leaves them unclassified, so they sit below the placings with
+    # their own state code rather than in the "not yet ranked" block.
+    assert [r.bib for r in results.unranked] == [2]
+    assert [(r.bib, r.final_status) for r in results.status_rows] == [(3, "dnc")]
+
+
+# ----- run state codes (DNF / DNC / DNS / DSQ) -----
+
+def mark_run(competition, cclass, bib, run_number, status, occurrence=0,
+             run_type=TimedRun.RunType.COUNTED):
+    """Close a run with a state code and no time — what a DNS looks like when the
+    competitor never started and no signal was ever recorded."""
+    return TimedRun.objects.create(
+        competition=competition, bib_number=bib, competition_class=cclass,
+        class_occurrence=occurrence, run_type=run_type, run_number=run_number,
+        status=status, manual_entry=True,
+    )
+
+
+def test_state_code_on_a_practice_run_does_not_affect_the_result():
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    cclass.practice_runs = 1
+    cclass.save(update_fields=["practice_runs"])
+    make_competitor(competition, cclass, 1)
+    mark_run(competition, cclass, 1, 1, "dsq", run_type=TimedRun.RunType.PRACTICE)
+    add_run(competition, cclass, 1, 1, 30)
+    add_run(competition, cclass, 1, 2, 30)
+
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [(r.bib, r.rank) for r in results.ranked] == [(1, 1)]
+    assert not results.status_rows
+
+
+@pytest.mark.parametrize("status", ["dnf", "dnc", "dns", "dsq"])
+def test_aggregate_over_several_runs_is_dnc_when_one_is_marked(status):
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1)
+    add_run(competition, cclass, 1, 1, 30)
+    mark_run(competition, cclass, 1, 2, status)
+
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert not results.ranked
+    assert [(r.bib, r.final_status) for r in results.status_rows] == [(1, "dnc")]
+
+
+@pytest.mark.parametrize("status", ["dnf", "dnc", "dns", "dsq"])
+def test_best_run_still_places_on_the_run_that_was_driven(status):
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.BEST_RUN)
+    make_competitor(competition, cclass, 1)
+    add_run(competition, cclass, 1, 1, 30)
+    mark_run(competition, cclass, 1, 2, status)
+
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [(r.bib, r.rank) for r in results.ranked] == [(1, 1)]
+    assert results.ranked[0].score == Decimal("30.000")
+    assert not results.status_rows
+
+
+def test_best_run_is_dnc_when_every_counted_run_is_marked():
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.BEST_RUN)
+    make_competitor(competition, cclass, 1)
+    mark_run(competition, cclass, 1, 1, "dnf")
+    mark_run(competition, cclass, 1, 2, "dns")
+
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [(r.bib, r.final_status) for r in results.status_rows] == [(1, "dnc")]
+
+
+def test_every_counted_run_disqualified_is_dsq():
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1)
+    mark_run(competition, cclass, 1, 1, "dsq")
+    mark_run(competition, cclass, 1, 2, "dsq")
+
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [(r.bib, r.final_status) for r in results.status_rows] == [(1, "dsq")]
+
+
+def test_every_counted_run_not_started_is_dns():
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1)
+    mark_run(competition, cclass, 1, 1, "dns")
+    mark_run(competition, cclass, 1, 2, "dns")
+
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [(r.bib, r.final_status) for r in results.status_rows] == [(1, "dns")]
+
+
+def test_disqualified_from_the_whole_event_is_dsq_at_once():
+    """The entry-level flag doesn't wait for the runs: it is a decision about the
+    competitor, so it settles them even with a counted run still to drive."""
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1, status=EventEntry.Status.DSQ)
+    add_run(competition, cclass, 1, 1, 30)
+
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [(r.bib, r.final_status) for r in results.status_rows] == [(1, "dsq")]
+    assert not results.unranked
+
+
+def test_a_marked_run_leaves_them_waiting_while_a_run_is_still_to_come():
+    """One state code doesn't retire a competitor who still has a run to drive —
+    they stay in the not-yet-ranked block until every counted run has settled."""
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1)
+    mark_run(competition, cclass, 1, 1, "dnf")
+
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [r.bib for r in results.unranked] == [1]
+    assert not results.status_rows
+
+
+def test_status_rows_are_ordered_dns_then_dnc_then_dsq_then_by_bib():
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    for bib in (1, 2, 3, 4):
+        make_competitor(competition, cclass, bib)
+    for bib, first, second in (
+        (1, "dsq", "dsq"),   # DSQ
+        (2, "dns", "dns"),   # DNS
+        (3, "dnf", "dnf"),   # DNC
+        (4, "dns", "dns"),   # DNS, higher bib than 2
+    ):
+        mark_run(competition, cclass, bib, 1, first)
+        mark_run(competition, cclass, bib, 2, second)
+
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [(r.bib, r.final_status) for r in results.status_rows] == [
+        (2, "dns"), (4, "dns"), (3, "dnc"), (1, "dsq"),
+    ]
+
+
+def test_a_state_code_beats_a_stray_second_row_for_the_same_run():
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1)
+    add_run(competition, cclass, 1, 1, 30)
+    add_run(competition, cclass, 1, 2, 30)
+    mark_run(competition, cclass, 1, 2, "dsq")   # the timekeeper's decision
+
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [(r.bib, r.final_status) for r in results.status_rows] == [(1, "dnc")]
+
+
+def test_summary_counts_each_state_code(client):
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    for bib in (1, 2, 3):
+        make_competitor(competition, cclass, bib)
+    mark_run(competition, cclass, 1, 1, "dns")
+    mark_run(competition, cclass, 1, 2, "dns")
+    mark_run(competition, cclass, 2, 1, "dnf")
+    mark_run(competition, cclass, 2, 2, "dnf")
+    add_run(competition, cclass, 3, 1, 30)      # still waiting on run 2
+
+    section = views.class_section(competition, cclass)
+    assert section["layout"]["summary"] == {
+        "starters": 3,
+        "statuses": [
+            {"label": "DNS", "count": 1},
+            {"label": "DNC", "count": 1},
+            {"label": "DSQ", "count": 0},
+        ],
+    }
+
+
+def test_unranked_run_cells_offer_a_dns_key_and_the_table_renders(client):
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1)
+    add_run(competition, cclass, 1, 1, 30)      # run 2 neither timed nor marked
+
+    section = views.class_section(competition, cclass)
+    [row] = section["unranked"]
+    assert row["counted"][0]["dns_key"] == ""          # already timed
+    assert row["counted"][1]["dns_key"]                 # offered
+    response = client.get(reverse("results:class", args=[cclass.pk]))
+    assert response.status_code == 200
+    assert b"rt-dns" in response.content
+    # The not-yet-ranked table drops the Total column, so its rows are one cell
+    # shorter than the ranked table's.
+    assert b"REGISTERED" not in response.content.upper()
+
+
+def test_results_dns_button_records_the_run(client):
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    make_competitor(competition, cclass, 1)
+    add_run(competition, cclass, 1, 1, 30)
+    section = views.class_section(competition, cclass)
+    key = section["unranked"][0]["counted"][1]["dns_key"]
+
+    response = client.post(
+        reverse("timing:run-status"),
+        data={"slot_key": key, "status": "dns"},
+        content_type="application/json",
+    )
+    assert response.status_code == 200 and response.json()["ok"]
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [(r.bib, r.final_status) for r in results.status_rows] == [(1, "dnc")]
+
+
+def test_export_all_pdf_covers_every_group(client):
+    """A section with ranked rows, state-code rows and still-waiting rows renders
+    to PDF — the unranked table has one column fewer, which used to be built from
+    the same header row."""
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    for bib in (1, 2, 3):
+        make_competitor(competition, cclass, bib)
+    add_run(competition, cclass, 1, 1, 30)
+    add_run(competition, cclass, 1, 2, 31)
+    mark_run(competition, cclass, 2, 1, "dns")
+    mark_run(competition, cclass, 2, 2, "dns")
+    add_run(competition, cclass, 3, 1, 30)
+
+    response = client.get(reverse("results:export-all"))
+    assert response.status_code == 200
+    assert response.content[:4] == b"%PDF"
 
 
 # ----- auto-timing identity sync -----
@@ -449,20 +662,26 @@ def test_regularity_column_shows_difference(client):
 
 def test_results_summary_counts(client):
     _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
-    make_competitor(competition, cclass, 1)                     # classified
+    make_competitor(competition, cclass, 1)                     # ranked
     make_competitor(competition, cclass, 2)                     # incomplete (no runs)
-    make_competitor(competition, cclass, 3, status="dns")       # not classified
-    make_competitor(competition, cclass, 4, status="dsq")       # not classified
+    make_competitor(competition, cclass, 3, status="dns")       # out of the event
+    make_competitor(competition, cclass, 4, status="dsq")       # out of the event
     add_run(competition, cclass, 1, 1, 30)
     add_run(competition, cclass, 1, 2, 30)
     response = client.get(reverse("results:class", args=[cclass.pk]))
     body = response.content
     assert b"Starters:" in body and b"4" in body
-    assert b"Classified:" in body
-    assert b"Not Classified:" in body
-    # 4 starters, 1 classified, 2 not classified (dns + dsq).
-    layout = response.context["layout"]["summary"]
-    assert layout == {"starters": 4, "classified": 1, "not_classified": 2}
+    # "Classified / not classified" told the operator nothing about which outcome
+    # they were looking at; the summary names the outcomes themselves.
+    assert b"DNS:" in body and b"DNC:" in body and b"DSQ:" in body
+    assert response.context["layout"]["summary"] == {
+        "starters": 4,
+        "statuses": [
+            {"label": "DNS", "count": 1},
+            {"label": "DNC", "count": 0},
+            {"label": "DSQ", "count": 1},
+        ],
+    }
 
 
 def test_best_run_column_heading(client):

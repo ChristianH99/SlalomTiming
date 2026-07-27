@@ -121,6 +121,9 @@ RUN_FIELDS = [
     "class_occurrence",
     "run_type",
     "run_number",
+    # The state code a run was closed with (DNF/DNC/DNS/DSQ) — part of the result,
+    # so an exported event must carry it or the import ranks differently.
+    "status",
     "manual_entry",
     "manual_run_time",
     "pylon_count",

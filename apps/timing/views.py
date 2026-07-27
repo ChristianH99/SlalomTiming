@@ -19,7 +19,7 @@ from apps.accounts import pages
 from apps.competitions.models import Competition, CompetitionClass
 from apps.participants.models import EventEntry
 
-from . import arrangement, autotiming, calc, cp540, dashboard
+from . import arrangement, autotiming, calc, cp540, dashboard, runstatus
 from .forms import TimingSettingsForm
 from .ingest import record_signal
 from .models import MarshalPenalty, TimedRun, TimingSettings, TimingSignal
@@ -689,6 +689,41 @@ def timing_run_update(request):
 
 
 @require_POST
+def timing_run_status(request):
+    """Close a run with a state code instead of a time — DNF / DNC / DNS / DSQ —
+    or clear the one it carries.
+
+    Posted from three places: both timing views (by ``run_id``, or by ``slot_key``
+    for a competitor with no run yet) and the results table's not-yet-ranked block
+    (always by ``slot_key`` — a DNS is exactly the case where nothing was ever
+    recorded). That is why this endpoint belongs to the Results page as well as
+    Timing (see apps/accounts/pages.py); both are timekeeper surfaces.
+    """
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    payload = _json_body(request)
+    status = runstatus.parse(payload.get("status"))
+    if status is None:
+        return JsonResponse({"ok": False, "error": "Unknown status."}, status=400)
+    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    if run is None:
+        if not status:
+            return JsonResponse({"ok": True})  # nothing recorded, nothing to clear
+        run = _run_from_slot(competition, payload.get("slot_key"))
+        if run is None:
+            return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
+    runstatus.apply(run, status)
+    # Taking a run over moves the start-order binding, so this is a write path
+    # that re-syncs before nudging the live views.
+    _rebind_and_broadcast(competition)
+    return JsonResponse({
+        "ok": True, "status": run.status,
+        "row": _serialize_run(run, _RowContext.load(competition)),
+    })
+
+
+@require_POST
 def timing_ignore(request):
     """Mark a time as a wrong measurement (or restore it). Ignoring removes it
     from its run; restoring re-inserts it causally."""
@@ -832,39 +867,10 @@ def timing_set_time(request):
     return JsonResponse({"ok": True, "row": _serialize_run(run, _RowContext.load(competition))})
 
 
-def _run_from_slot(competition, slot_key):
-    """Find (or create) the run for an Auto-timing start-order slot, so a time can
-    be keyed onto an upcoming competitor who has no run yet. The slot key is
-    ``entry:class:occurrence:run_type:run_number`` (see autotiming.slot_key). A
-    created run is operator-owned so it claims its slot and device times skip it.
-
-    The stored binding is refreshed first: this looks an existing run up *by that
-    identity*, and since the live views stopped persisting what they render (see
-    autotiming.sync_bindings) a stale row here would mean a second run created for
-    a competitor who already has one."""
-    autotiming.sync_bindings(competition)
-    parts = str(slot_key or "").split(":")
-    if len(parts) != 5:
-        return None
-    entry_pk, class_pk, occurrence, run_type, run_number = parts
-    if run_type not in (TimedRun.RunType.PRACTICE, TimedRun.RunType.COUNTED):
-        return None
-    try:
-        occurrence, run_number = int(occurrence), int(run_number)
-    except (TypeError, ValueError):
-        return None
-    entry = EventEntry.objects.filter(competition=competition, pk=entry_pk).first()
-    cclass = CompetitionClass.objects.filter(competition=competition, pk=class_pk).first()
-    if entry is None or cclass is None:
-        return None
-    identity = dict(
-        bib_number=entry.bib_number, competition_class=cclass,
-        class_occurrence=occurrence, run_type=run_type, run_number=run_number,
-    )
-    return (
-        TimedRun.objects.filter(competition=competition, **identity).first()
-        or TimedRun.objects.create(competition=competition, manual_entry=True, **identity)
-    )
+# Making a run from a start-order slot lives in runstatus.py: a status may be set
+# on a competitor who never started, which is the same "no run exists yet" problem
+# keying a time onto an upcoming starter has, so the two share one door.
+_run_from_slot = runstatus.run_for_slot
 
 
 def _discard_displaced(signal, keep_id=None):
@@ -1057,6 +1063,9 @@ def serialize_arrangement(competition):
         # here rather than only on the settings page.
         "device_link": cp540.link_state(settings),
         "multi_class": competition.allows_multiple_classes_effective(),
+        # The state codes a run can be closed with (DNF/DNC/DNS/DSQ) — one list
+        # for the page rather than a copy per row.
+        "status_options": runstatus.options(),
         "rows": [_serialize_run(run, ctx) for run in rows],
         # The same rail as Auto timing, built by the same code so the two pages
         # can't drift apart.
@@ -1088,8 +1097,11 @@ def _serialize_run(run, ctx):
         "start": _signal_ref(start, precision),
         "finish": _signal_ref(finish, precision),
         # A row with neither time (and no typed run time) is a placeholder awaiting
-        # a starter.
-        "placeholder": start is None and finish is None and run.manual_run_time is None,
+        # a starter. A row closed with a state code is not awaiting anything — it
+        # is a recorded outcome, so it neither reads as a placeholder nor offers
+        # the × that would throw the outcome away (clear the status first).
+        "placeholder": (start is None and finish is None
+                        and run.manual_run_time is None and not run.status),
         "run_time": calc.format_clock(rt, precision),
         # The run time was typed in by hand, not measured — highlighted apart.
         "run_time_manual": run.manual_run_time is not None,
@@ -1104,6 +1116,9 @@ def _serialize_run(run, ctx):
             "class_options": slots,
             "run_value": _run_value(run),
             "run_options": _run_options(ctx, run),
+            # DNF / DNC / DNS / DSQ, or "" for an ordinary run. A run carrying one
+            # is closed: it is never scored, whatever times sit on it.
+            "status": run.status,
             "pylon_count": run.pylon_count,
             "task_count": run.task_count,
             "stopline_count": run.stopline_count,

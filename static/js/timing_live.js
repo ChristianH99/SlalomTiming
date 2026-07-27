@@ -37,6 +37,7 @@
   const pair = (signalId, runId, slot) => postJSON(URLS.pair, { signal_id: signalId, run_id: runId, slot });
   const setTime = (runId, slot, time) => postJSON(URLS.setTime, { run_id: runId, slot, time });
   const setRuntime = (runId, runTime) => postJSON(URLS.setRuntime, { run_id: runId, run_time: runTime });
+  const setStatus = (runId, status) => postJSON(URLS.runStatus, { run_id: runId, status });
   const setInputLock = (locked) => postJSON(URLS.inputLock, { locked });
 
   // ---- small DOM helpers --------------------------------------------------
@@ -51,8 +52,9 @@
     if (child) td.append(child);
     return td;
   }
-  // Start, Finish, Run time, Bib, Competitor, Class, Run, Total (+4 penalty cols).
-  const colspan = () => (state.penalties_enabled ? 12 : 8);
+  // Start, Finish, Run time, Bib, Competitor, Class, Run, Status, Total
+  // (+4 penalty cols).
+  const colspan = () => (state.penalties_enabled ? 13 : 9);
 
   // ---- rendering ----------------------------------------------------------
   function render() {
@@ -101,6 +103,9 @@
     tr.dataset.runId = run.id;
     if (row.placeholder) tr.classList.add("timing-row--placeholder");
     if (run.over_max) tr.classList.add("timing-row--over");
+    // A run closed with a state code is not going to produce a time — the row
+    // says so at a glance rather than only in its dropdown.
+    if (run.status) tr.classList.add("timing-row--status");
 
     tr.append(cell("tt-time", timeSlot(row.start, "start", run.id)));
     tr.append(cell("tt-time", timeSlot(row.finish, "finish", run.id)));
@@ -109,13 +114,18 @@
     tr.append(nameCell(run));
     tr.append(cell("tt-class", classField(run)));
     tr.append(cell("tt-run-sel", runField(run)));
+    tr.append(cell("tt-status", statusField(run)));
     if (state.penalties_enabled) {
       tr.append(cell("tt-pen", penaltyBox(run, "pylon_count")));
       tr.append(cell("tt-pen", penaltyBox(run, "task_count")));
       tr.append(cell("tt-pen", penaltyBox(run, "stopline_count")));
       tr.append(cell("tt-pen-total", el("span", "pen-total", run.penalty_text || "–")));
     }
-    const totalCell = cell("tt-total", el("span", "run-total", run.total || "–"));
+    // A run closed with a state code has no total to show, so the cell carries
+    // the code — the one place the row's outcome is read from either way.
+    const totalCell = cell("tt-total", run.status
+      ? el("span", "run-total run-total--status", run.status.toUpperCase())
+      : el("span", "run-total", run.total || "–"));
     // An empty placeholder can be removed.
     if (row.placeholder) {
       const del = el("button", "row-delete", "×");
@@ -302,6 +312,32 @@
     });
     select.addEventListener("change", () =>
       updateRun({ run_id: run.id, run_value: select.value }).then(applyRow)
+    );
+    return select;
+  }
+
+  // How a run ended when it didn't end in a time: DNF / DNC / DNS / DSQ, or "–"
+  // for the ordinary case. The codes come from the server (runstatus.options) so
+  // the page can't invent one the model doesn't have.
+  function statusField(run) {
+    const select = el("select", "status-select" + (run.status ? " status-select--set" : ""));
+    select.dataset.rowKey = run.id;
+    select.dataset.field = "status";
+    const blank = el("option", null, "–");
+    blank.value = "";
+    select.append(blank);
+    (state.status_options || []).forEach((opt) => {
+      const o = el("option", null, opt.label);
+      o.value = opt.value;
+      o.title = opt.title;
+      if (opt.value === run.status) o.selected = true;
+      select.append(o);
+    });
+    select.title = run.status
+      ? gettext("This run is closed with a state code — it is not scored.")
+      : gettext("Close this run with a state code instead of a time");
+    select.addEventListener("change", () =>
+      setStatus(run.id, select.value).then(applyRow)
     );
     return select;
   }

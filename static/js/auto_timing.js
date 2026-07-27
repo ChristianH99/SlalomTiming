@@ -116,6 +116,8 @@
     postJSON(URLS.setTime, { run_id: runId, slot, time, slot_key: slotKey });
   const setRuntime = (runId, runTime, slotKey) =>
     postJSON(URLS.setRuntime, { run_id: runId, run_time: runTime, slot_key: slotKey });
+  const setStatus = (runId, status, slotKey) =>
+    postJSON(URLS.runStatus, { run_id: runId, status, slot_key: slotKey });
   const reorder = (order) => postJSON(URLS.reorder, { order });
   const resetOrder = () => postJSON(URLS.resetOrder, {});
   const adjust = (runId, field, value) => postJSON(URLS.adjust, { run_id: runId, [field]: value });
@@ -219,8 +221,14 @@
     // is a hover away rather than lost.
     if (item.name) name.title = item.name;
     li.append(name);
-    // The total (run + penalties) is the meaningful figure here.
-    if (item.total_time) li.append(el("span", "auto-order-time", item.total_time));
+    // The total (run + penalties) is the meaningful figure here — unless the run
+    // was closed with a state code, which is what happened *instead* of a time.
+    if (item.status) {
+      li.classList.add("auto-order-item--status");
+      li.append(el("span", "auto-order-time auto-order-time--status", item.status.toUpperCase()));
+    } else if (item.total_time) {
+      li.append(el("span", "auto-order-time", item.total_time));
+    }
     if (!item.orphan) li.title = gettext("Click to bring this competitor into the tiles");
     // A plain click focuses this competitor in the tiles (dragging still reorders).
     li.addEventListener("click", () => focusItem(item.index));
@@ -307,8 +315,15 @@
     times.append(timeBlock(gettext("Start"), item.start, item, "start"));
     times.append(timeBlock(gettext("Finish"), item.finish, item, "finish"));
     times.append(runTimeFigure(item));
-    times.append(figure(gettext("Total"), item.total_time || "–", "auto-runtime--total"));
+    times.append(item.status
+      ? figure(gettext("Total"), item.status.toUpperCase(), "auto-runtime--status")
+      : figure(gettext("Total"), item.total_time || "–", "auto-runtime--total"));
     div.append(times);
+
+    // How this run ended when it didn't end in a time. Offered for an upcoming
+    // competitor too (they have no run yet — the slot key makes one), because
+    // "did not start" is exactly the case where nothing was ever recorded.
+    if (!item.orphan && editable(item)) div.append(statusRow(item));
 
     // Timekeeper manual +/- on the run's total pylon / task counts.
     if (state.penalties_enabled && item.run_id) div.append(adjustRow(item));
@@ -451,6 +466,28 @@
   function enterRuntimeEdit(host, item, current) {
     inlineEdit(host, current, "s.xx",
       (value) => setRuntime(item.run_id, value, item.key).then(refresh));
+  }
+
+  // One toggle per state code (DNF / DNC / DNS / DSQ): pressing the one already
+  // set clears it. Buttons rather than a dropdown — this is a screen operated at
+  // arm's length while a competitor is on course. The codes come from the server
+  // (runstatus.options), so the page can't offer one the model doesn't have.
+  function statusRow(item) {
+    const row = el("div", "auto-status");
+    row.append(el("span", "auto-status-label", gettext("Status")));
+    const group = el("div", "auto-status-buttons");
+    (state.status_options || []).forEach((opt) => {
+      const on = item.status === opt.value;
+      const btn = el("button", "auto-status-btn" + (on ? " auto-status-btn--on" : ""), opt.label);
+      btn.type = "button";
+      btn.title = on ? gettext("Clear this run's status") : opt.title;
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.addEventListener("click", () =>
+        setStatus(item.run_id, on ? "" : opt.value, item.key).then(refresh));
+      group.append(btn);
+    });
+    row.append(group);
+    return row;
   }
 
   function adjustRow(item) {

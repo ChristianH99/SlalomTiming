@@ -1,5 +1,9 @@
 {% comment %}Renders the ranked results table and, when present, the unranked block.
-Expects `layout`, `ranked`, `unranked`, `scope`.{% endcomment %}
+Expects `layout`, `ranked`, `status_rows`, `unranked`, `scope`, `run_status_url`.
+
+`status_rows` are competitors whose event is settled but on a state code (DNS /
+DNC / DSQ) rather than a score. They belong at the foot of the ranked table: they
+are finished, just not in the placings.{% endcomment %}
 {% load static i18n %}
 <div class="table-card results-card">
   <table class="results-table" data-results-table>
@@ -21,7 +25,17 @@ Expects `layout`, `ranked`, `unranked`, `scope`.{% endcomment %}
           </td>
         </tr>
       {% empty %}
-        <tr class="empty-row"><td colspan="{{ layout.column_count }}">{% trans "No complete results yet." %}</td></tr>
+        {% if not status_rows %}
+          <tr class="empty-row"><td colspan="{{ layout.column_count }}">{% trans "No complete results yet." %}</td></tr>
+        {% endif %}
+      {% endfor %}
+      {% for row in status_rows %}
+        <tr class="result-final-status">
+          <td class="rt-rank"><span class="rt-rank-num">–</span></td>
+          <td class="rt-bib">{{ row.bib }}</td>
+          {% include "results/_results_midcells.html" %}
+          <td class="rt-total"><div class="rt-line rt-status-code">{{ row.final_status }}</div></td>
+        </tr>
       {% endfor %}
     </tbody>
   </table>
@@ -29,17 +43,18 @@ Expects `layout`, `ranked`, `unranked`, `scope`.{% endcomment %}
 
 {% if unranked %}
   <h2 class="form-section">{% trans "Not yet ranked" %}</h2>
-  <p class="hint">{% trans "Competitors missing a counted run, or marked did-not-start / did-not-finish / disqualified." %}</p>
+  <p class="hint">{% trans "Competitors still missing a counted run. Mark one “DNS” where the time would be if they never started it." %}</p>
   <div class="table-card results-card">
-    <table class="results-table results-table--muted">
-      <thead>{% include "results/_results_head.html" %}</thead>
+    {% comment %}No Total column here: a competitor who hasn't finished has no
+    total, and the cell only ever repeated their registration state back.{% endcomment %}
+    <table class="results-table results-table--muted" data-unranked-table>
+      <thead>{% include "results/_results_head.html" with omit_total=True %}</thead>
       <tbody>
         {% for row in unranked %}
           <tr>
             <td class="rt-rank">–</td>
             <td class="rt-bib">{{ row.bib }}</td>
             {% include "results/_results_midcells.html" %}
-            <td class="rt-total"><div class="rt-line rt-status">{{ row.status|upper }}</div></td>
           </tr>
         {% endfor %}
       </tbody>
@@ -49,10 +64,10 @@ Expects `layout`, `ranked`, `unranked`, `scope`.{% endcomment %}
 
 <div class="results-summary">
   <span><strong>{% trans "Starters:" %}</strong> {{ layout.summary.starters }}</span>
-  <span class="results-summary-sep">·</span>
-  <span><strong>{% trans "Classified:" %}</strong> {{ layout.summary.classified }}</span>
-  <span class="results-summary-sep">·</span>
-  <span><strong>{% trans "Not Classified:" %}</strong> {{ layout.summary.not_classified }}</span>
+  {% for entry in layout.summary.statuses %}
+    <span class="results-summary-sep">·</span>
+    <span><strong>{{ entry.label }}:</strong> {{ entry.count }}</span>
+  {% endfor %}
 </div>
 
 <div id="tie-editor" data-scope="{{ scope }}" data-resolve-url="{% url 'results:tie-resolve' %}" hidden>{% csrf_token %}</div>
@@ -61,4 +76,7 @@ Expects `layout`, `ranked`, `unranked`, `scope`.{% endcomment %}
   <button type="button" class="button button--small" id="tie-save">{% trans "Save order" %}</button>
   <button type="button" class="button button--secondary button--small" id="tie-cancel">{% trans "Cancel" %}</button>
 </div>
+<div id="run-status" data-url="{{ run_status_url }}"
+     data-confirm="{% trans 'Mark this run as not started?' %}" hidden></div>
 <script src="{% static 'js/results_tie.js' %}"></script>
+<script src="{% static 'js/results_status.js' %}"></script>

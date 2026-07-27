@@ -1,0 +1,2 @@
+{% comment %}The inside of one run cell. Expects `cell`.{% endcomment %}
+{% load i18n %}{% if cell.status %}<div class="rt-line rt-status-code">{{ cell.status }}</div><div class="rt-line rt-pen"></div>{% elif cell.dns_key %}<div class="rt-line"><button type="button" class="rt-dns" data-dns-key="{{ cell.dns_key }}" title="{% trans 'Mark this run as did not start' %}">{% trans "DNS" %}</button></div><div class="rt-line rt-pen"></div>{% else %}<div class="rt-line">{{ cell.time }}</div><div class="rt-line rt-pen">{{ cell.penalty }}</div>{% endif %}

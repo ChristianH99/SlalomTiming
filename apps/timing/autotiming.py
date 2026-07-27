@@ -272,7 +272,9 @@ def current_run(competition, runs=None):
 def serialize(competition):
     """The whole Auto timing state: the ordered items (slot + its bound run), the
     current index, the ignored times, and the marshal posts."""
-    from . import cp540
+    # Imported here, not at module scope: runstatus builds a run from a start-order
+    # slot and so imports this module back.
+    from . import cp540, runstatus
     from .models import TimingSettings
 
     settings = TimingSettings.load()
@@ -310,6 +312,8 @@ def serialize(competition):
         # Which piece of setup is missing when there is no start order — an empty
         # list is otherwise indistinguishable from "nothing has started yet".
         "empty_reason": _empty_reason(competition) if not items else "",
+        # The state codes a run can be closed with — one list for the page.
+        "status_options": runstatus.options(),
         "posts": [{"number": post.number} for post in posts],
     }
 
@@ -351,6 +355,9 @@ def _item(precision, ctype, marshal_mode, index, slot, run, posts):
         "run_time": calc.format_clock(rt, precision),
         "run_time_manual": bool(run and run.manual_run_time is not None),
         "total_time": total_time,
+        # DNF / DNC / DNS / DSQ, or "" — the run was closed with a state code
+        # instead of a time (see runstatus.py).
+        "status": run.status if run else "",
         # One line per penalty type: its non-editable base, the run field the Auto
         # stepper edits, its value, and the grand count. Drives the +/- steppers.
         "penalties": lines,

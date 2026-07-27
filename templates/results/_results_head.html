@@ -8,5 +8,7 @@
   {% if layout.licence_keys %}<th>{{ layout.licence_header }}</th>{% endif %}
   {% for t in layout.training_labels %}<th class="rt-run">{{ t }}</th>{% endfor %}
   {% for c in layout.counted_labels %}<th class="rt-run">{{ c }}</th>{% endfor %}
-  <th class="rt-total">{{ layout.score_heading }}</th>
+  {% comment %}`omit_total` drops the last column for the not-yet-ranked table,
+  which has no total to show.{% endcomment %}
+  {% if not omit_total %}<th class="rt-total">{{ layout.score_heading }}</th>{% endif %}
 </tr>

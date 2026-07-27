@@ -17,6 +17,7 @@ urlpatterns = [
     path("timing/run/", views.timing_run_update, name="run-update"),
     path("timing/run/add/", views.timing_add_run, name="run-add"),
     path("timing/run/delete/", views.timing_delete_run, name="run-delete"),
+    path("timing/run/status/", views.timing_run_status, name="run-status"),
     path("timing/ignore/", views.timing_ignore, name="ignore"),
     path("timing/pair/", views.timing_pair, name="pair"),
     path("timing/set-time/", views.timing_set_time, name="set-time"),

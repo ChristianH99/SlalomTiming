@@ -744,6 +744,46 @@ def _set_bib(client, participant, bib, confirm=False):
     ).json()
 
 
+def _set_dsq(client, participant, dsq):
+    return client.post(
+        reverse("participants:set-dsq"),
+        data={"participant": participant.pk, "dsq": dsq},
+        content_type="application/json",
+    )
+
+
+def test_event_disqualification_is_scoped_to_the_active_competition(client):
+    """The switch on the participant detail ends their event here and nowhere
+    else — the flag lives on the entry, so the same person is untouched at another
+    competition."""
+    ctype = make_type()
+    competition = make_competition(ctype)
+    other = Competition.objects.create(
+        competition_type=ctype, name="Other", date=datetime.date(2026, 6, 1),
+    )
+    person = _make_person(ctype)
+    here = EventEntry.objects.create(participant=person, competition=competition, bib_number=7)
+    there = EventEntry.objects.create(participant=person, competition=other, bib_number=7)
+
+    assert _set_dsq(client, person, True).json()["ok"]
+    here.refresh_from_db(); there.refresh_from_db()
+    assert here.status == EventEntry.Status.DSQ
+    assert there.status == EventEntry.Status.REGISTERED
+
+    assert _set_dsq(client, person, False).json()["ok"]
+    here.refresh_from_db()
+    assert here.status == EventEntry.Status.REGISTERED
+
+
+def test_event_disqualification_needs_a_registration(client):
+    ctype = make_type()
+    make_competition(ctype)
+    person = _make_person(ctype)   # no bib: not in this event at all
+
+    response = _set_dsq(client, person, True)
+    assert response.status_code == 404 and response.json()["ok"] is False
+
+
 def test_the_inline_bib_field_asks_the_same_question(client):
     """The list's inline field changes exactly the same thing as the edit form,
     so it cannot be the way around the guard."""

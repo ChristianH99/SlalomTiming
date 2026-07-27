@@ -2,8 +2,8 @@
 
 A *section* is one results table (a class or an Overall group) as produced by
 ``views.class_section`` / ``views.overall_section`` — its ``layout`` (column
-structure) plus the ranked/unranked row dicts. ``render_results_pdf`` lays each
-section on its own page(s):
+structure) plus its ranked / state-code / unranked row dicts. ``render_results_pdf``
+lays each section on its own page(s):
 
   * the same columns and values shown on screen, in a ReportLab table that repeats
     its header row, always spans the full page width, and only ever breaks *between*
@@ -119,11 +119,11 @@ def _fit(text, max_width, bold=False, size=_BODY_FONT):
     return (text[:lo].rstrip() + ell) if lo else ell
 
 
-def _numeric_font(layout, rows, col_widths):
+def _numeric_font(layout, rows, col_widths, include_total=True):
     """The font size for time/total cells: as large as ``_BODY_FONT`` but shrunk
     (never below 7pt) so the widest time still fits its column on one line — keeps
     times from wrapping whatever the precision, run count or orientation."""
-    cols = _columns(layout)
+    cols = _columns(layout, include_total)
     run_inner = [col_widths[i] - 2 * _CELL_HPAD
                  for i, (kind, _) in enumerate(cols) if kind in ("run", "total")]
     if not run_inner:
@@ -191,9 +191,11 @@ def _wrap_to_lines(text, max_width, max_lines, bold=False, size=_BODY_FONT):
 # Table building
 # ---------------------------------------------------------------------------
 
-def _columns(layout):
+def _columns(layout, include_total=True):
     """The ordered ``(kind, weight)`` columns for a table layout — same order as the
-    on-screen head/mid-cell partials."""
+    on-screen head/mid-cell partials. The not-yet-ranked table drops the total
+    column (``include_total=False``): those competitors have no total, exactly as
+    on screen."""
     cols = [("rank", _COLW["rank"]), ("bib", _COLW["bib"])]
     if layout["include_class"]:
         cols.append(("class", _COLW["class"]))
@@ -209,11 +211,12 @@ def _columns(layout):
         cols.append(("run", _COLW["run"]))
     for _col in layout["counted_labels"]:
         cols.append(("run", _COLW["run"]))
-    cols.append(("total", _COLW["total"]))
+    if include_total:
+        cols.append(("total", _COLW["total"]))
     return cols
 
 
-def _min_col_widths(layout):
+def _min_col_widths(layout, include_total=True):
     """The narrowest each column may be: enough for the longest *word* of its
     heading to render on one line. The weights in ``_COLW`` are proportions of the
     page, so a heading that is a short word in one language ("Bib") and a long one
@@ -221,7 +224,7 @@ def _min_col_widths(layout):
     former. Wrapping *between* words is still allowed — a two-word heading ("Best
     run") may take two lines, which the auto-sized header row absorbs."""
     mins = []
-    for text, style in _header_labels(layout):
+    for text, style in _header_labels(layout, include_total):
         words = str(text or "").split()
         widest = max((stringWidth(w, style.fontName, style.fontSize) for w in words),
                      default=0.0)
@@ -229,15 +232,15 @@ def _min_col_widths(layout):
     return mins
 
 
-def _col_widths(layout, usable_w):
+def _col_widths(layout, usable_w, include_total=True):
     """Absolute column widths that always sum to ``usable_w`` — the weights scaled
     (up or down) equally so the table spans the whole page width, except that no
     column falls below the width its heading needs (``_min_col_widths``). Columns
     held at their minimum are taken out of the pool and the rest share what is
     left, still by weight."""
-    cols = _columns(layout)
+    cols = _columns(layout, include_total)
     weights = [w for _, w in cols]
-    mins = _min_col_widths(layout)
+    mins = _min_col_widths(layout, include_total)
 
     def scaled(values):
         """``values`` stretched or squeezed to span exactly ``usable_w``."""
@@ -275,7 +278,7 @@ def _row_lines(layout):
     )
 
 
-def _header_labels(layout):
+def _header_labels(layout, include_total=True):
     """The ordered ``(text, style)`` column headings — same order as ``_columns``.
     Shared by the rendered header row and the minimum column widths, so a heading
     can never be measured differently from the way it is drawn."""
@@ -294,12 +297,14 @@ def _header_labels(layout):
         labels.append((t, _head_c))
     for c in layout["counted_labels"]:
         labels.append((c, _head_c))
-    labels.append((layout["score_heading"], _head_c))
+    if include_total:
+        labels.append((layout["score_heading"], _head_c))
     return labels
 
 
-def _header_cells(layout):
-    return [Paragraph(escape(str(text)), style) for text, style in _header_labels(layout)]
+def _header_cells(layout, include_total=True):
+    return [Paragraph(escape(str(text)), style)
+            for text, style in _header_labels(layout, include_total)]
 
 
 def _block_markup(lines, inner_w, row_lines):
@@ -325,6 +330,14 @@ def _block_markup(lines, inner_w, row_lines):
 
 
 def _run_markup(cell, num_size, inner_w):
+    # A run closed with a state code prints the code where its time would be, in
+    # the screen's amber, so paper and glass read as one table. The second line is
+    # still reserved (&#160;) — every row keeps the same height.
+    status = cell.get("status") or ""
+    if status:
+        size = round(num_size * 0.78, 1)
+        code = escape(_fit(status, inner_w, bold=True, size=size))
+        return f'<b><font size="{size}" color="#8A4B12">{code}</font></b><br/>&#160;'
     time = escape(_fit(cell.get("time") or " ", inner_w, size=num_size))
     pen = escape(cell.get("penalty") or "")
     small = round(num_size * 0.78, 1)
@@ -332,9 +345,13 @@ def _run_markup(cell, num_size, inner_w):
     return f'<font size="{num_size}">{time}</font><br/>{pen_line}'
 
 
-def _row_cells(layout, row, ranked, col_widths, num_size):
+def _row_cells(layout, row, kind, col_widths, num_size):
     """The Paragraph cells for one body row, in column order. Each info field is
-    fitted to its column so nothing wraps; run/total cells are two lines."""
+    fitted to its column so nothing wraps; run/total cells are two lines.
+
+    ``kind`` is which of the three groups the row is in — ``"ranked"`` (score and
+    gap in the last column), ``"status"`` (the state code their event ended on) or
+    ``"unranked"`` (no last column at all: they have no total)."""
     def inner(idx):
         return col_widths[idx] - 2 * _CELL_HPAD
 
@@ -364,30 +381,38 @@ def _row_cells(layout, row, ranked, col_widths, num_size):
         cells.append(Paragraph(_run_markup(cell, num_size, inner(i)), _cell_c)); i += 1
     for cell in row.get("counted", []):
         cells.append(Paragraph(_run_markup(cell, num_size, inner(i)), _cell_c)); i += 1
+    if kind == "unranked":
+        return cells  # no total column: those competitors have no total
     small = round(num_size * 0.78, 1)
-    if ranked:
+    if kind == "status":
+        code = escape(_fit(row.get("final_status") or "", inner(i), bold=True, size=small))
+        markup = f'<b><font size="{small}" color="#8A4B12">{code}</font></b><br/> '
+    else:
         total = escape(_fit(row.get("total") or "–", inner(i), bold=True, size=num_size))
         gap = escape(row.get("gap") or "")
         gap_line = f'<font size="{small}" color="#7c8492">{gap}</font>' if gap else " "
         markup = f'<b><font size="{num_size}">{total}</font></b><br/>{gap_line}'
-    else:
-        markup = f'<font size="{num_size}" color="#7c8492">{escape((row.get("status") or "").upper())}</font><br/> '
     cells.append(Paragraph(markup, _cell_c))
     return cells
 
 
-def _make_table(layout, rows, ranked, usable_w):
+def _make_table(layout, rows, kind, usable_w, extra_rows=()):
     """A ReportLab table for a set of rows: full page width, uniform body-row height,
-    repeating header, splitting only between rows."""
-    col_widths = _col_widths(layout, usable_w)
-    row_h = _row_lines(layout) * _BODY_LEAD + 2 * _CELL_VPAD
-    num_size = _numeric_font(layout, rows, col_widths)
+    repeating header, splitting only between rows.
 
-    data = [_header_cells(layout)]
+    ``extra_rows`` are the state-code rows that sit at the foot of the ranked
+    table — the same columns, given the ``"status"`` treatment."""
+    include_total = kind != "unranked"
+    col_widths = _col_widths(layout, usable_w, include_total)
+    row_h = _row_lines(layout) * _BODY_LEAD + 2 * _CELL_VPAD
+    num_size = _numeric_font(layout, rows, col_widths, include_total)
+
+    data = [_header_cells(layout, include_total)]
     heights = [None]  # header row auto-sizes
-    if rows:
-        for row in rows:
-            data.append(_row_cells(layout, row, ranked, col_widths, num_size))
+    body = [(row, kind) for row in rows] + [(row, "status") for row in extra_rows]
+    if body:
+        for row, row_kind in body:
+            data.append(_row_cells(layout, row, row_kind, col_widths, num_size))
             heights.append(row_h)
     else:
         data.append([Paragraph(_("No complete results yet."),
@@ -417,17 +442,18 @@ def _section_flowables(section, usable_w):
     layout = section["layout"]
     headline = f'{section["title"]} · {_("Results")} · {section["scoring_label"]}'
     flow = [Paragraph(escape(headline), _title)]
-    flow.append(_make_table(layout, section["ranked"], True, usable_w))
+    # The state-code rows ride at the foot of the ranked table, as on screen:
+    # their event is settled, they are simply not in the placings.
+    flow.append(_make_table(layout, section["ranked"], "ranked", usable_w,
+                            extra_rows=section.get("status_rows", ())))
     if section["unranked"]:
         flow.append(Paragraph(_("Not yet ranked"), _subhead))
-        flow.append(_make_table(layout, section["unranked"], False, usable_w))
+        flow.append(_make_table(layout, section["unranked"], "unranked", usable_w))
     summary = layout["summary"]
-    flow.append(Paragraph(
-        f'<b>{_("Starters:")}</b> {summary["starters"]} &nbsp;·&nbsp; '
-        f'<b>{_("Classified:")}</b> {summary["classified"]} &nbsp;·&nbsp; '
-        f'<b>{_("Not Classified:")}</b> {summary["not_classified"]}',
-        _summary,
-    ))
+    parts = [f'<b>{_("Starters:")}</b> {summary["starters"]}']
+    parts += [f'<b>{entry["label"]}:</b> {entry["count"]}'
+              for entry in summary.get("statuses", [])]
+    flow.append(Paragraph(" &nbsp;·&nbsp; ".join(parts), _summary))
     return flow
 
 
