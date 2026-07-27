@@ -112,7 +112,11 @@ hand.
   store, and deleting an old one actually reclaims the space — a history of installers
   costs nothing here.
 - **Re-running a release build replaces its asset** (`gh release upload --clobber`)
-  rather than failing on the name.
+  rather than failing on the name. A run started by hand (*Actions -> Windows installer
+  -> Run workflow*) takes an optional **release tag**: give it one and it builds that
+  tag's code and attaches the installer to that release. That is the way to fill in a
+  release whose build failed for a reason that had nothing to do with its code —
+  without moving a tag people may already have.
 
 The runner installs uv itself and Inno Setup through chocolatey (`build.ps1`'s own
 winget fallback is not dependable on a hosted runner). Nothing else is configured, and

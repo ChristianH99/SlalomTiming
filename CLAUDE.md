@@ -897,12 +897,21 @@ uv run python manage.py collectstatic    # required for any DEBUG=False run (see
 uv run python manage.py makemessages -l de --no-obsolete        # after touching any translatable string
 uv run python manage.py makemessages -d djangojs -l de --no-obsolete
 uv run python manage.py compilemessages -l de                   # .mo files are committed — always recompile
-uv run pytest                            # tests (pytest-django)
+uv run pytest                            # tests (pytest-django) — needs collectstatic first, see below
 ```
 
 `runserver` alone drives the whole app, including the Dashboard at `/` and the Manual/Auto timing views
 (they read `TimingSignal` -> `TimedRun` and update live over the `timing_live` WebSocket group). The
 legacy `run_timing_connector` loop is only needed to feed the *old* `TimingEvent` connector-loop path.
+
+**`collectstatic` is a prerequisite of the test suite, not only of a deployment.** `STORAGES` uses
+WhiteNoise's *manifest* storage in every mode, so `{% static %}` resolves through
+`staticfiles/staticfiles.json` — which is gitignored build output. A checkout that has never run
+`collectstatic` fails most of the suite with "Missing staticfiles manifest entry", because every page
+render 500s; the tests pass on a working machine only because that artefact is already lying there.
+Run it once after cloning (and after adding a static file). The manifest's strictness is worth
+keeping — it is what turns a `{% static %}` pointing at a file that doesn't exist into a failed test
+rather than a dead timing view — but it does mean CI runs `collectstatic` before `pytest`.
 
 ## Deployment
 

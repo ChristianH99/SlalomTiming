@@ -11,8 +11,12 @@ name: Windows installer
 #
 #   https://github.com/<owner>/<repo>/releases/latest/download/SlalomTiming-Setup-<version>.exe
 #
+# A manual run can name an existing tag (the release_tag input) and publish to
+# that release, which is how a release whose build failed for a reason that had
+# nothing to do with its code gets its installer without moving a published tag.
+#
 # Release assets are the download route on purpose. A 28 MB Setup .exe committed
-# to a branch would add ~28 MB of *permanent* repository weight per build — git
+# to a branch would add ~28 MB of *permanent* repository weight per build - git
 # keeps every version of every file forever, and a Setup .exe recompresses
 # differently on each build, so nothing deduplicates. Release assets are not git
 # objects: they live outside the object store, old ones can be deleted, and
@@ -29,6 +33,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag to build and attach the installer to (e.g. v0.1.0). Leave empty to just build this branch.'
+        required: false
+        default: ''
 
 concurrency:
   group: windows-installer-${{ github.ref }}
@@ -44,8 +53,19 @@ jobs:
     permissions:
       contents: write  # only used by the release-upload step
 
+    env:
+      # The release this build publishes to, if any: the one that triggered it,
+      # or a tag named in a manual run. Empty for an ordinary push, which
+      # publishes nothing. github.event.inputs (rather than inputs) because it is
+      # simply absent on events that have no inputs.
+      RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.release_tag || '' }}
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Build what the tag says, not what the branch says: a manual re-run
+          # for a release must produce that release's code.
+          ref: ${{ github.event.inputs.release_tag || github.ref }}
 
       - name: Resolve the version
         id: version
@@ -54,20 +74,19 @@ jobs:
           $pyproject = (Select-String -Path pyproject.toml -Pattern '^version\s*=\s*"(.+)"' |
                         Select-Object -First 1).Matches[0].Groups[1].Value
 
-          if ("${{ github.event_name }}" -eq "release") {
+          if ($env:RELEASE_TAG) {
             # The tag names the release, and the asset filename has to agree with
             # it: an installer called 0.1.0 hanging under a release called v0.2.0
             # is the kind of thing nobody notices until they are debugging which
             # build an operator actually has.
-            $tag = "${{ github.event.release.tag_name }}"
-            $version = $tag -replace '^[vV]', ''
+            $version = $env:RELEASE_TAG -replace '^[vV]', ''
             if ($version -notmatch '^\d+(\.\d+){0,3}$') {
-              throw "Release tag '$tag' is not a version number (expected e.g. v1.2.3). Setup's filename and AppVersion are built from it."
+              throw "Release tag '$env:RELEASE_TAG' is not a version number (expected e.g. v1.2.3). Setup's filename and AppVersion are built from it."
             }
             if ($version -ne $pyproject) {
               # A warning, not a failure: the release already exists by the time
               # this runs, so refusing would leave it with no installer at all.
-              Write-Output "::warning::Release $tag builds version $version, but pyproject.toml says $pyproject. The tag wins; consider bumping pyproject.toml."
+              Write-Output "::warning::Release $env:RELEASE_TAG builds version $version, but pyproject.toml says $pyproject. The tag wins; consider bumping pyproject.toml."
             }
           } else {
             $version = $pyproject
@@ -97,6 +116,16 @@ jobs:
       - name: Sync dependencies
         shell: pwsh
         run: uv sync
+
+      - name: Collect static files
+        shell: pwsh
+        # Required before the tests, not only before the build. STORAGES uses
+        # WhiteNoise's manifest storage in every mode, so {% static %} resolves
+        # through staticfiles.json - and STATIC_ROOT is gitignored build output.
+        # Without this, every page renders as a 500 ("Missing staticfiles
+        # manifest entry") and most of the suite fails on a machine that has
+        # never run collectstatic, which is exactly what a clean runner is.
+        run: uv run python manage.py collectstatic --noinput
 
       - name: Run the test suite
         shell: pwsh
@@ -134,15 +163,15 @@ jobs:
           if-no-files-found: error
 
       - name: Attach it to the release
-        if: github.event_name == 'release'
+        if: env.RELEASE_TAG != ''
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # --clobber so re-running a release build replaces the asset instead of
           # failing on the name already being taken.
-          gh release upload "${{ github.event.release.tag_name }}" "${{ steps.setup.outputs.path }}" --clobber
-          if ($LASTEXITCODE -ne 0) { throw "could not upload the installer to ${{ github.event.release.tag_name }}." }
+          gh release upload "$env:RELEASE_TAG" "${{ steps.setup.outputs.path }}" --clobber
+          if ($LASTEXITCODE -ne 0) { throw "could not upload the installer to $env:RELEASE_TAG." }
 
       - name: Summary
         if: always() && steps.setup.outcome == 'success'
@@ -151,9 +180,8 @@ jobs:
           $name = "${{ steps.version.outputs.name }}"
           $repo = "${{ github.repository }}"
           $lines = @("### $name (${{ steps.setup.outputs.size }})", "")
-          if ("${{ github.event_name }}" -eq "release") {
-            $tag = "${{ github.event.release.tag_name }}"
-            $lines += "Attached to [$tag](https://github.com/$repo/releases/tag/$tag):"
+          if ($env:RELEASE_TAG) {
+            $lines += "Attached to [$env:RELEASE_TAG](https://github.com/$repo/releases/tag/$env:RELEASE_TAG):"
             $lines += ""
             $lines += "``https://github.com/$repo/releases/latest/download/$name``"
           } else {
