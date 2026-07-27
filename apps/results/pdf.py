@@ -213,12 +213,55 @@ def _columns(layout):
     return cols
 
 
+def _min_col_widths(layout):
+    """The narrowest each column may be: enough for the longest *word* of its
+    heading to render on one line. The weights in ``_COLW`` are proportions of the
+    page, so a heading that is a short word in one language ("Bib") and a long one
+    in another ("Startnr.") could be broken mid-word by a column sized for the
+    former. Wrapping *between* words is still allowed — a two-word heading ("Best
+    run") may take two lines, which the auto-sized header row absorbs."""
+    mins = []
+    for text, style in _header_labels(layout):
+        words = str(text or "").split()
+        widest = max((stringWidth(w, style.fontName, style.fontSize) for w in words),
+                     default=0.0)
+        mins.append(widest + 2 * _CELL_HPAD)
+    return mins
+
+
 def _col_widths(layout, usable_w):
     """Absolute column widths that always sum to ``usable_w`` — the weights scaled
-    (up or down) equally so the table spans the whole page width."""
+    (up or down) equally so the table spans the whole page width, except that no
+    column falls below the width its heading needs (``_min_col_widths``). Columns
+    held at their minimum are taken out of the pool and the rest share what is
+    left, still by weight."""
     cols = _columns(layout)
-    total = sum(w for _, w in cols)
-    return [usable_w * w / total for _, w in cols]
+    weights = [w for _, w in cols]
+    mins = _min_col_widths(layout)
+
+    def scaled(values):
+        """``values`` stretched or squeezed to span exactly ``usable_w``."""
+        total = sum(values) or 1.0
+        return [usable_w * v / total for v in values]
+
+    # Not even the headings fit (or every column is held at its minimum): there is
+    # nothing left to distribute by weight, so scale the minima to the page.
+    if sum(mins) >= usable_w:
+        return scaled(mins)
+
+    pinned = [False] * len(cols)
+    while True:
+        free_w = usable_w - sum(m for m, p in zip(mins, pinned) if p)
+        free_wt = sum(w for w, p in zip(weights, pinned) if not p)
+        if not free_wt:
+            return scaled(mins)
+        widths = [mins[i] if pinned[i] else free_w * weights[i] / free_wt
+                  for i in range(len(cols))]
+        short = [i for i in range(len(cols)) if not pinned[i] and widths[i] < mins[i]]
+        if not short:
+            return widths
+        for i in short:
+            pinned[i] = True
 
 
 def _row_lines(layout):
@@ -232,24 +275,31 @@ def _row_lines(layout):
     )
 
 
-def _header_cells(layout):
-    cells = [Paragraph(_("Rank"), _head_c), Paragraph(_("Bib"), _head_c)]
+def _header_labels(layout):
+    """The ordered ``(text, style)`` column headings — same order as ``_columns``.
+    Shared by the rendered header row and the minimum column widths, so a heading
+    can never be measured differently from the way it is drawn."""
+    labels = [(_("Rank"), _head_c), (_("Bib"), _head_c)]
     if layout["include_class"]:
-        cells.append(Paragraph(_("Class"), _head))
+        labels.append((_("Class"), _head))
     if layout["name_keys"]:
-        cells.append(Paragraph(escape(layout["name_header"]), _head))
+        labels.append((layout["name_header"], _head))
     if layout["address_keys"]:
-        cells.append(Paragraph(escape(layout["address_header"]), _head))
+        labels.append((layout["address_header"], _head))
     if layout["has_vehicle"]:
-        cells.append(Paragraph(_("Vehicle"), _head))
+        labels.append((_("Vehicle"), _head))
     if layout["licence_keys"]:
-        cells.append(Paragraph(escape(layout["licence_header"]), _head))
+        labels.append((layout["licence_header"], _head))
     for t in layout["training_labels"]:
-        cells.append(Paragraph(escape(t), _head_c))
+        labels.append((t, _head_c))
     for c in layout["counted_labels"]:
-        cells.append(Paragraph(escape(c), _head_c))
-    cells.append(Paragraph(escape(layout["score_heading"]), _head_c))
-    return cells
+        labels.append((c, _head_c))
+    labels.append((layout["score_heading"], _head_c))
+    return labels
+
+
+def _header_cells(layout):
+    return [Paragraph(escape(str(text)), style) for text, style in _header_labels(layout)]
 
 
 def _block_markup(lines, inner_w, row_lines):

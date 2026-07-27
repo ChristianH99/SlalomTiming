@@ -648,6 +648,58 @@ def test_a_resolution_does_not_reapply_at_a_different_score(client):
     assert [r.tie_state for r in results.ranked] == ["pending", "pending"]
 
 
+# ----- PDF: no column is narrower than its own heading -----
+
+
+def _pdf_layout(enabled, counted=3, training=0, heading="Total"):
+    return views.build_layout(
+        enabled, counted_count=counted, training_count=training,
+        include_class=True, score_heading=heading,
+        summary={"starters": 0, "classified": 0, "not_classified": 0},
+    )
+
+
+@pytest.mark.parametrize("language", ["en", "de"])
+@pytest.mark.parametrize("orientation", ["portrait", "landscape"])
+def test_a_heading_word_is_never_broken_across_two_lines(language, orientation):
+    """The column weights are proportions of the page, so a heading that is short
+    in one language ("Bib") and long in another ("Startnr.") used to be split
+    mid-word. Every column must fit the longest word of its own heading — in every
+    language, orientation and column set."""
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    from django.utils import translation
+
+    from . import pdf
+
+    page = landscape(A4) if orientation == "landscape" else A4
+    usable_w = page[0] - 2 * pdf._MARGIN_X
+    column_sets = [
+        ["driver_name"],
+        ["driver_name", "club", "email", "phone", "street", "city", "vehicle",
+         "license", "birthday", "birth_year"],
+    ]
+    # (counted, training) — a run-heavy table squeezes the info columns hardest.
+    run_counts = [(1, 0), (3, 0), (4, 3)]
+    headings = [views._score_heading(m) for m in CompetitionClass.Scoring]
+    cases = [(cols, runs, head)
+             for cols in column_sets for runs in run_counts for head in headings]
+    with translation.override(language):
+        for enabled, (counted, training), heading in cases:
+            layout = _pdf_layout(enabled + ["training"], counted=counted,
+                                 training=training, heading=str(heading))
+            widths = pdf._col_widths(layout, usable_w)
+            assert sum(widths) == pytest.approx(usable_w), "the table must still span the page"
+            for width, (text, style) in zip(widths, pdf._header_labels(layout)):
+                inner = width - 2 * pdf._CELL_HPAD
+                for word in str(text).split():
+                    got = stringWidth(word, style.fontName, style.fontSize)
+                    assert got <= inner + 0.01, (
+                        f"{language}/{orientation}: {word!r} needs {got:.1f}pt, "
+                        f"column has {inner:.1f}pt"
+                    )
+
+
 def test_saving_a_resolution_sweeps_ones_whose_tie_is_gone(client):
     competition, cclass = _tie_setup()
     _resolve(client, competition, cclass)
