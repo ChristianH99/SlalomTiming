@@ -89,10 +89,19 @@ depending on why it ran.
 by the push that breaks it rather than on release day.
 
 **On a published release** it builds at the *release's* version and uploads the
-installer as a release asset, which is the download link to hand out:
+installer as a release asset:
 
 ```
 https://github.com/<owner>/<repo>/releases/latest/download/SlalomTiming-Setup-<version>.exe
+```
+
+**That link is anonymous only while the repository is public.** This one is private,
+so the URL 404s for anyone not signed in with access, and it cannot be handed to an
+operator as-is. Either make the repository public, or fetch the file yourself and pass
+it on (USB stick, file share, e-mail — it is one self-contained `.exe`):
+
+```powershell
+gh release download v0.1.0 --pattern "*.exe"      # needs the gh CLI, signed in
 ```
 
 So cutting a version is: tag it, publish the release, wait ~15 minutes, and the

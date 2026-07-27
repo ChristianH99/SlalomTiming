@@ -6,10 +6,14 @@ name: Windows installer
 #                     change that breaks packaging is caught by the push that
 #                     causes it rather than on release day.
 #   release        -> build it at the *release's* version and attach it to that
-#                     release, where anyone can download it without a GitHub
-#                     account:
+#                     release:
 #
 #   https://github.com/<owner>/<repo>/releases/latest/download/SlalomTiming-Setup-<version>.exe
+#
+# That link is anonymous only while the repository is public. On a private
+# repository a release asset needs an authenticated download (`gh release
+# download`, or the API with a token), so handing an operator a plain URL does
+# not work - see build/README.md.
 #
 # A manual run can name an existing tag (the release_tag input) and publish to
 # that release, which is how a release whose build failed for a reason that had
@@ -150,9 +154,13 @@ jobs:
           "path=$($exe.FullName)" | Out-File $env:GITHUB_OUTPUT -Append
           "size=$('{0:N0} MB' -f ($exe.Length / 1MB))" | Out-File $env:GITHUB_OUTPUT -Append
           # The installer is unsigned, so Windows will call it an unknown
-          # publisher. A checksum in the log is the only way someone can confirm
-          # the file they downloaded is the one this run produced.
-          "sha256=$((Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower())" | Out-File $env:GITHUB_OUTPUT -Append
+          # publisher. A checksum is the only way someone can confirm the file
+          # they downloaded is the one this run produced. Written to the log as
+          # well as the output, because GITHUB_OUTPUT and the job summary are
+          # both invisible to `gh run view --log` and to anyone reading it.
+          $sha = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          Write-Output "SHA-256 $sha"
+          "sha256=$sha" | Out-File $env:GITHUB_OUTPUT -Append
 
       # Kept for every build, including releases: the run page is where you look
       # when you are asking what a particular commit produced.

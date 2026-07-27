@@ -213,8 +213,10 @@ cannot take an event with it. See **[build/README.md](build/README.md)**.
 
 That build also runs on GitHub (`.github/workflows/windows-installer.yml`): every push is
 built and kept on its run page, and **publishing a release** builds it at that release's
-version and attaches it as an asset, so the current installer is always one link away:
+version and attaches it as an asset:
 `https://github.com/<owner>/<repo>/releases/latest/download/SlalomTiming-Setup-<version>.exe`
+— anonymous only while the repository is public; on a private one that download needs to
+be authenticated (`gh release download`).
 
 ## Adding a real device connector
 
