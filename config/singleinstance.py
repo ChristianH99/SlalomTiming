@@ -73,7 +73,7 @@ def acquire():
         return
 
     global _lock_file
-    path = Path(settings.BASE_DIR) / 'run' / 'server.lock'
+    path = Path(settings.DATA_DIR) / 'run' / 'server.lock'
     path.parent.mkdir(parents=True, exist_ok=True)
     path.touch(exist_ok=True)
     handle = open(path, 'r+', encoding='utf-8')

@@ -16,6 +16,15 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Everything this app *writes* while it runs — the event database, uploaded logos,
+# the single-server lock, the unrecorded-times recovery file. A checkout keeps them
+# beside the code (BASE_DIR), which is what a developer expects; the packaged
+# Windows build (build/) points this at %LOCALAPPDATA%\SlalomTiming\data instead,
+# because the code there is replaced wholesale by the next installer and the
+# database is the event. Anything written at runtime belongs under here, never
+# under BASE_DIR — config/tests.py holds the line.
+DATA_DIR = Path(os.environ.get('SLALOM_DATA_DIR') or BASE_DIR)
+
 
 def _env_bool(name, default=False):
     """Read a boolean from the environment ("1/true/yes/on" -> True)."""
@@ -267,7 +276,7 @@ CHANNEL_LAYERS = {
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': DATA_DIR / 'db.sqlite3',
         # A blocked writer (the CP540 reader vs. a web request) waits for the lock
         # up to this long instead of failing immediately with "database is locked",
         # so an incoming timing signal isn't dropped under contention. WAL mode
@@ -354,7 +363,7 @@ STORAGES = {
 # via config/urls.py. Set DJANGO_SERVE_MEDIA=False when a reverse proxy is
 # configured to serve MEDIA_ROOT itself.
 MEDIA_URL = 'media/'
-MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT') or BASE_DIR / 'media')
+MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT') or DATA_DIR / 'media')
 SERVE_MEDIA = _env_bool('DJANGO_SERVE_MEDIA', default=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

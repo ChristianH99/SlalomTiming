@@ -18,6 +18,9 @@ Two rules the rest of this document is built around:
 
 ## 1. Install (once per machine)
 
+From a checkout, below. If the venue machine should not have a checkout at all, build
+the Windows installer instead and skip to section 3 — see *Windows without a checkout*.
+
 ```bash
 git clone <this repo> /srv/slalomtiming      # or C:\SlalomTiming on Windows
 cd /srv/slalomtiming
@@ -66,6 +69,32 @@ The script loads `.env`, runs `check --deploy`, `migrate` and `collectstatic`, t
 runs one Daphne process in the foreground. Ctrl+C or closing the window stops it.
 `-Port 8000` and `-Bind 0.0.0.0` are options; `-SkipChecks` restarts mid-event
 without touching the database or static files.
+
+### Windows without a checkout — the packaged installer
+
+If the timekeeping laptop should not have a git checkout, a Python or a terminal on
+it, build the installer instead (**[build/README.md](build/README.md)**):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build\build.ps1     # on YOUR machine
+```
+
+That produces `dist\SlalomTiming-Setup-<version>.exe` — one ~28 MB file carrying its
+own interpreter and every dependency. Copy it to the laptop, run it, and the operator
+gets a desktop icon. No administrator account needed. Sections 1 and 2 above do not
+apply: the first start generates the secret key, creates the database and asks for the
+operator login by itself.
+
+Two differences from a checkout are worth knowing before an event:
+
+- **The event data is somewhere else.** `%LOCALAPPDATA%\SlalomTiming\data` holds
+  `db.sqlite3`, `media\`, `.env` and `run\` — deliberately outside the program folder,
+  so upgrading or uninstalling cannot take an event with it. That is the folder to back
+  up (section 5), and the Start Menu has a shortcut to it.
+- **It serves 127.0.0.1 only, until you say otherwise.** That is the plain-HTTP case
+  section 3.4 allows. Letting marshals' phones in means editing `SLALOM_BIND` and
+  `DJANGO_ALLOWED_HOSTS` in that `.env` — and reading 3.4 first, because at that point
+  the app is on the venue network without TLS.
 
 ### Linux (a venue box)
 
@@ -190,3 +219,6 @@ Then start Caddy if it isn't already running as a service.
 | Browser refuses to submit a form, CSRF error | Origin missing from `DJANGO_CSRF_TRUSTED_ORIGINS` | Add `https://<host>`, restart |
 | Live views stop updating for *some* browsers | Two server processes | See rule 1 — one process only |
 | `database is locked` in the log | Heavy write contention on SQLite | Reduce open dashboards; WAL + a 30 s busy timeout are already configured |
+| Setup says Slalom Timing is running | The launcher holds a mutex while the server is up | Close the black server window, then run Setup again |
+| The installed app opens an empty event | Its database is `%LOCALAPPDATA%\SlalomTiming\data`, not the checkout's | Import the event's `.zip` (Import / Export), or copy `db.sqlite3` in with the app closed |
+| Setup warns "unknown publisher" | The installer isn't code-signed | "More info" → "Run anyway"; see build/README.md |

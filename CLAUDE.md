@@ -38,11 +38,47 @@ config/                  Django project (settings, urls, asgi/wsgi). singleinsta
                          preload): a pin can't be revoked before it expires and a venue hostname
                          served from a local CA gets reused, so a year is a trap — raise it with a
                          real public domain. Also SESSION_COOKIE_AGE (12 h, an event day, not
-                         Django's fortnight) and the login-throttle limits.
+                         Django's fortnight) and the login-throttle limits. DATA_DIR (env
+                         SLALOM_DATA_DIR, default BASE_DIR) is where everything the app *writes*
+                         goes — db.sqlite3, media/, run/server.lock, timing_unrecorded.log. A
+                         checkout keeps them beside the code; the packaged Windows build points it
+                         at %LOCALAPPDATA% because the next installer overwrites the code and the
+                         database is the event. Anything written at runtime belongs under DATA_DIR,
+                         never BASE_DIR — config/tests.py::TestWritablePaths holds the line.
 deploy/                  Serving the app for real: systemd unit, Windows start-server.ps1 and a
                          Caddyfile — all pinned to exactly one Daphne process. Run-book: DEPLOYMENT.md
                          (§3.4 is the TLS decision: Caddy's local CA, Tailscale, or plain HTTP said
                          out loud).
+start.ps1 / start.bat    The dev-machine one-click start (root level, double-clickable): installs uv
+                         if missing, `uv sync` (which fetches Python 3.14 itself), migrates, offers
+                         `createsuperuser` when the database has no accounts, then runserver. Refuses
+                         to run when .env says DJANGO_DEBUG=False and points at deploy/start-server.ps1
+                         — a development server must not end up serving a venue.
+build/                   Packaging that same app as a one-click Windows installer for a machine with
+                         no Python, no uv and no terminal: build.ps1 vendors a standalone CPython 3.14
+                         plus every dependency from uv.lock, copies the code, runs collectstatic,
+                         draws the icon (make_icon.py, from the CSS tokens), self-tests the payload
+                         and compiles installer.iss into dist/SlalomTiming-Setup-<version>.exe.
+                         launcher.py is what the desktop shortcut runs: it points SLALOM_DATA_DIR at
+                         %LOCALAPPDATA%\SlalomTiming\data, writes a .env with a generated secret key
+                         on first run, migrates, asks for the first operator account, opens the
+                         browser and runs one Daphne process. Two rules the pipeline exists to keep:
+                         the installed code is disposable and the data is not (hence DATA_DIR), and
+                         no .pyc may ship — `__pycache__\<long migration name>.cpython-314.pyc` pushes
+                         an install path past Windows' 260-char limit and rolls Setup back. See
+                         build/README.md.
+.github/workflows/       windows-installer.yml: the same build on a windows-latest runner (test
+                         suite first, then build.ps1). Every *push* keeps its installer as a run
+                         artifact and publishes nothing — that run is the check that packaging
+                         still works. A *published release* builds at the release's version (the
+                         tag, `v1.2.3` → 1.2.3, which becomes both the filename and Setup's
+                         AppVersion; a non-version tag fails the build, a tag disagreeing with
+                         pyproject.toml only warns, since the release already exists by then) and
+                         uploads the .exe as a **release asset** — never to a branch: git keeps
+                         every version of a file forever and a 28 MB Setup .exe recompresses
+                         differently each build, so committed installers would add ~28 MB of
+                         permanent repo weight each, while assets live outside the object store
+                         and deleting one reclaims the space.
 apps/accounts/           Access control. Login required everywhere and page-level roles:
                          pages.py is the registry (page key -> the (app, url_name) patterns it
                          covers; PAGES is also the sidebar order), a role is a Django Group with a

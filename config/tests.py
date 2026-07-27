@@ -239,7 +239,7 @@ class TestSingleInstance:
 
     def test_second_server_is_refused(self, tmp_path, capsys):
         try:
-            with override_settings(BASE_DIR=tmp_path, DEBUG=False):
+            with override_settings(DATA_DIR=tmp_path, DEBUG=False):
                 singleinstance.acquire()
                 assert singleinstance._lock_file is not None
                 held = singleinstance._lock_file
@@ -253,7 +253,7 @@ class TestSingleInstance:
 
     def test_development_only_warns(self, tmp_path, capsys):
         try:
-            with override_settings(BASE_DIR=tmp_path, DEBUG=True):
+            with override_settings(DATA_DIR=tmp_path, DEBUG=True):
                 singleinstance.acquire()
                 singleinstance.acquire()  # must not raise while developing
             assert 'starting anyway' in capsys.readouterr().err
@@ -262,7 +262,7 @@ class TestSingleInstance:
 
     def test_steps_aside_for_a_cross_process_channel_layer(self, tmp_path):
         layers = {'default': {'BACKEND': 'channels_redis.core.RedisChannelLayer'}}
-        with override_settings(BASE_DIR=tmp_path, DEBUG=False, CHANNEL_LAYERS=layers):
+        with override_settings(DATA_DIR=tmp_path, DEBUG=False, CHANNEL_LAYERS=layers):
             singleinstance.acquire()
             singleinstance.acquire()
         assert singleinstance._lock_file is None
@@ -270,10 +270,68 @@ class TestSingleInstance:
 
     def test_escape_hatch(self, tmp_path, monkeypatch):
         monkeypatch.setenv('DJANGO_ALLOW_MULTIPLE_SERVERS', '1')
-        with override_settings(BASE_DIR=tmp_path, DEBUG=False):
+        with override_settings(DATA_DIR=tmp_path, DEBUG=False):
             singleinstance.acquire()
             singleinstance.acquire()
         assert singleinstance._lock_file is None
+
+
+class TestWritablePaths:
+    """Everything written at runtime lives under DATA_DIR, never under BASE_DIR.
+
+    In a checkout the two are the same directory, so nothing here is visible while
+    developing. In the packaged Windows build (build/) they are not: BASE_DIR is
+    program files that the next installer replaces and an uninstall deletes, and
+    DATA_DIR is the operator's event. A path that goes back to BASE_DIR would put
+    the database in the first one, and nobody would find out until an upgrade
+    silently took an event's times with it.
+    """
+
+    def _under(self, path, parent):
+        return Path(parent) in Path(path).parents or Path(path) == Path(parent)
+
+    def test_the_database_and_media_follow_the_data_directory(self, tmp_path):
+        """In a subprocess, because the test runner swaps DATABASES['NAME'] for a
+        test database — the configured value can only be read from outside."""
+        result = _run_manage(
+            'diffsettings', '--output', 'hash', '--all',
+            SLALOM_DATA_DIR=str(tmp_path),
+        )
+        assert result.returncode == 0, result.stderr
+        printed = {}
+        for line in result.stdout.splitlines():
+            line = line.removeprefix('###').strip()
+            if ' = ' in line:
+                name, _, value = line.partition(' = ')
+                printed[name.strip()] = value.strip()
+        # as_posix(): a WindowsPath prints its repr with forward slashes.
+        assert tmp_path.as_posix() in printed['DATABASES']
+        assert tmp_path.as_posix() in printed['MEDIA_ROOT']
+
+    def test_uploaded_media_is_in_the_data_directory(self):
+        assert self._under(settings.MEDIA_ROOT, settings.DATA_DIR)
+
+    def test_the_unrecorded_times_log_is_in_the_data_directory(self):
+        """A time the database refused is the one record that it happened."""
+        from apps.timing import ingest
+
+        assert self._under(ingest.UNRECORDED_LOG, settings.DATA_DIR)
+
+    def test_the_server_lock_is_in_the_data_directory(self, tmp_path):
+        try:
+            with override_settings(DATA_DIR=tmp_path, DEBUG=False):
+                singleinstance.acquire()
+            assert (tmp_path / 'run' / 'server.lock').exists()
+        finally:
+            if singleinstance._lock_file is not None:
+                singleinstance._lock_file.close()
+                singleinstance._lock_file = None
+
+    def test_a_checkout_still_writes_beside_the_code(self):
+        """The default has to stay BASE_DIR: dev, the tests and DEPLOYMENT.md all
+        assume db.sqlite3 is in the project directory."""
+        if not os.environ.get('SLALOM_DATA_DIR'):
+            assert Path(settings.DATA_DIR) == Path(settings.BASE_DIR)
 
 
 class TestRunBook:
@@ -284,6 +342,14 @@ class TestRunBook:
         assert (root / 'deploy' / 'slalomtiming.service').exists()
         assert (root / 'deploy' / 'start-server.ps1').exists()
         assert (root / 'deploy' / 'Caddyfile').exists()
+
+    def test_the_windows_build_is_documented(self):
+        """The one-click installer is a supported way to ship this app."""
+        root = Path(settings.BASE_DIR)
+        assert (root / 'build' / 'build.ps1').exists()
+        assert (root / 'build' / 'installer.iss').exists()
+        assert (root / 'build' / 'launcher.py').exists()
+        assert (root / 'build' / 'README.md').exists()
 
     def test_login_page_is_reachable(self, client):
         """Smoke test that the URL conf still resolves after the media route."""

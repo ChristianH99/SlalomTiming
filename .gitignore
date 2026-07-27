@@ -8,7 +8,9 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+# NOT `build/`: that directory holds the Windows installer's build scripts and is
+# tracked. Only its staging area (and dist/, the built Setup .exe) is ignored.
+/build/_stage/
 develop-eggs/
 dist/
 downloads/

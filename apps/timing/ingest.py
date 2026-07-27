@@ -30,7 +30,7 @@ from .models import TimingSettings, TimingSignal
 logger = logging.getLogger(__name__)
 
 # Last-resort durable capture for signals the DB refused even after retries.
-UNRECORDED_LOG = Path(settings.BASE_DIR) / "timing_unrecorded.log"
+UNRECORDED_LOG = Path(settings.DATA_DIR) / "timing_unrecorded.log"
 
 
 def _is_locked(exc):

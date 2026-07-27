@@ -194,6 +194,28 @@ All three run exactly **one** Daphne process. That is a hard requirement, not a 
 live-update channel layer, the CP540 reader thread and its event loop live in the process, so a
 second worker silently splits the event in half. A second start is refused (`run/server.lock`).
 
+### A Windows machine with nothing installed on it
+
+Two ways, depending on whether that machine should carry a checkout:
+
+```powershell
+start.bat                                                  # a checkout: installs uv, Python 3.14
+                                                           # and the dependencies, then serves
+powershell -ExecutionPolicy Bypass -File build\build.ps1   # no checkout: build an installer
+```
+
+`build.ps1` produces `dist\SlalomTiming-Setup-<version>.exe` — one ~28 MB file carrying its own
+Python and every dependency. It installs without an administrator account and leaves a desktop
+icon; the operator never sees a terminal, because the first start generates the secret key, creates
+the database and asks for the first login itself. Its event data lives in
+`%LOCALAPPDATA%\SlalomTiming\data`, outside the program folder, so an upgrade or an uninstall
+cannot take an event with it. See **[build/README.md](build/README.md)**.
+
+That build also runs on GitHub (`.github/workflows/windows-installer.yml`): every push is
+built and kept on its run page, and **publishing a release** builds it at that release's
+version and attaches it as an asset, so the current installer is always one link away:
+`https://github.com/<owner>/<repo>/releases/latest/download/SlalomTiming-Setup-<version>.exe`
+
 ## Adding a real device connector
 
 Implement `TimingDeviceConnector` (`apps/timing/connectors/base.py`) — `connect()`,

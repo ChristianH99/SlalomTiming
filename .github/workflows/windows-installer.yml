@@ -1,0 +1,165 @@
+name: Windows installer
+
+# Builds the one-click Windows installer (build/README.md).
+#
+#   push, manual  ->  build it and keep it on the run page as an artifact, so a
+#                     change that breaks packaging is caught by the push that
+#                     causes it rather than on release day.
+#   release        -> build it at the *release's* version and attach it to that
+#                     release, where anyone can download it without a GitHub
+#                     account:
+#
+#   https://github.com/<owner>/<repo>/releases/latest/download/SlalomTiming-Setup-<version>.exe
+#
+# Release assets are the download route on purpose. A 28 MB Setup .exe committed
+# to a branch would add ~28 MB of *permanent* repository weight per build — git
+# keeps every version of every file forever, and a Setup .exe recompresses
+# differently on each build, so nothing deduplicates. Release assets are not git
+# objects: they live outside the object store, old ones can be deleted, and
+# deleting one actually reclaims the space. Keeping a history of installers is
+# therefore free here, which it never was on a branch.
+
+on:
+  push:
+    # A push event covers tags too, and a tag here is always followed within
+    # seconds by the release that publishes it - which triggers the build that
+    # actually produces an asset. Without this, every release costs two full
+    # Windows builds and the first one publishes nothing.
+    tags-ignore: ['**']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  # A newer push makes an older build obsolete before it finishes. A release
+  # build is never cancelled: nothing else will ever produce that release's
+  # asset, and a half-published release is worse than a slow one.
+  cancel-in-progress: ${{ github.event_name != 'release' }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write  # only used by the release-upload step
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the version
+        id: version
+        shell: pwsh
+        run: |
+          $pyproject = (Select-String -Path pyproject.toml -Pattern '^version\s*=\s*"(.+)"' |
+                        Select-Object -First 1).Matches[0].Groups[1].Value
+
+          if ("${{ github.event_name }}" -eq "release") {
+            # The tag names the release, and the asset filename has to agree with
+            # it: an installer called 0.1.0 hanging under a release called v0.2.0
+            # is the kind of thing nobody notices until they are debugging which
+            # build an operator actually has.
+            $tag = "${{ github.event.release.tag_name }}"
+            $version = $tag -replace '^[vV]', ''
+            if ($version -notmatch '^\d+(\.\d+){0,3}$') {
+              throw "Release tag '$tag' is not a version number (expected e.g. v1.2.3). Setup's filename and AppVersion are built from it."
+            }
+            if ($version -ne $pyproject) {
+              # A warning, not a failure: the release already exists by the time
+              # this runs, so refusing would leave it with no installer at all.
+              Write-Output "::warning::Release $tag builds version $version, but pyproject.toml says $pyproject. The tag wins; consider bumping pyproject.toml."
+            }
+          } else {
+            $version = $pyproject
+          }
+
+          "value=$version" | Out-File $env:GITHUB_OUTPUT -Append
+          "name=SlalomTiming-Setup-$version.exe" | Out-File $env:GITHUB_OUTPUT -Append
+
+      - name: Install uv
+        shell: pwsh
+        run: |
+          if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+            irm https://astral.sh/uv/install.ps1 | iex
+          }
+          # Later steps get their own shell, so PATH has to be handed over. Both
+          # locations, because where the installer puts uv has moved between versions.
+          foreach ($dir in @("$env:USERPROFILE\.local\bin", "$env:USERPROFILE\.cargo\bin")) {
+            if (Test-Path $dir) { $dir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
+          }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        # build.ps1 would install it itself via winget, but winget is not
+        # dependable on a hosted runner; chocolatey is preinstalled there.
+        run: choco install innosetup -y --no-progress
+
+      - name: Sync dependencies
+        shell: pwsh
+        run: uv sync
+
+      - name: Run the test suite
+        shell: pwsh
+        # Before the build, deliberately: a release asset is handed to an operator
+        # and run at an event, and a red suite means it should not be.
+        run: uv run pytest -q
+
+      - name: Build the installer
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File build\build.ps1 -Version "${{ steps.version.outputs.value }}"
+
+      - name: Check the installer
+        id: setup
+        shell: pwsh
+        run: |
+          $expected = "dist\${{ steps.version.outputs.name }}"
+          if (-not (Test-Path $expected)) {
+            $built = (Get-ChildItem dist\*.exe -ErrorAction SilentlyContinue | ForEach-Object Name) -join ", "
+            throw "Expected $expected, found: $(if ($built) { $built } else { 'nothing' })."
+          }
+          $exe = Get-Item $expected
+          "path=$($exe.FullName)" | Out-File $env:GITHUB_OUTPUT -Append
+          "size=$('{0:N0} MB' -f ($exe.Length / 1MB))" | Out-File $env:GITHUB_OUTPUT -Append
+          # The installer is unsigned, so Windows will call it an unknown
+          # publisher. A checksum in the log is the only way someone can confirm
+          # the file they downloaded is the one this run produced.
+          "sha256=$((Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower())" | Out-File $env:GITHUB_OUTPUT -Append
+
+      # Kept for every build, including releases: the run page is where you look
+      # when you are asking what a particular commit produced.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.name }}
+          path: dist/*.exe
+          if-no-files-found: error
+
+      - name: Attach it to the release
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # --clobber so re-running a release build replaces the asset instead of
+          # failing on the name already being taken.
+          gh release upload "${{ github.event.release.tag_name }}" "${{ steps.setup.outputs.path }}" --clobber
+          if ($LASTEXITCODE -ne 0) { throw "could not upload the installer to ${{ github.event.release.tag_name }}." }
+
+      - name: Summary
+        if: always() && steps.setup.outcome == 'success'
+        shell: pwsh
+        run: |
+          $name = "${{ steps.version.outputs.name }}"
+          $repo = "${{ github.repository }}"
+          $lines = @("### $name (${{ steps.setup.outputs.size }})", "")
+          if ("${{ github.event_name }}" -eq "release") {
+            $tag = "${{ github.event.release.tag_name }}"
+            $lines += "Attached to [$tag](https://github.com/$repo/releases/tag/$tag):"
+            $lines += ""
+            $lines += "``https://github.com/$repo/releases/latest/download/$name``"
+          } else {
+            $lines += "Not released - only a published release gets an asset. " +
+                      "This build is on the run page under **Artifacts**."
+          }
+          $lines += ""
+          $lines += "SHA-256 ``${{ steps.setup.outputs.sha256 }}``"
+          $lines -join "`n" | Out-File $env:GITHUB_STEP_SUMMARY -Append
