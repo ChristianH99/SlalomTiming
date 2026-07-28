@@ -146,4 +146,28 @@
       <button class="button" type="submit">{% trans "Create user" %}</button>
     </div>
   </form>
+
+  {% comment %}The audit trail (SEC-9). Here rather than on a page of its own
+  because this page is already the one only a superuser can open — a "Logs" page
+  would need its own key in the access registry and its own role, for one
+  download.{% endcomment %}
+  <h2 class="access-subhead access-audit-head">{% trans "Audit log" %}</h2>
+  {% comment %}Two short {% trans %} rather than one wrapped {% blocktrans %}: a
+  blocktrans keeps the template's own line breaks and indentation inside the
+  msgid, which lands in front of a translator as a shape they have to
+  reproduce.{% endcomment %}
+  <p class="hint">
+    {% trans "Every change made through this app — who made it, from which device, and what they sent." %}
+    {% trans "Written to a file rather than the database, so it survives whatever the event does. Keep it with the results if a placing is ever questioned." %}
+  </p>
+  {% if audit_files %}
+    <p class="access-audit-size">
+      {% blocktrans count n=audit_files with size=audit_bytes|filesizeformat %}{{ size }} in {{ n }} file{% plural %}{{ size }} in {{ n }} files{% endblocktrans %}
+    </p>
+    <div class="actions actions--start">
+      <a class="button button--secondary" href="{% url 'accounts:audit-log' %}">{% trans "Download audit log" %}</a>
+    </div>
+  {% else %}
+    <p class="hint">{% trans "Nothing recorded yet." %}</p>
+  {% endif %}
 {% endblock %}

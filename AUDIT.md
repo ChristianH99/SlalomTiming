@@ -19,8 +19,10 @@ Baseline at audit time: the shipped suite was **603 passed, 0 failed** (8 m 29 s
 
 **Progress:** §1 (release blockers) done. §2a (access control) done. §2b (CSP +
 inline-JS extraction) done — 1,778 lines moved out of 18 templates and a strict
-`script-src 'self'` shipped, which also closes UI-27. §2c (audit trail) next.
-Everything below §2 is still open.
+`script-src 'self'` shipped, which also closes UI-27. §2c (audit trail) done —
+a rotating `audit.log`, written by middleware so no endpoint can be forgotten,
+downloaded by a superuser from User Access. **§2 is complete.** §3 (data
+integrity) next; everything below it is still open.
 
 ---
 
@@ -250,7 +252,7 @@ page, superuser-gated, or deliberately open. Below are the gaps around it.
 | SEC-F | ✅ FIXED | **Login throttling has no per-IP cap.** `throttle._key` is `(username, IP)`, so one host can spray *unlimited* usernames at 10 attempts each without ever being blocked, and account enumeration is unlimited. Add a second counter on IP alone. |
 | SEC-G | ✅ FIXED | **`marshal_submit` stores unbounded JSON.** `detail` goes into a `JSONField` with no size or shape check. A 1.19 MB blob was stored from one request and is then re-serialised into `auto-state` for every open browser on every nudge. *Evidence:* `test_marshal_detail_json_is_size_bounded` fails. |
 | SEC-H | ✅ FIXED | **SEC-11 confirmed open — no CSP**, and `base.html` carries ~130 lines of **inline `<script>`** in four IIFEs, plus `json_script` blocks. Adding a CSP is therefore not a one-line change; move that JS to `static/js/` first. |
-| SEC-I | → §2c | **SEC-9 confirmed open — no audit trail.** Nobody can answer "who changed this result?" A timekeeper, a marshal and an organiser all write to the same rows. On a multi-user network this is the difference between a protest you can settle and one you cannot. |
+| SEC-I | ✅ FIXED | **SEC-9 confirmed open — no audit trail.** Nobody can answer "who changed this result?" A timekeeper, a marshal and an organiser all write to the same rows. On a multi-user network this is the difference between a protest you can settle and one you cannot. |
 | SEC-J | ✅ FIXED | `marshal_release` compares the claim token with `==`, not `secrets.compare_digest` (`views.py:491`) — inconsistent with `_marshal_may_write`, which does. |
 | SEC-K | ⊘ WAIVED | **No self-service password change.** Only a superuser can reset a password, from the User Access page. An operator whose password was set on race morning by someone else cannot change it. |
 | SEC-L | ✅ FIXED | A superuser resetting **their own** password is logged out immediately — `user_update` calls `set_password`/`save` without `update_session_auth_hash`. |
@@ -354,7 +356,8 @@ checklist and the troubleshooting table are all there. What is missing:
   automatic backup yet") and offers a manual `VACUUM INTO` between runs. For a
   multi-user event where the database *is* the event, a scheduled `VACUUM INTO` on a
   timer is a small feature and the difference between a hiccup and a lost day.
-* **OPS-2 (High)** — BLK-5: no log file, so there is nothing to look at afterwards.
+* **OPS-2 (✅ FIXED)** — BLK-5 gave the app a log file; §2c gave it an audit trail
+  beside it, and both are named in the race-day checklist.
 * **OPS-3 (Med)** — **No health endpoint.** Nothing to point a check at; "is it up" means
   loading a page.
 * **OPS-4 (Med)** — **`timing_unrecorded.log` has no replay path.** The run-book says the

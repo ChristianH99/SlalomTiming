@@ -3455,6 +3455,8 @@ textarea:focus-visible,
    attribute, which a Content-Security-Policy blocks along with every other
    inline style — there is no way to allow ours and not an injected one. */
 .inline-form { display: inline; }
+.access-audit-head { margin-top: var(--space-10); }
+.access-audit-size { font-size: var(--text-sm); color: var(--text-mid); margin: 0 0 var(--space-5); }
 .access-checks { margin-bottom: var(--space-6); }
 .access-roles { display: flex; flex-direction: column; gap: var(--space-4); margin-bottom: var(--space-6); }
 .access-role-check { display: flex; align-items: center; gap: var(--space-4); font-size: var(--text-base); color: var(--text-dark); }

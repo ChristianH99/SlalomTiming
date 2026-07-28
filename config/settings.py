@@ -180,6 +180,9 @@ MIDDLEWARE = [
     # Login required everywhere + role-based page gating (see apps/accounts).
     # Must sit after AuthenticationMiddleware (needs request.user).
     'apps.accounts.middleware.AccessControlMiddleware',
+    # Who changed what (SEC-9). Innermost, so it sees request.user and the
+    # resolved view, and only records requests the gate above let through.
+    'apps.audit.AuditMiddleware',
 ]
 
 # Authentication redirects (apps.accounts provides the login/logout views).
@@ -298,6 +301,13 @@ LOGIN_LOCKOUT_SECONDS = _env_int('DJANGO_LOGIN_LOCKOUT_SECONDS', 300)
 # club's events, and nothing here is chatty.
 LOG_DIR = Path(os.environ.get('DJANGO_LOG_DIR') or DATA_DIR / 'logs')
 LOG_LEVEL = os.environ.get('DJANGO_LOG_LEVEL', 'INFO').upper()
+# The audit trail keeps its own file. It answers a different question from the
+# application log ("who changed this result?" rather than "what went wrong?"),
+# it is the one a protest is settled from, and mixing it into the general log
+# would bury it — so it rotates on its own budget and is downloaded on its own.
+AUDIT_LOG_FILE = LOG_DIR / 'audit.log'
+AUDIT_LOG_MAX_BYTES = _env_int('DJANGO_AUDIT_LOG_MAX_BYTES', 5 * 1024 * 1024)
+AUDIT_LOG_BACKUPS = _env_int('DJANGO_AUDIT_LOG_BACKUPS', 5)
 
 try:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -315,6 +325,12 @@ LOGGING = {
             'format': '{asctime} {levelname} {name}: {message}',
             'style': '{',
         },
+        # No level and no logger name: every line is the same kind of thing, and
+        # what matters is that a person can read a column of them.
+        'audit': {
+            'format': '{asctime} {message}',
+            'style': '{',
+        },
     },
     'handlers': {
         'console': {
@@ -329,6 +345,14 @@ LOGGING = {
             'encoding': 'utf-8',
             'formatter': 'app',
         }} if _log_file_ok else {}),
+        **({'audit': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(AUDIT_LOG_FILE),
+            'maxBytes': AUDIT_LOG_MAX_BYTES,
+            'backupCount': AUDIT_LOG_BACKUPS,
+            'encoding': 'utf-8',
+            'formatter': 'audit',
+        }} if _log_file_ok else {}),
     },
     'root': {
         'handlers': ['console', *(['file'] if _log_file_ok else [])],
@@ -338,10 +362,18 @@ LOGGING = {
         # Django's request logger is noisy about 404s and says nothing this app
         # needs; its own errors still reach the root handlers.
         'django': {'level': 'WARNING'},
-        # The two that are an audit trail rather than debug output: who signed in
-        # and who was refused, and every time the database would not take.
+        # Who signed in and who was refused, and every time the database would
+        # not take a time. Both belong in the application log.
         'apps.accounts.login': {'level': 'INFO'},
         'apps.timing': {'level': 'INFO'},
+        # The audit trail goes to its own file *and nowhere else*: propagate off,
+        # so a page of "user=x changed run 412" lines doesn't drown the log an
+        # operator reads when something is wrong.
+        'apps.audit': {
+            'handlers': ['audit'] if _log_file_ok else [],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }
 

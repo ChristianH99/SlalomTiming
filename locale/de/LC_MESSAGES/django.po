@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-28 21:39+0200\n"
+"POT-Creation-Date: 2026-07-28 22:58+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -59,79 +59,85 @@ msgstr "Ergebnisse"
 msgid "Import / Export"
 msgstr "Import / Export"
 
-#: .\apps\accounts\views.py:122
+#: .\apps\accounts\views.py:154
+msgid "There is nothing in the audit log yet."
+msgstr "Im Protokoll steht noch nichts."
+
+#: .\apps\accounts\views.py:182
 msgid "A role needs a name."
 msgstr "Eine Rolle braucht einen Namen."
 
-#: .\apps\accounts\views.py:124
+#: .\apps\accounts\views.py:184
 #, python-format
 msgid "A role named “%(name)s” already exists."
 msgstr "Eine Rolle mit dem Namen „%(name)s“ existiert bereits."
 
-#: .\apps\accounts\views.py:128
+#: .\apps\accounts\views.py:188
 #, python-format
 msgid "Role “%(name)s” created."
 msgstr "Rolle „%(name)s“ erstellt."
 
-#: .\apps\accounts\views.py:142
+#: .\apps\accounts\views.py:202
 #, python-format
 msgid "Access for “%(name)s” updated."
 msgstr "Zugriff für „%(name)s“ aktualisiert."
 
-#: .\apps\accounts\views.py:154
+#: .\apps\accounts\views.py:214
 #, python-format
 msgid "Role “%(name)s” deleted."
 msgstr "Rolle „%(name)s“ gelöscht."
 
-#: .\apps\accounts\views.py:173
+#: .\apps\accounts\views.py:233
 msgid "A username is required."
 msgstr "Ein Benutzername ist erforderlich."
 
-#: .\apps\accounts\views.py:176
+#: .\apps\accounts\views.py:236
 #, python-format
 msgid "A user named “%(name)s” already exists."
 msgstr "Ein Benutzer mit dem Namen „%(name)s“ existiert bereits."
 
-#: .\apps\accounts\views.py:186
+#: .\apps\accounts\views.py:246
 #, python-format
 msgid "User “%(name)s” created."
 msgstr "Benutzer „%(name)s“ erstellt."
 
-#: .\apps\accounts\views.py:213
+#: .\apps\accounts\views.py:273
 #, python-format
 msgid "Password for “%(name)s” reset."
 msgstr "Passwort für „%(name)s“ zurückgesetzt."
 
-#: .\apps\accounts\views.py:215
+#: .\apps\accounts\views.py:275
 #, python-format
 msgid "Roles for “%(name)s” updated."
 msgstr "Rollen für „%(name)s“ aktualisiert."
 
-#: .\apps\accounts\views.py:235
+#: .\apps\accounts\views.py:295
 msgid "You can’t deactivate your own account."
 msgstr "Sie können Ihr eigenes Konto nicht deaktivieren."
 
-#: .\apps\accounts\views.py:238
+#: .\apps\accounts\views.py:298
 msgid "Can’t deactivate the last superuser."
 msgstr "Der letzte Superuser kann nicht deaktiviert werden."
 
-#: .\apps\accounts\views.py:243
+#: .\apps\accounts\views.py:303
+#, python-format
 msgid "“%(name)s” can sign in again."
 msgstr "„%(name)s“ kann sich wieder anmelden."
 
-#: .\apps\accounts\views.py:247
+#: .\apps\accounts\views.py:307
+#, python-format
 msgid "“%(name)s” is deactivated and can no longer sign in."
 msgstr "„%(name)s“ ist deaktiviert und kann sich nicht mehr anmelden."
 
-#: .\apps\accounts\views.py:259
+#: .\apps\accounts\views.py:319
 msgid "You can’t delete your own account."
 msgstr "Sie können Ihr eigenes Konto nicht löschen."
 
-#: .\apps\accounts\views.py:262
+#: .\apps\accounts\views.py:322
 msgid "Can’t delete the last superuser."
 msgstr "Der letzte Superuser kann nicht gelöscht werden."
 
-#: .\apps\accounts\views.py:266
+#: .\apps\accounts\views.py:326
 #, python-format
 msgid "User “%(name)s” deleted."
 msgstr "Benutzer „%(name)s“ gelöscht."
@@ -1073,11 +1079,11 @@ msgstr "Import abgebrochen – es wurde nichts geändert."
 msgid "The upload has expired. Please choose the file again."
 msgstr "Der Upload ist abgelaufen. Bitte wähle die Datei erneut aus."
 
-#: .\config\settings.py:438
+#: .\config\settings.py:470
 msgid "German"
 msgstr "Deutsch"
 
-#: .\config\settings.py:439
+#: .\config\settings.py:471
 msgid "English"
 msgstr "Englisch"
 
@@ -1291,6 +1297,42 @@ msgstr "Noch keine Rollen definiert — erstellen Sie zuerst oben eine."
 #: .\templates\accounts\user_access.html:147
 msgid "Create user"
 msgstr "Benutzer erstellen"
+
+#: .\templates\accounts\user_access.html:156
+msgid "Audit log"
+msgstr "Protokoll"
+
+#: .\templates\accounts\user_access.html:163
+msgid ""
+"Every change made through this app — who made it, from which device, and "
+"what they sent."
+msgstr ""
+"Jede Änderung über diese App — wer sie gemacht hat, von welchem Gerät, und "
+"was gesendet wurde."
+
+#: .\templates\accounts\user_access.html:164
+msgid ""
+"Written to a file rather than the database, so it survives whatever the "
+"event does. Keep it with the results if a placing is ever questioned."
+msgstr ""
+"In eine Datei geschrieben statt in die Datenbank, damit es übersteht, was "
+"der Veranstaltung auch passiert. Bewahren Sie es zusammen mit den "
+"Ergebnissen auf, falls eine Platzierung einmal angezweifelt wird."
+
+#: .\templates\accounts\user_access.html:168
+#, python-format
+msgid "%(size)s in %(n)s file"
+msgid_plural "%(size)s in %(n)s files"
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\templates\accounts\user_access.html:171
+msgid "Download audit log"
+msgstr "Protokoll herunterladen"
+
+#: .\templates\accounts\user_access.html:174
+msgid "Nothing recorded yet."
+msgstr "Noch nichts aufgezeichnet."
 
 #: .\templates\base.html:6 .\templates\base.html:106
 msgid "Slalom Timing"

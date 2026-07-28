@@ -110,6 +110,17 @@ Cross-cutting bits       Each app also carries the ordinary Django plumbing: adm
                          **templatetags/**: apps/competitions/templatetags/competitions_tags.py
                          (participant_classes — a participant's classes under the competition's
                          assignment method) and apps/results/templatetags/pdf_markup.py.
+apps/audit.py            Who changed what (SEC-9). AuditMiddleware writes one line per
+                         *mutating* request to `<DATA_DIR>/logs/audit.log` — user, IP,
+                         view name, response code and the redacted payload. A middleware
+                         rather than a call per view (forty endpoints is forty chances to
+                         forget one, and the forgotten one is the one somebody asks
+                         about), and a file rather than a table (a table means a DB write
+                         on every edit, competing for the one SQLite write lock the CP540
+                         reader needs). GETs are never recorded — the live views re-fetch
+                         several times a second per open browser. Downloaded whole
+                         (rotated files first, so it reads chronologically) from
+                         accounts:audit-log, superuser-only.
 apps/common.py           Helpers shared across apps: safe_next() resolves the POSTed ?next to
                          an in-app URL (rejecting off-site ones), so the unsaved-changes
                          modal's "Save changes" lands where the user was navigating.
@@ -1048,7 +1059,7 @@ Two more that are about *saying the same thing the same way*:
 
 ## Security
 
-Two rules to keep in mind when adding anything to this app:
+Four rules to keep in mind when adding anything to this app:
 
 - **A login is not authorisation.** `AccessControlMiddleware` gates URLs by page key, so any view
   reachable from two pages (the marshal endpoints), or from outside the gate at all
@@ -1062,11 +1073,25 @@ Two rules to keep in mind when adding anything to this app:
   view and, for a zip, per entry against the declared *and* actual expanded size
   (`apps/transfer/archive.py`). Numbers keyed in by an operator are bounded in
   `apps/timing/views.py` because SQLite stores out-of-range values rather than refusing them.
+  Every id a client sends goes through `_as_pk()` first: handing a non-numeric one to
+  `filter(id=…)` makes Django raise while it prepares the query, which is a 500 rather than
+  a 404.
+- **Nothing on a page may be inline.** The app ships a strict Content-Security-Policy
+  (`config/csp.py`): `script-src 'self'`, no `'unsafe-inline'`, no nonce. A CSP cannot tell
+  our inline `<script>` from an injected one, so allowing ours allows the attack it exists
+  to stop. Every script therefore lives in `static/js/`, page data crosses over through
+  `json_script` (`window.pageData(id)` reads it defensively), strings through `gettext()`
+  and the djangojs catalog, and form controls are found by `data-` marker rather than by
+  the id Django rendered. `config/tests.py` fails on an inline `<script>`, a `style="…"`
+  attribute, an `onclick=`, template syntax left in a `.js` file, or an escaped quote
+  opening an argument — the last two being ways a script dies silently while the page
+  still renders.
+- **Every change is recorded.** `apps/audit.py` — see the layout section.
 
-Failed logins are throttled and logged (`apps/accounts/throttle.py`). Still open from the audit
-and deliberately not done yet: no CSP (`SEC-11`), no audit trail of who changed a result
-(`SEC-9`), the duplicate-check endpoint isn't scoped to the competition type (`SEC-7`), and the
-WebSocket consumers check login but not role (`SEC-12`).
+Failed logins are throttled and logged (`apps/accounts/throttle.py`), and the login throttle
+also caps attempts per address, not just per (username, IP). Still open from the audit and
+deliberately not done yet: the WebSocket consumers now check a page role, but there is no
+per-competition scoping on them.
 
 ## Performance
 

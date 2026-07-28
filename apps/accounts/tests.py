@@ -313,3 +313,147 @@ class TestAccountManagement:
         response = client.post(reverse("accounts:user-create"),
                                {"username": "x", "password": "Zx9!qwerty-long"})
         assert response.status_code == 403
+
+
+# --- SEC-9: who changed what ------------------------------------------------
+
+class TestAuditTrail:
+    """A timekeeper, a marshal and an organiser write to the same rows. Until now
+    nothing recorded which of them did, so a protested result could not be
+    attributed to anybody."""
+
+    @pytest.fixture
+    def audit_file(self, settings, tmp_path):
+        """Point the audit handler at a file this test owns."""
+        import logging
+        from logging.handlers import RotatingFileHandler
+
+        path = tmp_path / "audit.log"
+        settings.AUDIT_LOG_FILE = path
+        settings.AUDIT_LOG_BACKUPS = 5
+        logger = logging.getLogger("apps.audit")
+        handler = RotatingFileHandler(path, encoding="utf-8")
+        handler.setFormatter(logging.Formatter("{asctime} {message}", style="{"))
+        previous, previous_level = logger.handlers, logger.level
+        logger.handlers = [handler]
+        logger.setLevel(logging.INFO)
+        yield path
+        handler.close()
+        logger.handlers, logger.level = previous, previous_level
+
+    def test_a_change_records_who_made_it(self, client, django_user_model, audit_file):
+        from apps.competitions.models import Competition, CompetitionType
+        from apps.timing.models import TimedRun
+        import datetime
+        import json as _json
+
+        user = django_user_model.objects.create_superuser(
+            username="timekeeper", email="", password="x")
+        client.force_login(user)
+        ctype = CompetitionType.objects.create(name="Audited")
+        comp = Competition.objects.create(
+            competition_type=ctype, name="R", date=datetime.date(2026, 5, 1),
+            is_active=True)
+        run = TimedRun.objects.create(competition=comp)
+
+        client.post(reverse("timing:run-status"),
+                    data=_json.dumps({"run_id": run.id, "status": "dsq"}),
+                    content_type="application/json")
+
+        line = audit_file.read_text(encoding="utf-8")
+        assert "user=timekeeper" in line
+        assert "timing:run-status" in line
+        assert f"run_id={run.id}" in line
+        assert "status=dsq" in line
+        # The response code must not read as another `status=`, or a line with a
+        # run status on it has two of them and means neither.
+        assert "[200]" in line
+        assert line.count("status=") == 1
+
+    def test_reading_a_page_is_not_recorded(self, client, django_user_model, audit_file):
+        """Every open browser re-fetches the live views several times a second.
+        Recording that would bury the event and say nothing about it."""
+        user = django_user_model.objects.create_superuser(
+            username="watcher", email="", password="x")
+        client.force_login(user)
+        client.get(reverse("accounts:users"))
+        assert audit_file.read_text(encoding="utf-8") == ""
+
+    def test_a_password_is_never_written_to_the_log(self, client, django_user_model, audit_file):
+        user = django_user_model.objects.create_superuser(
+            username="boss", email="", password="x")
+        client.force_login(user)
+        client.post(reverse("accounts:user-create"),
+                    {"username": "newbie", "password": "Sup3r!secret-value"})
+        written = audit_file.read_text(encoding="utf-8")
+        assert "accounts:user-create" in written
+        assert "username=newbie" in written
+        assert "Sup3r!secret-value" not in written
+        assert "password=***" in written
+
+    def test_the_audit_log_is_superuser_only(self, django_user_model, audit_file):
+        audit_file.write_text("something happened\n", encoding="utf-8")
+        django_user_model.objects.create_user(username="plain", password="Zx9!qwerty-long")
+        plain = Client()
+        plain.login(username="plain", password="Zx9!qwerty-long")
+        assert plain.get(reverse("accounts:audit-log")).status_code == 403
+        assert Client().get(reverse("accounts:audit-log")).status_code == 302  # anonymous
+
+    def test_a_superuser_can_download_the_whole_trail(self, client, django_user_model, audit_file):
+        """Rotated files first, so what comes out is one continuous record rather
+        than the last few megabytes."""
+        audit_file.write_text("newest\n", encoding="utf-8")
+        audit_file.with_name(audit_file.name + ".1").write_text("middle\n", encoding="utf-8")
+        audit_file.with_name(audit_file.name + ".2").write_text("oldest\n", encoding="utf-8")
+        user = django_user_model.objects.create_superuser(
+            username="boss2", email="", password="x")
+        client.force_login(user)
+        response = client.get(reverse("accounts:audit-log"))
+        assert response.status_code == 200
+        body = b"".join(response.streaming_content).decode()
+        assert body.splitlines() == ["oldest", "middle", "newest"]
+        assert "attachment" in response["Content-Disposition"]
+
+    def test_the_device_door_is_recorded_even_though_nobody_is_signed_in(
+            self, settings, audit_file):
+        """timing:signal is the one endpoint outside the login gate. A time
+        arriving from a device is still a change to the event."""
+        import datetime
+        import json as _json
+
+        from apps.competitions.models import Competition, CompetitionType
+        from apps.timing.models import TimingSettings
+
+        settings.TIMING_DEVICE_TOKEN = "device-secret"
+        ctype = CompetitionType.objects.create(name="Doorway")
+        Competition.objects.create(competition_type=ctype, name="R",
+                                   date=datetime.date(2026, 5, 1), is_active=True)
+        TimingSettings.load()
+        Client().post(
+            reverse("timing:signal"),
+            data=_json.dumps({"running_number": 7, "port": 1, "time": "10:00:00.000"}),
+            content_type="application/json",
+            headers={"x-device-token": "device-secret"},
+        )
+        written = audit_file.read_text(encoding="utf-8")
+        assert "timing:signal" in written
+        assert "running_number=7" in written
+        assert "device-secret" not in written   # the header is not a payload field
+
+    def test_an_unreadable_body_does_not_break_the_request(self, client, django_user_model,
+                                                           audit_file, settings):
+        """Reading the request is itself fallible (an over-large body raises
+        RequestDataTooBig). The trail only *observes* — it must never be the
+        reason a request fails."""
+        settings.DATA_UPLOAD_MAX_MEMORY_SIZE = 50
+        user = django_user_model.objects.create_superuser(
+            username="bulk", email="", password="x")
+        client.force_login(user)
+        response = client.post(
+            reverse("timing:input-lock"),
+            data='{"locked": true, "padding": "' + "x" * 5000 + '"}',
+            content_type="application/json",
+        )
+        # Django's own limit answers; the audit line records that it happened.
+        assert response.status_code in (200, 400, 413)
+        assert "timing:input-lock" in audit_file.read_text(encoding="utf-8")

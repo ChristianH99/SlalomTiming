@@ -192,6 +192,10 @@ Then start Caddy if it isn't already running as a service.
 - The log is the first place to look: `<data dir>/logs/slalomtiming.log` (who signed
   in, who was refused, anything the database would not take), plus
   `journalctl -u slalomtiming -f` or the Daphne window on Windows.
+- `<data dir>/logs/audit.log` is the other one: every change anybody made, with the
+  account, the device address and what was sent. Download it from **User Access →
+  Audit log** (superuser only). It answers "who put a DSQ on run 412" — keep it with
+  the results, and keep it until the placings are final.
 - `timing_unrecorded.log` **in the data directory** (`SLALOM_DATA_DIR`, which is the
   project directory for a checkout and `%LOCALAPPDATA%\SlalomTiming\data` for the
   packaged install) should stay empty. Anything in it is a timing signal the database
@@ -204,6 +208,8 @@ Then start Caddy if it isn't already running as a service.
 
 - Export the event from **Import / Export → Export** (a self-contained `.zip`) and
   keep it with the results PDFs.
+- Download the audit log (**User Access → Audit log**) and keep it with them. It is
+  the only record of who changed what, and it rotates.
 - Stop the server; keep `db.sqlite3` until the results are final and published.
 
 ## 6. When something is wrong
