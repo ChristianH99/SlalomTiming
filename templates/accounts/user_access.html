@@ -17,7 +17,7 @@
         <div class="access-card-head">
           <span class="access-card-title">{{ role.group.name }}</span>
           <form method="post" action="{% url 'accounts:role-delete' %}"
-                onsubmit="return confirm('{% blocktrans with name=role.group.name %}Delete the role “{{ name }}”? Users lose the access it grants.{% endblocktrans %}');">
+                data-confirm="{% blocktrans with name=role.group.name %}Delete the role “{{ name }}”? Users lose the access it grants.{% endblocktrans %}">
             {% csrf_token %}
             <input type="hidden" name="group" value="{{ role.group.pk }}">
             <button class="button button--small button--danger" type="submit">{% trans "Delete" %}</button>
@@ -61,14 +61,29 @@
       <div class="access-card">
         <div class="access-card-head">
           <span class="access-card-title">{{ row.user.username }}
-            {% if row.user.is_superuser %}<span class="access-badge">{% trans "superuser" %}</span>{% endif %}</span>
-          <form method="post" action="{% url 'accounts:user-delete' %}"
-                onsubmit="return confirm('{% blocktrans with name=row.user.username %}Delete the user “{{ name }}”?{% endblocktrans %}');">
-            {% csrf_token %}
-            <input type="hidden" name="user" value="{{ row.user.pk }}">
-            <button class="button button--small button--danger" type="submit"
-                    {% if row.user == request.user %}disabled title="{% trans 'You can’t delete your own account' %}"{% endif %}>{% trans "Delete" %}</button>
-          </form>
+            {% if row.user.is_superuser %}<span class="access-badge">{% trans "superuser" %}</span>{% endif %}
+            {% if not row.user.is_active %}<span class="access-badge access-badge--off">{% trans "deactivated" %}</span>{% endif %}</span>
+          <div class="access-card-actions">
+            {% comment %}Deactivating is the everyday action — a marshal who has gone
+            home, a laptop that walked off. It refuses a login while leaving the
+            account and everything it did in place; deleting is the rare one.{% endcomment %}
+            <form method="post" action="{% url 'accounts:user-set-active' %}">
+              {% csrf_token %}
+              <input type="hidden" name="user" value="{{ row.user.pk }}">
+              <input type="hidden" name="active" value="{% if row.user.is_active %}0{% else %}1{% endif %}">
+              <button class="button button--small button--secondary" type="submit"
+                      {% if row.user == request.user %}disabled title="{% trans 'You can’t deactivate your own account' %}"{% endif %}>
+                {% if row.user.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Reactivate" %}{% endif %}
+              </button>
+            </form>
+            <form method="post" action="{% url 'accounts:user-delete' %}"
+                  data-confirm="{% blocktrans with name=row.user.username %}Delete the user “{{ name }}”?{% endblocktrans %}">
+              {% csrf_token %}
+              <input type="hidden" name="user" value="{{ row.user.pk }}">
+              <button class="button button--small button--danger" type="submit"
+                      {% if row.user == request.user %}disabled title="{% trans 'You can’t delete your own account' %}"{% endif %}>{% trans "Delete" %}</button>
+            </form>
+          </div>
         </div>
         <form method="post" action="{% url 'accounts:user-update' %}">
           {% csrf_token %}

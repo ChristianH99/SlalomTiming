@@ -26,6 +26,7 @@ singleinstance.acquire()
 
 from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
+from channels.security.websocket import AllowedHostsOriginValidator  # noqa: E402
 
 from apps.timing import cp540  # noqa: E402
 from apps.timing.routing import websocket_urlpatterns  # noqa: E402
@@ -36,9 +37,44 @@ from apps.timing.routing import websocket_urlpatterns  # noqa: E402
 # that is actually a running server.
 cp540.autostart()
 
+
+def _sweep_expired_sessions():
+    """Delete session rows that have already expired.
+
+    Django never prunes them for the database backend, so the table grew for the
+    life of the install — rows holding a user id long after the session died, and
+    a scan every time a page asks "who else is signed in?" (apps/common.py). A
+    server start is the natural moment: it is once per event day, and it cannot
+    collide with anything, because nothing is serving yet.
+    """
+    import logging
+
+    try:
+        from django.contrib.sessions.models import Session
+        from django.utils import timezone
+
+        removed, _ = Session.objects.filter(expire_date__lt=timezone.now()).delete()
+        if removed:
+            logging.getLogger(__name__).info('Removed %d expired sessions', removed)
+    except Exception:  # noqa: BLE001 - an unmigrated database must not stop the server
+        logging.getLogger(__name__).warning(
+            'Could not sweep expired sessions', exc_info=True
+        )
+
+
+_sweep_expired_sessions()
+
 application = ProtocolTypeRouter(
     {
         'http': django_asgi_app,
-        'websocket': AuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
+        # Browsers do not apply the same-origin policy to WebSockets: any page an
+        # operator visits can open a socket to this server with their cookies
+        # attached. AllowedHostsOriginValidator refuses a handshake whose Origin
+        # isn't one of ours, which is the WebSocket half of what CSRF does for
+        # forms. (With DEBUG on, ALLOWED_HOSTS is localhost, so the Simulator tab
+        # and the dev server still work.)
+        'websocket': AllowedHostsOriginValidator(
+            AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
+        ),
     }
 )

@@ -269,6 +269,10 @@ SESSION_COOKIE_AGE = _env_int('DJANGO_SESSION_HOURS', 12) * 3600
 # counters live in the cache below; both are env-settable so a locked-out timekeeper
 # can be let back in mid-event without touching code.
 LOGIN_MAX_ATTEMPTS = _env_int('DJANGO_LOGIN_MAX_ATTEMPTS', 10)
+# ...and per IP across every username, which is what stops one host working
+# through a list of accounts. Higher, because a venue laptop may be several
+# people's browser.
+LOGIN_MAX_ATTEMPTS_PER_HOST = _env_int('DJANGO_LOGIN_MAX_ATTEMPTS_PER_HOST', 50)
 LOGIN_LOCKOUT_SECONDS = _env_int('DJANGO_LOGIN_LOCKOUT_SECONDS', 300)
 
 # --- Logging ---

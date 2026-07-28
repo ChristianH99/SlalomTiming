@@ -298,7 +298,8 @@ def test_list_view_search_by_name(client):
 # ----- duplicate check endpoint -----
 
 def test_participant_check_flags_matching_license_and_name(client):
-    ctype = make_type()
+    # Scoped to the active competition's type (SEC-7), so there has to be one.
+    ctype = make_competition().competition_type
     existing = Participant.objects.create(
         competition_type=ctype, first_name="John", last_name="Smith",
         date_of_birth=datetime.date(2010, 1, 1), address_street="s",

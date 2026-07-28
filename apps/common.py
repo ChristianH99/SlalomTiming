@@ -49,8 +49,15 @@ def other_signed_in_users(request):
 def safe_next(request, fallback):
     """Return the POSTed ?next URL if it's a safe in-app path, else fallback.
     Lets the unsaved-changes modal's "Save changes" land on the page the user
-    was navigating to."""
+    was navigating to.
+
+    ``require_https`` follows the request: on a TLS deployment an absolute
+    ``http://`` URL — even to this very host — is a downgrade, and saving a form
+    is not the moment to put a session cookie on the air.
+    """
     nxt = request.POST.get("next")
-    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+    if nxt and url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
         return nxt
     return fallback

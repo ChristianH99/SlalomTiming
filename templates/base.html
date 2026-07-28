@@ -221,6 +221,19 @@
   </script>
 
   <script>
+    // Any form carrying data-confirm asks before it submits. Replaces the inline
+    // onsubmit="return confirm(...)" attributes, which a Content-Security-Policy
+    // has no way to allow.
+    (function () {
+      document.querySelectorAll("form[data-confirm]").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+        });
+      });
+    })();
+  </script>
+
+  <script>
     // Topbar language selector: toggle the menu; close on outside click or Escape.
     (function () {
       const root = document.querySelector("[data-lang-switcher]");

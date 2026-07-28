@@ -225,3 +225,91 @@ def test_cannot_delete_last_superuser():
     c.force_login(su)
     c.post(reverse("accounts:user-delete"), {"user": su.pk})
     assert User.objects.filter(pk=su.pk).exists()
+
+
+# --- SEC-F: one host must not be able to walk a user list -------------------
+
+class TestHostThrottle:
+    """The per-(username, IP) counter alone left an address free to try ten
+    passwords against each of a hundred accounts. An address has its own budget."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        from django.core.cache import cache
+        cache.clear()
+        yield
+        cache.clear()
+
+    def test_many_usernames_from_one_address_are_eventually_refused(self, settings):
+        settings.LOGIN_MAX_ATTEMPTS = 10
+        settings.LOGIN_MAX_ATTEMPTS_PER_HOST = 6
+        client = Client()
+        # Six different accounts, one wrong guess each: under the per-pair limit
+        # every time, so nothing here would have tripped before.
+        for i in range(6):
+            client.post(reverse("accounts:login"),
+                        {"username": f"victim{i}", "password": "wrong"})
+        response = client.post(reverse("accounts:login"),
+                               {"username": "victim99", "password": "wrong"})
+        assert response.context["locked_out"] is True
+
+    def test_a_good_password_does_not_clear_the_address_budget(self, settings, django_user_model):
+        settings.LOGIN_MAX_ATTEMPTS_PER_HOST = 3
+        django_user_model.objects.create_user(username="operator", password="Zx9!qwerty-long")
+        client = Client()
+        for i in range(3):
+            client.post(reverse("accounts:login"),
+                        {"username": f"other{i}", "password": "wrong"})
+        client.post(reverse("accounts:login"),
+                    {"username": "operator", "password": "Zx9!qwerty-long"})
+        response = client.post(reverse("accounts:login"),
+                               {"username": "someone", "password": "wrong"})
+        assert response.context["locked_out"] is True
+
+
+# --- SEC-L / SEC-M / SEC-N: managing accounts -------------------------------
+
+class TestAccountManagement:
+    def test_resetting_your_own_password_does_not_sign_you_out(self, client, django_user_model):
+        admin = django_user_model.objects.create_superuser(
+            username="boss", email="", password="Zx9!qwerty-long")
+        client.force_login(admin)
+        client.post(reverse("accounts:user-update"),
+                    {"user": admin.pk, "password": "Nw7!qwerty-longer"})
+        # Still signed in: set_password rotates the hash the session is signed
+        # against, so without update_session_auth_hash the very next request is
+        # anonymous.
+        assert client.get(reverse("accounts:users")).status_code == 200
+
+    def test_a_deactivated_account_cannot_sign_in(self, client, django_user_model):
+        user = django_user_model.objects.create_user(
+            username="marshal", password="Zx9!qwerty-long")
+        admin = django_user_model.objects.create_superuser(
+            username="boss", email="", password="x")
+        client.force_login(admin)
+        client.post(reverse("accounts:user-set-active"), {"user": user.pk, "active": "0"})
+        user.refresh_from_db()
+        assert user.is_active is False
+        assert django_user_model.objects.filter(pk=user.pk).exists()  # not deleted
+        fresh = Client()
+        fresh.post(reverse("accounts:login"),
+                   {"username": "marshal", "password": "Zx9!qwerty-long"})
+        assert fresh.get("/").status_code == 302  # still anonymous
+
+    def test_the_last_active_superuser_cannot_deactivate_themselves(self, client, django_user_model):
+        admin = django_user_model.objects.create_superuser(
+            username="boss", email="", password="x")
+        client.force_login(admin)
+        client.post(reverse("accounts:user-set-active"), {"user": admin.pk, "active": "0"})
+        admin.refresh_from_db()
+        assert admin.is_active is True
+
+    def test_a_signed_in_non_superuser_is_refused_not_redirected(self, django_user_model):
+        """A redirect to the login page asks "who are you?" of somebody who is
+        already signed in; the answer is "not you"."""
+        django_user_model.objects.create_user(username="plain", password="Zx9!qwerty-long")
+        client = Client()
+        client.login(username="plain", password="Zx9!qwerty-long")
+        response = client.post(reverse("accounts:user-create"),
+                               {"username": "x", "password": "Zx9!qwerty-long"})
+        assert response.status_code == 403

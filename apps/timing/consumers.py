@@ -1,18 +1,34 @@
 import asyncio
 
+from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from .services import LIVE_GROUP, TIMING_GROUP, register_server_loop
 
+# Which pages a live socket belongs to. The nudges it carries are about the event
+# being timed — that a time landed, and which competition is now active — so it is
+# for the screens that show one. A login was the only check before (SEC-12), which
+# meant any account at all could listen in on a running event.
+LIVE_PAGES = {"dashboard", "timing", "marshal_posts", "results"}
 
-def _is_authenticated(scope):
-    user = scope.get("user")
-    return bool(user and user.is_authenticated)
+
+@database_sync_to_async
+def _may_listen(user):
+    """Whether this user holds any page a live view is rendered on.
+
+    Off the event loop because it reads the user's groups — the same reason the
+    HTTP gate can do this inline and a consumer cannot.
+    """
+    from apps.accounts import pages
+
+    if not (user and user.is_authenticated):
+        return False
+    return bool(LIVE_PAGES & pages.user_pages(user))
 
 
 class TimingConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
-        if not _is_authenticated(self.scope):
+        if not await _may_listen(self.scope.get("user")):
             await self.close()
             return
         await self.channel_layer.group_add(TIMING_GROUP, self.channel_name)
@@ -30,7 +46,7 @@ class TimingLiveConsumer(AsyncJsonWebsocketConsumer):
     or run assignments change; the client then re-fetches the arrangement."""
 
     async def connect(self):
-        if not _is_authenticated(self.scope):
+        if not await _may_listen(self.scope.get("user")):
             await self.close()
             return
         # Record the server's event loop so background threads (the CP540 reader)

@@ -437,13 +437,26 @@ def _bib_change_warning(competition, old_bib, new_bib, confirmed):
 def participant_check(request):
     """Return participants that look like duplicates of what's being entered:
     an exact (case-insensitive) licence-number match, or the same first and
-    last name. Used by the add/edit form to warn before a duplicate is saved."""
+    last name. Used by the add/edit form to warn before a duplicate is saved.
+
+    Scoped to the **active competition's type** (SEC-7). A participant belongs to
+    exactly one discipline and the form can only ever register them under the
+    active one, so a match from another discipline could not be acted on anyway —
+    but the answer carried that person's name, club and licence number, which made
+    this an unthrottled lookup oracle for anyone holding the Participants page:
+    type a licence number, learn who holds it. It now answers only about people
+    the caller can already see on the participant list.
+    """
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"matches": []})
+
     first_name = request.GET.get("first_name", "").strip()
     last_name = request.GET.get("last_name", "").strip()
     license_number = request.GET.get("license_number", "").strip()
     exclude = request.GET.get("exclude", "")
 
-    base = Participant.objects.all()
+    base = Participant.objects.filter(competition_type=competition.competition_type)
     if exclude.isascii() and exclude.isdigit():
         base = base.exclude(pk=int(exclude))
 

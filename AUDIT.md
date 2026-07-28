@@ -17,8 +17,9 @@ A **failing** probe is a confirmed defect: its assertion states the behaviour th
 
 Baseline at audit time: the shipped suite was **603 passed, 0 failed** (8 m 29 s).
 
-**Progress: §1 (release blockers) is done — 606 passed, 0 failed.** Everything below
-§1 is still open.
+**Progress:** §1 (release blockers) done. §2a (access control) done — SEC-H (CSP)
+is §2b, SEC-I (audit trail) is §2c. Shipped suite **617 passed, 0 failed**.
+Everything below §2 is still open.
 
 ---
 
@@ -241,22 +242,22 @@ page, superuser-gated, or deliberately open. Below are the gaps around it.
 | ID | Sev | Finding |
 | --- | --- | --- |
 | SEC-A | ✅ FIXED | **`/media/` was world-readable.** `middleware.py:27` returns early for `MEDIA_URL`, before the authentication check. Verified: an anonymous `GET /media/audit-leak.txt` returns **200 with the file body**. `config/tests.py:68` currently *asserts* this behaviour, so it reads as deliberate — but the app's premise is "login required everywhere", and this is the one route by which uploaded content leaves it. It is also what makes BLK-1 exploitable unauthenticated. |
-| SEC-B | High | **`timing:signal` is `csrf_exempt` and accepts session auth.** A cross-origin form can post a JSON body; the only thing stopping it is Django's default `SameSite=Lax` session cookie. Nothing in the code states that dependency. Split the door: token-only for devices, CSRF-protected for the browser Simulator. |
-| SEC-C | Med | **SEC-7 confirmed open — `participants:check` leaks across competition types.** `Participant.objects.all()` is searched by licence number and name; the response carries **name, club and licence number** of participants registered under *other* disciplines. Any user with the Participants page gets an unthrottled licence-number oracle. *Evidence:* `test_duplicate_check_does_not_leak_participants_of_another_type` fails. |
-| SEC-D | Med | **The WebSocket has no origin check.** `config/asgi.py:43` wraps the router in `AuthMiddlewareStack` but not `AllowedHostsOriginValidator`. Browsers do not apply same-origin policy to WebSockets, so any page an operator visits can open `ws://…/ws/timing/live/` with their cookies and read the `competition` nudge (the event's name) and see when times land. |
-| SEC-E | Med | **SEC-12 confirmed open** — `consumers.py:9` checks `is_authenticated` only, no page role. Correctly listed as open in CLAUDE.md. |
-| SEC-F | Med | **Login throttling has no per-IP cap.** `throttle._key` is `(username, IP)`, so one host can spray *unlimited* usernames at 10 attempts each without ever being blocked, and account enumeration is unlimited. Add a second counter on IP alone. |
-| SEC-G | Med | **`marshal_submit` stores unbounded JSON.** `detail` goes into a `JSONField` with no size or shape check. A 1.19 MB blob was stored from one request and is then re-serialised into `auto-state` for every open browser on every nudge. *Evidence:* `test_marshal_detail_json_is_size_bounded` fails. |
-| SEC-H | Med | **SEC-11 confirmed open — no CSP**, and `base.html` carries ~130 lines of **inline `<script>`** in four IIFEs, plus `json_script` blocks. Adding a CSP is therefore not a one-line change; move that JS to `static/js/` first. |
-| SEC-I | Low | **SEC-9 confirmed open — no audit trail.** Nobody can answer "who changed this result?" A timekeeper, a marshal and an organiser all write to the same rows. On a multi-user network this is the difference between a protest you can settle and one you cannot. |
-| SEC-J | Low | `marshal_release` compares the claim token with `==`, not `secrets.compare_digest` (`views.py:491`) — inconsistent with `_marshal_may_write`, which does. |
-| SEC-K | Low | **No self-service password change.** Only a superuser can reset a password, from the User Access page. An operator whose password was set on race morning by someone else cannot change it. |
-| SEC-L | Low | A superuser resetting **their own** password is logged out immediately — `user_update` calls `set_password`/`save` without `update_session_auth_hash`. |
-| SEC-M | Low | **No account deactivation.** `is_active` is never exposed; the only way to remove access is to delete the user. |
-| SEC-N | Low | `_superuser_required` redirects an authenticated non-superuser to the **login page** rather than returning 403 — a confusing loop. (The middleware already 403s the pages, so this only affects the POST endpoints.) |
-| SEC-O | Low | `safe_next` permits an absolute `http://<same-host>/…`, i.e. a protocol downgrade, because `url_has_allowed_host_and_scheme` is called without `require_https`. |
-| SEC-P | Low | Sessions are never pruned. Nothing runs `manage.py clearsessions`, it is not in DEPLOYMENT.md, and `other_signed_in_users` scans that table on every competition switch. Expired session rows are also retained personal data. |
-| SEC-Q | Info | The CP540 reader appends to `buffer` with no line-length cap (`cp540.py:228`). A device that never sends `\n` grows it unbounded. We dial out to a configured address, so the trust level is moderate — but a venue LAN is not trusted. |
+| SEC-B | ✅ FIXED | **`timing:signal` is `csrf_exempt` and accepts session auth.** A cross-origin form can post a JSON body; the only thing stopping it is Django's default `SameSite=Lax` session cookie. Nothing in the code states that dependency. Split the door: token-only for devices, CSRF-protected for the browser Simulator. |
+| SEC-C | ✅ FIXED | **SEC-7 confirmed open — `participants:check` leaks across competition types.** `Participant.objects.all()` is searched by licence number and name; the response carries **name, club and licence number** of participants registered under *other* disciplines. Any user with the Participants page gets an unthrottled licence-number oracle. *Evidence:* `test_duplicate_check_does_not_leak_participants_of_another_type` fails. |
+| SEC-D | ✅ FIXED | **The WebSocket has no origin check.** `config/asgi.py:43` wraps the router in `AuthMiddlewareStack` but not `AllowedHostsOriginValidator`. Browsers do not apply same-origin policy to WebSockets, so any page an operator visits can open `ws://…/ws/timing/live/` with their cookies and read the `competition` nudge (the event's name) and see when times land. |
+| SEC-E | ✅ FIXED | **SEC-12 confirmed open** — `consumers.py:9` checks `is_authenticated` only, no page role. Correctly listed as open in CLAUDE.md. |
+| SEC-F | ✅ FIXED | **Login throttling has no per-IP cap.** `throttle._key` is `(username, IP)`, so one host can spray *unlimited* usernames at 10 attempts each without ever being blocked, and account enumeration is unlimited. Add a second counter on IP alone. |
+| SEC-G | ✅ FIXED | **`marshal_submit` stores unbounded JSON.** `detail` goes into a `JSONField` with no size or shape check. A 1.19 MB blob was stored from one request and is then re-serialised into `auto-state` for every open browser on every nudge. *Evidence:* `test_marshal_detail_json_is_size_bounded` fails. |
+| SEC-H | → §2b | **SEC-11 confirmed open — no CSP**, and `base.html` carries ~130 lines of **inline `<script>`** in four IIFEs, plus `json_script` blocks. Adding a CSP is therefore not a one-line change; move that JS to `static/js/` first. |
+| SEC-I | → §2c | **SEC-9 confirmed open — no audit trail.** Nobody can answer "who changed this result?" A timekeeper, a marshal and an organiser all write to the same rows. On a multi-user network this is the difference between a protest you can settle and one you cannot. |
+| SEC-J | ✅ FIXED | `marshal_release` compares the claim token with `==`, not `secrets.compare_digest` (`views.py:491`) — inconsistent with `_marshal_may_write`, which does. |
+| SEC-K | ⊘ WAIVED | **No self-service password change.** Only a superuser can reset a password, from the User Access page. An operator whose password was set on race morning by someone else cannot change it. |
+| SEC-L | ✅ FIXED | A superuser resetting **their own** password is logged out immediately — `user_update` calls `set_password`/`save` without `update_session_auth_hash`. |
+| SEC-M | ✅ FIXED | **No account deactivation.** `is_active` is never exposed; the only way to remove access is to delete the user. |
+| SEC-N | ✅ FIXED | `_superuser_required` redirects an authenticated non-superuser to the **login page** rather than returning 403 — a confusing loop. (The middleware already 403s the pages, so this only affects the POST endpoints.) |
+| SEC-O | ✅ FIXED | `safe_next` permits an absolute `http://<same-host>/…`, i.e. a protocol downgrade, because `url_has_allowed_host_and_scheme` is called without `require_https`. |
+| SEC-P | ✅ FIXED | Sessions are never pruned. Nothing runs `manage.py clearsessions`, it is not in DEPLOYMENT.md, and `other_signed_in_users` scans that table on every competition switch. Expired session rows are also retained personal data. |
+| SEC-Q | ✅ FIXED | The CP540 reader appends to `buffer` with no line-length cap (`cp540.py:228`). A device that never sends `\n` grows it unbounded. We dial out to a configured address, so the trust level is moderate — but a venue LAN is not trusted. |
 
 ---
 

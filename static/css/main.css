@@ -3435,6 +3435,12 @@ textarea:focus-visible,
   letter-spacing: 0.04em; color: var(--flame); background: var(--flame-bg);
   padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); margin-left: var(--space-3); vertical-align: middle;
 }
+/* A deactivated account: it still exists and still shows what it did, it just
+   can't sign in. Quiet rather than alarming — the state is a fact about the
+   account, not a problem with it. */
+.access-badge--off { color: var(--text-mid); background: var(--border-light); }
+/* Deactivate sits beside Delete; the two must not stack as the card narrows. */
+.access-card-actions { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
 .access-checks { margin-bottom: var(--space-6); }
 .access-roles { display: flex; flex-direction: column; gap: var(--space-4); margin-bottom: var(--space-6); }
 .access-role-check { display: flex; align-items: center; gap: var(--space-4); font-size: var(--text-base); color: var(--text-dark); }

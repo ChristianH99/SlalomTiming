@@ -1656,6 +1656,18 @@ def test_every_live_view_shares_one_socket_implementation():
         assert "window.liveSocket(" in source, f"{name} doesn't use the shared socket"
 
 
+def _live_listener(django_user_model, username):
+    """A user allowed to open a live socket.
+
+    The socket is gated on holding a page a live view is rendered on (SEC-12) —
+    a login on its own no longer gets you the event's nudges — so a test user
+    needs a role, or to be a superuser.
+    """
+    return django_user_model.objects.create_superuser(
+        username=username, email="", password="x"
+    )
+
+
 def _live_socket_scenario(user, messages):
     """Drive TimingLiveConsumer through a list of client messages, returning what
     it sent back."""
@@ -1685,14 +1697,14 @@ def test_live_socket_answers_a_heartbeat(django_user_model):
     """A socket can die without a close frame (a phone leaving Wi-Fi gets no TCP
     FIN), so the client pings and treats silence as a dead link. Without a reply
     it would tear down a perfectly good connection every 30 s."""
-    user = django_user_model.objects.create_user(username="pinger", password="x")
+    user = _live_listener(django_user_model, "pinger")
     assert _live_socket_scenario(user, [{"action": "ping"}]) == [{"event": "pong"}]
 
 
 def test_live_socket_ignores_anything_else_it_is_sent(django_user_model):
     """The base consumer's receive_json raises, which would drop the socket — and
     the operator's screen with it."""
-    user = django_user_model.objects.create_user(username="babbler", password="x")
+    user = _live_listener(django_user_model, "babbler")
     assert _live_socket_scenario(user, [{"action": "nonsense"}, {"action": "ping"}]) == \
         [None, {"event": "pong"}]
 
@@ -1705,7 +1717,7 @@ def test_a_changed_event_reaches_the_open_views_by_name(django_user_model):
     from .consumers import TimingLiveConsumer
     from .services import notify_competition_changed
 
-    user = django_user_model.objects.create_user(username="watcher", password="x")
+    user = _live_listener(django_user_model, "watcher")
 
     async def run():
         comm = WebsocketCommunicator(TimingLiveConsumer.as_asgi(), "/ws/timing/live/")
@@ -1937,3 +1949,112 @@ def test_a_start_order_with_starters_reports_no_reason():
     comp, _ = auto_scenario()
     data = autotiming.serialize(comp)
     assert data["items"] and data["empty_reason"] == ""
+
+
+# --- SEC-B: the one open write endpoint ------------------------------------
+# timing:signal is csrf_exempt because a physical device carries no token. That
+# also made it reachable cross-site by a logged-in operator's browser, with
+# nothing but the session cookie's SameSite default in the way — a browser's
+# choice, not ours. A device is identified by its token; a session is CSRF-checked.
+
+class TestSignalDoor:
+    def test_a_session_post_without_a_csrf_token_is_refused(self, django_user_model):
+        from django.test import Client
+
+        TimingSettings.load()
+        admin = django_user_model.objects.create_superuser(
+            username="op-nocsrf", email="", password="x")
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(admin)
+        response = client.post(
+            reverse("timing:signal"),
+            data=json.dumps({"running_number": 1, "port": 1, "time": "10:00:00.000"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 403
+        assert not TimingSignal.objects.exists()
+
+    def test_a_device_token_needs_no_csrf_token(self, settings, django_user_model):
+        from django.test import Client
+
+        settings.TIMING_DEVICE_TOKEN = "s3cret-device-token"
+        TimingSettings.load()
+        client = Client(enforce_csrf_checks=True)
+        response = client.post(
+            reverse("timing:signal"),
+            data=json.dumps({"running_number": 1, "port": 1, "time": "10:00:00.000"}),
+            content_type="application/json",
+            headers={"x-device-token": "s3cret-device-token"},
+        )
+        assert response.status_code == 200
+        assert TimingSignal.objects.count() == 1
+
+    def test_a_wrong_device_token_is_refused(self, settings):
+        from django.test import Client
+
+        settings.TIMING_DEVICE_TOKEN = "s3cret-device-token"
+        settings.DEBUG = False
+        TimingSettings.load()
+        response = Client().post(
+            reverse("timing:signal"),
+            data=json.dumps({"running_number": 1, "port": 1, "time": "10:00:00.000"}),
+            content_type="application/json",
+            headers={"x-device-token": "wrong"},
+        )
+        assert response.status_code == 401
+        assert not TimingSignal.objects.exists()
+
+
+# --- SEC-G: a marshal's phone writes into a JSONField ------------------------
+
+def test_a_marshal_detail_blob_is_bounded_and_reshaped(client):
+    """`detail` arrives as free JSON from a phone, lands in a JSONField and is
+    then re-downloaded by every open Auto timing page on every nudge."""
+    from apps.competitions.models import MarshalPost
+
+    ctype = CompetitionType.objects.create(
+        name="Marshalled", penalties_enabled=True, pylon_penalty=5,
+        task_penalty=10, stop_line_penalty=20,
+    )
+    competition = Competition.objects.create(
+        competition_type=ctype, name="Race", date=datetime.date(2026, 5, 1),
+        is_active=True, penalties_by_marshal_posts=True,
+    )
+    MarshalPost.objects.create(competition=competition, number=1, tasks="1")
+    run = TimedRun.objects.create(competition=competition)
+
+    huge = {
+        "tasks": {str(i): {"pylons": 99999} for i in range(5000)},
+        "stop_line": True,
+        "junk": "x" * 100000,
+    }
+    client.post(reverse("timing:marshal-submit"),
+                data=json.dumps({"run_id": run.id, "post": 1, "detail": huge}),
+                content_type="application/json")
+
+    stored = MarshalPenalty.objects.get(timed_run=run).detail
+    assert set(stored) == {"tasks", "stop_line"}          # unknown keys dropped
+    assert len(stored["tasks"]) <= 200                     # bounded
+    assert all(cell["pylons"] <= 999 for cell in stored["tasks"].values())
+
+
+# --- SEC-E: the live socket carries event news, so it needs a page ----------
+
+def test_a_login_alone_does_not_open_the_live_socket(django_user_model):
+    """SEC-12: the consumers checked is_authenticated and nothing else, so any
+    account at all could listen in on a running event."""
+    from channels.testing import WebsocketCommunicator
+
+    from .consumers import TimingLiveConsumer
+
+    user = django_user_model.objects.create_user(username="outsider", password="x")
+
+    async def run():
+        comm = WebsocketCommunicator(TimingLiveConsumer.as_asgi(), "/ws/timing/live/")
+        comm.scope["user"] = user
+        connected, _ = await comm.connect()
+        if connected:
+            await comm.disconnect()
+        return connected
+
+    assert async_to_sync(run)() is False

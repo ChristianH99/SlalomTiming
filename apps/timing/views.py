@@ -8,6 +8,7 @@ from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
+from django.middleware.csrf import CsrfViewMiddleware
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -48,6 +49,11 @@ MAX_PENALTY_COUNT = 999
 # A device's running number counts starts, so the column's own range is already far
 # past anything real. Bounded at the door for the same reason as the counts above.
 MAX_RUNNING_NUMBER = 2_147_483_647
+# A marshal post's per-task breakdown, as its phone sends it. A post watches a
+# handful of tasks, so this is orders of magnitude more than any real board — but
+# it is a JSONField written straight from a request, and every open Auto timing
+# page re-downloads whatever is in it on every nudge.
+MAX_DETAIL_TASKS = 200
 # The fields of a run-update that say *who this run belongs to*. Editing one of
 # these is what makes the run operator-owned (manual_entry); the penalty counts in
 # the same payload deliberately do not — see timing_run_update.
@@ -326,7 +332,7 @@ def marshal_submit(request):
     existing = MarshalPenalty.objects.filter(timed_run=run, marshal_post=post).first()
     if existing is not None and existing.submitted:
         return JsonResponse({"ok": False, "locked": True}, status=409)
-    detail = payload.get("detail")
+    detail = _clean_detail(payload.get("detail"))
     MarshalPenalty.objects.update_or_create(
         timed_run=run,
         marshal_post=post,
@@ -334,7 +340,7 @@ def marshal_submit(request):
             "pylon_count": _as_count(payload.get("pylon_count")),
             "task_count": _as_count(payload.get("task_count")),
             "stopline_count": _as_count(payload.get("stopline_count")),
-            "detail": detail if isinstance(detail, dict) else {},
+            "detail": detail,
             "submitted": bool(payload.get("submitted")),
         },
     )
@@ -491,7 +497,11 @@ def marshal_release(request):
     payload = _json_body(request)
     token = str(payload.get("token") or "")
     post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
-    if post is not None and post.claim_token and post.claim_token == token:
+    # compare_digest, like _marshal_may_write: this is the secret that says which
+    # device owns the post, and the two comparisons should not differ.
+    if post is not None and post.claim_token and token and secrets.compare_digest(
+        post.claim_token, token
+    ):
         post.claim_token = ""
         post.claim_seen = None
         post.save(update_fields=["claim_token", "claim_seen"])
@@ -597,26 +607,51 @@ def timing_signal(request):
     return JsonResponse({"ok": True, "id": signal.id if signal else None, "captured": signal is None})
 
 
-def _signal_authorized(request):
-    """Who may POST a raw timing signal. The endpoint is CSRF-exempt and outside
-    the login gate (a device can't log in), so it enforces its own rule here:
+class _CsrfCheck(CsrfViewMiddleware):
+    """CsrfViewMiddleware that reports rather than responds, so this view can ask
+    it a question. ``process_view`` returns None when the token is good."""
 
-    - a logged-in user *who holds the Timing page* (the Simulator page runs in
-      the operator's session) — OK. A login on its own is not enough: writing a
-      time into the live event is the Timing page's business, and every other
-      Timing URL is gated on it, so a registration-desk account that can't open
-      the timing views can't inject signals into them either;
-    - otherwise, if TIMING_DEVICE_TOKEN is configured, a matching X-Device-Token
-      (constant-time compared) — OK;
-    - otherwise the door is open only while DEBUG is on (local dev). In a
-      deployment (DEBUG off) an anonymous, tokenless post is refused, so the one
-      unauthenticated write endpoint isn't world-writable."""
-    if request.user.is_authenticated:
-        return "timing" in pages.user_pages(request.user)
+    def _reject(self, request, reason):
+        return reason
+
+
+def _device_token_ok(request):
+    """A device presenting the configured shared secret (constant-time compared)."""
     token = getattr(settings, "TIMING_DEVICE_TOKEN", "")
-    if token:
-        provided = request.headers.get("X-Device-Token", "")
-        return bool(provided) and secrets.compare_digest(provided, token)
+    if not token:
+        return False
+    provided = request.headers.get("X-Device-Token", "")
+    return bool(provided) and secrets.compare_digest(provided, token)
+
+
+def _signal_authorized(request):
+    """Who may POST a raw timing signal.
+
+    This is the app's one endpoint outside the login gate, because a physical
+    timing device cannot log in — so it decides for itself, and there are exactly
+    two callers:
+
+    * **a device**, identified by a matching ``X-Device-Token``. It carries no
+      cookies, so CSRF does not apply to it and the view stays ``csrf_exempt``
+      for its sake;
+    * **the browser Simulator**, which runs in the operator's session. A login
+      alone is not enough — writing a time into the live event is the Timing
+      page's business, and every other Timing URL is gated on it — and because
+      this caller *does* carry cookies, its request is CSRF-checked here. Without
+      that, ``csrf_exempt`` plus session auth meant any page an operator visited
+      could post times into a running event, with nothing but the session
+      cookie's SameSite=Lax default standing in the way. That default is a
+      browser's choice, not ours.
+
+    With neither, the door is open only while DEBUG is on (local dev); a
+    deployment refuses an anonymous, tokenless post.
+    """
+    if _device_token_ok(request):
+        return True
+    if request.user.is_authenticated:
+        if "timing" not in pages.user_pages(request.user):
+            return False
+        return _CsrfCheck(lambda r: None).process_view(request, None, (), {}) is None
     return settings.DEBUG
 
 
@@ -1306,6 +1341,29 @@ def _as_count(value):
     """A penalty count from the client -> 0..MAX_PENALTY_COUNT (garbage -> 0)."""
     number = _digits(value)
     return min(number, MAX_PENALTY_COUNT) if number is not None else 0
+
+
+def _clean_detail(value):
+    """A marshal board's per-task breakdown, reduced to the shape we render.
+
+    It arrives as free JSON from a phone and lands in a JSONField that every open
+    Auto timing page then re-downloads on every nudge, so it is rebuilt here
+    rather than stored as sent: known keys only, counts bounded, and a cap on how
+    many tasks a post may report."""
+    if not isinstance(value, dict):
+        return {}
+    tasks_in = value.get("tasks")
+    tasks = {}
+    if isinstance(tasks_in, dict):
+        for key, cell in list(tasks_in.items())[:MAX_DETAIL_TASKS]:
+            number = _digits(key)
+            if number is None or not isinstance(cell, dict):
+                continue
+            pylons = _as_count(cell.get("pylons"))
+            failed = bool(cell.get("task"))
+            if pylons or failed:
+                tasks[str(number)] = {"pylons": pylons, "task": failed}
+    return {"tasks": tasks, "stop_line": bool(value.get("stop_line"))}
 
 
 def _as_signed(value):

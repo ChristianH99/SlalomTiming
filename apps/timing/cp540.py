@@ -38,6 +38,12 @@ _INPUTS = {
 }
 
 _LOG_MAX = 400
+# Longest line we will hold while waiting for its newline. A TN line is ~40
+# characters; this is far past anything real, and it is here because the buffer
+# below otherwise grows without limit if whatever is on the other end of the
+# socket never sends one. We dial out to a configured address, but a venue LAN is
+# not a trusted place to leave that assumption unstated.
+_MAX_LINE = 8192
 
 # A dropped link (knocked cable, device reboot, Wi-Fi blip) must not end the
 # session: the reader keeps trying while the CP540 is the selected device, since
