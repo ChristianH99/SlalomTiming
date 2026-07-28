@@ -45,6 +45,9 @@ _DURATION_CHARS = re.compile(r"^[0-9:.]+$")
 # IntegerField. They are driven by steppers, so anything outside this range is a
 # broken client rather than an operator — clamped, so the run stays readable.
 MAX_PENALTY_COUNT = 999
+# A device's running number counts starts, so the column's own range is already far
+# past anything real. Bounded at the door for the same reason as the counts above.
+MAX_RUNNING_NUMBER = 2_147_483_647
 # The fields of a run-update that say *who this run belongs to*. Editing one of
 # these is what makes the run operator-owned (manual_entry); the penalty counts in
 # the same payload deliberately do not — see timing_run_update.
@@ -308,8 +311,8 @@ def marshal_submit(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
-    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
+    post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
     if run is None or post is None:
         return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
     # A marshal writes with the claim their device holds; the timekeeper may write
@@ -350,8 +353,8 @@ def marshal_unlock(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
-    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
+    post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
     if run is None or post is None:
         return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
     mp = MarshalPenalty.objects.filter(timed_run=run, marshal_post=post).first()
@@ -373,7 +376,7 @@ def marshal_lock_all(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
     for post in competition.marshal_posts.all():
@@ -385,8 +388,8 @@ def marshal_lock_all(request):
 
 
 def _resolve_run_and_post(competition, payload):
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
-    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
+    post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
     return run, post
 
 
@@ -467,7 +470,7 @@ def marshal_claim(request):
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
     token = str(payload.get("token") or "")[:64]
-    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
     if post is None or not token:
         return JsonResponse({"ok": False, "error": "Unknown post."}, status=404)
     now = timezone.now()
@@ -487,7 +490,7 @@ def marshal_release(request):
         return JsonResponse({"ok": True})
     payload = _json_body(request)
     token = str(payload.get("token") or "")
-    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
     if post is not None and post.claim_token and post.claim_token == token:
         post.claim_token = ""
         post.claim_seen = None
@@ -520,7 +523,7 @@ def auto_penalty_adjust(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
     fields = []
@@ -574,7 +577,11 @@ def timing_signal(request):
     except (KeyError, TypeError, ValueError):
         return JsonResponse({"ok": False, "error": "running_number and port are required integers."}, status=400)
 
-    if running_number < 1 or not (1 <= port <= 4):
+    # Bounded like every other number an outside caller sends: running_number is a
+    # PositiveIntegerField, and SQLite takes whatever it is handed rather than
+    # refusing it (see the note at the top of this file). A device counts starts,
+    # so anything past a signed 32-bit column is a broken client.
+    if not (1 <= running_number <= MAX_RUNNING_NUMBER) or not (1 <= port <= 4):
         return JsonResponse({"ok": False, "error": "running_number ≥ 1 and port 1–4 required."}, status=400)
 
     device_time = _parse_device_time(payload.get("time"))
@@ -645,7 +652,7 @@ def timing_run_update(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
 
@@ -706,7 +713,7 @@ def timing_run_status(request):
     status = runstatus.parse(payload.get("status"))
     if status is None:
         return JsonResponse({"ok": False, "error": "Unknown status."}, status=400)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         if not status:
             return JsonResponse({"ok": True})  # nothing recorded, nothing to clear
@@ -731,7 +738,7 @@ def timing_ignore(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    signal = TimingSignal.objects.filter(id=payload.get("signal_id"), competition=competition).first()
+    signal = TimingSignal.objects.filter(id=_as_pk(payload.get("signal_id")), competition=competition).first()
     if signal is None:
         return JsonResponse({"ok": False, "error": "Unknown signal."}, status=404)
     signal.ignored = bool(payload.get("ignored"))
@@ -754,9 +761,9 @@ def timing_pair(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    signal = TimingSignal.objects.filter(id=payload.get("signal_id"), competition=competition).first()
+    signal = TimingSignal.objects.filter(id=_as_pk(payload.get("signal_id")), competition=competition).first()
     slot = payload.get("slot")
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None and payload.get("slot_key"):
         run = _run_from_slot(competition, payload.get("slot_key"))
     if signal is None or run is None or slot not in ("start", "finish"):
@@ -793,7 +800,7 @@ def timing_delete_run(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     run = TimedRun.objects.filter(
-        id=_json_body(request).get("run_id"), competition=competition,
+        id=_as_pk(_json_body(request).get("run_id")), competition=competition,
         start_signal__isnull=True, finish_signal__isnull=True,
     ).first()
     if run is not None:
@@ -819,7 +826,7 @@ def timing_set_time(request):
         return JsonResponse({"ok": False, "error": "Bad request."}, status=400)
     raw = payload.get("time")
     clearing = raw is None or str(raw).strip() == ""
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         # An upcoming competitor in the Auto order has no run yet — make one from
         # their start-order slot so a time can be keyed onto them. Nothing to clear
@@ -897,7 +904,7 @@ def timing_set_runtime(request):
     payload = _json_body(request)
     raw = payload.get("run_time")
     clearing = raw is None or str(raw).strip() == ""
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         if clearing:
             return JsonResponse({"ok": True})
@@ -1181,11 +1188,10 @@ def _class_key(run):
 def _parse_class_key(value, competition):
     """'pk:occurrence' -> (CompetitionClass or None, occurrence int)."""
     pk, _, occ = str(value or "").partition(":")
-    cclass = CompetitionClass.objects.filter(id=pk, competition=competition).first()
-    try:
-        occurrence = int(occ)
-    except (TypeError, ValueError):
-        occurrence = 0
+    cclass = CompetitionClass.objects.filter(
+        id=_as_pk(pk), competition=competition
+    ).first()
+    occurrence = _digits(occ) or 0
     return cclass, occurrence
 
 
@@ -1265,15 +1271,41 @@ def _json_body(request):
         return {}
 
 
-def _as_positive_int(value):
+def _digits(value):
+    """``value`` as an int when it is written in plain ASCII digits, else None.
+
+    ``str.isdigit()`` alone is not that test: it is True for "²" and "٣" while
+    ``int()`` accepts only the second, so an isdigit-then-int pair raises ValueError
+    on the first. Every number a client sends comes through here.
+    """
     text = str(value).strip()
-    return int(text) if text.isdigit() and int(text) > 0 else None
+    return int(text) if text.isascii() and text.isdigit() else None
+
+
+def _as_pk(value):
+    """A primary key from a client payload, or None.
+
+    Handing a non-numeric string straight to ``filter(id=…)`` makes Django raise
+    ValueError while it prepares the query — an unhandled 500 on every mutate
+    endpoint from one malformed request. A pk that isn't a number simply matches
+    nothing, which is what None does at every call site.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    return _digits(value)
+
+
+def _as_positive_int(value):
+    number = _digits(value)
+    return number if number is not None and number > 0 else None
 
 
 def _as_count(value):
     """A penalty count from the client -> 0..MAX_PENALTY_COUNT (garbage -> 0)."""
-    text = str(value).strip()
-    return min(int(text), MAX_PENALTY_COUNT) if text.isdigit() else 0
+    number = _digits(value)
+    return min(number, MAX_PENALTY_COUNT) if number is not None else 0
 
 
 def _as_signed(value):

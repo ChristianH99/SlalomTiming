@@ -48,28 +48,71 @@ def _env_int(name, default):
 
 
 # --- Core security settings (see config/.env.example for deployment) ---
-# In production every one of these MUST come from the environment. The literal
-# fallbacks below only exist so a fresh local checkout runs with no setup — they
-# are NOT safe to expose on a network.
-
-# SECURITY WARNING: keep the secret key used in production secret!
-INSECURE_DEV_SECRET_KEY = 'django-insecure-qvzii-zuntaf-+wv0yuv32g2vz%1)@mo4d7_a8n(bycgw&_@4o'
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', INSECURE_DEV_SECRET_KEY)
+# In production every one of these MUST come from the environment.
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Defaults to True for local use; set DJANGO_DEBUG=False in any deployment.
 DEBUG = _env_bool('DJANGO_DEBUG', default=True)
 
-# The checked-in development key is public — every copy of this repository has it,
-# so sessions and password-reset tokens signed with it are forgeable. A deployment
-# that forgot DJANGO_SECRET_KEY must fail loudly here rather than run unsafely
-# (`check --deploy` only warns, and a warning is easy to miss on race morning).
-if not DEBUG and SECRET_KEY == INSECURE_DEV_SECRET_KEY:
+# Where a development checkout keeps its generated signing key. Under DATA_DIR
+# (gitignored) so it is never committed and never shipped.
+DEV_SECRET_KEY_FILE = DATA_DIR / '.secret_key'
+
+
+def _development_secret_key():
+    """A signing key for *this checkout*, generated once and kept in DATA_DIR.
+
+    There used to be a literal key in this file. This repository is public, so
+    that key is public: anyone who has read it can forge anything signed with it —
+    a session cookie for any account, a password-reset token. A development server
+    on a shared network was one `git clone` away from a forged superuser session,
+    and no amount of history rewriting takes a published key back.
+
+    So each checkout now mints its own on first use. It is still a *development*
+    key and is never consulted with DEBUG off: a deployment must set
+    DJANGO_SECRET_KEY in its environment (enforced below).
+    """
+    try:
+        existing = DEV_SECRET_KEY_FILE.read_text(encoding='utf-8').strip()
+        if existing:
+            return existing
+    except OSError:
+        pass
+    # stdlib only: this runs while the settings module is still being executed,
+    # so nothing here may reach back into django.conf.
+    import secrets as _secrets
+
+    key = ''.join(
+        _secrets.choice('abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)')
+        for _ in range(50)
+    )
+    try:
+        DEV_SECRET_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        DEV_SECRET_KEY_FILE.write_text(key, encoding='utf-8')
+        os.chmod(DEV_SECRET_KEY_FILE, 0o600)  # best effort; a no-op on Windows
+    except OSError:
+        # A read-only checkout: a key that lasts one process still beats a shared
+        # one. Sessions won't survive a restart, which is a development problem.
+        pass
+    return key
+
+
+_ENV_SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '').strip()
+
+if _ENV_SECRET_KEY:
+    SECRET_KEY = _ENV_SECRET_KEY
+elif DEBUG:
+    SECRET_KEY = _development_secret_key()
+else:
+    # A deployment that forgot the key must fail loudly here rather than run
+    # unsafely (`check --deploy` only warns, and a warning is easy to miss on race
+    # morning). The generated development key is deliberately not offered as a
+    # fallback: it lives beside the database, which gets copied about.
     from django.core.exceptions import ImproperlyConfigured
 
     raise ImproperlyConfigured(
-        'DJANGO_SECRET_KEY is not set, so the insecure development key from the '
-        'repository would be used with DEBUG=False. Generate one with:\n'
+        'DJANGO_SECRET_KEY is not set and DEBUG is False. A deployment must be '
+        'given its own key; generate one with:\n'
         '  uv run python -c "from django.core.management.utils import '
         'get_random_secret_key as g; print(g())"'
     )
@@ -227,6 +270,67 @@ SESSION_COOKIE_AGE = _env_int('DJANGO_SESSION_HOURS', 12) * 3600
 # can be let back in mid-event without touching code.
 LOGIN_MAX_ATTEMPTS = _env_int('DJANGO_LOGIN_MAX_ATTEMPTS', 10)
 LOGIN_LOCKOUT_SECONDS = _env_int('DJANGO_LOGIN_LOCKOUT_SECONDS', 300)
+
+# --- Logging ---
+# There was no LOGGING at all, which had two consequences nobody could see. Python's
+# last-resort handler emits WARNING and above, so `throttle.note_success` ("who
+# signed in") was written at INFO and silently dropped — the login audit trail the
+# throttle module exists to provide did not reach anywhere. And nothing went to a
+# *file*: the packaged Windows build runs Daphne in a console window that is closed
+# at the end of the day, so failed logins and "this time could not be stored"
+# vanished with it.
+#
+# So: a rotating file under DATA_DIR (the directory that survives an upgrade),
+# alongside the console. Deliberately small — three files of 2 MB is months of a
+# club's events, and nothing here is chatty.
+LOG_DIR = Path(os.environ.get('DJANGO_LOG_DIR') or DATA_DIR / 'logs')
+LOG_LEVEL = os.environ.get('DJANGO_LOG_LEVEL', 'INFO').upper()
+
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    _log_file_ok = True
+except OSError:
+    # A read-only or unwritable data directory must not stop the server coming up;
+    # the console handler still works.
+    _log_file_ok = False
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'app': {
+            'format': '{asctime} {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'app',
+        },
+        **({'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOG_DIR / 'slalomtiming.log'),
+            'maxBytes': 2 * 1024 * 1024,
+            'backupCount': 3,
+            'encoding': 'utf-8',
+            'formatter': 'app',
+        }} if _log_file_ok else {}),
+    },
+    'root': {
+        'handlers': ['console', *(['file'] if _log_file_ok else [])],
+        'level': LOG_LEVEL,
+    },
+    'loggers': {
+        # Django's request logger is noisy about 404s and says nothing this app
+        # needs; its own errors still reach the root handlers.
+        'django': {'level': 'WARNING'},
+        # The two that are an audit trail rather than debug output: who signed in
+        # and who was refused, and every time the database would not take.
+        'apps.accounts.login': {'level': 'INFO'},
+        'apps.timing': {'level': 'INFO'},
+    },
+}
 
 # Local-memory cache, stated explicitly rather than left to the default: the login
 # throttle keeps its counters here, and this app already runs as exactly one process

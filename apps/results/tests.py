@@ -9,7 +9,7 @@ from apps.competitions.models import Competition, CompetitionClass, CompetitionT
 from apps.participants.models import ClassAssignment, EventEntry, Participant
 from apps.timing.models import TimedRun, TimingSignal
 
-from . import resultscalc, views
+from . import logos, resultscalc, views
 from .models import ManualTieResolution, ResultColumnSettings, ResultsPdfLayout
 
 pytestmark = pytest.mark.django_db
@@ -500,8 +500,13 @@ def test_columns_for_defaults_to_available_then_adds_class_columns():
     # Type collects club/licence/address/email by default; name + dob always.
     available = ResultColumnSettings.available_keys(competition)
     assert "club" in available and "driver_name" in available and "birthday" in available
-    # No rows yet -> general defaults to all available.
-    assert set(ResultColumnSettings.columns_for(competition, cclass)) == set(available)
+    # No rows yet -> the safe default set, NOT everything available: a results
+    # table (and the PDF that goes on the notice board) must not carry every
+    # competitor's e-mail, phone and home address unless somebody asked for it.
+    default = ResultColumnSettings.columns_for(competition, cclass)
+    assert set(default) == {"driver_name", "club", "birth_year"} & set(available)
+    for private in ("email", "phone", "street", "city", "license", "birthday"):
+        assert private not in default
     # A General set of just club; the class *adds* city on top (additive, no override).
     ResultColumnSettings.objects.create(
         competition=competition, competition_class=None, columns=["club"],
@@ -555,7 +560,7 @@ def test_settings_page_renders_stored_markup_sanitised(client):
 def test_an_over_sized_logo_is_refused(client, settings, tmp_path):
     settings.MEDIA_ROOT = tmp_path
     _, competition, _ = make_setup()
-    big = SimpleUploadedFile("logo.gif", PIXEL + b"\0" * views.MAX_LOGO_BYTES,
+    big = SimpleUploadedFile("logo.gif", PIXEL + b"\0" * logos.MAX_LOGO_BYTES,
                              content_type="image/gif")
     response = client.post(reverse("results:settings"),
                            {"general-club": "on", "image_left": big}, follow=True)

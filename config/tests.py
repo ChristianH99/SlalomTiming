@@ -62,18 +62,23 @@ class TestMedia:
         (which indexes STATIC_ROOT at startup) can't serve them — Django must."""
         with override_settings(DEBUG=False):
             match = resolve(f'{settings.MEDIA_URL}results_logos/1/logo.png')
-        assert match.func.__module__ == 'django.views.static'
+        # config.media wraps django.views.static.serve in a login check — media is
+        # written from what operators upload and import, so it is not public.
+        assert match.func.__module__ == 'config.media'
         assert match.kwargs['document_root'] == settings.MEDIA_ROOT
 
-    def test_media_is_not_gated_by_access_control(self, rf):
-        """The access-control middleware skips /media/ by prefix, which only works
-        because Django normalises MEDIA_URL to a leading slash."""
-        from apps.accounts.middleware import AccessControlMiddleware
+    def test_media_needs_a_login(self):
+        """Media is written at runtime from what operators upload and *import*, and
+        it is served from this app's own origin. It used to be the one route out of
+        the login gate (the middleware skipped /media/ by prefix), which is what let
+        a crafted import archive plant a file anybody could then fetch."""
+        # A fresh client, not the shared fixture: that one is signed in as a
+        # superuser, which is exactly the thing this test must not assume.
+        from django.test import Client
 
-        assert str(settings.MEDIA_URL).startswith('/')
-        request = rf.get(f'{settings.MEDIA_URL}results_logos/1/logo.png')
-        middleware = AccessControlMiddleware(lambda req: None)
-        assert middleware.process_view(request, lambda req: None, (), {}) is None
+        response = Client().get(f'{settings.MEDIA_URL}results_logos/1/logo.png')
+        assert response.status_code == 302, 'uploaded media is reachable without a login'
+        assert '/login/' in response.url
 
 
 class TestFonts:
@@ -124,9 +129,35 @@ class TestTemplateComments:
 
 
 class TestSecretKey:
-    """SEC-15: the development key is public — every checkout has it."""
+    """SEC-15: no signing key may be committed, and a deployment must bring its own.
 
-    def test_deployment_with_the_dev_key_refuses_to_start(self):
+    There used to be a literal key in settings.py. This repository is public, so
+    that key was public: anyone who had read it could forge a session cookie for
+    any account. It is gone, each checkout mints its own into DATA_DIR, and these
+    tests are what keep it that way."""
+
+    def test_no_signing_key_is_committed(self):
+        """A key in a public repository is a key everybody has, for ever — no
+        history rewrite takes it back. So there must not be one to begin with."""
+        source = (settings.BASE_DIR / 'config' / 'settings.py').read_text(encoding='utf-8')
+        assert 'django-insecure-' not in source, (
+            'a Django secret key literal is back in settings.py'
+        )
+
+    def test_a_development_checkout_generates_its_own_key(self):
+        """A fresh checkout still runs with no setup — but not with everyone
+        else's key."""
+        from config.settings import _development_secret_key
+
+        assert settings.SECRET_KEY
+        assert len(settings.SECRET_KEY) >= 32
+        # Stable across calls: sessions have to survive a restart.
+        assert _development_secret_key() == _development_secret_key()
+
+    def test_the_generated_key_is_not_committed(self):
+        assert '.secret_key' in (settings.BASE_DIR / '.gitignore').read_text(encoding='utf-8')
+
+    def test_deployment_without_a_key_refuses_to_start(self):
         result = _run_manage(
             'check',
             DJANGO_DEBUG='False',

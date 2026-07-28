@@ -17,13 +17,12 @@ pk there silently misorders an imported event rather than failing loudly.
 
 from dataclasses import dataclass, field
 
-from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils.translation import gettext as _
 
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
 from apps.participants.models import ClassAssignment, EventEntry
-from apps.results import pdfmarkup
+from apps.results import logos, pdfmarkup
 from apps.results.models import ManualTieResolution, ResultColumnSettings, ResultsPdfLayout
 from apps.timing.autotiming import slot_key
 from apps.timing.models import MarshalPenalty, TimedRun, TimingSignal
@@ -366,8 +365,18 @@ def _import_results(document, competition, classes, entries, media):
         for side in ("left", "right"):
             name = layout_row.get(f"image_{side}")
             content = media.get(name) if name else None
-            if content:
-                getattr(layout, f"image_{side}").save(name, ContentFile(content), save=True)
+            if not content:
+                continue
+            # Bytes and name both come from another club's machine, and MEDIA_ROOT
+            # is served back by this app. Written unchecked, an archive could plant
+            # an HTML file and have the app serve it as HTML — script running in
+            # the importer's session — or a `../` name and a SuspiciousFileOperation
+            # mid-transaction. logos.clean_bytes verifies it is really an image and
+            # gives it a name of ours; a refusal costs the emblem, not the import.
+            logo = logos.clean_bytes(name, content)
+            if logo is None:
+                continue
+            getattr(layout, f"image_{side}").save(logo.name, logo, save=True)
 
     _import_tie_resolutions(results, competition, classes, entries)
 

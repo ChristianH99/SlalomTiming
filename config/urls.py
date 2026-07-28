@@ -20,7 +20,8 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.i18n import JavaScriptCatalog
-from django.views.static import serve
+
+from config.media import serve_media
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -46,11 +47,13 @@ urlpatterns = [
 # logos on a single-event LAN app. Point a reverse proxy at MEDIA_ROOT and set
 # DJANGO_SERVE_MEDIA=False to take it out of the Python process.
 # (django.conf.urls.static.static() can't be used: it returns nothing unless DEBUG.)
+# Served through config/media.py, not django.views.static.serve directly: every
+# other page in this app needs a login and this one is no exception — see there.
 if settings.SERVE_MEDIA:
     urlpatterns += [
         re_path(
             r'^%s(?P<path>.*)$' % re.escape(settings.MEDIA_URL.lstrip('/')),
-            serve,
+            serve_media,
             {'document_root': settings.MEDIA_ROOT},
         ),
     ]

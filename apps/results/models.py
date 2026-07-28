@@ -92,17 +92,24 @@ class ResultColumnSettings(models.Model):
 
     # ----- effective settings -----
 
+    # What a competition shows before anybody has been near the Results settings
+    # page. It used to be *every* available column, which meant a result table —
+    # and the PDF that goes on the notice board — carried each competitor's e-mail
+    # address, phone number and home address unless the organiser noticed and
+    # turned them off. A result sheet names the driver, their club and their year;
+    # everything else is opt-in.
+    DEFAULT_COLUMNS = ["driver_name", "club", "birth_year", "training"]
+
     @classmethod
     def general_columns(cls, competition):
         """The General column set, restricted to what the type still collects.
-        Defaults to every available column when no General row is saved yet."""
+        Falls back to ``DEFAULT_COLUMNS`` when no General row is saved yet."""
         available = cls.available_keys(competition)
         row = cls.objects.filter(
             competition=competition, competition_class__isnull=True
         ).first()
-        if row is None:
-            return list(available)
-        return [key for key in available if key in (row.columns or [])]
+        chosen = row.columns or [] if row is not None else cls.DEFAULT_COLUMNS
+        return [key for key in available if key in chosen]
 
     @classmethod
     def class_additions(cls, competition, competition_class):

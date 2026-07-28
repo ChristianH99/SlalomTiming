@@ -21,10 +21,13 @@ class AccessControlMiddleware:
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        # Static/media are served outside the URL resolver (or as unnamed
-        # patterns); never gate them.
-        path = request.path
-        if path.startswith(settings.STATIC_URL) or path.startswith(settings.MEDIA_URL):
+        # Static files carry no event data and are served by WhiteNoise before
+        # this ever runs; never gate them. **Media is not in this list** — it is
+        # written at runtime from what operators upload and import, and it used to
+        # be the one way out of the login gate. It goes through config/media.py,
+        # which requires a login of its own; here it simply falls through to the
+        # unmapped-endpoint rule below (any authenticated user).
+        if request.path.startswith(settings.STATIC_URL):
             return None
 
         match = request.resolver_match

@@ -1,12 +1,11 @@
 import json
 
-from django import forms
 from django.contrib import messages
-from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import content_disposition_header
 from django.utils.translation import gettext as _
 from django.views import View
 
@@ -16,19 +15,13 @@ from apps.competitions.views import ActiveCompetitionMixin
 from apps.timing import calc
 from apps.timing.models import TimedRun
 
-from . import pdf, pdfmarkup, resultscalc
+from . import logos, pdf, pdfmarkup, resultscalc
 from .models import (
     RESULT_COLUMNS, ManualTieResolution, ResultColumnSettings, ResultsPdfLayout,
 )
 
 # Name-block lines rendered in bold (the competitor's and co-driver's names).
 BOLD_KEYS = {"driver_name", "co_driver"}
-
-# A PDF logo is a club emblem printed at ~18 mm high. The two logo fields are
-# assigned straight from request.FILES (there is no ModelForm here), so nothing else
-# checks them: without this an upload of any size is written into MEDIA_ROOT, and
-# anything at all is written as an "image" for ReportLab to choke on at export time.
-MAX_LOGO_BYTES = 4 * 1024 * 1024
 
 # The tallies under a results table. "Classified / not classified" said very little
 # — every competitor was one or the other and neither number told the operator
@@ -392,7 +385,13 @@ def sample_section(competition, layout_ctx):
 def _pdf_response(competition, layout, sections, filename):
     data = pdf.render_results_pdf(competition, layout, sections)
     response = HttpResponse(data, content_type="application/pdf")
-    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    # A filename carries a class name, which an organiser types. Interpolating it
+    # into the header let a class named `A"; x` close the quoted string and append
+    # a second `filename=` of its choosing; a name in a script the header's latin-1
+    # encoding can't hold came out RFC-2047-encoded and unreadable to every
+    # browser; and a name with a newline in it raised BadHeaderError, i.e. a 500.
+    # Django's own builder handles all three (RFC 5987 `filename*=` when needed).
+    response["Content-Disposition"] = content_disposition_header(False, filename)
     return response
 
 
@@ -472,22 +471,8 @@ class ResultsExportSampleView(ActiveCompetitionMixin, View):
         return _pdf_response(competition, layout, [section], "results-sample.pdf")
 
 
-def _clean_logo(upload):
-    """A picked logo, or ``(None, message)`` saying why it was refused.
-
-    Size first, then Pillow's own verification via ``forms.ImageField`` — the same
-    check a ModelForm would have run, which this page bypasses by assigning
-    ``request.FILES`` onto the model directly."""
-    if upload is None:
-        return None, None
-    if upload.size > MAX_LOGO_BYTES:
-        return None, _(
-            "The logo “%(name)s” is too large (limit %(limit)s MB)."
-        ) % {"name": upload.name, "limit": MAX_LOGO_BYTES // (1024 * 1024)}
-    try:
-        return forms.ImageField().clean(upload), None
-    except ValidationError:
-        return None, _("“%(name)s” is not an image file.") % {"name": upload.name}
+# Both logo doors (this page and the import) share one check — see apps/results/logos.py.
+_clean_logo = logos.clean_upload
 
 
 def _parse_year(value):

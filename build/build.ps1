@@ -140,6 +140,15 @@ Copy-Item (Join-Path $PSScriptRoot "launcher.py") $app -Force
 Get-ChildItem $app -Recurse -File -Include "tests.py", "db.sqlite3" -Force |
     Remove-Item -Force -ErrorAction SilentlyContinue
 
+# A key a developer's checkout generated for itself (config/settings.py) must never
+# travel in the payload - every installation would then sign sessions with the same
+# one, which is the whole reason the committed literal was removed.
+Get-ChildItem $app -Recurse -File -Force -Filter ".secret_key" |
+    Remove-Item -Force -ErrorAction SilentlyContinue
+Get-ChildItem $app -Recurse -Directory -Force |
+    Where-Object { $_.Name -eq "logs" } |
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
 # --- 6. Static files ------------------------------------------------------
 # With DEBUG off, WhiteNoise serves STATIC_ROOT and nothing else serves /static/,
 # so this has to happen at build time - the installed copy is read-only.
@@ -148,6 +157,8 @@ $buildData = Join-Path $stage "_builddata"
 $env:SLALOM_DATA_DIR = $buildData
 $env:DJANGO_STATIC_ROOT = Join-Path $app "staticfiles"
 $env:DJANGO_DEBUG = "False"
+# Build-time only, and never written anywhere the payload can carry it: the
+# installed app generates its own on first run (build/launcher.py).
 $env:DJANGO_SECRET_KEY = "build-time-only-not-shipped"
 $env:DJANGO_ALLOW_PLAIN_HTTP = "True"
 & $py (Join-Path $app "manage.py") collectstatic --noinput --clear | Out-Null

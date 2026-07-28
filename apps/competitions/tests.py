@@ -829,8 +829,20 @@ def test_changing_competition_type_clears_foreign_registrations(client):
     )
     EventEntry.objects.create(participant=p, competition=comp, bib_number=1)
 
+    # Dropping registrations is destructive, so it is refused until confirmed:
+    # the first post re-renders the page with the dialog and changes nothing.
     resp = client.post(reverse("competitions:general"), {
         "competition_type": type_b.pk, "name": comp.name, "date": "2026-05-01",
+    })
+    assert resp.status_code == 200
+    assert resp.context["confirm_type_change"] == 1
+    comp.refresh_from_db()
+    assert comp.competition_type == type_a
+    assert EventEntry.objects.filter(competition=comp).exists()
+
+    resp = client.post(reverse("competitions:general"), {
+        "competition_type": type_b.pk, "name": comp.name, "date": "2026-05-01",
+        "confirm_type_change": "1",
     })
     assert resp.status_code == 302
     comp.refresh_from_db()

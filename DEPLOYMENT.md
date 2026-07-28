@@ -189,11 +189,13 @@ Then start Caddy if it isn't already running as a service.
 
 **During the event**
 
-- The log is the first place to look: `journalctl -u slalomtiming -f`, or the
-  Daphne window on Windows.
-- `timing_unrecorded.log` in the project root should stay empty. Anything in it is a
-  timing signal the database refused — the time is in that file, not lost, and needs
-  entering by hand.
+- The log is the first place to look: `<data dir>/logs/slalomtiming.log` (who signed
+  in, who was refused, anything the database would not take), plus
+  `journalctl -u slalomtiming -f` or the Daphne window on Windows.
+- `timing_unrecorded.log` **in the data directory** (`SLALOM_DATA_DIR`, which is the
+  project directory for a checkout and `%LOCALAPPDATA%\SlalomTiming\data` for the
+  packaged install) should stay empty. Anything in it is a timing signal the database
+  refused — the time is in that file, not lost, and needs entering by hand.
 - Take a snapshot between runs:
   `uv run python -c "import sqlite3; sqlite3.connect('db.sqlite3').execute('VACUUM INTO ?', ('backup-YYYYMMDD-HHMM.sqlite3',))"`
   and copy it to a USB stick or a second machine. There is no automatic backup yet.
@@ -211,9 +213,10 @@ Then start Caddy if it isn't already running as a service.
 | Every page is unstyled, no live updates | `collectstatic` hasn't run, or `STATIC_ROOT` is empty | `uv run python manage.py collectstatic --noinput`, restart |
 | `Slalom Timing is already running against this directory` | A server process is still up (section 1, rule 1) | Stop it — check Task Manager / `systemctl status slalomtiming`. The lock is `run/server.lock`. |
 | Results-PDF logo previews 404 | `DJANGO_SERVE_MEDIA=False` without the proxy serving `/media/` | Unset it, or add the `handle_path /media/*` block in the Caddyfile |
-| `ImproperlyConfigured: DJANGO_SECRET_KEY is not set` | `.env` missing or not loaded into the process | Section 2; systemd needs `EnvironmentFile=`, PowerShell uses `start-server.ps1` |
 | `ImproperlyConfigured: DJANGO_SECURE_COOKIES=False is no longer honoured` | An old `.env` from before the TLS decision | Section 3.4 — set up TLS, or set `DJANGO_ALLOW_PLAIN_HTTP=True` deliberately |
 | Login says "Too many failed attempts" | The failed-attempt lockout (username + IP) | Wait it out, restart the server, or raise `DJANGO_LOGIN_MAX_ATTEMPTS` |
+| `ImproperlyConfigured: DJANGO_SECRET_KEY is not set and DEBUG is False` | `.env` missing, or not loaded into the process. A deployment must bring its own signing key — there is deliberately no fallback | Section 2; systemd needs `EnvironmentFile=`, PowerShell uses `start-server.ps1` |
+| A logo or an imported emblem doesn't appear | It was refused as not-an-image (uploads say so; an import drops it silently and imports everything else) | Upload the emblem again from Results settings |
 | A browser insists on HTTPS after you moved to plain HTTP | An HSTS pin from an earlier HTTPS run | Nothing server-side can revoke it; clear the site's HSTS entry in the browser and see section 3.4 |
 | `DisallowedHost` in the log | The hostname isn't in `DJANGO_ALLOWED_HOSTS` | Add it (including the bare IP if people type that), restart |
 | Browser refuses to submit a form, CSRF error | Origin missing from `DJANGO_CSRF_TRUSTED_ORIGINS` | Add `https://<host>`, restart |

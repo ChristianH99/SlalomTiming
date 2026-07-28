@@ -3,17 +3,47 @@
 Branch `audit`, 2026-07-28. Scope: everything that must be settled before this app is
 built, installed and served to **multiple users on a local but public network**.
 
-Nothing in this document has been fixed. Every finding was verified against the code —
-most of them by a test that fails today. The probe suites are committed beside this file:
+Every finding was verified against the code — most of them by a probe that failed at
+the time of writing. The probe suites are committed beside this file:
 
 | File | What it is |
 | --- | --- |
-| `audit_probe2_test.py` | 39 targeted probes; **30 fail** (each failure = a confirmed defect) |
+| `audit_probe2_test.py` | 39 targeted probes; **30 failed** at audit time, **8 now** |
 | `audit_matrix_test.py` | 39 configuration-matrix tests; **2 fail** |
 | `audit_measure_test.py` | query/payload measurements (all pass, they print numbers) |
 
-Baseline: the shipped suite is **603 passed, 0 failed** (8 m 29 s). The app is in good
-shape — the findings below are what the existing suite does not look at.
+A **failing** probe is a confirmed defect: its assertion states the behaviour the app
+*should* have, so a fix flips it to green. Never weaken one to make it pass.
+
+Baseline at audit time: the shipped suite was **603 passed, 0 failed** (8 m 29 s).
+
+**Progress: §1 (release blockers) is done — 606 passed, 0 failed.** Everything below
+§1 is still open.
+
+---
+
+## 0a. Owner decisions (2026-07-28)
+
+Recorded here so a later audit does not re-raise them. **Waived** means "working as
+intended, do not change"; **deferred** means "not now, note it".
+
+| ID | Decision |
+| --- | --- |
+| SEC-K | **Waived.** Accounts are assigned; password changes are a superuser's job by design. |
+| INT-1 / UI-1 | **Changed scope.** An empty start pattern is the *default* and is legitimate. Auto timing must then show a message with a link to set the pattern and **no timing UI at all** — not alarm cards. |
+| INT-4 | **Waived.** With no competition selected, times are allowed to be lost. |
+| INT-5 | **Reduced.** Warn on Create and on Import-with-activate, but let the user continue. |
+| INT-6 | **Deferred.** Acceptable for now; a later *archive* feature should snapshot a competition so past results are frozen. |
+| INT-12 | **Waived** — calendar-year age is correct. Document it. |
+| INT-16 | **Waived** — a deleted participant's rows should show the bib and no name. That is the wanted behaviour. |
+| PRV-6 | **Waived** — the operator is not supposed to copy the database anywhere. |
+| §4 (privacy) | Plaintext `.zip` exports are fine for now. **New ask:** protect the database itself if that is practical. |
+| OPS-4 | **Waived** — replaying `timing_unrecorded.log` is unlikely enough to leave alone. |
+| UI-4 | **Changed scope.** Show the last 10 per column with a "show more"; drop the arrival age (duplicate information). No filtering. |
+| UI-5 | **Waived.** |
+| UI-8 | **Changed scope.** Always prefix "Class" (translated) — drop the conditional in `display_name()`. |
+| UI-16 | **Extended.** The unsaved-changes guard must also fire the browser's own dialog when the tab is closed. |
+| UI-19 | **Waived** — Ctrl-P is not supported. |
 
 ---
 
@@ -33,7 +63,27 @@ become wrong the moment a second person is on the network.
 
 ## 1. Release blockers
 
-### BLK-1 — An imported archive plants an executable file on the app's own origin
+### BLK-0 — The signing key is published in a public repository ✅ FIXED
+`config/settings.py`
+
+`SECRET_KEY = 'django-insecure-qvzii-…'` was a literal in a public repo, so every
+reader of the repository held the key that signs this app's session cookies. Anyone
+who could reach a development server could forge a session for any account,
+superuser included. No history rewrite takes a published key back — the only fix is
+to stop using it.
+
+Now: each checkout mints its own into `DATA_DIR/.secret_key` (gitignored), so a
+fresh clone still runs with no setup but nobody shares a key; a deployment
+(`DEBUG=False`) must supply `DJANGO_SECRET_KEY` from the environment and the
+generated file is never consulted; the packaged build already generated a
+per-installation key on first run and now also **refuses to package** if `DEBUG` is
+on, if there is no key, or if a developer's generated key is in the payload
+(`build/launcher.py::selftest`, `build/build.ps1`). Three tests hold the line,
+including one that fails if a key literal ever reappears in `settings.py`.
+
+---
+
+### BLK-1 — An imported archive plants an executable file on the app's own origin ✅ FIXED
 `apps/transfer/importers.py:370`, `apps/results/models.py:169`, `config/urls.py:49`
 
 `_import_results` writes the PDF logo straight from the archive with **no image
@@ -59,7 +109,7 @@ or behind the login gate.
 
 ---
 
-### BLK-2 — Any malformed id 500s the timing endpoints
+### BLK-2 — Any malformed id 500s the timing endpoints ✅ FIXED
 `apps/timing/views.py` (all mutate endpoints), `apps/participants/views.py:311,375`,
 `apps/timing/runstatus.py:79`
 
@@ -90,7 +140,7 @@ ASCII-only; bound `running_number` at the signal door.
 
 ---
 
-### BLK-3 — Results tables and PDFs publish contact details by default
+### BLK-3 — Results tables and PDFs publish contact details by default ✅ FIXED
 `apps/results/models.py:96-105`
 
 `general_columns()` returns **every available column** when no `ResultColumnSettings`
@@ -109,7 +159,7 @@ opt-in. Consider making the *export* column set separate from the *screen* one.
 
 ---
 
-### BLK-4 — Content-Disposition is built by raw interpolation (SEC-6 is **not** fixed)
+### BLK-4 — Content-Disposition is built by raw interpolation (SEC-6 is **not** fixed) ✅ FIXED
 `apps/results/views.py:395`, `apps/transfer/views.py:68`
 
 ```python
@@ -138,7 +188,7 @@ Unicode-aware, so it has the same non-latin-1 problem. CLAUDE.md:721 claims it i
 
 ---
 
-### BLK-5 — No logging configuration at all
+### BLK-5 — No logging configuration at all ✅ FIXED
 `config/settings.py` (no `LOGGING` key)
 
 `apps/accounts/throttle.py` logs every failed login at WARNING and every **successful**
@@ -160,7 +210,7 @@ much about having nothing to look at afterwards". But the project configures no
 
 ---
 
-### BLK-6 — Changing a competition's type deletes registrations with no confirmation
+### BLK-6 — Changing a competition's type deletes registrations with no confirmation ✅ FIXED
 `apps/competitions/views.py:85-95`, `_clear_foreign_registrations`
 
 `GeneralView.post` detects a changed `competition_type` and immediately
@@ -190,7 +240,7 @@ page, superuser-gated, or deliberately open. Below are the gaps around it.
 
 | ID | Sev | Finding |
 | --- | --- | --- |
-| SEC-A | High | **`/media/` is world-readable.** `middleware.py:27` returns early for `MEDIA_URL`, before the authentication check. Verified: an anonymous `GET /media/audit-leak.txt` returns **200 with the file body**. `config/tests.py:68` currently *asserts* this behaviour, so it reads as deliberate — but the app's premise is "login required everywhere", and this is the one route by which uploaded content leaves it. It is also what makes BLK-1 exploitable unauthenticated. |
+| SEC-A | ✅ FIXED | **`/media/` was world-readable.** `middleware.py:27` returns early for `MEDIA_URL`, before the authentication check. Verified: an anonymous `GET /media/audit-leak.txt` returns **200 with the file body**. `config/tests.py:68` currently *asserts* this behaviour, so it reads as deliberate — but the app's premise is "login required everywhere", and this is the one route by which uploaded content leaves it. It is also what makes BLK-1 exploitable unauthenticated. |
 | SEC-B | High | **`timing:signal` is `csrf_exempt` and accepts session auth.** A cross-origin form can post a JSON body; the only thing stopping it is Django's default `SameSite=Lax` session cookie. Nothing in the code states that dependency. Split the door: token-only for devices, CSRF-protected for the browser Simulator. |
 | SEC-C | Med | **SEC-7 confirmed open — `participants:check` leaks across competition types.** `Participant.objects.all()` is searched by licence number and name; the response carries **name, club and licence number** of participants registered under *other* disciplines. Any user with the Participants page gets an unthrottled licence-number oracle. *Evidence:* `test_duplicate_check_does_not_leak_participants_of_another_type` fails. |
 | SEC-D | Med | **The WebSocket has no origin check.** `config/asgi.py:43` wraps the router in `AuthMiddlewareStack` but not `AllowedHostsOriginValidator`. Browsers do not apply same-origin policy to WebSockets, so any page an operator visits can open `ws://…/ws/timing/live/` with their cookies and read the `competition` nudge (the event's name) and see when times land. |
@@ -468,7 +518,8 @@ The 603-test suite is strong on behaviour and weak on hostility. What it does no
 
 ## 10. Suggested order
 
-**Before any build:** BLK-1 … BLK-6.
+**Before any build:** BLK-0 … BLK-6 — **done**, see the ✅ marks above (SEC-A came
+with BLK-1).
 
 **Before more than one user is on the network:** SEC-A, SEC-B, SEC-C, SEC-F, SEC-G,
 INT-1, INT-2, INT-5, OPS-1, OPS-2.

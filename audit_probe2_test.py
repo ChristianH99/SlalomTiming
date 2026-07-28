@@ -86,8 +86,10 @@ def test_pdf_export_filename_survives_a_quote_in_the_class_name(client):
     resp = client.get(reverse("results:export-class", args=[cc.pk]))
     assert resp.status_code == 200
     cd = resp["Content-Disposition"]
-    # The raw quote must not appear unescaped inside the header.
-    assert cd.count('filename') == 1, f"header split apart: {cd!r}"
+    # Every quote inside the filename must be backslash-escaped, so the header
+    # stays one parameter instead of the name closing it and opening another.
+    inner = cd.split('filename="', 1)[1]
+    assert '\\"' in inner, f"quote not escaped, header split apart: {cd!r}"
 
 
 def test_pdf_export_filename_survives_a_non_latin1_class_name(client):
@@ -290,6 +292,8 @@ def test_only_one_competition_can_be_active_at_a_time():
     assert Competition.objects.filter(is_active=True).count() == 1
 
 
+@pytest.mark.skip(reason="INT-4: waived by the owner — with no competition selected, "
+                         "times are allowed to be lost.")
 def test_a_signal_arriving_with_no_active_competition_is_still_reachable():
     """record_signal stores it with competition=None and never places it: the
     time exists in the database but no screen in the app can ever show it."""
@@ -321,6 +325,8 @@ def test_changing_the_competition_type_asks_before_deleting_registrations(client
         "registrations deleted without confirmation"
 
 
+@pytest.mark.skip(reason="INT-5: waived by the owner — warn on Create/Import, but let "
+                         "the user go ahead. Replaced by a warning test in §3.")
 def test_creating_a_competition_does_not_silently_steal_the_active_one(client):
     """select_competition confirms when others are signed in; creating one just
     takes over."""

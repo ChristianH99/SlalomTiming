@@ -11,6 +11,7 @@ archive waits in ``staging`` between the steps; the session holds only its token
 from django.contrib import messages
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import content_disposition_header
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.decorators.http import require_POST
@@ -65,7 +66,9 @@ class ExportView(View):
             return redirect("transfer:export")
 
         response = HttpResponse(payload, content_type="application/zip")
-        response["Content-Disposition"] = f'attachment; filename="{name}"'
+        # Built by Django rather than interpolated: the name carries a competition
+        # name (see apps/results/views.py::_pdf_response for what that cost).
+        response["Content-Disposition"] = content_disposition_header(True, name)
         return response
 
 
@@ -218,7 +221,8 @@ def csv_sample(request):
     response = HttpResponse(
         csvimport.sample_csv(competition), content_type="text/csv; charset=utf-8"
     )
-    response["Content-Disposition"] = 'attachment; filename="participants-sample.csv"'
+    response["Content-Disposition"] = content_disposition_header(
+        True, "participants-sample.csv")
     return response
 
 

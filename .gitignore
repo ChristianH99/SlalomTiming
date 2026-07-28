@@ -77,6 +77,14 @@ db.sqlite3-shm
 # The single-server lock (config/singleinstance.py)
 /run/
 
+# The development signing key this checkout generated for itself
+# (config/settings.py::_development_secret_key). Never commit one: a key in a
+# public repository is a key everybody has.
+.secret_key
+
+# Rotating application/security log (config/settings.py LOGGING)
+/logs/
+
 # Flask stuff:
 instance/
 .webassets-cache

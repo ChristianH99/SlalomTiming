@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-28 08:17+0200\n"
+"POT-Creation-Date: 2026-07-28 19:46+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -202,18 +202,18 @@ msgstr "Wie gleiche Ergebnisse getrennt werden."
 msgid "Resolution of the timing device."
 msgstr "Auflösung des Zeitmessgeräts."
 
-#: .\apps\competitions\models.py:92 .\apps\participants\views.py:100
+#: .\apps\competitions\models.py:92 .\apps\participants\views.py:115
 #: .\apps\results\models.py:13
 msgid "Co-driver"
 msgstr "Beifahrer"
 
-#: .\apps\competitions\models.py:94 .\apps\participants\views.py:102
+#: .\apps\competitions\models.py:94 .\apps\participants\views.py:117
 #: .\apps\results\models.py:19 .\apps\results\pdf.py:293
 #: .\apps\transfer\merge.py:40 .\templates\results\_results_head.html:7
 msgid "Vehicle"
 msgstr "Fahrzeug"
 
-#: .\apps\competitions\models.py:96 .\apps\participants\views.py:103
+#: .\apps\competitions\models.py:96 .\apps\participants\views.py:118
 #: .\templates\participants\participant_form.html:87
 msgid "Address"
 msgstr "Adresse"
@@ -230,12 +230,12 @@ msgid "Licence number"
 msgstr "Lizenznummer"
 
 #: .\apps\competitions\models.py:100 .\apps\participants\forms.py:161
-#: .\apps\participants\views.py:104 .\apps\results\models.py:15
+#: .\apps\participants\views.py:119 .\apps\results\models.py:15
 #: .\apps\transfer\merge.py:45
 msgid "E-Mail"
 msgstr "E-Mail"
 
-#: .\apps\competitions\models.py:101 .\apps\participants\views.py:105
+#: .\apps\competitions\models.py:101 .\apps\participants\views.py:120
 #: .\apps\results\models.py:16 .\apps\transfer\merge.py:46
 msgid "Phone"
 msgstr "Telefon"
@@ -356,39 +356,39 @@ msgstr "Training"
 msgid "Counted"
 msgstr "Wertung"
 
-#: .\apps\competitions\views.py:93
+#: .\apps\competitions\views.py:108
 #, python-format
 msgid "Removed %(count)s registration(s) that didn't belong to “%(type)s”."
 msgstr "%(count)s Nennung(en) entfernt, die nicht zu „%(type)s“ gehörten."
 
-#: .\apps\competitions\views.py:96
+#: .\apps\competitions\views.py:111
 msgid "General settings saved."
 msgstr "Allgemeine Einstellungen gespeichert."
 
-#: .\apps\competitions\views.py:195
+#: .\apps\competitions\views.py:221
 msgid "Classes saved."
 msgstr "Klassen gespeichert."
 
-#: .\apps\competitions\views.py:239
+#: .\apps\competitions\views.py:265
 msgid "Run order saved."
 msgstr "Laufreihenfolge gespeichert."
 
-#: .\apps\competitions\views.py:346 .\apps\competitions\views.py:361
+#: .\apps\competitions\views.py:372 .\apps\competitions\views.py:387
 msgid "Penalties settings saved."
 msgstr "Strafen-Einstellungen gespeichert."
 
-#: .\apps\competitions\views.py:351
+#: .\apps\competitions\views.py:377
 msgid "Some task lists couldn't be read — fix them and save again."
 msgstr ""
 "Einige Aufgabenlisten konnten nicht gelesen werden — korrigieren Sie sie und "
 "speichern Sie erneut."
 
-#: .\apps\competitions\views.py:640
+#: .\apps\competitions\views.py:666
 #, python-format
 msgid "Settings for “%(name)s” saved."
 msgstr "Einstellungen für „%(name)s“ gespeichert."
 
-#: .\apps\competitions\views.py:699
+#: .\apps\competitions\views.py:725
 msgid "That type is still in use and can't be deleted."
 msgstr "Dieser Typ wird noch verwendet und kann nicht gelöscht werden."
 
@@ -488,34 +488,34 @@ msgstr "Disqualifiziert"
 msgid "Finished"
 msgstr "Beendet"
 
-#: .\apps\participants\views.py:305 .\apps\participants\views.py:369
+#: .\apps\participants\views.py:320 .\apps\participants\views.py:385
 msgid "No competition is selected."
 msgstr "Es ist kein Wettbewerb ausgewählt."
 
-#: .\apps\participants\views.py:309 .\apps\participants\views.py:373
-#: .\apps\results\views.py:626
+#: .\apps\participants\views.py:324 .\apps\participants\views.py:389
+#: .\apps\results\views.py:611
 msgid "Malformed request."
 msgstr "Fehlerhafte Anfrage."
 
-#: .\apps\participants\views.py:315
+#: .\apps\participants\views.py:331
 msgid "Unknown participant."
 msgstr "Unbekannter Teilnehmer."
 
-#: .\apps\participants\views.py:334
+#: .\apps\participants\views.py:350
 msgid "Bib must be a positive number."
 msgstr "Die Startnummer muss eine positive Zahl sein."
 
-#: .\apps\participants\views.py:341
+#: .\apps\participants\views.py:357
 #, python-format
 msgid "Bib %(bib)s is already taken."
 msgstr "Startnummer %(bib)s ist bereits vergeben."
 
-#: .\apps\participants\views.py:384
+#: .\apps\participants\views.py:400
 #: .\templates\participants\participant_list.html:110
 msgid "Give this participant a bib first."
 msgstr "Vergeben Sie diesem Teilnehmer zuerst eine Startnummer."
 
-#: .\apps\participants\views.py:404
+#: .\apps\participants\views.py:420
 #, python-format
 msgid ""
 "%(count)s recorded run stays with bib %(bib)s and stops being this "
@@ -530,7 +530,7 @@ msgstr[1] ""
 "%(count)s erfasste Läufe bleiben bei Startnummer %(bib)s und gehören dann "
 "nicht mehr zu diesem Teilnehmer."
 
-#: .\apps\participants\views.py:410
+#: .\apps\participants\views.py:426
 #, python-format
 msgid ""
 "%(count)s run already recorded under bib %(bib)s becomes this participant's."
@@ -543,21 +543,31 @@ msgstr[1] ""
 "%(count)s bereits unter Startnummer %(bib)s erfasste Läufe gehören dann zu "
 "diesem Teilnehmer."
 
-#: .\apps\participants\views.py:417
+#: .\apps\participants\views.py:433
 msgid "This moves recorded times."
 msgstr "Dadurch werden erfasste Zeiten verschoben."
 
-#: .\apps\participants\views.py:437
+#: .\apps\participants\views.py:453
 msgid "licence number"
 msgstr "Lizenznummer"
 
-#: .\apps\participants\views.py:441
+#: .\apps\participants\views.py:457
 msgid "name and licence number"
 msgstr "Name und Lizenznummer"
 
-#: .\apps\participants\views.py:443
+#: .\apps\participants\views.py:459
 msgid "name"
 msgstr "Name"
+
+#: .\apps\results\logos.py:48
+#, python-format
+msgid "The logo “%(name)s” is too large (limit %(limit)s MB)."
+msgstr "Das Logo „%(name)s“ ist zu groß (Grenze %(limit)s MB)."
+
+#: .\apps\results\logos.py:53
+#, python-format
+msgid "“%(name)s” is not an image file."
+msgstr "„%(name)s“ ist keine Bilddatei."
 
 #: .\apps\results\models.py:12
 msgid "Driver name"
@@ -579,15 +589,15 @@ msgstr "Geburtsjahr"
 msgid "Training runs"
 msgstr "Trainingsläufe"
 
-#: .\apps\results\models.py:153
+#: .\apps\results\models.py:160
 msgid "Portrait"
 msgstr "Hochformat"
 
-#: .\apps\results\models.py:154
+#: .\apps\results\models.py:161
 msgid "Landscape"
 msgstr "Querformat"
 
-#: .\apps\results\models.py:155
+#: .\apps\results\models.py:162
 msgid "Auto (fit the table)"
 msgstr "Automatisch (an Tabelle anpassen)"
 
@@ -678,51 +688,41 @@ msgstr ""
 "Die Ränge müssen der Reihe nach vergeben werden – bei Gleichstand bleibt die "
 "kleinere Zahl."
 
-#: .\apps\results\resultscalc.py:584 .\apps\results\views.py:299
+#: .\apps\results\resultscalc.py:584 .\apps\results\views.py:292
 #, python-format
 msgid "%(label)s · %(runs)s Runs"
 msgstr "%(label)s · %(runs)s Läufe"
 
-#: .\apps\results\views.py:83
+#: .\apps\results\views.py:76
 msgid "Best run"
 msgstr "Bester Lauf"
 
-#: .\apps\results\views.py:85
+#: .\apps\results\views.py:78
 msgid "Difference"
 msgstr "Differenz"
 
-#: .\apps\results\views.py:86 .\templates\timing\live.html:63
+#: .\apps\results\views.py:79 .\templates\timing\live.html:63
 msgid "Total"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:298 .\templates\results\index.html:13
+#: .\apps\results\views.py:291 .\templates\results\index.html:13
 msgid "Overall"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:301 .\templates\base.html:66
+#: .\apps\results\views.py:294 .\templates\base.html:66
 #, python-format
 msgid "Overall · %(label)s · %(runs)s Runs"
 msgstr "Gesamt · %(label)s · %(runs)s Läufe"
 
-#: .\apps\results\views.py:485
-#, python-format
-msgid "The logo “%(name)s” is too large (limit %(limit)s MB)."
-msgstr "Das Logo „%(name)s“ ist zu groß (Grenze %(limit)s MB)."
-
-#: .\apps\results\views.py:490
-#, python-format
-msgid "“%(name)s” is not an image file."
-msgstr "„%(name)s“ ist keine Bilddatei."
-
-#: .\apps\results\views.py:516 .\apps\results\views.py:617
+#: .\apps\results\views.py:501 .\apps\results\views.py:602
 msgid "No active competition."
 msgstr "Kein aktiver Wettbewerb."
 
-#: .\apps\results\views.py:631
+#: .\apps\results\views.py:616
 msgid "Unknown results table."
 msgstr "Unbekannte Ergebnistabelle."
 
-#: .\apps\results\views.py:725
+#: .\apps\results\views.py:710
 msgid "Results settings saved."
 msgstr "Ergebnis-Einstellungen gespeichert."
 
@@ -820,16 +820,16 @@ msgstr "Nicht gewertet"
 msgid "Intermediate"
 msgstr "Zwischenzeit"
 
-#: .\apps\timing\views.py:128
+#: .\apps\timing\views.py:131
 #, python-format
 msgid "Connecting to the Tag Heuer CP540 at %(ip)s:%(port)s…"
 msgstr "Verbinde mit dem Tag Heuer CP540 unter %(ip)s:%(port)s…"
 
-#: .\apps\timing\views.py:134
+#: .\apps\timing\views.py:137
 msgid "Disconnected from the timing device."
 msgstr "Verbindung zum Zeitmessgerät getrennt."
 
-#: .\apps\timing\views.py:136
+#: .\apps\timing\views.py:139
 msgid "Timing settings saved."
 msgstr "Zeitmess-Einstellungen gespeichert."
 
@@ -943,39 +943,39 @@ msgstr "Startnummer %(bib)s ist in diesem Wettbewerb schon vergeben."
 msgid "Bib %(bib)s is also used on line %(line)s."
 msgstr "Startnummer %(bib)s wird auch in Zeile %(line)s verwendet."
 
-#: .\apps\transfer\importers.py:75
+#: .\apps\transfer\importers.py:74
 msgid "Use the existing type and keep its current settings"
 msgstr "Vorhandenen Typ verwenden und dessen Einstellungen behalten"
 
-#: .\apps\transfer\importers.py:76
+#: .\apps\transfer\importers.py:75
 msgid "Use the existing type and overwrite its settings from the file"
 msgstr ""
 "Vorhandenen Typ verwenden und dessen Einstellungen aus der Datei "
 "überschreiben"
 
-#: .\apps\transfer\importers.py:79
+#: .\apps\transfer\importers.py:78
 msgid "Register a separate competition type"
 msgstr "Eigenen Wettbewerbstyp anlegen"
 
-#: .\apps\transfer\importers.py:87
+#: .\apps\transfer\importers.py:86
 msgid "The export does not say what it contains."
 msgstr "Der Export gibt nicht an, was er enthält."
 
-#: .\apps\transfer\importers.py:92
+#: .\apps\transfer\importers.py:91
 msgid "The export has no competition type."
 msgstr "Der Export enthält keinen Wettbewerbstyp."
 
-#: .\apps\transfer\importers.py:94
+#: .\apps\transfer\importers.py:93
 msgid "The export claims to be an event but holds no competition."
 msgstr ""
 "Der Export gibt sich als Veranstaltung aus, enthält aber keinen Wettbewerb."
 
-#: .\apps\transfer\importers.py:177
+#: .\apps\transfer\importers.py:176
 #, python-format
 msgid "%(name)s (imported)"
 msgstr "%(name)s (importiert)"
 
-#: .\apps\transfer\importers.py:264
+#: .\apps\transfer\importers.py:263
 #, python-format
 msgid ""
 "%(name)s appears twice in the file (bib %(bib)s was merged into bib "
@@ -1012,15 +1012,15 @@ msgstr ""
 "Die Exportdatei enthält einen Wert, den %(model)s.%(field)s nicht speichern "
 "kann."
 
-#: .\apps\transfer\views.py:64
+#: .\apps\transfer\views.py:65
 msgid "Choose what to export."
 msgstr "Wähle aus, was exportiert werden soll."
 
-#: .\apps\transfer\views.py:109
+#: .\apps\transfer\views.py:112
 msgid "Choose a file to import."
 msgstr "Wähle eine Datei zum Importieren aus."
 
-#: .\apps\transfer\views.py:113
+#: .\apps\transfer\views.py:116
 #, python-format
 msgid ""
 "That file is %(size)s MB — too large for an export archive (the limit is "
@@ -1029,12 +1029,12 @@ msgstr ""
 "Diese Datei ist %(size)s MB groß — zu groß für ein Export-Archiv (die Grenze "
 "liegt bei %(limit)s MB)."
 
-#: .\apps\transfer\views.py:137
+#: .\apps\transfer\views.py:140
 msgid "Choose a competition to import participants into."
 msgstr ""
 "Wähle einen Wettbewerb, in den die Teilnehmer importiert werden sollen."
 
-#: .\apps\transfer\views.py:143
+#: .\apps\transfer\views.py:146
 #, python-format
 msgid ""
 "That file is %(size)s MB — too large for a participant list (the limit is "
@@ -1043,27 +1043,27 @@ msgstr ""
 "Diese Datei ist %(size)s MB groß — zu groß für eine Teilnehmerliste (die "
 "Grenze liegt bei %(limit)s MB)."
 
-#: .\apps\transfer\views.py:156
+#: .\apps\transfer\views.py:159
 msgid "Participants imported."
 msgstr "Teilnehmer importiert."
 
-#: .\apps\transfer\views.py:209
+#: .\apps\transfer\views.py:212
 msgid "Import finished."
 msgstr "Import abgeschlossen."
 
-#: .\apps\transfer\views.py:228
+#: .\apps\transfer\views.py:232
 msgid "Import cancelled — nothing was changed."
 msgstr "Import abgebrochen – es wurde nichts geändert."
 
-#: .\apps\transfer\views.py:241
+#: .\apps\transfer\views.py:245
 msgid "The upload has expired. Please choose the file again."
 msgstr "Der Upload ist abgelaufen. Bitte wähle die Datei erneut aus."
 
-#: .\config\settings.py:321
+#: .\config\settings.py:425
 msgid "German"
 msgstr "Deutsch"
 
-#: .\config\settings.py:322
+#: .\config\settings.py:426
 msgid "English"
 msgstr "Englisch"
 
@@ -1239,7 +1239,7 @@ msgstr "leer lassen zum Beibehalten"
 
 #: .\templates\accounts\user_access.html:97
 #: .\templates\competitions\competition_classes.html:61
-#: .\templates\competitions\competition_general.html:29
+#: .\templates\competitions\competition_general.html:34
 #: .\templates\competitions\competition_penalties.html:69
 #: .\templates\competitions\competition_runorder.html:75
 #: .\templates\competitions\competitiontype_form.html:10
@@ -1380,6 +1380,7 @@ msgstr "Verwerfen"
 #: .\templates\competitions\competition_classes.html:71
 #: .\templates\competitions\competition_confirm_delete.html:30
 #: .\templates\competitions\competition_confirm_switch.html:33
+#: .\templates\competitions\competition_general.html:55
 #: .\templates\competitions\competition_penalties.html:90
 #: .\templates\competitions\competitiontype_form.html:11
 #: .\templates\competitions\competitiontype_settings.html:80
@@ -1445,7 +1446,7 @@ msgstr ""
 "Klassen und die Laufreihenfolge. Der neue Wettbewerb wird zum aktuellen."
 
 #: .\templates\competitions\competition_add.html:15
-#: .\templates\competitions\competition_general.html:15
+#: .\templates\competitions\competition_general.html:20
 msgid "+ add new type"
 msgstr "+ neuen Typ hinzufügen"
 
@@ -1644,6 +1645,37 @@ msgstr ""
 #, python-format
 msgid "Basic details for <strong>%(name)s</strong>."
 msgstr "Grunddaten für <strong>%(name)s</strong>."
+
+#: .\templates\competitions\competition_general.html:46
+msgid "Remove registrations?"
+msgstr "Meldungen entfernen?"
+
+#: .\templates\competitions\competition_general.html:49
+#, python-format
+msgid ""
+"<strong>%(n)s</strong> registered participant does not belong to “%(type)s” "
+"and would be removed from this competition."
+msgid_plural ""
+"<strong>%(n)s</strong> registered participants do not belong to “%(type)s” "
+"and would be removed from this competition."
+msgstr[0] ""
+"<strong>%(n)s</strong> gemeldeter Teilnehmer gehört nicht zu „%(type)s“ und "
+"würde aus diesem Wettbewerb entfernt."
+msgstr[1] ""
+"<strong>%(n)s</strong> gemeldete Teilnehmer gehören nicht zu „%(type)s“ und "
+"würden aus diesem Wettbewerb entfernt."
+
+#: .\templates\competitions\competition_general.html:51
+msgid ""
+"They keep their bibs’ recorded times, but those times stop being anybody’s. "
+"The participants themselves are not deleted."
+msgstr ""
+"Die unter ihren Startnummern erfassten Zeiten bleiben erhalten, gehören dann "
+"aber niemandem mehr. Die Teilnehmer selbst werden nicht gelöscht."
+
+#: .\templates\competitions\competition_general.html:54
+msgid "Remove them and save"
+msgstr "Entfernen und speichern"
 
 #: .\templates\competitions\competition_list.html:9
 msgid "Search by name or type…"
@@ -2492,6 +2524,7 @@ msgstr "Noch keine laufenden Klassen."
 
 #: .\templates\results\results_class.html:6
 #: .\templates\results\results_class.html:7
+#, python-format
 msgid "Result %(name)s"
 msgstr "Ergebnis %(name)s"
 

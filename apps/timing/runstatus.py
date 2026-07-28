@@ -26,6 +26,12 @@ from apps.participants.models import EventEntry
 from . import autotiming
 from .models import TimedRun
 
+
+def _as_pk(value):
+    """A pk (or a small non-negative number) out of a slot key, else None."""
+    text = str(value).strip()
+    return int(text) if text.isascii() and text.isdigit() else None
+
 # The state codes, in the order the timing screens offer them.
 CHOICES = [
     TimedRun.Status.DNF,
@@ -73,9 +79,12 @@ def run_for_slot(competition, slot_key):
     entry_pk, class_pk, occurrence, run_type, run_number = parts
     if run_type not in (TimedRun.RunType.PRACTICE, TimedRun.RunType.COUNTED):
         return None
-    try:
-        occurrence, run_number = int(occurrence), int(run_number)
-    except (TypeError, ValueError):
+    # A slot key arrives as text from a client, and both halves of it are pks.
+    # Handing a non-numeric one to filter(pk=…) makes Django raise while it
+    # prepares the query — the same 500 the timing endpoints used to have.
+    entry_pk, class_pk = _as_pk(entry_pk), _as_pk(class_pk)
+    occurrence, run_number = _as_pk(occurrence), _as_pk(run_number)
+    if None in (class_pk, run_number) or entry_pk is None or occurrence is None:
         return None
     entry = EventEntry.objects.filter(competition=competition, pk=entry_pk).first()
     cclass = CompetitionClass.objects.filter(competition=competition, pk=class_pk).first()

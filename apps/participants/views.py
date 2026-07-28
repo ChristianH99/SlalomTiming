@@ -16,6 +16,21 @@ from .forms import ParticipantCreateForm, ParticipantUpdateForm
 from .models import ClassAssignment, EventEntry, Participant
 
 
+def _as_pk(value):
+    """A pk from a JSON payload, or None.
+
+    Handing a non-numeric string to ``filter(pk=…)`` makes Django raise ValueError
+    while it prepares the query — a 500 rather than a 404. A pk that isn't a number
+    matches nothing, which is what None does here.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    text = str(value).strip()
+    return int(text) if text.isascii() and text.isdigit() else None
+
+
 def save_class_assignments(participant, competition, form):
     """Persist a manual class selection: replace this competition's assignments
     for the participant with the validated list (which may contain repeats)."""
@@ -309,7 +324,8 @@ def participant_set_bib(request):
         return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
 
     participant = Participant.objects.filter(
-        pk=payload.get("participant"), competition_type=competition.competition_type
+        pk=_as_pk(payload.get("participant")),
+        competition_type=competition.competition_type,
     ).first()
     if participant is None:
         return JsonResponse({"ok": False, "error": gettext("Unknown participant.")}, status=404)
@@ -330,7 +346,7 @@ def participant_set_bib(request):
             entry.delete()
         return JsonResponse({"ok": True, "bib": None})
 
-    if not raw.isdigit() or int(raw) < 1:
+    if not (raw.isascii() and raw.isdigit()) or int(raw) < 1:
         return JsonResponse({"ok": False, "error": gettext("Bib must be a positive number.")})
     bib = int(raw)
 
@@ -373,7 +389,7 @@ def participant_set_dsq(request):
         return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
 
     entry = EventEntry.objects.filter(
-        participant__pk=payload.get("participant"),
+        participant__pk=_as_pk(payload.get("participant")),
         participant__competition_type=competition.competition_type,
         competition=competition,
     ).first()
@@ -428,7 +444,7 @@ def participant_check(request):
     exclude = request.GET.get("exclude", "")
 
     base = Participant.objects.all()
-    if exclude.isdigit():
+    if exclude.isascii() and exclude.isdigit():
         base = base.exclude(pk=int(exclude))
 
     results = {}

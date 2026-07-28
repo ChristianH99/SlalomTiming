@@ -67,12 +67,24 @@ class ActiveCompetitionMixin:
 class GeneralView(ActiveCompetitionMixin, View):
     template_name = "competitions/competition_general.html"
 
+    @staticmethod
+    def _context(competition, form, confirm_type_change=0, new_type=None):
+        # confirm_type_change is always present and always a number: the template
+        # counts on it in a {% blocktrans count %}, which raises on an empty
+        # string — so an ordinary GET must not leave it out.
+        return {
+            "object": competition,
+            "form": form,
+            "confirm_type_change": confirm_type_change,
+            "new_type": new_type,
+        }
+
     def get(self, request):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
         form = CompetitionForm(instance=competition)
-        return render(request, self.template_name, {"object": competition, "form": form})
+        return render(request, self.template_name, self._context(competition, form))
 
     def post(self, request):
         competition = self.get_active()
@@ -81,11 +93,25 @@ class GeneralView(ActiveCompetitionMixin, View):
         old_type_id = competition.competition_type_id
         form = CompetitionForm(request.POST, instance=competition)
         if form.is_valid():
+            new_type_id = form.cleaned_data["competition_type"].pk
+            if new_type_id != old_type_id:
+                # A registration belongs to one discipline, so changing the type
+                # drops every entry that no longer fits — and takes those
+                # competitors' bibs (and the identity of any time recorded under
+                # them) with it. Every other destructive action in this app says
+                # what it costs first; this one used to say it afterwards, on a
+                # dropdown sitting on the most-visited setup page. So: count, ask,
+                # and only then save. The check is server-side because the page it
+                # asks from may be stale.
+                doomed = _foreign_registration_count(competition, new_type_id)
+                if doomed and not request.POST.get("confirm_type_change"):
+                    return render(request, self.template_name, self._context(
+                        competition, form,
+                        confirm_type_change=doomed,
+                        new_type=form.cleaned_data["competition_type"],
+                    ))
             form.save()
             if competition.competition_type_id != old_type_id:
-                # A registration belongs to one discipline; changing the
-                # competition's type drops the ones that no longer fit (their
-                # bibs were silently blocking the new discipline otherwise).
                 removed = _clear_foreign_registrations(competition)
                 if removed:
                     messages.info(
@@ -95,7 +121,18 @@ class GeneralView(ActiveCompetitionMixin, View):
                     )
             messages.success(request, _("General settings saved."))
             return redirect(safe_next(request, reverse("competitions:general")))
-        return render(request, self.template_name, {"object": competition, "form": form})
+        return render(request, self.template_name, self._context(competition, form))
+
+
+def _foreign_registration_count(competition, new_type_id):
+    """How many registrations changing the type to ``new_type_id`` would delete."""
+    from apps.participants.models import EventEntry
+
+    return (
+        EventEntry.objects.filter(competition=competition)
+        .exclude(participant__competition_type_id=new_type_id)
+        .count()
+    )
 
 
 def _clear_foreign_registrations(competition):
