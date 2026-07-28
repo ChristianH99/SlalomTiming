@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-27 23:49+0200\n"
+"POT-Creation-Date: 2026-07-28 08:17+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -47,11 +47,10 @@ msgstr "Zeitmessung"
 msgid "Marshal Posts"
 msgstr "Streckenposten"
 
-#: .\apps\accounts\pages.py:23 .\apps\results\pdf.py:619
+#: .\apps\accounts\pages.py:23 .\apps\results\pdf.py:625
 #: .\templates\base.html:42 .\templates\base.html:63
 #: .\templates\results\index.html:3 .\templates\results\index.html:4
-#: .\templates\results\index.html:7 .\templates\results\results_class.html:4
-#: .\templates\results\results_overall.html:4
+#: .\templates\results\index.html:7
 #: .\templates\results\results_settings.html:6
 msgid "Results"
 msgstr "Ergebnisse"
@@ -606,11 +605,19 @@ msgstr "Startnr."
 msgid "No complete results yet."
 msgstr "Noch keine vollständigen Ergebnisse."
 
-#: .\apps\results\pdf.py:450 .\templates\results\_results_table.html:46
+#: .\apps\results\pdf.py:447
+msgid "Result"
+msgstr "Ergebnis"
+
+#: .\apps\results\pdf.py:455 .\templates\results\_results_table.html:46
 msgid "Not yet ranked"
 msgstr "Noch nicht platziert"
 
-#: .\apps\results\pdf.py:612
+#: .\apps\results\pdf.py:458 .\templates\results\_results_table.html:68
+msgid "Starters:"
+msgstr "Starter:"
+
+#: .\apps\results\pdf.py:618
 #, python-format
 msgid "Exported %(dt)s"
 msgstr "Exportiert %(dt)s"
@@ -2448,10 +2455,6 @@ msgstr ""
 "Teilnehmer, denen noch ein Wertungslauf fehlt. Markieren Sie einen Lauf "
 "dort, wo die Zeit stünde, mit „DNS“, wenn er nicht angetreten wurde."
 
-#: .\templates\results\_results_table.html:68
-msgid "Starters:"
-msgstr "Starter:"
-
 #: .\templates\results\_results_table.html:77
 msgid "Drag the tied competitors into order and set their ranks."
 msgstr ""
@@ -2471,7 +2474,7 @@ msgid "Export all to PDF"
 msgstr "Alle als PDF exportieren"
 
 #: .\templates\results\index.html:17
-#: .\templates\results\results_overall.html:7
+#: .\templates\results\results_overall.html:9
 #, python-format
 msgid "Overall · %(label)s"
 msgstr "Gesamt · %(label)s"
@@ -2487,27 +2490,27 @@ msgstr[1] "%(runs)s Läufe · %(count)s Klassen"
 msgid "No running classes yet."
 msgstr "Noch keine laufenden Klassen."
 
-#: .\templates\results\results_class.html:3
-#, python-format
-msgid "%(name)s results"
-msgstr "Ergebnisse %(name)s"
+#: .\templates\results\results_class.html:6
+#: .\templates\results\results_class.html:7
+msgid "Result %(name)s"
+msgstr "Ergebnis %(name)s"
 
-#: .\templates\results\results_class.html:9
-#: .\templates\results\results_overall.html:9
+#: .\templates\results\results_class.html:12
+#: .\templates\results\results_overall.html:11
 msgid "Export PDF"
 msgstr "PDF exportieren"
 
-#: .\templates\results\results_overall.html:3
-#: .\templates\results\results_settings.html:13
-msgid "Overall results"
-msgstr "Gesamtergebnisse"
+#: .\templates\results\results_overall.html:5
+#: .\templates\results\results_overall.html:6
+msgid "Result Overall"
+msgstr "Ergebnis Gesamt"
 
-#: .\templates\results\results_overall.html:8
+#: .\templates\results\results_overall.html:10
 #, python-format
 msgid "%(runs)s Runs"
 msgstr "%(runs)s Läufe"
 
-#: .\templates\results\results_overall.html:11
+#: .\templates\results\results_overall.html:13
 msgid "all classes combined"
 msgstr "alle Klassen zusammen"
 
@@ -2524,6 +2527,10 @@ msgid ""
 msgstr ""
 "Welche Teilnehmerangaben in den Ergebnistabellen für <strong>%(name)s</"
 "strong> erscheinen. Platz und Startnummer werden immer angezeigt."
+
+#: .\templates\results\results_settings.html:13
+msgid "Overall results"
+msgstr "Gesamtergebnisse"
 
 #: .\templates\results\results_settings.html:15
 msgid ""

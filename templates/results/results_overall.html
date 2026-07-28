@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% load i18n %}
-{% block title %}{% trans "Overall results" %} – Slalom Timing{% endblock %}
-{% block topbar_title %}{% trans "Results" %}{% endblock %}
+{% comment %}Singular, like the per-class pages: one table, one result.{% endcomment %}
+{% block title %}{% trans "Result Overall" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Result Overall" %}{% endblock %}
 {% block content %}
   <div class="results-header">
     <h1 class="page-heading">{% blocktrans with label=scoring_label %}Overall · {{ label }}{% endblocktrans %}</h1>

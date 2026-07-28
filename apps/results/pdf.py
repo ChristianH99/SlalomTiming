@@ -440,7 +440,12 @@ def _make_table(layout, rows, kind, usable_w, extra_rows=()):
 def _section_flowables(section, usable_w):
     """Title + ranked table (+ unranked block) + summary for one section."""
     layout = section["layout"]
-    headline = f'{section["title"]} · {_("Results")} · {section["scoring_label"]}'
+    # Singular: a section is one table — one class's result, or one Overall.
+    # Bound to a name first: xgettext does not look inside an f-string, so a
+    # `_("…")` written in there is never extracted and only ever translates by
+    # accident, when the same msgid happens to exist somewhere else.
+    word = _("Result")
+    headline = f'{section["title"]} · {word} · {section["scoring_label"]}'
     flow = [Paragraph(escape(headline), _title)]
     # The state-code rows ride at the foot of the ranked table, as on screen:
     # their event is settled, they are simply not in the placings.
@@ -450,7 +455,8 @@ def _section_flowables(section, usable_w):
         flow.append(Paragraph(_("Not yet ranked"), _subhead))
         flow.append(_make_table(layout, section["unranked"], "unranked", usable_w))
     summary = layout["summary"]
-    parts = [f'<b>{_("Starters:")}</b> {summary["starters"]}']
+    starters = _("Starters:")   # outside the f-string, so xgettext sees it
+    parts = [f'<b>{starters}</b> {summary["starters"]}']
     parts += [f'<b>{entry["label"]}:</b> {entry["count"]}'
               for entry in summary.get("statuses", [])]
     flow.append(Paragraph(" &nbsp;·&nbsp; ".join(parts), _summary))

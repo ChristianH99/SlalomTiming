@@ -1033,6 +1033,14 @@ Two more that are about *saying the same thing the same way*:
   need the bare number, not for display. A penalty is a different quantity (whole seconds added,
   never measured) so it is written differently — and only one way, by `calc.format_penalty`
   (`+5 s`). Pinned by `test_every_view_writes_a_run_time_the_same_way`.
+- **A page's own name is singular; "Results" is the list of them.** The Results landing page is
+  "Results"; each class page is "Result Class 7" (`Ergebnis Klasse 7`) and the Overall page
+  "Result Overall", in the topbar and the browser tab alike. The PDF headline matches
+  (`Class 1 · Result · Aggregate times`).
+- **`_("…")` inside an f-string is never extracted.** xgettext does not look inside f-strings, so
+  such a string only translates by accident — when the same msgid happens to exist elsewhere.
+  Bind it to a name first (`word = _("Result")`), then interpolate. This is why the PDF headline
+  read "Ergebnisse" for years: it was borrowing the sidebar's msgid.
 - **Django's `{# #}` is single-line only.** Its lexer matches `{#.*?#}` without DOTALL, so a comment
   that wraps is rendered onto the page for the operator to read. This escaped review twice; multi-
   line commentary goes in `{% comment %}…{% endcomment %}`, and `config/tests.py` now checks every
