@@ -21,7 +21,21 @@ class CompetitionType(models.Model):
     """A discipline (Motorcycle, Go-Cart, …) and the rules every competition of
     that discipline is run and evaluated under. The evaluation settings are
     recorded here only; the timing screen, the results calculation and the
-    participant form each read them when those features are built."""
+    participant form each read them when those features are built.
+
+    **A type is shared by every competition of that discipline, and its settings
+    are read live.** So changing a penalty amount, the tie-break or the timing
+    precision in November re-ranks July's event the next time anybody opens its
+    results — the times are unchanged, the numbers over them are not. That is
+    accepted for now (INT-6 in AUDIT.md): the settings are edited between events,
+    not during one, and the alternative is versioning every field.
+
+    The proper answer is an **archive**: a snapshot of a competition — its results
+    as computed on the day, with the type settings that produced them — taken when
+    the event is signed off, so a finished result stops depending on a live row.
+    That is a feature, not a fix, and it belongs with the export machinery in
+    apps/transfer/ when it is built.
+    """
 
     class TieBreak(models.TextChoices):
         FASTEST_RUN = "fastest_run", _("Fastest run time")
@@ -160,7 +174,9 @@ class Competition(models.Model):
         default=list,
         blank=True,
         help_text="The order participants take their runs, as pattern blocks "
-        "(see apps/competitions/startpattern.py). Replayed for every run.",
+        "(see apps/competitions/startpattern.py). Replayed for every run. Empty "
+        "means no pattern — Auto timing then asks for one and the other screens "
+        "carry on without it.",
     )
     auto_timing_order = models.JSONField(
         default=list,
@@ -173,17 +189,32 @@ class Competition(models.Model):
 
     class Meta:
         ordering = ["-date"]
+        constraints = [
+            # There is one active competition for the whole installation, and
+            # `get_current()` is `filter(is_active=True).first()` — so with two
+            # active rows the app silently serves whichever sorts first and
+            # nobody can see the conflict. Every path that sets the flag clears
+            # the others first, but "every path does the right thing" is a claim
+            # about code, and this is a claim about the data.
+            models.UniqueConstraint(
+                fields=["is_active"],
+                condition=models.Q(is_active=True),
+                name="only_one_active_competition",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.date:%Y-%m-%d})"
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
-        if is_new and not self.start_pattern:
-            # Seeded with the default classes: without a pattern the start order
-            # is empty, so Auto timing and the dashboard would show nothing at
-            # all on a competition that is otherwise fully set up.
-            self.start_pattern = startpattern.default_pattern()
+        # No start pattern by default. A pattern is what Auto timing needs, and
+        # Auto timing is a choice — plenty of events are timed on the Manual view
+        # with competitors turning up at the line in any order, and neither the
+        # dashboard nor the results read the pattern at all (they derive from the
+        # entries and their classes). A competition once got a default seeded here
+        # so the Auto page wouldn't look broken; the page now says it needs one and
+        # links to where to build it, which is the honest version of the same fix.
         super().save(*args, **kwargs)
         if is_new:
             CompetitionClass.objects.bulk_create(
@@ -277,10 +308,22 @@ class Competition(models.Model):
         ]
 
     def class_for_birth_year(self, birth_year):
+        """The running class whose age range covers this birth year, or None.
+
+        **Age is the competition year minus the birth year** — the age the
+        competitor reaches during the season, not their age on the day. That is
+        how slalom classes are normally written ("Jahrgang"), so somebody born in
+        December is in the same class all year as somebody born in January. It
+        has always worked this way and was never written down anywhere.
+
+        With overlapping ranges the first match in class order wins. The Classes
+        page says so (see ``age_range_problems``) rather than leaving it to be
+        discovered from a competitor landing in the wrong class.
+        """
         if birth_year is None:
             return None
         age = self.date.year - birth_year
-        for competition_class in self.classes.filter(is_running=True):
+        for competition_class in self._running_classes_ordered():
             if (
                 competition_class.age_from is not None
                 and competition_class.age_to is not None
@@ -288,6 +331,52 @@ class Competition(models.Model):
             ):
                 return competition_class
         return None
+
+    def age_range_problems(self):
+        """Age ranges that two running classes both claim, or that no class does.
+
+        Only meaningful under age-based assignment, where these decide which class
+        a competitor lands in — and both failure modes are silent: an overlap puts
+        them in whichever class sorts first, a gap leaves them in no class at all
+        and simply absent from every start list. Returned as sentences for the
+        Classes page; nothing is refused, because a range being edited is
+        half-finished more often than it is wrong.
+        """
+        if not self.assignment().uses_age:
+            return []
+        ranged = [
+            cc for cc in self._running_classes_ordered()
+            if cc.age_from is not None and cc.age_to is not None
+        ]
+        problems = []
+        for i, first in enumerate(ranged):
+            if first.age_from > first.age_to:
+                problems.append(gettext(
+                    "“%(name)s” runs from age %(a)s to %(b)s, which is backwards — "
+                    "nobody falls in it."
+                ) % {"name": first.name, "a": first.age_from, "b": first.age_to})
+            for second in ranged[i + 1:]:
+                lo = max(first.age_from, second.age_from)
+                hi = min(first.age_to, second.age_to)
+                if lo <= hi:
+                    problems.append(gettext(
+                        "“%(first)s” and “%(second)s” both cover age %(range)s — a "
+                        "competitor that age goes into “%(first)s”, because it comes "
+                        "first in the list."
+                    ) % {
+                        "first": first.name, "second": second.name,
+                        "range": str(lo) if lo == hi else f"{lo}–{hi}",
+                    })
+        # Gaps between the ranges: an age nobody claims is a competitor with no class.
+        covered = sorted((cc.age_from, cc.age_to) for cc in ranged)
+        for (_a, end), (start, _b) in zip(covered, covered[1:]):
+            if start > end + 1:
+                missing = str(end + 1) if start == end + 2 else f"{end + 1}–{start - 1}"
+                problems.append(gettext(
+                    "No running class covers age %(range)s — a competitor that age "
+                    "is assigned no class and appears in no start list."
+                ) % {"range": missing})
+        return problems
 
     def assignment(self):
         """The AssignmentMethod strategy for this competition."""

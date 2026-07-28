@@ -1180,23 +1180,15 @@ def test_switching_tells_every_open_live_view_which_event_it_now_shows(client, m
 
 # ----- stage 7: a competition that can actually be timed -----
 
-def test_a_new_competition_starts_with_a_usable_start_pattern():
-    # No pattern at all meant start_lists() scheduled nothing: an empty Auto timing
-    # start order and zero expected runs on the dashboard, on a competition that
-    # looked fully set up. The default matches the seeded classes' run counts.
+def test_a_new_competition_has_no_start_pattern():
+    """A pattern is what *Auto* timing needs, and Auto timing is a choice: plenty
+    of events are run on the Manual view with competitors turning up at the line
+    in any order. Nothing else reads the pattern — the dashboard and the results
+    derive from the entries and their classes — so a competition starts without
+    one and the Auto page asks for it."""
     competition = make_competition()
-    assert competition.start_pattern == startpattern.default_pattern()
-    cclass = competition.classes.first()
-    starter = startpattern.Starter(
-        key=(1, cclass.pk, 0), bib=1, name="A", class_name=cclass.name,
-        practice_runs=cclass.practice_runs, counted_runs=cclass.counted_runs,
-    )
-    slots = startpattern.expand(competition.start_pattern_blocks(), [starter])
-    assert [(s.run_type, s.run_number) for s in slots] == [
-        ("practice", 1), ("counted", 1), ("counted", 2),
-    ]
-    # …and it schedules every run those classes grant, with nothing left owed.
-    assert startpattern.shortfalls(competition.start_pattern_blocks(), [starter]) == []
+    assert competition.start_pattern == []
+    assert competition.start_pattern_blocks() == []
 
 
 def test_an_explicit_pattern_is_never_overwritten():
@@ -1270,3 +1262,107 @@ def test_a_german_class_heading_is_not_klasse_klasse(settings):
     already = competition.classes.create(name="Klasse 7", is_running=True)
     assert plain.display_name() == "Klasse 7"
     assert already.display_name() == "Klasse 7"
+
+
+# --- INT-2: exactly one active competition ----------------------------------
+
+def test_two_active_competitions_are_refused_by_the_database():
+    """`get_current()` is `filter(is_active=True).first()`, so with two active
+    rows the app silently serves whichever sorts first and nobody can see the
+    conflict. Every code path clears the others first — but that is a claim about
+    code, and this is a claim about the data."""
+    from django.db import IntegrityError, transaction
+
+    ctype = CompetitionType.objects.create(name="OnlyOne")
+    Competition.objects.create(competition_type=ctype, name="A",
+                               date=datetime.date(2026, 5, 1), is_active=True)
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Competition.objects.create(competition_type=ctype, name="B",
+                                       date=datetime.date(2026, 6, 1), is_active=True)
+
+
+def test_any_number_of_inactive_competitions_is_fine():
+    ctype = CompetitionType.objects.create(name="Archive")
+    for i in range(4):
+        Competition.objects.create(competition_type=ctype, name=f"Past {i}",
+                                   date=datetime.date(2025, i + 1, 1))
+    assert Competition.objects.filter(is_active=False).count() == 4
+
+
+def test_switching_the_active_competition_still_works(client):
+    """The constraint must not get in the way of the normal switch, which clears
+    the old flag and sets the new one."""
+    ctype = CompetitionType.objects.create(name="Switcher")
+    first = Competition.objects.create(competition_type=ctype, name="A",
+                                       date=datetime.date(2026, 5, 1), is_active=True)
+    second = Competition.objects.create(competition_type=ctype, name="B",
+                                        date=datetime.date(2026, 6, 1))
+    client.post(reverse("competitions:select", args=[second.pk]), {"confirm_switch": "1"})
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert (first.is_active, second.is_active) == (False, True)
+
+
+# --- INT-11 / INT-12: what an age range covers, and what "age" means --------
+
+class TestAgeRanges:
+    """Under age-based assignment these decide which class a competitor lands in,
+    and both failure modes are silent: an overlap picks whichever class sorts
+    first, a gap leaves them in no class and absent from every start list."""
+
+    def _competition(self):
+        ctype = CompetitionType.objects.create(name="Aged")
+        competition = Competition.objects.create(
+            competition_type=ctype, name="R", date=datetime.date(2026, 5, 1),
+            assignment_method="age",
+        )
+        competition.classes.all().delete()
+        return competition
+
+    def _cls(self, competition, name, age_from, age_to, position):
+        return CompetitionClass.objects.create(
+            competition=competition, name=name, is_running=True,
+            age_from=age_from, age_to=age_to, position=position)
+
+    def test_an_overlap_is_named_with_what_it_costs(self):
+        competition = self._competition()
+        self._cls(competition, "Mini", 6, 10, 0)
+        self._cls(competition, "Maxi", 9, 14, 1)
+        problems = competition.age_range_problems()
+        assert any("9" in p and "Mini" in p and "Maxi" in p for p in problems), problems
+
+    def test_a_gap_is_named(self):
+        competition = self._competition()
+        self._cls(competition, "Mini", 6, 10, 0)
+        self._cls(competition, "Maxi", 14, 18, 1)
+        assert any("11" in p for p in competition.age_range_problems())
+
+    def test_a_backwards_range_is_named(self):
+        competition = self._competition()
+        self._cls(competition, "Odd", 14, 6, 0)
+        assert any("backwards" in p for p in competition.age_range_problems())
+
+    def test_ranges_that_meet_exactly_are_not_a_problem(self):
+        competition = self._competition()
+        self._cls(competition, "Mini", 6, 10, 0)
+        self._cls(competition, "Maxi", 11, 14, 1)
+        assert competition.age_range_problems() == []
+
+    def test_manual_assignment_is_never_asked(self):
+        """The ranges are display-only under manual assignment."""
+        competition = self._competition()
+        competition.assignment_method = "manual"
+        competition.save(update_fields=["assignment_method"])
+        self._cls(competition, "Mini", 6, 10, 0)
+        self._cls(competition, "Maxi", 9, 14, 1)
+        assert competition.age_range_problems() == []
+
+    def test_age_is_the_competition_year_minus_the_birth_year(self):
+        """Not age on the day: slalom classes are written by Jahrgang, so a
+        December birthday is in the same class all year as a January one."""
+        competition = self._competition()
+        mini = self._cls(competition, "Mini", 6, 10, 0)
+        assert competition.class_for_birth_year(2026 - 6) == mini
+        assert competition.class_for_birth_year(2026 - 10) == mini
+        assert competition.class_for_birth_year(2026 - 11) is None

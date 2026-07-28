@@ -38,6 +38,26 @@ from apps.timing.routing import websocket_urlpatterns  # noqa: E402
 cp540.autostart()
 
 
+def _harden_data_directory():
+    """Restrict DATA_DIR to the account running the server (config/datasecurity.py).
+
+    Here for the same reason as the single-instance lock and the CP540 autostart:
+    this is the one entry point that is actually a server, so management commands
+    and the test suite never touch the developer's own file modes.
+    """
+    import logging
+
+    from django.conf import settings
+
+    from config import datasecurity
+
+    outcome = datasecurity.harden(settings.DATA_DIR, settings.HARDEN_DATA_DIR)
+    logging.getLogger(__name__).info('Data directory permissions: %s', outcome)
+
+
+_harden_data_directory()
+
+
 def _sweep_expired_sessions():
     """Delete session rows that have already expired.
 

@@ -235,7 +235,16 @@ class TimingLiveView(TemplateView):
 class AutoTimingView(TemplateView):
     """The order-driven live view: the start order down the left, and the
     previous/current/next competitors with their times and each marshal post's
-    running penalty on the right."""
+    running penalty on the right.
+
+    Auto timing *is* the start order, so with no start pattern there is nothing
+    for this page to be. It then shows one sentence and a link to build one, and
+    no timing controls at all — rather than a page of empty furniture, or (what it
+    used to do with times already recorded) a screen of flame-bordered
+    "unattributed time" alarms, one per run, with nothing saying why. The rest of
+    the app does not need a pattern: Manual timing, the dashboard and the results
+    all work from the entries and their classes.
+    """
 
     template_name = "timing/auto.html"
 
@@ -243,13 +252,16 @@ class AutoTimingView(TemplateView):
         context = super().get_context_data(**kwargs)
         competition = Competition.get_current()
         context["competition"] = competition
+        context["needs_pattern"] = (
+            competition is not None and not competition.start_pattern_blocks()
+        )
         context["page_urls"] = _urls(
             "auto-state", "auto-reorder", "auto-reset-order", "ignore", "pair",
             "set-time", "set-runtime", "run-status", "auto-adjust",
             "marshal-unlock", "marshal-lock", "marshal-lock-all",
             "marshal-task-edit", "input-lock",
         )
-        if competition is not None:
+        if competition is not None and not context["needs_pattern"]:
             context["auto"] = autotiming.serialize(competition)
         return context
 
@@ -259,8 +271,14 @@ def auto_arrangement(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"competition": False})
+    if not competition.start_pattern_blocks():
+        # The page answers this itself and doesn't load its script (see
+        # AutoTimingView), so nothing normally asks — but the endpoint says the
+        # same thing rather than serialising an order that cannot exist.
+        return JsonResponse({"competition": True, "needs_pattern": True})
     data = autotiming.serialize(competition)
     data["competition"] = True
+    data["needs_pattern"] = False
     return JsonResponse(data)
 
 
@@ -275,8 +293,22 @@ def auto_reorder(request):
     posted = payload.get("order")
     if not isinstance(posted, list):
         return JsonResponse({"ok": False, "error": "order must be a list."}, status=400)
+    # Filtered to slots that exist *and* deduplicated: a key twice over would put
+    # one competitor in two places in the order, and `ordered_slots` resolves that
+    # by silently dropping the second — an order that doesn't match what was sent
+    # and never says so. Bounded too, since this is a list from a client.
     known = {slot["key"] for slot in autotiming.computed_slots(competition)}
-    competition.auto_timing_order = [key for key in posted if key in known]
+    seen, order = set(), []
+    for key in posted:
+        if key in known and key not in seen:
+            seen.add(key)
+            order.append(key)
+            # Bounded by the *result*, not by the input: capping the input first
+            # threw away real keys whenever the client sent an unknown one before
+            # them, which is exactly what it does when a slot has just gone.
+            if len(order) == len(known):
+                break
+    competition.auto_timing_order = order
     competition.save(update_fields=["auto_timing_order"])
     # A different order binds runs to different competitors — persist it here, on
     # the write, because the readers no longer do (see autotiming.sync_bindings).

@@ -33,9 +33,26 @@ class CompetitionListView(ListView):
 
 
 class CompetitionCreateView(CreateView):
+    """Create a competition — which also makes it the current one.
+
+    That is a change to *everybody's* screen, not a private one: there is a single
+    active competition per installation, and every timing view, results table and
+    marshal post follows it. `select_competition` goes to some trouble to say so
+    before switching; creating one used to do the same thing silently, so setting
+    up next month's event during this one moved the timekeeper's page out from
+    under them. The page now names who else is signed in. It does not refuse —
+    creating a competition is normal, and the operator can see the cost.
+    """
+
     model = Competition
     form_class = CompetitionForm
     template_name = "competitions/competition_add.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["others"] = other_signed_in_users(self.request)
+        context["current"] = Competition.get_current()
+        return context
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -162,6 +179,9 @@ class ClassesView(ActiveCompetitionMixin, View):
             "assignment_form": assignment_form,
             "formset": formset,
             "assignment_methods_meta": assignment_methods_meta(),
+            # Overlaps and gaps between the age ranges. Only under age-based
+            # assignment, where they silently decide who lands where.
+            "age_problems": competition.age_range_problems(),
             # What the page's script needs, handed over as data: nothing on a page
             # may be inline now that the app ships a CSP (see static/js/shell.js).
             "page_config": {"year": competition.date.year},

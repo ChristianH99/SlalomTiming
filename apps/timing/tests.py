@@ -1934,15 +1934,23 @@ def test_channel_outside_the_devices_inputs_is_refused(client):
 # ----- stage 7: an empty start order says which piece of setup is missing -----
 
 def test_an_empty_start_order_names_what_is_missing(client):
+    """Why the *order* came out empty. "No pattern" is deliberately not one of
+    these — that is the page not applying at all, and it is answered before any
+    of this runs (see test_auto_timing_without_a_pattern_asks_for_one)."""
     comp = make_active_competition()          # classes seeded, none running
+    comp.start_pattern = [{"window": None, "chips": ["counted"]}]
+    comp.save(update_fields=["start_pattern"])
     assert autotiming.serialize(comp)["empty_reason"] == "classes"
 
     comp.classes.filter(name="1").update(is_running=True, run_position=0)
     assert autotiming.serialize(comp)["empty_reason"] == "starters"
 
-    comp.start_pattern = []
-    comp.save(update_fields=["start_pattern"])
-    assert autotiming.serialize(comp)["empty_reason"] == "pattern"
+    comp.classes.filter(name="1").update(practice_runs=0, counted_runs=0)
+    make_participant(comp.competition_type, 1, comp)
+    ClassAssignment.objects.create(
+        participant=Participant.objects.get(first_name="Bib"),
+        competition_class=comp.classes.get(name="1"))
+    assert autotiming.serialize(comp)["empty_reason"] == "runs"
 
 
 def test_a_start_order_with_starters_reports_no_reason():
@@ -2058,3 +2066,171 @@ def test_a_login_alone_does_not_open_the_live_socket(django_user_model):
         return connected
 
     assert async_to_sync(run)() is False
+
+
+# --- INT-1: Auto timing is the start order, so it needs one ------------------
+# With no start pattern the page used to render its whole apparatus around an
+# empty order — and once times existed, one flame-bordered "unattributed time"
+# alarm per run, because every recorded run is an orphan when there are no slots
+# to bind it to. Seventy alarms and nothing saying why. It now says why.
+
+def _competition_without_a_pattern():
+    ctype = CompetitionType.objects.create(name="Patternless")
+    competition = Competition.objects.create(
+        competition_type=ctype, name="R", date=datetime.date(2026, 5, 1),
+        is_active=True,
+    )
+    cclass = competition.classes.first()
+    cclass.is_running, cclass.run_position = True, 0
+    cclass.save()
+    return competition, cclass
+
+
+def test_auto_timing_without_a_pattern_asks_for_one(client):
+    competition, _ = _competition_without_a_pattern()
+    assert competition.start_pattern_blocks() == []
+    response = client.get(reverse("timing:auto"))
+    assert response.status_code == 200
+    assert response.context["needs_pattern"] is True
+    body = response.content.decode()
+    assert reverse("competitions:runorder") in body
+    # …and none of the timing apparatus is on the page.
+    for marker in ('id="auto-tiles"', 'id="auto-order-list"', 'id="ignored-box"',
+                   'js/auto_timing.js'):
+        assert marker not in body, f"{marker} is still rendered without a pattern"
+
+
+def test_auto_timing_without_a_pattern_shows_no_alarms_for_recorded_runs(client):
+    """The state the real database was found in: runs recorded, no pattern. Every
+    one of them is an orphan, and the page used to render each as an alarm."""
+    competition, _ = _competition_without_a_pattern()
+    TimingSettings.load()
+    for i in range(3):
+        TimedRun.objects.create(
+            competition=competition,
+            start_signal=TimingSignal.objects.create(
+                competition=competition, running_number=i + 1, port=1,
+                device_time=datetime.time(10, i, 0)),
+        )
+    body = client.get(reverse("timing:auto")).content.decode()
+    assert "auto-orphan" not in body
+    assert reverse("competitions:runorder") in body
+
+
+def test_a_pattern_brings_the_timing_page_back(client):
+    competition, _ = _competition_without_a_pattern()
+    competition.start_pattern = [{"window": None, "chips": ["counted"]}]
+    competition.save(update_fields=["start_pattern"])
+    response = client.get(reverse("timing:auto"))
+    assert response.context["needs_pattern"] is False
+    assert 'id="auto-tiles"' in response.content.decode()
+
+
+def test_the_other_screens_do_not_need_a_pattern(client):
+    """Manual timing, the dashboard and the results read the entries and their
+    classes, never the pattern. Losing the default must not touch them."""
+    competition, cclass = _competition_without_a_pattern()
+    participant = make_participant(competition.competition_type, 1, competition)
+    ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+    for name in ("timing:manual", "timing:dashboard", "timing:arrangement",
+                 "timing:dashboard-state", "results:index"):
+        assert client.get(reverse(name)).status_code == 200, name
+    state = client.get(reverse("timing:dashboard-state")).json()
+    # The runs this competitor owes are known from their class alone.
+    assert state["progress"]["expected"] == (cclass.practice_runs + cclass.counted_runs)
+
+
+# --- INT-3: a run that crosses midnight -------------------------------------
+
+class TestMidnight:
+    """Both device times are clock *times*, not instants, so 23:59:59 → 00:00:02
+    subtracts to −86 397 s. The run simply had no time, and nobody was told which
+    of the two nights it happened on. The same wrap happens on a CP540 whose
+    internal clock rolls at 24 h."""
+
+    def test_a_run_across_midnight_is_measured(self):
+        assert calc.run_time(datetime.time(23, 59, 59),
+                             datetime.time(0, 0, 2), 3) == Decimal("3.000")
+
+    def test_a_run_across_midnight_keeps_its_fractions(self):
+        assert calc.run_time(datetime.time(23, 59, 58, 500000),
+                             datetime.time(0, 0, 1, 250000), 3) == Decimal("2.750")
+
+    def test_a_pairing_too_far_apart_is_still_refused(self):
+        """A finish from this morning on an afternoon start is a wrong pairing,
+        not a wrap — it must not come back as twenty-three hours."""
+        assert calc.run_time(datetime.time(15, 0, 0), datetime.time(9, 0, 0), 3) is None
+
+    def test_an_ordinary_run_is_unaffected(self):
+        assert calc.run_time(datetime.time(10, 0, 0),
+                             datetime.time(10, 0, 42, 270000), 3) == Decimal("42.270")
+
+
+# --- INT-9: format_clock truncates, like everything else --------------------
+
+class TestClockTruncates:
+    """The app's rule is "as fast as the device fully resolved, never faster".
+    format_clock used `f"{x:.3f}"`, which rounds — invisible on an already-
+    truncated value, which is why it survived, but it is also handed sums and
+    differences (run + penalty, gap to the winner)."""
+
+    @pytest.mark.parametrize("value,precision,expected", [
+        ("12.9996", 3, "00:12.999"),
+        ("12.3456", 3, "00:12.345"),
+        ("0.9999", 3, "00:00.999"),
+        ("59.9999", 2, "00:59.99"),
+        ("75.5", 2, "01:15.50"),
+        ("0", 3, "00:00.000"),
+        ("-3.4567", 3, "-00:03.456"),
+    ])
+    def test_it_never_rounds_up(self, value, precision, expected):
+        assert calc.format_clock(Decimal(value), precision) == expected
+
+
+# --- INT-8: a recorded time may not vanish from under its run ---------------
+
+def test_deleting_a_signal_a_run_uses_is_refused():
+    """SET_NULL silently blanked the run's time: the row stayed, the measurement
+    went, and nothing said so."""
+    from django.db.models import RestrictedError
+
+    ctype = CompetitionType.objects.create(name="Protected")
+    competition = Competition.objects.create(
+        competition_type=ctype, name="R", date=datetime.date(2026, 5, 1), is_active=True)
+    signal = TimingSignal.objects.create(
+        competition=competition, running_number=1, port=1,
+        device_time=datetime.time(10, 0, 0))
+    run = TimedRun.objects.create(competition=competition, start_signal=signal)
+    with pytest.raises(RestrictedError):
+        signal.delete()
+    run.refresh_from_db()
+    assert run.start_signal_id == signal.id
+
+
+def test_deleting_the_whole_competition_still_works():
+    """RESTRICT rather than PROTECT precisely so this case survives: both tables
+    cascade from the competition, and that has to keep working."""
+    ctype = CompetitionType.objects.create(name="Cascade")
+    competition = Competition.objects.create(
+        competition_type=ctype, name="R", date=datetime.date(2026, 5, 1))
+    signal = TimingSignal.objects.create(
+        competition=competition, running_number=1, port=1,
+        device_time=datetime.time(10, 0, 0))
+    TimedRun.objects.create(competition=competition, start_signal=signal)
+    competition.delete()
+    assert not TimingSignal.objects.filter(pk=signal.pk).exists()
+
+
+# --- INT-13: a reorder may not repeat a slot --------------------------------
+
+def test_a_reorder_drops_repeats(client):
+    """A key twice over puts one competitor in two places; ordered_slots resolves
+    that by silently dropping the second, so the saved order isn't what was sent."""
+    competition, _cclass = _competition_with_field(3)
+    keys = [slot["key"] for slot in autotiming.computed_slots(competition)]
+    assert len(keys) >= 2
+    client.post(reverse("timing:auto-reorder"),
+                data=json.dumps({"order": [keys[1], keys[0], keys[1], "not-a-key"]}),
+                content_type="application/json")
+    competition.refresh_from_db()
+    assert competition.auto_timing_order == [keys[1], keys[0]]

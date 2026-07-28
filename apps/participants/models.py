@@ -1,7 +1,37 @@
+import datetime
+
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType
+
+# The oldest date of birth this app will take. Not a judgement about anybody’s
+# age — a bound, so a slipped keystroke in a date field is refused instead of
+# stored. A year-1200 birth date sailed straight in and then gave every age-based
+# class a nonsense age.
+EARLIEST_BIRTH_YEAR = 1900
+
+
+def validate_birth_date(value):
+    """A date of birth that could belong to a living competitor.
+
+    A validator on the model rather than a rule in the form, so it also covers
+    the CSV import and the transfer document — apps/transfer/schema.py runs each
+    field’s own validators on the way in, which is what turns a damaged file into
+    a sentence instead of a row every later read chokes on.
+    """
+    if value is None:
+        return
+    if value > timezone.localdate():
+        raise ValidationError(
+            _("A date of birth can’t be in the future."), code="future_birth_date")
+    if value.year < EARLIEST_BIRTH_YEAR:
+        raise ValidationError(
+            _("A date of birth before %(year)s is a typo — please check it."),
+            code="ancient_birth_date", params={"year": EARLIEST_BIRTH_YEAR},
+        )
 
 
 class Participant(models.Model):
@@ -14,7 +44,7 @@ class Participant(models.Model):
     )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    date_of_birth = models.DateField()
+    date_of_birth = models.DateField(validators=[validate_birth_date])
 
     # Everything below is optional at the DB level: which of these a participant
     # must supply is decided per discipline by CompetitionType.PARTICIPANT_INFO,

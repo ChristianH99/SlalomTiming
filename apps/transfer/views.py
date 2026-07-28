@@ -16,6 +16,7 @@ from django.utils.translation import gettext as _
 from django.views import View
 from django.views.decorators.http import require_POST
 
+from apps.common import other_signed_in_users
 from apps.competitions.models import Competition, CompetitionType
 
 from . import archive, csvimport, exporters, importers, merge, staging
@@ -178,6 +179,10 @@ class ImportReviewView(View):
     def _context(self, request, plan):
         return {
             "plan": plan,
+            # "Make this the current event" moves every open screen, exactly as
+            # creating a competition does. Named, not refused.
+            "others": other_signed_in_users(request),
+            "current": Competition.get_current(),
             "filename": request.session.get("transfer_import_name", ""),
             "summary": plan.participant_summary,
             "conflicts": plan.conflicts,

@@ -1,5 +1,6 @@
 import json
 
+from django.db import IntegrityError
 from django.db.models import F, OuterRef, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import redirect
@@ -228,15 +229,32 @@ class ParticipantCreateView(ParticipantFormContextMixin, CreateView):
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
-        response = super().form_valid(form)
         competition = Competition.get_current()
         bib_number = form.cleaned_data.get("bib_number")
         if bib_number is not None:
-            EventEntry.objects.create(
-                participant=self.object,
-                competition=competition,
-                bib_number=bib_number,
-            )
+            # The form checked this bib was free; between then and here another
+            # desk may have taken it. Ask the form to say so rather than letting
+            # the constraint 500 — and do it before the participant is saved, so
+            # a refused registration doesn't leave half of itself behind.
+            if EventEntry.objects.filter(
+                competition=competition, bib_number=bib_number
+            ).exists():
+                form.add_error("bib_number", _(
+                    "This bib number was just taken by somebody else."))
+                return self.form_invalid(form)
+        response = super().form_valid(form)
+        try:
+            if bib_number is not None:
+                EventEntry.objects.create(
+                    participant=self.object,
+                    competition=competition,
+                    bib_number=bib_number,
+                )
+        except IntegrityError:
+            self.object.delete()
+            form.add_error("bib_number", _(
+                "This bib number was just taken by somebody else."))
+            return self.form_invalid(form)
         save_class_assignments(self.object, competition, form)
         return response
 
@@ -368,11 +386,22 @@ def participant_set_bib(request):
     if warning:
         return warning
 
-    if entry is None:
-        EventEntry.objects.create(participant=participant, competition=competition, bib_number=bib)
-    elif entry.bib_number != bib:
-        entry.bib_number = bib
-        entry.save(update_fields=["bib_number"])
+    # The check above is a read and this is a write, so two registration desks
+    # can pass it at the same moment and the database decides. It refuses the
+    # loser with an IntegrityError, which without this is a 500 rather than the
+    # same "already taken" the other path gives.
+    try:
+        if entry is None:
+            EventEntry.objects.create(
+                participant=participant, competition=competition, bib_number=bib)
+        elif entry.bib_number != bib:
+            entry.bib_number = bib
+            entry.save(update_fields=["bib_number"])
+    except IntegrityError:
+        return JsonResponse(
+            {"ok": False, "error": gettext("Bib %(bib)s was just taken by somebody else.")
+             % {"bib": bib}}
+        )
     return JsonResponse({"ok": True, "bib": bib})
 
 

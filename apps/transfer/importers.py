@@ -17,7 +17,7 @@ pk there silently misorders an imported event rather than failing loudly.
 
 from dataclasses import dataclass, field
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils.translation import gettext as _
 
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
@@ -137,16 +137,31 @@ class Result:
 def commit(plan, resolutions, type_action=None, media=None, activate=False):
     """Write the planned import. ``resolutions`` maps a participant ref to the
     operator's decision (see merge.apply); anything missing falls back to that
-    match's default."""
+    match's default.
+
+    Every way a document can be wrong comes back as a TransferError, because the
+    operator is holding a file somebody else's system wrote and a traceback tells
+    them nothing they can act on. schema.load catches the values a column cannot
+    hold; this catches the shapes a *table* cannot hold — two General column rows,
+    two entries on one bib — which are constraint violations rather than bad
+    values. The whole thing is one transaction, so a refusal writes nothing.
+    """
     document = plan.document
     media = media or {}
     result = Result()
 
-    result.competition_type = _resolve_type(plan, type_action or plan.default_type_action())
-    participants = _resolve_participants(plan, resolutions, result)
+    try:
+        result.competition_type = _resolve_type(
+            plan, type_action or plan.default_type_action())
+        participants = _resolve_participants(plan, resolutions, result)
 
-    if plan.is_event:
-        _import_event(document, result, participants, media, activate)
+        if plan.is_event:
+            _import_event(document, result, participants, media, activate)
+    except IntegrityError as exc:
+        raise TransferError(
+            _("The export holds data this system can’t store together (%(detail)s). "
+              "Nothing was imported.") % {"detail": str(exc)[:120]}
+        ) from None
 
     return result
 

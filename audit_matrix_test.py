@@ -37,6 +37,10 @@ def build(precision=2, penalties=True, marshal=False, scoring="aggregate",
         competition_type=ctype, name="Matrix", date=datetime.date(2026, 7, 1),
         is_active=True, assignment_method=assignment,
         penalties_by_marshal_posts=marshal,
+        # A competition has no start pattern by default (§3, INT-1) and Auto
+        # timing then asks for one instead of showing an order. The matrix is
+        # about a *configured* event, so it configures one.
+        start_pattern=[{"window": None, "chips": ["practice", "counted", "counted"]}],
     )
     cc = comp.classes.get(name="1")
     cc.is_running = True

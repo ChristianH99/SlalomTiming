@@ -521,13 +521,20 @@ def _draw_page(canv, doc, geom, header_markup, footer_markup, export_dt):
 
 
 class NumberedCanvas(canvas.Canvas):
-    """Deferred page save so the footer can show ``page / total``."""
+    """Deferred page save so the footer can show ``page / total``.
 
-    _page_x = A4[0] - _MARGIN_X
+    The page width arrives per instance (``page_x``), not as a class attribute
+    set just before ``build()``: two exports at different orientations overlap
+    the moment two people press "PDF" at once, and the second one's page numbers
+    landed at the first one's margin. Daphne runs sync views in a thread pool, so
+    that is not hypothetical.
+    """
+
     _page_y = _BOTTOM_EDGE
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, page_x=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self._page_x = page_x if page_x is not None else A4[0] - _MARGIN_X
         self._saved_states = []
 
     def showPage(self):
@@ -635,7 +642,6 @@ def render_results_pdf(competition, layout, sections):
                            footer_markup=fmarkup, export_dt=export_dt),
         ))
     doc.addPageTemplates(templates)
-    NumberedCanvas._page_x = page_w - _MARGIN_X
 
     story = []
     for i, section in enumerate(sections):
@@ -643,7 +649,7 @@ def render_results_pdf(competition, layout, sections):
             story.append(NextPageTemplate(f"sec{i}"))
             story.append(PageBreak())
         story.extend(_section_flowables(section, content_w))
-    doc.build(story, canvasmaker=NumberedCanvas)
+    doc.build(story, canvasmaker=partial(NumberedCanvas, page_x=page_w - _MARGIN_X))
     return buffer.getvalue()
 
 

@@ -167,11 +167,17 @@ class TimedRun(models.Model):
     competition = models.ForeignKey(
         "competitions.Competition", on_delete=models.CASCADE, related_name="timed_runs"
     )
+    # RESTRICT, not SET_NULL: deleting a TimingSignal used to silently blank the
+    # run's time — the row stayed, the measurement vanished, and nothing said so.
+    # For an app whose rule is "this app does not delete recorded times" that is
+    # the wrong default. RESTRICT rather than PROTECT because deleting a whole
+    # *competition* cascades to both tables at once, and that must still work;
+    # RESTRICT allows exactly that case and refuses the lone delete.
     start_signal = models.OneToOneField(
-        TimingSignal, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+        TimingSignal, null=True, blank=True, on_delete=models.RESTRICT, related_name="+"
     )
     finish_signal = models.OneToOneField(
-        TimingSignal, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+        TimingSignal, null=True, blank=True, on_delete=models.RESTRICT, related_name="+"
     )
     bib_number = models.PositiveIntegerField(null=True, blank=True)
     competition_class = models.ForeignKey(

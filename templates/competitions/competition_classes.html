@@ -21,6 +21,19 @@
   <h1 class="page-heading">{% trans "Classes" %}</h1>
   <p class="hint">{% blocktrans with name=object.name %}Classes for <strong>{{ name }}</strong>.{% endblocktrans %}</p>
 
+  {% comment %}Age ranges that overlap or leave a gap. Both are silent otherwise:
+  an overlap puts a competitor in whichever class sorts first, a gap leaves them
+  in no class and absent from every start list. Said out loud, not refused — a
+  range being edited is half-finished more often than it is wrong.{% endcomment %}
+  {% if age_problems %}
+    <div class="notice notice--warning">
+      <p class="notice-title">{% trans "Check the age ranges" %}</p>
+      <ul class="notice-list">
+        {% for problem in age_problems %}<li>{{ problem }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
   <form method="post" data-unsaved-guard>
     {% csrf_token %}
     <input type="hidden" name="next" value="">

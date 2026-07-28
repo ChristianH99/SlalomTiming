@@ -3455,6 +3455,12 @@ textarea:focus-visible,
    attribute, which a Content-Security-Policy blocks along with every other
    inline style — there is no way to allow ours and not an injected one. */
 .inline-form { display: inline; }
+/* A page-level warning: something is set up in a way that will behave oddly, but
+   is legal to save and may simply be half-edited. Amber, which this app already
+   uses for "a human did this by hand" — not the flame it uses for an alarm. */
+.notice--warning { border-color: var(--amber-soft); background: var(--amber-soft-bg); }
+.notice-title { font-weight: 700; color: var(--amber); margin: 0 0 var(--space-3); }
+.notice-list { margin: 0; padding-left: var(--space-7); display: flex; flex-direction: column; gap: var(--space-2); }
 .access-audit-head { margin-top: var(--space-10); }
 .access-audit-size { font-size: var(--text-sm); color: var(--text-mid); margin: 0 0 var(--space-5); }
 .access-checks { margin-bottom: var(--space-6); }

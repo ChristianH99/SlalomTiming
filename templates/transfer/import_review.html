@@ -59,6 +59,18 @@
           <span class="switch-track"><span class="switch-thumb"></span></span>
           <span class="switch-text">{% trans "Make the imported event the current one" %}</span>
         </label>
+        {% comment %}Same fact as on the Create page: one active competition for
+        the whole installation, so this moves everybody's screen.{% endcomment %}
+        {% if others %}
+          <p class="hint">
+            {% if current %}
+              {% blocktrans with name=current.name %}That replaces <strong>{{ name }}</strong> on every screen, including these people’s:{% endblocktrans %}
+            {% else %}
+              {% blocktrans %}Every timing screen, results table and marshal post follows it, including these people’s:{% endblocktrans %}
+            {% endif %}
+            {% for user in others %}<strong>{{ user.username }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+          </p>
+        {% endif %}
       </div>
     {% endif %}
 

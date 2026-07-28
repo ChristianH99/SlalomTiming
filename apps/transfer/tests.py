@@ -52,6 +52,9 @@ def make_event(ctype=None, with_timing=True):
     """A competition exercising every section of the document: classes, marshal
     posts, entries, assignments, timing, penalties and results config."""
     ctype = ctype or make_type()
+    # Exactly one competition may be active (INT-2, enforced by the database), and
+    # creating one in the app makes it current — so the helper does the same.
+    Competition.objects.filter(is_active=True).update(is_active=False)
     competition = Competition.objects.create(
         competition_type=ctype, name="Spring Race", date=datetime.date(2026, 5, 1),
         is_active=True, penalties_by_marshal_posts=True,

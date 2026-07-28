@@ -285,10 +285,15 @@ def test_format_clock_never_rounds_a_time_up():
 # ============================================================ F. data integrity
 
 def test_only_one_competition_can_be_active_at_a_time():
-    """Nothing at the DB level enforces it; get_current() silently picks one."""
+    """Nothing at the DB level enforced it; get_current() silently picked one.
+    Fixed in §3 — the database refuses the second, so this now asserts that."""
+    from django.db import IntegrityError, transaction
+
     ctype = make_type()
     make_competition(ctype, name="A")
-    make_competition(ctype, name="B")
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            make_competition(ctype, name="B")
     assert Competition.objects.filter(is_active=True).count() == 1
 
 

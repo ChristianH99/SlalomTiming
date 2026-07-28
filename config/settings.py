@@ -377,6 +377,14 @@ LOGGING = {
     },
 }
 
+# --- Data directory permissions ---
+# DATA_DIR holds every competitor's personal data, the audit trail and (in a
+# development checkout) the signing key. Restricting it to the account that runs
+# the server costs nothing and is done at startup — see config/datasecurity.py for
+# why this rather than encryption at rest. Off only if a deployment manages its
+# own ACLs and would rather this didn't touch them.
+HARDEN_DATA_DIR = _env_bool('DJANGO_HARDEN_DATA_DIR', default=True)
+
 # Local-memory cache, stated explicitly rather than left to the default: the login
 # throttle keeps its counters here, and this app already runs as exactly one process
 # (config/singleinstance.py), so per-process is per-system. A restart forgets the

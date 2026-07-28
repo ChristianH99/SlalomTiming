@@ -319,14 +319,16 @@ def serialize(competition):
 
 
 def _empty_reason(competition):
-    """Why the start order is empty, as a key the page turns into a sentence:
-    no class is running, no start pattern is set, or nobody is registered in the
-    running classes. Only asked when there is nothing to show, so the extra reads
-    are over empty tables."""
+    """Why the start order is empty, as a key the page turns into a sentence: no
+    class is running, or nobody is registered in the running classes, or the
+    running classes grant no runs. Only asked when there is nothing to show, so
+    the extra reads are over empty tables.
+
+    "No pattern" is deliberately not one of these. It is not a *reason the order
+    came out empty* — it is the page not applying at all, and it is answered
+    before any of this runs (see AutoTimingView.needs_pattern)."""
     if not competition.run_groups():
         return "classes"
-    if not competition.start_pattern_blocks():
-        return "pattern"
     if not any(starters for _run, starters in competition.starters_by_run()):
         return "starters"
     return "runs"

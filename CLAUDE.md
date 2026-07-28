@@ -24,7 +24,12 @@ participants / entering penalties) — no rewrite planned, just wider access + a
 ## Layout
 
 ```
-config/                  Django project (settings, urls, asgi/wsgi). singleinstance.py takes an
+config/                  Django project (settings, urls, asgi/wsgi). csp.py is the
+                         Content-Security-Policy middleware (see Security); media.py puts
+                         /media/ behind the login; datasecurity.py restricts DATA_DIR to the
+                         account running the server at startup (a 0o077 umask + chmod on POSIX,
+                         an icacls grant naming SYSTEM and Administrators *by SID* on Windows,
+                         because those names are localised). singleinstance.py takes an
                          exclusive lock on run/server.lock from asgi.py, so only one server process
                          ever serves an event (the channel layer, the CP540 reader thread and its
                          event loop are all per-process — a second worker splits the live updates
@@ -200,12 +205,13 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          order, so one pattern serves classes with different run counts (a
                          participant out of that type sits the chip out). Competition.start_lists()
                          is the resulting per-run start order; shortfalls() flags runs a class
-                         grants that the pattern never plays. A new competition is seeded with
-                         DEFAULT_BLOCKS (one block, the whole field at once, practice + counted +
-                         counted — the runs the default classes grant): with no pattern at all
-                         start_lists() schedules nothing, so Auto timing's start order and the
-                         dashboard's expected-run count were empty on a competition that looked
-                         fully set up. Edited on the Run order page below
+                         grants that the pattern never plays. A new competition has **no
+                         pattern**: a pattern is what *Auto* timing needs, and Auto timing is a
+                         choice — plenty of events run on the Manual view with competitors turning
+                         up at the line in any order. Nothing else reads it (the dashboard and the
+                         results derive from the entries and their classes), and Auto timing says
+                         it needs one and links to where to build it rather than rendering its
+                         apparatus around an empty order. Edited on the Run order page below
                          the run grouping; the live preview re-implements the expansion in JS.
                          The preview can run on real starters or on made-up ones (one run of N,
                          bibs 1..N, taking the first run's first class's run counts) so a pattern
@@ -322,8 +328,10 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          the *next* pulse will count as, computed from the runs already read, since
                          the phase is otherwise invisible and one stray pulse inverts it for the
                          rest of the event) and _empty_reason() (with no start order, which piece of
-                         setup is missing — no running class, no pattern, nobody registered, or
-                         classes granting no runs — instead of one sentence blaming the run order).
+                         setup is missing — no running class, nobody registered, or classes
+                         granting no runs — instead of one sentence blaming the run order. "No
+                         pattern" is not one of these: it is answered before any of this, by
+                         AutoTimingView.needs_pattern, which replaces the whole page).
   arrangement.py         Causal pairing of signals into runs: a finish joins the oldest open
                          start that began before it; a start never adopts an earlier orphan
                          finish. Ordering (which run is newest, which open start is oldest) is by
@@ -1039,6 +1047,13 @@ each exists because breaking it is what made the app read as several products st
 
 Two more that are about *saying the same thing the same way*:
 
+- **A time is truncated, never rounded** — `calc.run_time`, `resolved_run_time` *and*
+  `format_clock`. The last of those used `f"{x:.3f}"`, which rounds; invisible on an
+  already-truncated value, which is why it survived, but it is also handed sums and
+  differences (run + penalty, gap to the winner). A run that crosses midnight is measured
+  rather than dropped: both device times are clock *times*, so 23:59:59 → 00:00:02 is a
+  wrap, not a negative run (`calc.MAX_WRAP_GAP_US` is what keeps a genuinely mis-paired
+  time from coming back as twenty-three hours).
 - **`calc.format_clock` is the one way an elapsed time is written** — `mm:ss.xxx`, everywhere: both
   timing views, the Dashboard, the results tables, the PDFs. `format_precision` is for callers that
   need the bare number, not for display. A penalty is a different quantity (whole seconds added,

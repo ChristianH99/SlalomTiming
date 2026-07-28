@@ -818,3 +818,68 @@ def test_clearing_a_bib_with_times_on_it_asks_too(client):
 
     assert _set_bib(client, person, "", confirm=True)["ok"] is True
     assert not EventEntry.objects.filter(participant=person).exists()
+
+
+# --- INT-10: a date of birth has to be a plausible one ----------------------
+
+class TestBirthDateBounds:
+    """A slipped keystroke put a competitor in the year 3000 or the year 1200,
+    and every age-based class then computed a nonsense age from it."""
+
+    def test_the_form_refuses_a_future_date(self, client):
+        competition = make_competition()
+        data = participant_data(competition.competition_type)
+        data["date_of_birth"] = "3000-01-01"
+        client.post(reverse("participants:add"), data)
+        assert not Participant.objects.filter(first_name=data["first_name"]).exists()
+
+    def test_the_form_refuses_an_ancient_date(self, client):
+        competition = make_competition()
+        data = participant_data(competition.competition_type)
+        data["date_of_birth"] = "1200-06-06"
+        client.post(reverse("participants:add"), data)
+        assert not Participant.objects.filter(first_name=data["first_name"]).exists()
+
+    def test_an_ordinary_date_still_saves(self, client):
+        competition = make_competition()
+        data = participant_data(competition.competition_type)
+        data["date_of_birth"] = "2010-06-06"
+        client.post(reverse("participants:add"), data)
+        assert Participant.objects.filter(first_name=data["first_name"]).exists()
+
+    def test_an_import_document_is_refused_too(self):
+        """The validator lives on the model so apps/transfer/schema.py runs it —
+        which is what turns a damaged file into a sentence instead of a row every
+        later read chokes on."""
+        from apps.transfer import schema
+        from apps.transfer.schema import TransferError
+
+        with pytest.raises(TransferError):
+            schema.load(Participant, {"date_of_birth": "3000-01-01"}, ["date_of_birth"])
+
+
+# --- INT-7: two registration desks, one bib ---------------------------------
+
+def test_a_bib_taken_between_the_check_and_the_write_is_reported(client):
+    """The uniqueness check is a read and the insert is a write, so two desks can
+    both pass it. The database refuses the loser; that must read as "already
+    taken", not as a 500."""
+    import json as _json
+
+    competition = make_competition()
+    first = Participant.objects.create(
+        competition_type=competition.competition_type, first_name="A", last_name="One",
+        date_of_birth=datetime.date(2010, 1, 1))
+    second = Participant.objects.create(
+        competition_type=competition.competition_type, first_name="B", last_name="Two",
+        date_of_birth=datetime.date(2010, 1, 1))
+    EventEntry.objects.create(participant=first, competition=competition, bib_number=7)
+
+    response = client.post(
+        reverse("participants:set-bib"),
+        data=_json.dumps({"participant": second.pk, "bib": "7", "confirm": True}),
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+    assert "7" in response.json()["error"]

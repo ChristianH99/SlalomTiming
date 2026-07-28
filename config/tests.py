@@ -466,3 +466,54 @@ class TestContentSecurityPolicy:
                 f'{script.name}: escaped quote opening a token ({len(bad)}x) — '
                 f'the file will not parse'
             )
+
+
+class TestDataDirectoryPermissions:
+    """DATA_DIR holds every competitor's personal data, the audit trail and (in a
+    checkout) the signing key. The audit asked about encryption at rest; the
+    answer was file permissions, because a SQLCipher passphrase kept beside the
+    database protects nothing. See config/datasecurity.py."""
+
+    def test_it_restricts_the_directory_and_its_contents(self, tmp_path):
+        from config import datasecurity
+
+        (tmp_path / 'db.sqlite3').write_text('x')
+        (tmp_path / 'logs').mkdir()
+        (tmp_path / 'logs' / 'audit.log').write_text('x')
+        if sys.platform != 'win32':
+            (tmp_path / 'db.sqlite3').chmod(0o666)
+            (tmp_path).chmod(0o777)
+
+        outcome = datasecurity.harden(tmp_path)
+        assert 'failed' not in outcome and 'skipped' not in outcome, outcome
+
+        if sys.platform != 'win32':
+            assert (tmp_path.stat().st_mode & 0o777) == 0o700
+            assert ((tmp_path / 'db.sqlite3').stat().st_mode & 0o777) == 0o600
+            assert ((tmp_path / 'logs' / 'audit.log').stat().st_mode & 0o777) == 0o600
+
+    def test_it_can_be_turned_off(self, tmp_path):
+        from config import datasecurity
+
+        assert 'skipped' in datasecurity.harden(tmp_path, enabled=False)
+
+    def test_it_never_raises_on_a_directory_it_cannot_touch(self, tmp_path):
+        """A data directory on a network share or a FAT stick is a reason to log
+        and carry on, not to refuse to time the event."""
+        from config import datasecurity
+
+        assert 'skipped' in datasecurity.harden(tmp_path / 'does-not-exist')
+
+    def test_the_windows_grant_names_principals_by_sid(self):
+        """SYSTEM and Administrators are localised names; this app is run on
+        German-language Windows more often than not."""
+        source = (settings.BASE_DIR / 'config' / 'datasecurity.py').read_text(encoding='utf-8')
+        assert 'S-1-5-18' in source and 'S-1-5-32-544' in source
+        assert '"SYSTEM:' not in source and '"Administrators:' not in source
+
+    def test_the_server_entry_point_hardens_on_startup(self):
+        """Here rather than in AppConfig.ready(), which also fires for migrate,
+        collectstatic and the test suite — a developer's own file modes are not
+        this app's business."""
+        source = (settings.BASE_DIR / 'config' / 'asgi.py').read_text(encoding='utf-8')
+        assert '_harden_data_directory()' in source
