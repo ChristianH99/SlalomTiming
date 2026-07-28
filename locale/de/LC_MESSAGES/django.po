@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-28 19:46+0200\n"
+"POT-Creation-Date: 2026-07-28 21:39+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -59,69 +59,85 @@ msgstr "Ergebnisse"
 msgid "Import / Export"
 msgstr "Import / Export"
 
-#: .\apps\accounts\views.py:105
+#: .\apps\accounts\views.py:122
 msgid "A role needs a name."
 msgstr "Eine Rolle braucht einen Namen."
 
-#: .\apps\accounts\views.py:107
+#: .\apps\accounts\views.py:124
 #, python-format
 msgid "A role named “%(name)s” already exists."
 msgstr "Eine Rolle mit dem Namen „%(name)s“ existiert bereits."
 
-#: .\apps\accounts\views.py:111
+#: .\apps\accounts\views.py:128
 #, python-format
 msgid "Role “%(name)s” created."
 msgstr "Rolle „%(name)s“ erstellt."
 
-#: .\apps\accounts\views.py:124
+#: .\apps\accounts\views.py:142
 #, python-format
 msgid "Access for “%(name)s” updated."
 msgstr "Zugriff für „%(name)s“ aktualisiert."
 
-#: .\apps\accounts\views.py:135
+#: .\apps\accounts\views.py:154
 #, python-format
 msgid "Role “%(name)s” deleted."
 msgstr "Rolle „%(name)s“ gelöscht."
 
-#: .\apps\accounts\views.py:153
+#: .\apps\accounts\views.py:173
 msgid "A username is required."
 msgstr "Ein Benutzername ist erforderlich."
 
-#: .\apps\accounts\views.py:156
+#: .\apps\accounts\views.py:176
 #, python-format
 msgid "A user named “%(name)s” already exists."
 msgstr "Ein Benutzer mit dem Namen „%(name)s“ existiert bereits."
 
-#: .\apps\accounts\views.py:166
+#: .\apps\accounts\views.py:186
 #, python-format
 msgid "User “%(name)s” created."
 msgstr "Benutzer „%(name)s“ erstellt."
 
-#: .\apps\accounts\views.py:187
+#: .\apps\accounts\views.py:213
 #, python-format
 msgid "Password for “%(name)s” reset."
 msgstr "Passwort für „%(name)s“ zurückgesetzt."
 
-#: .\apps\accounts\views.py:189
+#: .\apps\accounts\views.py:215
 #, python-format
 msgid "Roles for “%(name)s” updated."
 msgstr "Rollen für „%(name)s“ aktualisiert."
 
-#: .\apps\accounts\views.py:199
+#: .\apps\accounts\views.py:235
+msgid "You can’t deactivate your own account."
+msgstr "Sie können Ihr eigenes Konto nicht deaktivieren."
+
+#: .\apps\accounts\views.py:238
+msgid "Can’t deactivate the last superuser."
+msgstr "Der letzte Superuser kann nicht deaktiviert werden."
+
+#: .\apps\accounts\views.py:243
+msgid "“%(name)s” can sign in again."
+msgstr "„%(name)s“ kann sich wieder anmelden."
+
+#: .\apps\accounts\views.py:247
+msgid "“%(name)s” is deactivated and can no longer sign in."
+msgstr "„%(name)s“ ist deaktiviert und kann sich nicht mehr anmelden."
+
+#: .\apps\accounts\views.py:259
 msgid "You can’t delete your own account."
 msgstr "Sie können Ihr eigenes Konto nicht löschen."
 
-#: .\apps\accounts\views.py:202
+#: .\apps\accounts\views.py:262
 msgid "Can’t delete the last superuser."
 msgstr "Der letzte Superuser kann nicht gelöscht werden."
 
-#: .\apps\accounts\views.py:206
+#: .\apps\accounts\views.py:266
 #, python-format
 msgid "User “%(name)s” deleted."
 msgstr "Benutzer „%(name)s“ gelöscht."
 
 #: .\apps\competitions\assignment.py:29 .\apps\competitions\models.py:28
-#: .\templates\timing\simulator.html:41
+#: .\templates\timing\simulator.html:46
 msgid "Manual"
 msgstr "Manuell"
 
@@ -202,18 +218,18 @@ msgstr "Wie gleiche Ergebnisse getrennt werden."
 msgid "Resolution of the timing device."
 msgstr "Auflösung des Zeitmessgeräts."
 
-#: .\apps\competitions\models.py:92 .\apps\participants\views.py:115
+#: .\apps\competitions\models.py:92 .\apps\participants\views.py:117
 #: .\apps\results\models.py:13
 msgid "Co-driver"
 msgstr "Beifahrer"
 
-#: .\apps\competitions\models.py:94 .\apps\participants\views.py:117
+#: .\apps\competitions\models.py:94 .\apps\participants\views.py:119
 #: .\apps\results\models.py:19 .\apps\results\pdf.py:293
 #: .\apps\transfer\merge.py:40 .\templates\results\_results_head.html:7
 msgid "Vehicle"
 msgstr "Fahrzeug"
 
-#: .\apps\competitions\models.py:96 .\apps\participants\views.py:118
+#: .\apps\competitions\models.py:96 .\apps\participants\views.py:120
 #: .\templates\participants\participant_form.html:87
 msgid "Address"
 msgstr "Adresse"
@@ -230,12 +246,12 @@ msgid "Licence number"
 msgstr "Lizenznummer"
 
 #: .\apps\competitions\models.py:100 .\apps\participants\forms.py:161
-#: .\apps\participants\views.py:119 .\apps\results\models.py:15
+#: .\apps\participants\views.py:121 .\apps\results\models.py:15
 #: .\apps\transfer\merge.py:45
 msgid "E-Mail"
 msgstr "E-Mail"
 
-#: .\apps\competitions\models.py:101 .\apps\participants\views.py:120
+#: .\apps\competitions\models.py:101 .\apps\participants\views.py:122
 #: .\apps\results\models.py:16 .\apps\transfer\merge.py:46
 msgid "Phone"
 msgstr "Telefon"
@@ -347,48 +363,46 @@ msgstr ""
 "Wettbewerb)."
 
 #: .\apps\competitions\startpattern.py:36 .\apps\timing\models.py:148
-#: .\templates\competitions\competition_runorder.html:270
 msgid "Practice"
 msgstr "Training"
 
 #: .\apps\competitions\startpattern.py:36 .\apps\timing\models.py:149
-#: .\templates\competitions\competition_runorder.html:270
 msgid "Counted"
 msgstr "Wertung"
 
-#: .\apps\competitions\views.py:108
+#: .\apps\competitions\views.py:119
 #, python-format
 msgid "Removed %(count)s registration(s) that didn't belong to “%(type)s”."
 msgstr "%(count)s Nennung(en) entfernt, die nicht zu „%(type)s“ gehörten."
 
-#: .\apps\competitions\views.py:111
+#: .\apps\competitions\views.py:122
 msgid "General settings saved."
 msgstr "Allgemeine Einstellungen gespeichert."
 
-#: .\apps\competitions\views.py:221
+#: .\apps\competitions\views.py:235
 msgid "Classes saved."
 msgstr "Klassen gespeichert."
 
-#: .\apps\competitions\views.py:265
+#: .\apps\competitions\views.py:282
 msgid "Run order saved."
 msgstr "Laufreihenfolge gespeichert."
 
-#: .\apps\competitions\views.py:372 .\apps\competitions\views.py:387
+#: .\apps\competitions\views.py:389 .\apps\competitions\views.py:404
 msgid "Penalties settings saved."
 msgstr "Strafen-Einstellungen gespeichert."
 
-#: .\apps\competitions\views.py:377
+#: .\apps\competitions\views.py:394
 msgid "Some task lists couldn't be read — fix them and save again."
 msgstr ""
 "Einige Aufgabenlisten konnten nicht gelesen werden — korrigieren Sie sie und "
 "speichern Sie erneut."
 
-#: .\apps\competitions\views.py:666
+#: .\apps\competitions\views.py:684
 #, python-format
 msgid "Settings for “%(name)s” saved."
 msgstr "Einstellungen für „%(name)s“ gespeichert."
 
-#: .\apps\competitions\views.py:725
+#: .\apps\competitions\views.py:754
 msgid "That type is still in use and can't be deleted."
 msgstr "Dieser Typ wird noch verwendet und kann nicht gelöscht werden."
 
@@ -488,34 +502,34 @@ msgstr "Disqualifiziert"
 msgid "Finished"
 msgstr "Beendet"
 
-#: .\apps\participants\views.py:320 .\apps\participants\views.py:385
+#: .\apps\participants\views.py:328 .\apps\participants\views.py:393
 msgid "No competition is selected."
 msgstr "Es ist kein Wettbewerb ausgewählt."
 
-#: .\apps\participants\views.py:324 .\apps\participants\views.py:389
+#: .\apps\participants\views.py:332 .\apps\participants\views.py:397
 #: .\apps\results\views.py:611
 msgid "Malformed request."
 msgstr "Fehlerhafte Anfrage."
 
-#: .\apps\participants\views.py:331
+#: .\apps\participants\views.py:339
 msgid "Unknown participant."
 msgstr "Unbekannter Teilnehmer."
 
-#: .\apps\participants\views.py:350
+#: .\apps\participants\views.py:358
 msgid "Bib must be a positive number."
 msgstr "Die Startnummer muss eine positive Zahl sein."
 
-#: .\apps\participants\views.py:357
+#: .\apps\participants\views.py:365
 #, python-format
 msgid "Bib %(bib)s is already taken."
 msgstr "Startnummer %(bib)s ist bereits vergeben."
 
-#: .\apps\participants\views.py:400
+#: .\apps\participants\views.py:408
 #: .\templates\participants\participant_list.html:110
 msgid "Give this participant a bib first."
 msgstr "Vergeben Sie diesem Teilnehmer zuerst eine Startnummer."
 
-#: .\apps\participants\views.py:420
+#: .\apps\participants\views.py:428
 #, python-format
 msgid ""
 "%(count)s recorded run stays with bib %(bib)s and stops being this "
@@ -530,7 +544,7 @@ msgstr[1] ""
 "%(count)s erfasste Läufe bleiben bei Startnummer %(bib)s und gehören dann "
 "nicht mehr zu diesem Teilnehmer."
 
-#: .\apps\participants\views.py:426
+#: .\apps\participants\views.py:434
 #, python-format
 msgid ""
 "%(count)s run already recorded under bib %(bib)s becomes this participant's."
@@ -543,19 +557,19 @@ msgstr[1] ""
 "%(count)s bereits unter Startnummer %(bib)s erfasste Läufe gehören dann zu "
 "diesem Teilnehmer."
 
-#: .\apps\participants\views.py:433
+#: .\apps\participants\views.py:441
 msgid "This moves recorded times."
 msgstr "Dadurch werden erfasste Zeiten verschoben."
 
-#: .\apps\participants\views.py:453
+#: .\apps\participants\views.py:474
 msgid "licence number"
 msgstr "Lizenznummer"
 
-#: .\apps\participants\views.py:457
+#: .\apps\participants\views.py:478
 msgid "name and licence number"
 msgstr "Name und Lizenznummer"
 
-#: .\apps\participants\views.py:459
+#: .\apps\participants\views.py:480
 msgid "name"
 msgstr "Name"
 
@@ -730,11 +744,11 @@ msgstr "Ergebnis-Einstellungen gespeichert."
 msgid "Pylons"
 msgstr "Pylonen"
 
-#: .\apps\timing\cp540.py:332
+#: .\apps\timing\cp540.py:338
 msgid "Connected to the timing device."
 msgstr "Mit dem Zeitmessgerät verbunden."
 
-#: .\apps\timing\cp540.py:334
+#: .\apps\timing\cp540.py:340
 msgid ""
 "No contact with the timing device — reconnecting. Times are not being "
 "recorded."
@@ -742,23 +756,23 @@ msgstr ""
 "Keine Verbindung zum Zeitmessgerät — es wird neu verbunden. Zeiten werden "
 "derzeit nicht aufgezeichnet."
 
-#: .\apps\timing\cp540.py:336
+#: .\apps\timing\cp540.py:342
 msgid ""
 "The timing device is not connected. Connect it on the Timing settings page."
 msgstr ""
 "Das Zeitmessgerät ist nicht verbunden. Stellen Sie die Verbindung auf der "
 "Seite Zeitmessung-Einstellungen her."
 
-#: .\apps\timing\cp540.py:338
+#: .\apps\timing\cp540.py:344
 msgid "The timing device is disconnected — times are not being recorded."
 msgstr "Das Zeitmessgerät ist getrennt — Zeiten werden nicht aufgezeichnet."
 
-#: .\apps\timing\forms.py:35 .\apps\timing\forms.py:37
+#: .\apps\timing\forms.py:47 .\apps\timing\forms.py:49
 msgid "Required to reach the Tag Heuer CP540."
 msgstr "Erforderlich, um den Tag Heuer CP540 zu erreichen."
 
 #: .\apps\timing\models.py:13 .\templates\timing\simulator.html:6
-#: .\templates\timing\simulator.html:13
+#: .\templates\timing\simulator.html:18
 msgid "Simulator"
 msgstr "Simulator"
 
@@ -820,16 +834,16 @@ msgstr "Nicht gewertet"
 msgid "Intermediate"
 msgstr "Zwischenzeit"
 
-#: .\apps\timing\views.py:131
+#: .\apps\timing\views.py:169
 #, python-format
 msgid "Connecting to the Tag Heuer CP540 at %(ip)s:%(port)s…"
 msgstr "Verbinde mit dem Tag Heuer CP540 unter %(ip)s:%(port)s…"
 
-#: .\apps\timing\views.py:137
+#: .\apps\timing\views.py:175
 msgid "Disconnected from the timing device."
 msgstr "Verbindung zum Zeitmessgerät getrennt."
 
-#: .\apps\timing\views.py:139
+#: .\apps\timing\views.py:177
 msgid "Timing settings saved."
 msgstr "Zeitmess-Einstellungen gespeichert."
 
@@ -1059,11 +1073,11 @@ msgstr "Import abgebrochen – es wurde nichts geändert."
 msgid "The upload has expired. Please choose the file again."
 msgstr "Der Upload ist abgelaufen. Bitte wähle die Datei erneut aus."
 
-#: .\config\settings.py:425
+#: .\config\settings.py:438
 msgid "German"
 msgstr "Deutsch"
 
-#: .\config\settings.py:426
+#: .\config\settings.py:439
 msgid "English"
 msgstr "Englisch"
 
@@ -1113,12 +1127,12 @@ msgstr ""
 "Falscher Benutzername oder falsches Passwort. Bitte versuchen Sie es erneut."
 
 #: .\templates\accounts\login.html:27
-#: .\templates\accounts\user_access.html:109
+#: .\templates\accounts\user_access.html:125
 msgid "Username"
 msgstr "Benutzername"
 
 #: .\templates\accounts\login.html:31
-#: .\templates\accounts\user_access.html:113
+#: .\templates\accounts\user_access.html:129
 msgid "Password"
 msgstr "Passwort"
 
@@ -1151,7 +1165,7 @@ msgid "— low-level data administration (superusers only)."
 msgstr "— systemnahe Datenverwaltung (nur Superuser)."
 
 #: .\templates\accounts\user_access.html:11
-#: .\templates\accounts\user_access.html:118
+#: .\templates\accounts\user_access.html:134
 msgid "Roles"
 msgstr "Rollen"
 
@@ -1167,7 +1181,7 @@ msgstr ""
 "Die Rolle „%(name)s“ löschen? Benutzer verlieren den damit gewährten Zugriff."
 
 #: .\templates\accounts\user_access.html:23
-#: .\templates\accounts\user_access.html:70
+#: .\templates\accounts\user_access.html:85
 #: .\templates\competitions\competition_list.html:55
 #: .\templates\competitions\competitiontype_list.html:41
 #: .\templates\competitions\competitiontype_list.html:45
@@ -1211,54 +1225,70 @@ msgstr ""
 msgid "superuser"
 msgstr "Superuser"
 
-#: .\templates\accounts\user_access.html:66
+#: .\templates\accounts\user_access.html:65
+msgid "deactivated"
+msgstr "deaktiviert"
+
+#: .\templates\accounts\user_access.html:76
+msgid "You can’t deactivate your own account"
+msgstr "Sie können Ihr eigenes Konto nicht deaktivieren"
+
+#: .\templates\accounts\user_access.html:77
+msgid "Deactivate"
+msgstr "Deaktivieren"
+
+#: .\templates\accounts\user_access.html:77
+msgid "Reactivate"
+msgstr "Reaktivieren"
+
+#: .\templates\accounts\user_access.html:81
 #, python-format
 msgid "Delete the user “%(name)s”?"
 msgstr "Den Benutzer „%(name)s“ löschen?"
 
-#: .\templates\accounts\user_access.html:70
+#: .\templates\accounts\user_access.html:85
 msgid "You can’t delete your own account"
 msgstr "Sie können Ihr eigenes Konto nicht löschen"
 
-#: .\templates\accounts\user_access.html:77
+#: .\templates\accounts\user_access.html:93
 msgid "Full access (superuser). Roles don’t affect this account."
 msgstr ""
 "Voller Zugriff (Superuser). Rollen wirken sich auf dieses Konto nicht aus."
 
-#: .\templates\accounts\user_access.html:87
+#: .\templates\accounts\user_access.html:103
 msgid "No roles defined."
 msgstr "Keine Rollen definiert."
 
-#: .\templates\accounts\user_access.html:92
+#: .\templates\accounts\user_access.html:108
 msgid "Reset password"
 msgstr "Passwort zurücksetzen"
 
-#: .\templates\accounts\user_access.html:94
+#: .\templates\accounts\user_access.html:110
 msgid "leave blank to keep"
 msgstr "leer lassen zum Beibehalten"
 
-#: .\templates\accounts\user_access.html:97
+#: .\templates\accounts\user_access.html:113
 #: .\templates\competitions\competition_classes.html:61
 #: .\templates\competitions\competition_general.html:34
 #: .\templates\competitions\competition_penalties.html:69
 #: .\templates\competitions\competition_runorder.html:75
 #: .\templates\competitions\competitiontype_form.html:10
-#: .\templates\competitions\competitiontype_settings.html:79
+#: .\templates\competitions\competitiontype_settings.html:83
 #: .\templates\participants\participant_form.html:130
 #: .\templates\results\results_settings.html:176
 #: .\templates\timing\settings.html:38
 msgid "Save"
 msgstr "Speichern"
 
-#: .\templates\accounts\user_access.html:106
+#: .\templates\accounts\user_access.html:122
 msgid "Add a user"
 msgstr "Benutzer hinzufügen"
 
-#: .\templates\accounts\user_access.html:126
+#: .\templates\accounts\user_access.html:142
 msgid "No roles defined yet — create one above first."
 msgstr "Noch keine Rollen definiert — erstellen Sie zuerst oben eine."
 
-#: .\templates\accounts\user_access.html:131
+#: .\templates\accounts\user_access.html:147
 msgid "Create user"
 msgstr "Benutzer erstellen"
 
@@ -1383,7 +1413,7 @@ msgstr "Verwerfen"
 #: .\templates\competitions\competition_general.html:55
 #: .\templates\competitions\competition_penalties.html:90
 #: .\templates\competitions\competitiontype_form.html:11
-#: .\templates\competitions\competitiontype_settings.html:80
+#: .\templates\competitions\competitiontype_settings.html:84
 #: .\templates\participants\participant_confirm_delete.html:29
 #: .\templates\participants\participant_form.html:131
 #: .\templates\participants\participant_form.html:157
@@ -1503,28 +1533,6 @@ msgstr "Klasse löschen?"
 #: .\templates\competitions\competition_classes.html:70
 msgid "Delete class"
 msgstr "Klasse löschen"
-
-#: .\templates\competitions\competition_classes.html:182
-msgid "This class"
-msgstr "Diese Klasse"
-
-#: .\templates\competitions\competition_classes.html:184
-msgid "recorded run(s) — the times are kept but lose their class"
-msgstr ""
-"erfasste(r) Lauf/Läufe — die Zeiten bleiben erhalten, verlieren aber ihre "
-"Klasse"
-
-#: .\templates\competitions\competition_classes.html:185
-msgid "participant assignment(s) — removed"
-msgstr "Teilnehmerzuordnung(en) — entfernt"
-
-#: .\templates\competitions\competition_classes.html:186
-msgid "has:"
-msgstr "hat:"
-
-#: .\templates\competitions\competition_classes.html:187
-msgid "It will be deleted when you press Save."
-msgstr "Sie wird gelöscht, wenn Sie auf Speichern drücken."
 
 #: .\templates\competitions\competition_confirm_delete.html:3
 #: .\templates\competitions\competition_confirm_delete.html:4
@@ -1799,54 +1807,8 @@ msgid "Delete penalties and save"
 msgstr "Strafen löschen und speichern"
 
 #: .\templates\competitions\competition_penalties.html:99
-#: .\templates\competitions\competition_penalties.html:165
 msgid "Marshal Post"
 msgstr "Streckenposten"
-
-#: .\templates\competitions\competition_penalties.html:191
-msgid "This task list can’t be read."
-msgstr "Diese Aufgabenliste kann nicht gelesen werden."
-
-#: .\templates\competitions\competition_penalties.html:197
-#, python-brace-format
-msgid "Task {tasks} is on another post too."
-msgstr "Aufgabe {tasks} ist auch auf einem anderen Posten."
-
-#: .\templates\competitions\competition_penalties.html:206
-msgid "Check the task lists — one can’t be read."
-msgstr "Überprüfen Sie die Aufgabenlisten — eine kann nicht gelesen werden."
-
-#: .\templates\competitions\competition_penalties.html:209
-#, python-brace-format
-msgid "Task {tasks} assigned to more than one post."
-msgstr "Aufgabe {tasks} ist mehr als einem Posten zugewiesen."
-
-#: .\templates\competitions\competition_penalties.html:216
-#, python-brace-format
-msgid "Tasks {tasks} assigned"
-msgstr "Aufgaben {tasks} zugewiesen"
-
-#: .\templates\competitions\competition_penalties.html:217
-msgid "No tasks assigned yet"
-msgstr "Noch keine Aufgaben zugewiesen"
-
-#: .\templates\competitions\competition_penalties.html:297
-#, python-brace-format
-msgid ""
-"This will delete <strong>{n}</strong> penalty already recorded by a marshal "
-"post."
-msgstr ""
-"Dadurch wird <strong>{n}</strong> bereits von einem Streckenposten erfasste "
-"Strafe gelöscht."
-
-#: .\templates\competitions\competition_penalties.html:298
-#, python-brace-format
-msgid ""
-"This will delete <strong>{n}</strong> penalties already recorded by marshal "
-"posts."
-msgstr ""
-"Dadurch werden <strong>{n}</strong> bereits von Streckenposten erfasste "
-"Strafen gelöscht."
 
 #: .\templates\competitions\competition_runorder.html:6
 msgid "How the run order works"
@@ -1930,100 +1892,7 @@ msgstr "Testteilnehmer"
 msgid "participants, bibs 1–n"
 msgstr "Teilnehmer, Startnummern 1–n"
 
-#: .\templates\competitions\competition_runorder.html:124
-msgid "Drag to reorder run"
-msgstr "Ziehen, um den Lauf umzuordnen"
-
-#: .\templates\competitions\competition_runorder.html:168
-#: .\templates\competitions\competition_runorder.html:569
-#: .\templates\timing\live.html:50
-msgid "Run"
-msgstr "Lauf"
-
-#: .\templates\competitions\competition_runorder.html:271
-msgid "P"
-msgstr "T"
-
-#: .\templates\competitions\competition_runorder.html:271
-msgid "C"
-msgstr "W"
-
-#: .\templates\competitions\competition_runorder.html:340
-msgid "Dummy participant"
-msgstr "Testteilnehmer"
-
-#: .\templates\competitions\competition_runorder.html:365
-msgid "Remove this run"
-msgstr "Diesen Lauf entfernen"
-
-#: .\templates\competitions\competition_runorder.html:390
-msgid "Drag to reorder block"
-msgstr "Ziehen, um den Block umzuordnen"
-
-#: .\templates\competitions\competition_runorder.html:416
-msgid "Participants per pass"
-msgstr "Teilnehmer pro Durchgang"
-
-#: .\templates\competitions\competition_runorder.html:425
-msgid "Take every participant in one pass"
-msgstr "Alle Teilnehmer in einem Durchgang nehmen"
-
-#: .\templates\competitions\competition_runorder.html:429
-msgid "all"
-msgstr "alle"
-
-#: .\templates\competitions\competition_runorder.html:435
-msgid "at a time"
-msgstr "auf einmal"
-
-#: .\templates\competitions\competition_runorder.html:476
-msgid "Remove this block"
-msgstr "Diesen Block entfernen"
-
-#: .\templates\competitions\competition_runorder.html:532
-#: .\templates\competitions\competition_runorder.html:597
-msgid "Block"
-msgstr "Block"
-
-#: .\templates\competitions\competition_runorder.html:553
-msgid "Add a block to see the start order."
-msgstr "Fügen Sie einen Block hinzu, um die Startreihenfolge zu sehen."
-
-#: .\templates\competitions\competition_runorder.html:569
-msgid "Dummy run"
-msgstr "Testlauf"
-
-#: .\templates\competitions\competition_runorder.html:577
-#, python-brace-format
-msgid "{n} participants taking {cls}’s runs: {p} practice, {c} counted"
-msgstr ""
-"{n} Teilnehmer absolvieren die Läufe von {cls}: {p} Training, {c} Wertung"
-
-#: .\templates\competitions\competition_runorder.html:580
-#, python-brace-format
-msgid "{n} participants taking 1 practice, 2 counted"
-msgstr "{n} Teilnehmer absolvieren 1 Training, 2 Wertung"
-
-#: .\templates\competitions\competition_runorder.html:586
-msgid "No participants with a bib in this run yet."
-msgstr "Noch keine Teilnehmer mit Startnummer in diesem Lauf."
-
-#: .\templates\competitions\competition_runorder.html:610
-msgid "nothing left to schedule — these participants have no such run left"
-msgstr ""
-"nichts mehr zu planen — diese Teilnehmer haben keinen solchen Lauf mehr"
-
-#: .\templates\competitions\competition_runorder.html:621
-#, python-brace-format
-msgid "{name} — {cls}, {type} run {n}"
-msgstr "{name} — {cls}, {type} Lauf {n}"
-
-#: .\templates\competitions\competition_runorder.html:635
-#, python-brace-format
-msgid "Not scheduled: {list}."
-msgstr "Nicht geplant: {list}."
-
-#: .\templates\competitions\competition_runorder.html:688
+#: .\templates\competitions\competition_runorder.html:85
 #, python-format
 msgid ""
 "No classes are running yet. Mark classes as <em>Running</em> on the <a "
@@ -2102,25 +1971,25 @@ msgstr ""
 "Regeln, nach denen jeder Wettbewerb dieses Typs ausgetragen und ausgewertet "
 "wird."
 
-#: .\templates\competitions\competitiontype_settings.html:29
+#: .\templates\competitions\competitiontype_settings.html:33
 msgid "Enter penalties during the race"
 msgstr "Strafen während des Rennens eingeben"
 
-#: .\templates\competitions\competitiontype_settings.html:31
+#: .\templates\competitions\competitiontype_settings.html:35
 msgid "With this on, the timing screen shows the penalties entry for each run."
 msgstr ""
 "Wenn dies aktiviert ist, zeigt der Zeitmessbildschirm die Strafeneingabe für "
 "jeden Lauf."
 
-#: .\templates\competitions\competitiontype_settings.html:46
+#: .\templates\competitions\competitiontype_settings.html:50
 msgid "Evaluation"
 msgstr "Auswertung"
 
-#: .\templates\competitions\competitiontype_settings.html:62
+#: .\templates\competitions\competitiontype_settings.html:66
 msgid "Required participant info"
 msgstr "Erforderliche Teilnehmerangaben"
 
-#: .\templates\competitions\competitiontype_settings.html:64
+#: .\templates\competitions\competitiontype_settings.html:68
 msgid ""
 "Which details the participant form asks for in this competition type. Name "
 "and date of birth are always asked for."
@@ -2128,7 +1997,7 @@ msgstr ""
 "Welche Angaben das Teilnehmerformular in diesem Wettbewerbstyp abfragt. Name "
 "und Geburtsdatum werden immer abgefragt."
 
-#: .\templates\competitions\competitiontype_settings.html:65
+#: .\templates\competitions\competitiontype_settings.html:69
 msgid ""
 "<span class=\"required-marker\">*</span> marks a detail that is mandatory "
 "once collected."
@@ -2136,7 +2005,7 @@ msgstr ""
 "<span class=\"required-marker\">*</span> kennzeichnet eine Angabe, die – "
 "sofern erhoben – verpflichtend ist."
 
-#: .\templates\competitions\competitiontype_settings.html:72
+#: .\templates\competitions\competitiontype_settings.html:76
 msgid "Mandatory"
 msgstr "Pflichtangabe"
 
@@ -2290,7 +2159,6 @@ msgid "No competition selected — class can't be computed."
 msgstr "Kein Wettbewerb ausgewählt — Klasse kann nicht berechnet werden."
 
 #: .\templates\participants\participant_form.html:54
-#: .\templates\participants\participant_form.html:269
 #: .\templates\results\results_settings.html:144
 #: .\templates\results\results_settings.html:157
 msgid "Remove"
@@ -2353,17 +2221,6 @@ msgstr ""
 #: .\templates\participants\participant_form.html:156
 msgid "Change the bib"
 msgstr "Startnummer ändern"
-
-#: .\templates\participants\participant_form.html:206
-msgid "Invalid date"
-msgstr "Ungültiges Datum"
-
-#: .\templates\participants\participant_form.html:209
-msgid ""
-"That’s not a valid date — please check the day exists in that month/year."
-msgstr ""
-"Das ist kein gültiges Datum — bitte prüfen Sie, ob der Tag in diesem Monat/"
-"Jahr existiert."
 
 #: .\templates\participants\participant_list.html:8
 #, python-format
@@ -2439,21 +2296,6 @@ msgstr "Keine Teilnehmer gefunden."
 #: .\templates\participants\participant_list.html:125
 msgid "No participants match your search."
 msgstr "Keine Teilnehmer entsprechen Ihrer Suche."
-
-#: .\templates\participants\participant_list.html:188
-#: .\templates\participants\participant_list.html:212
-#: .\templates\participants\participant_list.html:298
-msgid "Could not save."
-msgstr "Konnte nicht gespeichert werden."
-
-#: .\templates\participants\participant_list.html:193
-msgid "Change the bib anyway?"
-msgstr "Startnummer trotzdem ändern?"
-
-#: .\templates\participants\participant_list.html:201
-#: .\templates\participants\participant_list.html:294
-msgid "Saved"
-msgstr "Gespeichert"
 
 #: .\templates\results\_results_runcell.html:3
 msgid "Mark this run as did not start"
@@ -2999,6 +2841,10 @@ msgstr "Laufzeit"
 msgid "Competitor"
 msgstr "Starter"
 
+#: .\templates\timing\live.html:50
+msgid "Run"
+msgstr "Lauf"
+
 #: .\templates\timing\live.html:56
 msgid "Status"
 msgstr "Status"
@@ -3067,7 +2913,7 @@ msgstr ""
 msgid "Device stream"
 msgstr "Geräte-Datenstrom"
 
-#: .\templates\timing\settings.html:73 .\templates\timing\settings.html:106
+#: .\templates\timing\settings.html:73
 msgid "Idle"
 msgstr "Bereit"
 
@@ -3085,72 +2931,33 @@ msgstr ""
 msgid "No lines received yet."
 msgstr "Noch keine Zeilen empfangen."
 
-#: .\templates\timing\settings.html:106
-msgid "Connecting…"
-msgstr "Verbinden…"
-
-#: .\templates\timing\settings.html:107
-msgid "Connected"
-msgstr "Verbunden"
-
-#: .\templates\timing\settings.html:108
-msgid "Reconnecting…"
-msgstr "Neu verbinden…"
-
-#: .\templates\timing\settings.html:109
-msgid "Connection error"
-msgstr "Verbindungsfehler"
-
-#: .\templates\timing\settings.html:109
-msgid "Disconnected"
-msgstr "Getrennt"
-
-#: .\templates\timing\settings.html:134
-#, python-brace-format
-msgid "{n} signal"
-msgstr "{n} Signal"
-
-#: .\templates\timing\settings.html:135
-#, python-brace-format
-msgid "{n} signals"
-msgstr "{n} Signale"
-
-#: .\templates\timing\simulator.html:19
+#: .\templates\timing\simulator.html:24
 msgid "Device time"
 msgstr "Gerätezeit"
 
-#: .\templates\timing\simulator.html:24
+#: .\templates\timing\simulator.html:29
 msgid "Next running number"
 msgstr "Nächste laufende Nummer"
 
-#: .\templates\timing\simulator.html:27
+#: .\templates\timing\simulator.html:32
 msgid "Reset to 1"
 msgstr "Auf 1 zurücksetzen"
 
-#: .\templates\timing\simulator.html:32
+#: .\templates\timing\simulator.html:37
 msgid "Light barrier"
 msgstr "Lichtschranke"
 
-#: .\templates\timing\simulator.html:53
+#: .\templates\timing\simulator.html:58
 msgid "Signal log"
 msgstr "Signalprotokoll"
 
-#: .\templates\timing\simulator.html:54
+#: .\templates\timing\simulator.html:59
 msgid "Clear"
 msgstr "Leeren"
 
-#: .\templates\timing\simulator.html:57
+#: .\templates\timing\simulator.html:62
 msgid "No signals sent yet."
 msgstr "Noch keine Signale gesendet."
-
-#: .\templates\timing\simulator.html:118
-msgid "Signal rejected."
-msgstr "Signal abgelehnt."
-
-#: .\templates\timing\simulator.html:123
-#, python-brace-format
-msgid "#{n} · {label} · {time} — failed: {err}"
-msgstr "#{n} · {label} · {time} — fehlgeschlagen: {err}"
 
 #: .\templates\transfer\export.html:7
 msgid ""

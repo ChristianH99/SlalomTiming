@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-28 19:46+0200\n"
+"POT-Creation-Date: 2026-07-28 21:41+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -27,7 +27,7 @@ msgstr "▼ Aktuell"
 msgid "Locked"
 msgstr "Gesperrt"
 
-#: .\static\js\auto_timing.js:171 .\static\js\auto_timing.js:622
+#: .\static\js\auto_timing.js:171 .\static\js\auto_timing.js:624
 #: .\static\js\timing_live.js:75
 msgid "Lock"
 msgstr "Sperren"
@@ -41,7 +41,8 @@ msgstr ""
 msgid "Times are being recorded."
 msgstr "Zeiten werden aufgezeichnet."
 
-#: .\static\js\auto_timing.js:200
+#: .\static\js\auto_timing.js:200 .\static\js\run_order.js:93
+#: .\static\js\run_order.js:492
 msgid "Run"
 msgstr "Lauf"
 
@@ -89,74 +90,138 @@ msgstr "Gesamt"
 msgid "Lock all posts"
 msgstr "Alle Posten sperren"
 
-#: .\static\js\auto_timing.js:358
-#, fuzzy
-#| msgid ""
-#| "This time has no competitor in the start order. Drag it onto the right "
-#| "starter's Start or Finish slot, or discard it."
-msgid "This time has no competitor in the start order. Drag it onto the right "
+#: .\static\js\auto_timing.js:361
+msgid ""
+"This time has no competitor in the start order. Drag it onto the right "
+"starter's Start or Finish slot, or discard it."
 msgstr ""
 "Zu dieser Zeit gibt es keinen Starter in der Startreihenfolge. Ziehen Sie "
 "sie auf den Start oder das Ziel des richtigen Starters, oder verwerfen Sie "
 "sie."
 
-#: .\static\js\auto_timing.js:362
+#: .\static\js\auto_timing.js:364
 msgid "Move to Ignored"
 msgstr "Nach „Ignoriert“ verschieben"
 
-#: .\static\js\auto_timing.js:386 .\static\js\dashboard_overview.js:143
+#: .\static\js\auto_timing.js:388 .\static\js\dashboard_overview.js:143
 msgid "Run time"
 msgstr "Laufzeit"
 
-#: .\static\js\auto_timing.js:391 .\static\js\timing_live.js:180
+#: .\static\js\auto_timing.js:393 .\static\js\timing_live.js:180
 msgid "Double-click to type a run time"
 msgstr "Doppelklicken, um eine Laufzeit einzugeben"
 
-#: .\static\js\auto_timing.js:422
+#: .\static\js\auto_timing.js:424
 msgid "%(kind)s · double-click to edit"
 msgstr "%(kind)s · zum Bearbeiten doppelklicken"
 
-#: .\static\js\auto_timing.js:423 .\static\js\timing_live.js:166
+#: .\static\js\auto_timing.js:425 .\static\js\timing_live.js:166
 msgid "Typed in by hand"
 msgstr "Von Hand eingegeben"
 
-#: .\static\js\auto_timing.js:423
+#: .\static\js\auto_timing.js:425
 msgid "Drag to re-pair or to Ignored"
 msgstr "Ziehen zum erneuten Zuordnen oder auf „Ignoriert“"
 
-#: .\static\js\auto_timing.js:477
+#: .\static\js\auto_timing.js:479
 msgid "Status"
 msgstr "Status"
 
-#: .\static\js\auto_timing.js:483
+#: .\static\js\auto_timing.js:485
 msgid "Clear this run's status"
 msgstr "Status dieses Laufs entfernen"
 
-#: .\static\js\auto_timing.js:588 .\static\js\marshal_posts.js:75
-#: .\static\js\marshal_posts.js:157
+#: .\static\js\auto_timing.js:590 .\static\js\marshal_posts.js:74
+#: .\static\js\marshal_posts.js:156
 msgid "Post %(n)s"
 msgstr "Posten %(n)s"
 
-#: .\static\js\auto_timing.js:592
+#: .\static\js\auto_timing.js:594
 msgid "Task %(n)s"
 msgstr "Aufgabe %(n)s"
 
-#: .\static\js\auto_timing.js:597 .\static\js\marshal_posts.js:281
+#: .\static\js\auto_timing.js:599 .\static\js\marshal_posts.js:280
 msgid "Task"
 msgstr "Aufgabe"
 
-#: .\static\js\auto_timing.js:605 .\static\js\marshal_posts.js:220
+#: .\static\js\auto_timing.js:607 .\static\js\marshal_posts.js:219
 msgid "Stop line"
 msgstr "Stopplinie"
 
-#: .\static\js\auto_timing.js:610 .\static\js\auto_timing.js:677
-#: .\static\js\marshal_posts.js:289
+#: .\static\js\auto_timing.js:612 .\static\js\auto_timing.js:679
+#: .\static\js\marshal_posts.js:288
 msgid "Penalty"
 msgstr "Strafe"
 
-#: .\static\js\auto_timing.js:618
+#: .\static\js\auto_timing.js:620
 msgid "Unlock"
 msgstr "Entsperren"
+
+#: .\static\js\competition_classes.js:110
+msgid "This class"
+msgstr "Diese Klasse"
+
+#: .\static\js\competition_classes.js:112
+msgid "recorded run(s) — the times are kept but lose their class"
+msgstr ""
+"erfasste(r) Lauf/Läufe — die Zeiten bleiben erhalten, verlieren aber ihre "
+"Klasse"
+
+#: .\static\js\competition_classes.js:113
+msgid "participant assignment(s) — removed"
+msgstr "Teilnehmerzuordnung(en) — entfernt"
+
+#: .\static\js\competition_classes.js:114
+msgid "has:"
+msgstr "hat:"
+
+#: .\static\js\competition_classes.js:115
+msgid "It will be deleted when you press Save."
+msgstr "Sie wird gelöscht, wenn Sie auf Speichern drücken."
+
+#: .\static\js\competition_penalties.js:55
+msgid "Marshal Post"
+msgstr "Streckenposten"
+
+#: .\static\js\competition_penalties.js:81
+msgid "This task list can’t be read."
+msgstr "Diese Aufgabenliste kann nicht gelesen werden."
+
+#: .\static\js\competition_penalties.js:87
+msgid "Task {tasks} is on another post too."
+msgstr "Aufgabe {tasks} ist auch auf einem anderen Posten."
+
+#: .\static\js\competition_penalties.js:96
+msgid "Check the task lists — one can’t be read."
+msgstr "Überprüfen Sie die Aufgabenlisten — eine kann nicht gelesen werden."
+
+#: .\static\js\competition_penalties.js:99
+msgid "Task {tasks} assigned to more than one post."
+msgstr "Aufgabe {tasks} ist mehr als einem Posten zugewiesen."
+
+#: .\static\js\competition_penalties.js:106
+msgid "Tasks {tasks} assigned"
+msgstr "Aufgaben {tasks} zugewiesen"
+
+#: .\static\js\competition_penalties.js:107
+msgid "No tasks assigned yet"
+msgstr "Noch keine Aufgaben zugewiesen"
+
+#: .\static\js\competition_penalties.js:187
+msgid ""
+"This will delete <strong>{n}</strong> penalty already recorded by a marshal "
+"post."
+msgstr ""
+"Dadurch wird <strong>{n}</strong> bereits von einem Streckenposten erfasste "
+"Strafe gelöscht."
+
+#: .\static\js\competition_penalties.js:188
+msgid ""
+"This will delete <strong>{n}</strong> penalties already recorded by marshal "
+"posts."
+msgstr ""
+"Dadurch werden <strong>{n}</strong> bereits von Streckenposten erfasste "
+"Strafen gelöscht."
 
 #: .\static\js\dashboard_overview.js:24
 msgid "Done"
@@ -330,47 +395,47 @@ msgstr ""
 "Die aktuelle Veranstaltung wurde gewechselt. Dieser Bildschirm zeigt jetzt "
 "eine andere Veranstaltung."
 
-#: .\static\js\marshal_posts.js:84 .\static\js\marshal_posts.js:95
+#: .\static\js\marshal_posts.js:83 .\static\js\marshal_posts.js:94
 msgid "Post %(n)s is in use on another device."
 msgstr "Posten %(n)s wird auf einem anderen Gerät verwendet."
 
-#: .\static\js\marshal_posts.js:157
+#: .\static\js\marshal_posts.js:156
 msgid "Post %(n)s — in use"
 msgstr "Posten %(n)s — in Verwendung"
 
-#: .\static\js\marshal_posts.js:205
+#: .\static\js\marshal_posts.js:204
 msgid "Reduce penalty for task %(n)s"
 msgstr "Strafe für Aufgabe %(n)s verringern"
 
-#: .\static\js\marshal_posts.js:239
+#: .\static\js\marshal_posts.js:238
 msgid "Max penalty per task reached"
 msgstr "Maximale Strafe pro Aufgabe erreicht"
 
-#: .\static\js\marshal_posts.js:301
+#: .\static\js\marshal_posts.js:300
 msgid "Penalty: %(n)s s"
 msgstr "Strafe: %(n)s s"
 
-#: .\static\js\marshal_posts.js:316
+#: .\static\js\marshal_posts.js:315
 msgid "Waiting for the next starter…"
 msgstr "Warten auf den nächsten Starter…"
 
-#: .\static\js\marshal_posts.js:461
+#: .\static\js\marshal_posts.js:460
 msgid "The timekeeper's system would not take that entry."
 msgstr "Das System der Zeitnahme hat diese Eingabe nicht angenommen."
 
-#: .\static\js\marshal_posts.js:463
+#: .\static\js\marshal_posts.js:462
 msgid "Penalties submitted for bib %(bib)s"
 msgstr "Strafen für Startnummer %(bib)s übermittelt"
 
-#: .\static\js\marshal_posts.js:485
+#: .\static\js\marshal_posts.js:484
 msgid "Not sent yet — %(n)s waiting. Still trying…"
 msgstr "Noch nicht gesendet — %(n)s ausstehend. Wird weiter versucht…"
 
-#: .\static\js\marshal_posts.js:486
+#: .\static\js\marshal_posts.js:485
 msgid "Sending…"
 msgstr "Wird gesendet…"
 
-#: .\static\js\marshal_posts.js:576
+#: .\static\js\marshal_posts.js:575
 msgid "Bib %(bib)s is on course now — submit or switch when you're ready."
 msgstr ""
 "Startnr. %(bib)s ist jetzt auf der Strecke – senden oder wechseln Sie, wenn "
@@ -396,6 +461,35 @@ msgstr ""
 "<strong>Möglicherweise ein Duplikat.</strong> Diese Person scheint bereits "
 "registriert zu sein. Sie können trotzdem fortfahren, abbrechen oder den "
 "vorhandenen Datensatz öffnen:"
+
+#: .\static\js\participant_form_page.js:48
+msgid "Invalid date"
+msgstr "Ungültiges Datum"
+
+#: .\static\js\participant_form_page.js:51
+msgid ""
+"That’s not a valid date — please check the day exists in that month/year."
+msgstr ""
+"Das ist kein gültiges Datum — bitte prüfen Sie, ob der Tag in diesem Monat/"
+"Jahr existiert."
+
+#: .\static\js\participant_form_page.js:109
+msgid "Remove"
+msgstr "Entfernen"
+
+#: .\static\js\participant_list.js:59 .\static\js\participant_list.js:83
+#: .\static\js\participant_list.js:169 .\static\js\results_tie.js:132
+#: .\static\js\results_tie.js:135
+msgid "Could not save."
+msgstr "Konnte nicht gespeichert werden."
+
+#: .\static\js\participant_list.js:64
+msgid "Change the bib anyway?"
+msgstr "Startnummer trotzdem ändern?"
+
+#: .\static\js\participant_list.js:72 .\static\js\participant_list.js:165
+msgid "Saved"
+msgstr "Gespeichert"
 
 #: .\static\js\results_pdf_editor.js:139
 msgid "Could not remove the logo (%(error)s)."
@@ -433,9 +527,103 @@ msgstr ""
 "Die Ränge müssen der Reihe nach vergeben werden – bei Gleichstand bleibt die "
 "kleinere Zahl."
 
-#: .\static\js\results_tie.js:132 .\static\js\results_tie.js:135
-msgid "Could not save."
-msgstr "Konnte nicht gespeichert werden."
+#: .\static\js\run_order.js:49
+msgid "Drag to reorder run"
+msgstr "Zum Umsortieren des Laufs ziehen"
+
+#: .\static\js\run_order.js:193
+msgid "Practice"
+msgstr "Training"
+
+#: .\static\js\run_order.js:193
+msgid "Counted"
+msgstr "Wertung"
+
+#: .\static\js\run_order.js:194
+msgid "P"
+msgstr "T"
+
+#: .\static\js\run_order.js:194
+msgid "C"
+msgstr "W"
+
+#: .\static\js\run_order.js:263
+msgid "Dummy participant"
+msgstr "Beispielteilnehmer"
+
+#: .\static\js\run_order.js:288
+msgid "Remove this run"
+msgstr "Diesen Lauf entfernen"
+
+#: .\static\js\run_order.js:313
+msgid "Drag to reorder block"
+msgstr "Zum Umsortieren des Blocks ziehen"
+
+#: .\static\js\run_order.js:339
+msgid "Participants per pass"
+msgstr "Teilnehmer pro Durchgang"
+
+#: .\static\js\run_order.js:348
+msgid "Take every participant in one pass"
+msgstr "Alle Teilnehmer in einem Durchgang nehmen"
+
+#: .\static\js\run_order.js:352
+msgid "all"
+msgstr "alle"
+
+#: .\static\js\run_order.js:358
+msgid "at a time"
+msgstr "gleichzeitig"
+
+#: .\static\js\run_order.js:399
+msgid "Remove this block"
+msgstr "Diesen Block entfernen"
+
+#: .\static\js\run_order.js:455 .\static\js\run_order.js:520
+msgid "Block"
+msgstr "Block"
+
+#: .\static\js\run_order.js:476
+msgid "Add a block to see the start order."
+msgstr "Fügen Sie einen Block hinzu, um die Startreihenfolge zu sehen."
+
+#: .\static\js\run_order.js:492
+msgid "Dummy run"
+msgstr "Testlauf"
+
+#: .\static\js\run_order.js:500
+msgid "{n} participants taking {cls}’s runs: {p} practice, {c} counted"
+msgstr ""
+"{n} Teilnehmer absolvieren die Läufe von {cls}: {p} Training, {c} Wertung"
+
+#: .\static\js\run_order.js:503
+msgid "{n} participants taking 1 practice, 2 counted"
+msgstr "{n} Teilnehmer absolvieren 1 Training, 2 Wertung"
+
+#: .\static\js\run_order.js:509
+msgid "No participants with a bib in this run yet."
+msgstr "Noch keine Teilnehmer mit Startnummer in diesem Lauf."
+
+#: .\static\js\run_order.js:533
+msgid "nothing left to schedule — these participants have no such run left"
+msgstr ""
+"nichts mehr zu planen — diese Teilnehmer haben keinen solchen Lauf mehr"
+
+#: .\static\js\run_order.js:544
+msgid "{name} — {cls}, {type} run {n}"
+msgstr "{name} — {cls}, {type} Lauf {n}"
+
+#: .\static\js\run_order.js:558
+msgid "Not scheduled: {list}."
+msgstr "Nicht geplant: {list}."
+
+#: .\static\js\simulator.js:68
+msgid "Signal rejected."
+msgstr "Signal abgelehnt."
+
+#: .\static\js\simulator.js:73
+msgid "#{n} · {label} · {time} — failed: {err}"
+msgstr "#{n} · {label} · {time} — fehlgeschlagen: {err}"
 
 #: .\static\js\timing_live.js:93
 msgid "Add a row for an upcoming starter"
@@ -483,3 +671,35 @@ msgstr "Diesen Lauf mit einem Statuscode statt einer Zeit abschließen"
 #: .\static\js\timing_live.js:359
 msgid "The marshal posts enter this run's penalties."
 msgstr "Die Strafen dieses Laufs erfassen die Streckenposten."
+
+#: .\static\js\timing_settings.js:38
+msgid "Idle"
+msgstr "Bereit"
+
+#: .\static\js\timing_settings.js:38
+msgid "Connecting…"
+msgstr "Verbindung wird hergestellt…"
+
+#: .\static\js\timing_settings.js:39
+msgid "Connected"
+msgstr "Verbunden"
+
+#: .\static\js\timing_settings.js:39
+msgid "Reconnecting…"
+msgstr "Verbindung wird wiederhergestellt…"
+
+#: .\static\js\timing_settings.js:40
+msgid "Connection error"
+msgstr "Verbindungsfehler"
+
+#: .\static\js\timing_settings.js:40
+msgid "Disconnected"
+msgstr "Getrennt"
+
+#: .\static\js\timing_settings.js:65
+msgid "{n} signal"
+msgstr "{n} Signal"
+
+#: .\static\js\timing_settings.js:66
+msgid "{n} signals"
+msgstr "{n} Signale"

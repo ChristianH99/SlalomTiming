@@ -7,6 +7,7 @@ None of it shows up in a normal test run, because a normal test run has DEBUG on
 """
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -385,3 +386,83 @@ class TestRunBook:
     def test_login_page_is_reachable(self, client):
         """Smoke test that the URL conf still resolves after the media route."""
         assert client.get(reverse('accounts:login')).status_code == 200
+
+
+class TestContentSecurityPolicy:
+    """SEC-11. The policy is only worth having if it stays strict, and it only
+    *can* be strict while no page carries inline script or style — so both halves
+    are pinned here."""
+
+    def test_every_page_carries_the_policy(self, client):
+        response = client.get('/')
+        assert 'Content-Security-Policy' in response.headers
+
+    def test_the_policy_does_not_allow_inline_or_eval(self, client):
+        policy = client.get('/').headers['Content-Security-Policy']
+        assert "'unsafe-inline'" not in policy, (
+            "a CSP with 'unsafe-inline' cannot tell our inline script from an "
+            "injected one, which is the whole attack it exists to stop"
+        )
+        assert "'unsafe-eval'" not in policy
+        for directive in ("default-src 'self'", "script-src 'self'",
+                          "style-src 'self'", "frame-ancestors 'none'",
+                          "base-uri 'none'", "form-action 'self'"):
+            assert directive in policy, directive
+
+    @pytest.mark.parametrize('template', sorted(TEMPLATE_DIR.rglob('*.html')), ids=str)
+    def test_no_template_carries_an_inline_script_or_style(self, template):
+        """What makes the strict policy possible. A new inline block would not
+        fail loudly — the page would simply stop working in a browser, which is
+        the kind of thing that is discovered at an event."""
+        source = template.read_text(encoding='utf-8')
+        # Strip comments first: several of them talk *about* inline scripts.
+        source = re.sub(r'\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}', '',
+                        source, flags=re.S)
+        source = re.sub(r'\{#.*?#\}', '', source)
+        assert not re.search(r'<script(?![^>]*\ssrc=)[^>]*>', source), (
+            f'{template.name}: inline <script>. Move it to static/js/ — see '
+            f'config/csp.py.'
+        )
+        assert 'style="' not in source, (
+            f'{template.name}: inline style attribute, which style-src blocks.'
+        )
+
+    @pytest.mark.parametrize('template', sorted(TEMPLATE_DIR.rglob('*.html')), ids=str)
+    def test_no_template_carries_an_inline_event_handler(self, template):
+        source = template.read_text(encoding='utf-8')
+        found = re.findall(r'\son(?:click|change|input|submit|load|error|'
+                           r'keydown|keyup|focus|blur|mouseover)=', source)
+        assert not found, f'{template.name}: inline event handler {found[:2]}'
+
+    def test_no_script_file_contains_template_syntax(self):
+        """A script that moved out of a template but kept a {% trans %} or a
+        {{ var }} renders it verbatim into the browser."""
+        for script in (settings.BASE_DIR / 'static' / 'js').glob('*.js'):
+            source = script.read_text(encoding='utf-8')
+            # Comments explain the move and legitimately name the tags they
+            # replaced ("this used to be a {% trans %}"), so they are stripped
+            # before the check — both forms.
+            source = re.sub(r'/\*.*?\*/', '', source, flags=re.S)
+            source = re.sub(r'^\s*//.*$', '', source, flags=re.M)
+            assert '{%' not in source and '{{' not in source, (
+                f'{script.name} still contains Django template syntax'
+            )
+
+    def test_no_script_file_starts_a_token_with_an_escaped_quote(self):
+        r"""A cheap parse check, because there is no JS engine in the test run.
+
+        Moving 1,778 lines out of templates was a mechanical edit, and the way it
+        went wrong was ``querySelector(\"[data-run]\")`` — an escaped quote where
+        a string should open, which is a SyntaxError that takes the whole file
+        with it. Nothing on the server notices: the page renders, the script is
+        dead, and you find out at an event.
+        """
+        for script in (settings.BASE_DIR / 'static' / 'js').glob('*.js'):
+            source = script.read_text(encoding='utf-8')
+            # Only where an *argument* should open — `href=\"…\"` inside a
+            # string is legitimate and common.
+            bad = re.findall(r'[(,]\s*\\"', source)
+            assert not bad, (
+                f'{script.name}: escaped quote opening a token ({len(bad)}x) — '
+                f'the file will not parse'
+            )

@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  const URLS = window.DASH_URLS;
+  const URLS = window.pageData("page-urls");
   const dataEl = document.getElementById("dash-data");
   if (!URLS || !dataEl) return;
 

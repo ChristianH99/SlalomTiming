@@ -38,9 +38,19 @@
     </div>
 
     {{ overview|json_script:"dash-data" }}
-    <script>
-      window.DASH_URLS = { state: "{% url 'timing:dashboard-state' %}" };
-    </script>
+    {% comment %}The page's endpoint map, handed over as data rather than written
+    into an inline <script>: the app ships a Content-Security-Policy, and
+    json_script escapes it for us.{% endcomment %}
+    {{ page_urls|json_script:"page-urls" }}
+  {% endif %}
+{% endblock %}
+
+{% comment %}Guarded on there being a competition, as these scripts were when
+they sat beside the page: with no event selected there is no state element for
+them to read. They live in this block rather than in the content so they run
+*after* base.html's shell.js, which defines window.csrfToken().{% endcomment %}
+{% block scripts %}
+  {% if competition %}
     <script src="{% static 'js/live_socket.js' %}"></script>
     <script src="{% static 'js/dashboard_overview.js' %}"></script>
   {% endif %}

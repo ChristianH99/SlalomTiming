@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load static i18n %}
 {% block title %}{% blocktrans with name=competition_type.name %}{{ name }} settings{% endblocktrans %} – Slalom Timing{% endblock %}
 {% block topbar_title %}{% trans "Competition type settings" %}{% endblock %}
 {% block content %}
@@ -23,7 +23,10 @@
 
     <h2 class="form-section">{% trans "Penalties" %}</h2>
     <div class="settings-section">
-      <label class="switch">
+      {% comment %}data-penalty-toggle rather than the field's rendered id: the
+      script lives in a file now (the app ships a CSP), so it cannot be handed a
+      template variable and finds its control by marker instead.{% endcomment %}
+      <label class="switch" data-penalty-toggle>
         {{ form.penalties_enabled }}
         <span class="switch-track"><span class="switch-thumb"></span></span>
         <span class="switch-text">{% trans "Enter penalties during the race" %}</span>
@@ -81,22 +84,8 @@
     </div>
   </form>
 
-  <script>
-    (function () {
-      // The amounts only mean something with penalties on — grey them out with
-      // the toggle rather than hiding them, so the numbers stay visible. They
-      // are disabled too, so nothing can be typed into a value that the form
-      // would then discard.
-      const toggle = document.getElementById("{{ form.penalties_enabled.auto_id }}");
-      const block = document.querySelector("[data-penalty-block]");
-      if (!toggle || !block) return;
-      const apply = () => {
-        const off = !toggle.checked;
-        block.classList.toggle("settings-row--off", off);
-        block.querySelectorAll("input").forEach((input) => { input.disabled = off; });
-      };
-      toggle.addEventListener("change", apply);
-      apply();
-    })();
-  </script>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/competitiontype_settings.js' %}"></script>
 {% endblock %}

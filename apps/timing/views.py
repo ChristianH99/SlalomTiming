@@ -78,6 +78,32 @@ def _rebind_and_broadcast(competition):
     broadcast_live()
 
 
+# The endpoint maps the live pages' scripts drive. They used to be written into an
+# inline <script> in each template; with a Content-Security-Policy in place nothing
+# on a page may be inline, so the view hands them over as data and the template
+# renders them through `json_script` (which escapes them for us).
+def _urls(*names):
+    from django.urls import reverse
+
+    return {
+        _CAMEL.get(name, name.replace("-", "_")): reverse(f"timing:{name}")
+        for name in names
+    }
+
+
+# url name -> the key its script already uses.
+_CAMEL = {
+    "arrangement": "arrangement", "run-update": "run", "run-add": "runAdd",
+    "run-delete": "runDelete", "run-status": "runStatus", "ignore": "ignore",
+    "pair": "pair", "set-time": "setTime", "set-runtime": "setRuntime",
+    "input-lock": "inputLock", "auto-state": "state", "auto-reorder": "reorder",
+    "auto-reset-order": "resetOrder", "auto-adjust": "adjust",
+    "marshal-unlock": "unlock", "marshal-lock": "lock",
+    "marshal-lock-all": "lockAll", "marshal-task-edit": "taskEdit",
+    "dashboard-state": "state", "signal": "signal", "cp540-status": "status",
+}
+
+
 class DashboardView(TemplateView):
     """The organiser overview: a live, read-only status view of the whole event
     (overall run progress, per-class state, the competitor on course, headline
@@ -89,6 +115,7 @@ class DashboardView(TemplateView):
         context = super().get_context_data(**kwargs)
         competition = Competition.get_current()
         context["competition"] = competition
+        context["page_urls"] = _urls("dashboard-state")
         if competition is not None:
             context["overview"] = dashboard.serialize(competition)
         return context
@@ -116,6 +143,11 @@ class TimingSettingsView(UpdateView):
 
     def get_object(self, queryset=None):
         return TimingSettings.load()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_urls"] = _urls("cp540-status")
+        return context
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -175,6 +207,11 @@ class SimulatorView(TemplateView):
 
     template_name = "timing/simulator.html"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_urls"] = _urls("signal")
+        return context
+
 
 class TimingLiveView(TemplateView):
     """The operator's live timing view for the active competition: incoming start
@@ -186,6 +223,10 @@ class TimingLiveView(TemplateView):
         context = super().get_context_data(**kwargs)
         competition = Competition.get_current()
         context["competition"] = competition
+        context["page_urls"] = _urls(
+            "arrangement", "run-update", "run-add", "run-delete", "run-status",
+            "ignore", "pair", "set-time", "set-runtime", "input-lock",
+        )
         if competition is not None:
             context["arrangement"] = serialize_arrangement(competition)
         return context
@@ -202,6 +243,12 @@ class AutoTimingView(TemplateView):
         context = super().get_context_data(**kwargs)
         competition = Competition.get_current()
         context["competition"] = competition
+        context["page_urls"] = _urls(
+            "auto-state", "auto-reorder", "auto-reset-order", "ignore", "pair",
+            "set-time", "set-runtime", "run-status", "auto-adjust",
+            "marshal-unlock", "marshal-lock", "marshal-lock-all",
+            "marshal-task-edit", "input-lock",
+        )
         if competition is not None:
             context["auto"] = autotiming.serialize(competition)
         return context

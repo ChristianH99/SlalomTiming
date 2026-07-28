@@ -25,6 +25,18 @@ class TimingSettingsForm(forms.ModelForm):
                 "inputmode": "numeric",
             })
         self.fields["port"].widget.attrs.update({"min": "1", "max": "65535", "inputmode": "numeric"})
+        # Markers for static/js/timing_settings.js, which shows the block belonging
+        # to the selected device and locks the address while the link is up. It
+        # used to find these by the id Django renders (`{{ form.device.id_for_label }}`
+        # written into an inline script); nothing on a page may be inline now that
+        # the app ships a CSP, and a marker is the better coupling anyway — the
+        # script no longer depends on how this form names its fields.
+        for name, marker in (
+            ("device", "data-device-select"),
+            ("ip_address", "data-device-ip"),
+            ("port", "data-device-port"),
+        ):
+            self.fields[name].widget.attrs[marker] = ""
 
     def clean(self):
         cleaned = super().clean()

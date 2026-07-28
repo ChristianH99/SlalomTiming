@@ -83,7 +83,9 @@ class ParticipantFormContextMixin:
         # Passed to the template via {{ ...|json_script }}, which handles the
         # JSON serialization — so these stay as plain Python objects here.
         context["class_ranges"] = ranges
-        context["competition_year"] = competition.date.year if competition else None
+        context["page_config"] = {
+            "competitionYear": competition.date.year if competition else None,
+        }
         context["club_options"] = known_clubs()
         context["email_domains"] = COMMON_EMAIL_DOMAINS
         context["check_url"] = reverse("participants:check")
@@ -201,8 +203,14 @@ class ParticipantListView(ListView):
         # Attach each participant's detail-panel rows for the expandable view.
         for participant in context["participants"]:
             participant.detail_rows = participant_detail_rows(participant, collected)
-        context["set_bib_url"] = reverse("participants:set-bib")
-        context["set_dsq_url"] = reverse("participants:set-dsq")
+        # Handed over as data, not written into an inline <script>: nothing on a
+        # page may be inline now that the app ships a CSP (see static/js/shell.js).
+        context["page_config"] = {
+            "urls": {
+                "setBib": reverse("participants:set-bib"),
+                "setDsq": reverse("participants:set-dsq"),
+            },
+        }
         return context
 
 

@@ -162,6 +162,9 @@ class ClassesView(ActiveCompetitionMixin, View):
             "assignment_form": assignment_form,
             "formset": formset,
             "assignment_methods_meta": assignment_methods_meta(),
+            # What the page's script needs, handed over as data: nothing on a page
+            # may be inline now that the app ships a CSP (see static/js/shell.js).
+            "page_config": {"year": competition.date.year},
         }
 
     @staticmethod
@@ -264,6 +267,9 @@ class RunOrderView(ActiveCompetitionMixin, View):
             "start_pattern_data": startpattern.serialize(competition.start_pattern_blocks()),
             "run_type_labels": startpattern.RUN_TYPE_LABELS,
             "max_dummy": startpattern.MAX_DUMMY_STARTERS,
+            # The same number again for the page's script, which is a file now
+            # and so cannot be handed a template variable (see shell.js).
+            "page_config": {"maxDummy": startpattern.MAX_DUMMY_STARTERS},
         })
 
     def post(self, request):
@@ -425,6 +431,7 @@ class PenaltiesView(ActiveCompetitionMixin, View):
             "post_count": len(rows),
             "tasks_summary": taskspec.summary(numbers),
             "max_posts": MAX_MARSHAL_POSTS,
+            "page_config": {"maxPosts": MAX_MARSHAL_POSTS},
             # Recorded penalties per post number, so the page can say what a
             # change would destroy before it is submitted.
             "penalty_counts": PenaltiesView._penalty_counts(competition),
@@ -709,8 +716,19 @@ class MarshalPostsView(ActiveCompetitionMixin, View):
         max_pylons = None
         if ctype.pylon_penalty and ctype.max_penalty_per_task:
             max_pylons = ctype.max_penalty_per_task // ctype.pylon_penalty
+        from django.urls import reverse as _reverse
+
         config = {
             "competitionId": competition.pk,
+            # The endpoints this board drives. They were an inline <script> until
+            # the app grew a CSP; json_script escapes them for us.
+            "urls": {
+                key: _reverse(f"timing:marshal-{name}")
+                for key, name in (
+                    ("state", "state"), ("submit", "submit"), ("claim", "claim"),
+                    ("release", "release"), ("claims", "claims"),
+                )
+            },
             "posts": posts_data,
             "maxPylons": max_pylons,
             "pylonPenalty": ctype.pylon_penalty,

@@ -17,8 +17,9 @@ A **failing** probe is a confirmed defect: its assertion states the behaviour th
 
 Baseline at audit time: the shipped suite was **603 passed, 0 failed** (8 m 29 s).
 
-**Progress:** §1 (release blockers) done. §2a (access control) done — SEC-H (CSP)
-is §2b, SEC-I (audit trail) is §2c. Shipped suite **617 passed, 0 failed**.
+**Progress:** §1 (release blockers) done. §2a (access control) done. §2b (CSP +
+inline-JS extraction) done — 1,778 lines moved out of 18 templates and a strict
+`script-src 'self'` shipped, which also closes UI-27. §2c (audit trail) next.
 Everything below §2 is still open.
 
 ---
@@ -248,7 +249,7 @@ page, superuser-gated, or deliberately open. Below are the gaps around it.
 | SEC-E | ✅ FIXED | **SEC-12 confirmed open** — `consumers.py:9` checks `is_authenticated` only, no page role. Correctly listed as open in CLAUDE.md. |
 | SEC-F | ✅ FIXED | **Login throttling has no per-IP cap.** `throttle._key` is `(username, IP)`, so one host can spray *unlimited* usernames at 10 attempts each without ever being blocked, and account enumeration is unlimited. Add a second counter on IP alone. |
 | SEC-G | ✅ FIXED | **`marshal_submit` stores unbounded JSON.** `detail` goes into a `JSONField` with no size or shape check. A 1.19 MB blob was stored from one request and is then re-serialised into `auto-state` for every open browser on every nudge. *Evidence:* `test_marshal_detail_json_is_size_bounded` fails. |
-| SEC-H | → §2b | **SEC-11 confirmed open — no CSP**, and `base.html` carries ~130 lines of **inline `<script>`** in four IIFEs, plus `json_script` blocks. Adding a CSP is therefore not a one-line change; move that JS to `static/js/` first. |
+| SEC-H | ✅ FIXED | **SEC-11 confirmed open — no CSP**, and `base.html` carries ~130 lines of **inline `<script>`** in four IIFEs, plus `json_script` blocks. Adding a CSP is therefore not a one-line change; move that JS to `static/js/` first. |
 | SEC-I | → §2c | **SEC-9 confirmed open — no audit trail.** Nobody can answer "who changed this result?" A timekeeper, a marshal and an organiser all write to the same rows. On a multi-user network this is the difference between a protest you can settle and one you cannot. |
 | SEC-J | ✅ FIXED | `marshal_release` compares the claim token with `==`, not `secrets.compare_digest` (`views.py:491`) — inconsistent with `_marshal_may_write`, which does. |
 | SEC-K | ⊘ WAIVED | **No self-service password change.** Only a superuser can reset a password, from the User Access page. An operator whose password was set on race morning by someone else cannot change it. |
@@ -443,6 +444,15 @@ What follows is what is left.
 * **UI-17 (Med)** — The guard's **"Save changes" calls `form.submit()`**, which bypasses
   HTML5 constraint validation and any `submit` listener. An invalid form posts. Should be
   `requestSubmit()`.
+* **UI-30 (✅ FIXED)** — *(reported after §2b, pre-existing)* **The Manual timing
+  table sat in a band of empty white.** `.timing-live-main` is `flex: 0 1 auto`,
+  so it sized to its *widest* child — and that was the time legend below the
+  table, whose three items on one line came to 1174px against a 1063px table. The
+  card therefore ran 111px past its own last column. Verified pre-existing by
+  measuring the same numbers on the pre-§2b code. The column now takes its width
+  from the table (`width: max-content`) and the two full-width strips below it
+  (legend, barrier phase) are taken out of the intrinsic measurement, so the
+  legend wraps to the table instead of stretching it.
 * **UI-18 (Med)** — **The Manual timing layout never stacks.** `.timing-live-body` is a
   plain flex row with no `flex-wrap` and no breakpoint, while its sibling `.auto-layout`
   stacks at ≤1100 px. On a tablet at the finish line the Ignored rail crushes the table.
@@ -465,8 +475,19 @@ What follows is what is left.
   "Reset order".
 * **UI-26 (Low)** — The Dashboard's class board leaves a ragged gap when the class count
   is not a multiple of three.
-* **UI-27 (Info)** — `base.html` carries ~130 lines of inline JS in four IIFEs while
-  every other script lives in `static/js/`. Also the blocker for SEC-H.
+* **UI-27 (✅ FIXED)** — `base.html` carried ~130 lines of inline JS in four IIFEs
+  while every other script lived in `static/js/`. Also the blocker for SEC-H; both
+  went together in §2b.
+* **UI-28 (Low)** — *(found during §2b)* The participant form shows German page
+  furniture around **English field labels** ("First name", "Last name", "Date of
+  birth"): those come from `Participant`'s field names, which carry no
+  `verbose_name`, so there is nothing for the catalogue to translate. Every other
+  label on the page is translated, which makes it read as a half-finished form.
+* **UI-29 (✅ FIXED)** — *(found during §2b)* `gettext("a" + "b")` in
+  `auto_timing.js` put `"a"` in the catalogue while the browser looked up `"ab"`,
+  so the "unattributed time" sentence had been rendering in English in a German
+  UI. It is the JS twin of the `_("…")`-inside-an-f-string trap CLAUDE.md already
+  warns about, and nothing checks for either.
 
 ---
 
@@ -511,6 +532,11 @@ The 603-test suite is strong on behaviour and weak on hostility. What it does no
 * **TST-7** — **No import-hostility tests**: crafted media, duplicate rows, traversing
   names. `apps/transfer/tests.py` tests the happy path and the archive budgets.
 * **TST-8** — **No accessibility assertions** (focus order, aria-live, labels).
+* **TST-10** — *(found during §2b)* Nothing checks that a `static/js` file
+  parses. Moving 1,778 lines out of templates broke two files with an escaped
+  quote where a string should open; the server was perfectly happy, the page
+  rendered, and the script was simply dead. `config/tests.py` now has a cheap
+  heuristic for that exact signature — a real JS parse in CI would be better.
 * **TST-9** — Nothing asserts the design-system rules the CSS comment states (no raw
   colour / length outside the token block) — those would be cheap file tests, and
   UI-10..13 are what slipped through.

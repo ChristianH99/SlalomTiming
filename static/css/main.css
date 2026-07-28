@@ -2399,7 +2399,17 @@ textarea:focus-visible,
   gap: var(--space-7);
   width: 100%;
 }
-.timing-live-main { flex: 0 1 auto; min-width: 0; }
+/* The table decides how wide this column is — nothing else in it may.
+   `flex: 0 1 auto` sizes the column to its *widest* child, and the widest child
+   was the legend below the table: three items on one line came to 1174px against
+   a 1063px table, so the card ran 111px past its own last column and the table
+   sat in a band of empty white. `max-content` on the column and the two full-width
+   strips taken out of the intrinsic measurement (`width: 0` contributes nothing,
+   `min-width: 100%` then fills whatever the table settled on) means the legend
+   wraps to the table instead of stretching it. */
+.timing-live-main { flex: 0 1 auto; min-width: 0; width: max-content; max-width: 100%; }
+.timing-live-main > .time-legend,
+.timing-live-main > .barrier-phase { width: 0; min-width: 100%; }
 
 /* Single-light-barrier phase (templates/timing/_barrier_phase.html). Only a
    one-channel rig shows it at all, so it is quiet by default and only the role
@@ -3441,6 +3451,10 @@ textarea:focus-visible,
 .access-badge--off { color: var(--text-mid); background: var(--border-light); }
 /* Deactivate sits beside Delete; the two must not stack as the card narrows. */
 .access-card-actions { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+/* A form that must not take a line of its own. Was a style="display:inline"
+   attribute, which a Content-Security-Policy blocks along with every other
+   inline style — there is no way to allow ours and not an injected one. */
+.inline-form { display: inline; }
 .access-checks { margin-bottom: var(--space-6); }
 .access-roles { display: flex; flex-direction: column; gap: var(--space-4); margin-bottom: var(--space-6); }
 .access-role-check { display: flex; align-items: center; gap: var(--space-4); font-size: var(--text-base); color: var(--text-dark); }

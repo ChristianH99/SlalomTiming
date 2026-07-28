@@ -150,6 +150,11 @@ INSTALLED_APPS = [
     'apps.transfer',
 ]
 
+# Whether the CSP is sent as Report-Only (nothing blocked, violations logged to
+# the browser console). For finding out what a new page broke without breaking it
+# in front of an operator — not a setting to deploy with. See config/csp.py.
+CSP_REPORT_ONLY = _env_bool('DJANGO_CSP_REPORT_ONLY', default=False)
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     # Serves everything under STATIC_ROOT (compressed + far-future cached) from the
@@ -157,6 +162,10 @@ MIDDLEWARE = [
     # without this a real deployment renders with no CSS and no JS at all. Must sit
     # directly below SecurityMiddleware and above everything else.
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Content-Security-Policy (SEC-11). Below WhiteNoise — a static file needs no
+    # policy and WhiteNoise answers those without going further — but above
+    # everything that renders a page, so an error page carries it too.
+    'config.csp.ContentSecurityPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     # Resolves the active language (session -> cookie -> Accept-Language ->
     # LANGUAGE_CODE) so {% trans %} and gettext render in the chosen language.

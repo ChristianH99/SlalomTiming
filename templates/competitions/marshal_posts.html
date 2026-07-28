@@ -59,16 +59,15 @@
       <p class="marshal-toast" data-toast hidden></p>
     </div>
 
-    <script>
-      window.MARSHAL_URLS = {
-        state: "{% url 'timing:marshal-state' %}",
-        submit: "{% url 'timing:marshal-submit' %}",
-        claim: "{% url 'timing:marshal-claim' %}",
-        release: "{% url 'timing:marshal-release' %}",
-        claims: "{% url 'timing:marshal-claims' %}",
-      };
-      window.MARSHAL_CSRF = "{{ csrf_token }}";
-    </script>
+  {% endif %}
+{% endblock %}
+
+{% comment %}Guarded the same way the board is: with no posts set up there is no
+config element for the script to read, and it would throw on load. The scripts sit
+in this block rather than beside the board so they run *after* base.html's
+shell.js, which defines window.csrfToken().{% endcomment %}
+{% block scripts %}
+  {% if penalties_by_marshal_posts and has_posts %}
     <script src="{% static 'js/live_socket.js' %}"></script>
     <script src="{% static 'js/marshal_posts.js' %}"></script>
   {% endif %}

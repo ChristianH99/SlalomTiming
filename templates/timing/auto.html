@@ -69,25 +69,19 @@
     </div>
 
     {{ auto|json_script:"auto-data" }}
-    <script>
-      window.AUTO_URLS = {
-        state: "{% url 'timing:auto-state' %}",
-        reorder: "{% url 'timing:auto-reorder' %}",
-        resetOrder: "{% url 'timing:auto-reset-order' %}",
-        ignore: "{% url 'timing:ignore' %}",
-        pair: "{% url 'timing:pair' %}",
-        setTime: "{% url 'timing:set-time' %}",
-        setRuntime: "{% url 'timing:set-runtime' %}",
-        runStatus: "{% url 'timing:run-status' %}",
-        adjust: "{% url 'timing:auto-adjust' %}",
-        unlock: "{% url 'timing:marshal-unlock' %}",
-        lock: "{% url 'timing:marshal-lock' %}",
-        lockAll: "{% url 'timing:marshal-lock-all' %}",
-        taskEdit: "{% url 'timing:marshal-task-edit' %}",
-        inputLock: "{% url 'timing:input-lock' %}",
-      };
-      window.AUTO_CSRF = "{{ csrf_token }}";
-    </script>
+    {% comment %}The page's endpoint map, handed over as data rather than written
+    into an inline <script>: the app ships a Content-Security-Policy, and
+    json_script escapes it for us.{% endcomment %}
+    {{ page_urls|json_script:"page-urls" }}
+  {% endif %}
+{% endblock %}
+
+{% comment %}Guarded on there being a competition, as these scripts were when
+they sat beside the page: with no event selected there is no state element for
+them to read. They live in this block rather than in the content so they run
+*after* base.html's shell.js, which defines window.csrfToken().{% endcomment %}
+{% block scripts %}
+  {% if competition %}
     <script src="{% static 'js/device_alarm.js' %}"></script>
     <script src="{% static 'js/barrier_phase.js' %}"></script>
     <script src="{% static 'js/live_socket.js' %}"></script>

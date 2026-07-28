@@ -9,8 +9,7 @@
 (function () {
   "use strict";
 
-  const URLS = window.AUTO_URLS;
-  const CSRF = window.AUTO_CSRF;
+  const URLS = window.pageData("page-urls");
   const dataEl = document.getElementById("auto-data");
   if (!URLS || !dataEl) return;
 
@@ -104,7 +103,7 @@
   async function postJSON(url, body) {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      headers: { "Content-Type": "application/json", "X-CSRFToken": window.csrfToken() },
       body: JSON.stringify(body || {}),
     });
     return res.json().catch(() => ({ ok: false }));
@@ -354,9 +353,11 @@
   // or throw it away. Both were already possible; neither was said anywhere.
   function orphanHelp(item) {
     const box = el("div", "auto-orphan");
-    box.append(el("p", "auto-orphan-text", gettext(
-      "This time has no competitor in the start order. Drag it onto the right "
-      + "starter's Start or Finish slot, or discard it.")));
+    // One string literal, not two concatenated: xgettext extracts what it can
+    // *see*, so `gettext("a" + "b")` puts "a" in the catalog while the browser
+    // looks up "ab" — a miss, and the sentence renders in English for ever. Same
+    // trap as `_("…")` inside a Python f-string (see CLAUDE.md).
+    box.append(el("p", "auto-orphan-text", gettext("This time has no competitor in the start order. Drag it onto the right starter's Start or Finish slot, or discard it.")));
     const ids = [item.start && item.start.id, item.finish && item.finish.id].filter(Boolean);
     if (ids.length) {
       const drop = el("button", "button button--secondary button--small", gettext("Move to Ignored"));
