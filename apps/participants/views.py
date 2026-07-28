@@ -138,10 +138,15 @@ class ParticipantListView(ListView):
             return Participant.objects.none()
 
         qs = Participant.objects.filter(competition_type=self.competition.competition_type)
-        bib_subquery = EventEntry.objects.filter(
+        entry_here = EventEntry.objects.filter(
             competition=self.competition, participant=OuterRef("pk")
-        ).values("bib_number")[:1]
-        qs = qs.annotate(current_bib=Subquery(bib_subquery))
+        )
+        qs = qs.annotate(
+            current_bib=Subquery(entry_here.values("bib_number")[:1]),
+            # Whether this participant is out of the whole event (the detail
+            # panel's disqualification switch), not of a single run.
+            current_status=Subquery(entry_here.values("status")[:1]),
+        )
         if self.active_only:
             qs = qs.filter(entries__competition=self.competition)
         # Bib order first (unassigned last), then last name as the tiebreaker.
@@ -182,6 +187,7 @@ class ParticipantListView(ListView):
         for participant in context["participants"]:
             participant.detail_rows = participant_detail_rows(participant, collected)
         context["set_bib_url"] = reverse("participants:set-bib")
+        context["set_dsq_url"] = reverse("participants:set-dsq")
         return context
 
 
@@ -344,6 +350,45 @@ def participant_set_bib(request):
         entry.bib_number = bib
         entry.save(update_fields=["bib_number"])
     return JsonResponse({"ok": True, "bib": bib})
+
+
+@require_POST
+def participant_set_dsq(request):
+    """Disqualify a participant from the **whole event**, or take it back, from the
+    participant list's expandable detail.
+
+    This is the wider of the two disqualifications the app records and it is
+    deliberately kept away from the other: a DSQ on a *run* is entered on the
+    timing views and only costs that run, while this one ends the participant's
+    event in every class they are entered in. It is scoped to the active
+    competition — the flag lives on their EventEntry, so the same person is
+    unaffected at the next event.
+    """
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
+
+    entry = EventEntry.objects.filter(
+        participant__pk=payload.get("participant"),
+        participant__competition_type=competition.competition_type,
+        competition=competition,
+    ).first()
+    if entry is None:
+        # No entry means no bib: they aren't in this event at all, so there is
+        # nothing to disqualify them from.
+        return JsonResponse(
+            {"ok": False, "error": gettext("Give this participant a bib first.")}, status=404
+        )
+    dsq = bool(payload.get("dsq"))
+    # Only ever moved between these two: the other statuses belong to a run, and
+    # taking a disqualification back must not invent a "finished" that never was.
+    entry.status = EventEntry.Status.DSQ if dsq else EventEntry.Status.REGISTERED
+    entry.save(update_fields=["status", "updated_at"])
+    return JsonResponse({"ok": True, "dsq": dsq})
 
 
 def _bib_change_warning(competition, old_bib, new_bib, confirmed):

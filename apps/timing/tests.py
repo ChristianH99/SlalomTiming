@@ -163,6 +163,55 @@ def test_dashboard_progress_without_start_pattern(client):
     assert klass["finished"] == 1 and klass["status"] == "running"
 
 
+def _progress_setup(practice=0, counted=2):
+    """A competition with one class and one starter, for the progress tallies."""
+    comp = make_active_competition()
+    cclass = comp.classes.create(name="A", is_running=True, run_position=1,
+                                 practice_runs=practice, counted_runs=counted)
+    participant = make_participant(comp.competition_type, 1, comp)
+    ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+    return comp, cclass
+
+
+def test_a_run_closed_with_a_state_code_counts_as_done(client):
+    """A DNF is as final as a time — leaving it outstanding would peg the class at
+    50 % with nothing left anyone could record."""
+    comp, cclass = _progress_setup()
+    TimedRun.objects.create(
+        competition=comp, bib_number=1, competition_class=cclass,
+        run_type=TimedRun.RunType.COUNTED, run_number=1,
+        manual_run_time=Decimal("12.34"), manual_entry=True,
+    )
+    TimedRun.objects.create(
+        competition=comp, bib_number=1, competition_class=cclass,
+        run_type=TimedRun.RunType.COUNTED, run_number=2,
+        status=TimedRun.Status.DNF, manual_entry=True,
+    )
+    data = client.get(reverse("timing:dashboard-state")).json()
+    assert data["progress"] == {"expected": 2, "finished": 2, "percent": 100}
+    klass = next(c for c in data["classes"] if c["name"] == "A")
+    assert klass["status"] == "done"
+
+
+def test_a_disqualified_competitors_undriven_runs_leave_the_total(client):
+    """Their event is over, so the runs they will now never take stop being
+    outstanding work — but the one they did drive stays counted on both sides."""
+    comp, cclass = _progress_setup()
+    TimedRun.objects.create(
+        competition=comp, bib_number=1, competition_class=cclass,
+        run_type=TimedRun.RunType.COUNTED, run_number=1,
+        manual_run_time=Decimal("12.34"), manual_entry=True,
+    )
+    before = client.get(reverse("timing:dashboard-state")).json()["progress"]
+    assert before == {"expected": 2, "finished": 1, "percent": 50}
+
+    EventEntry.objects.filter(competition=comp, bib_number=1).update(
+        status=EventEntry.Status.DSQ
+    )
+    after = client.get(reverse("timing:dashboard-state")).json()["progress"]
+    assert after == {"expected": 1, "finished": 1, "percent": 100}
+
+
 # ----- timing settings -----
 
 def test_timing_settings_is_a_singleton():
@@ -574,6 +623,61 @@ def test_run_update_marks_over_max(client):
                   class_key=f"{cclass.pk}:0", run_value=f"counted-{number}")
     rows = serialize_arrangement(comp)["rows"]
     assert all(row["run"]["over_max"] for row in rows)
+
+
+def test_run_status_closes_and_clears_a_run(client):
+    comp = make_active_competition()
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    resp = post_json(client, "timing:run-status", run_id=run.id, status="dnf").json()
+    assert resp["ok"] and resp["status"] == "dnf"
+    run.refresh_from_db()
+    # A state code is a statement about *this* competitor's run, so it takes the
+    # row over: the positional binding must not hand it to the next starter.
+    assert run.status == "dnf" and run.manual_entry
+    assert post_json(client, "timing:run-status", run_id=run.id, status="").json()["ok"]
+    run.refresh_from_db()
+    assert run.status == ""
+
+
+def test_run_status_refuses_a_code_it_does_not_know(client):
+    comp = make_active_competition()
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    assert post_json(client, "timing:run-status", run_id=run.id, status="oops").status_code == 400
+    run.refresh_from_db()
+    assert run.status == ""
+
+
+def test_run_status_makes_the_run_for_a_competitor_who_never_started(client):
+    """DNS is exactly the case where nothing was ever recorded, so the endpoint
+    has to build the row from the competitor's place in the start order."""
+    comp = make_active_competition()
+    comp.classes.filter(name="1").update(is_running=True, practice_runs=0, counted_runs=1)
+    cclass = comp.classes.get(name="1")
+    participant = Participant.objects.create(
+        competition_type=comp.competition_type, first_name="Ada", last_name="Lovelace",
+        date_of_birth=datetime.date(2010, 1, 1),
+    )
+    entry = EventEntry.objects.create(participant=participant, competition=comp, bib_number=7)
+    ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+    slot_key = autotiming.slot_key(entry.pk, cclass.pk, 0, TimedRun.RunType.COUNTED, 1)
+
+    assert post_json(client, "timing:run-status", slot_key=slot_key, status="dns").json()["ok"]
+    run = TimedRun.objects.get(competition=comp, bib_number=7)
+    assert run.status == "dns" and run.start_signal_id is None
+    # Asking twice reuses the row rather than opening a second one for the same run.
+    post_json(client, "timing:run-status", slot_key=slot_key, status="dns")
+    assert TimedRun.objects.filter(competition=comp, bib_number=7).count() == 1
+
+
+def test_a_run_closed_with_a_state_code_does_not_absorb_the_next_time(client):
+    """A DNS row is not a placeholder waiting for a starter — handing it the next
+    competitor's time would silently rewrite the outcome."""
+    comp = make_active_competition()
+    marked = TimedRun.objects.create(competition=comp, manual_entry=True, status="dns")
+    signal = signal_in(comp, 1, "10:00:00.000")
+    marked.refresh_from_db()
+    assert marked.start_signal_id is None
+    assert TimedRun.objects.get(start_signal=signal).id != marked.id
 
 
 def test_run_update_rejects_without_active_competition(client):

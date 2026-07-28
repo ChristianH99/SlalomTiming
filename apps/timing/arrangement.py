@@ -28,13 +28,16 @@ def ingest(signal, settings):
         # Fill the oldest pre-entered placeholder (a row with a bib/run but no
         # times yet) so times populate those bottom-first; else open a new run. A
         # row that already carries a hand-typed run time is complete, not awaiting
-        # a measurement, so it is skipped.
+        # a measurement, so it is skipped — and so is one the timekeeper has
+        # already closed with a state code (a DNS row is not waiting for a start;
+        # handing it the next competitor's time would silently rewrite it).
         placeholder = (
             TimedRun.objects.filter(
                 competition=signal.competition,
                 start_signal__isnull=True,
                 finish_signal__isnull=True,
                 manual_run_time__isnull=True,
+                status="",
             )
             .order_by("id")
             .first()
@@ -130,6 +133,7 @@ def detach(signal):
 def _is_blank(run):
     return not (
         run.bib_number or run.run_type or run.manual_run_time is not None
+        or run.status
         or run.pylon_count or run.task_count or run.stopline_count
     )
 

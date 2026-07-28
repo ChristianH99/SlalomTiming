@@ -14,6 +14,7 @@ from apps.common import safe_next
 from apps.competitions.models import CompetitionClass
 from apps.competitions.views import ActiveCompetitionMixin
 from apps.timing import calc
+from apps.timing.models import TimedRun
 
 from . import pdf, pdfmarkup, resultscalc
 from .models import (
@@ -29,10 +30,15 @@ BOLD_KEYS = {"driver_name", "co_driver"}
 # anything at all is written as an "image" for ReportLab to choke on at export time.
 MAX_LOGO_BYTES = 4 * 1024 * 1024
 
-# Starters counted as "not classified" in the results summary: those who did not
-# start or were disqualified. (DNF is neither classified nor counted here yet — a
-# DSQ checkbox in timing is still to come.)
-NOT_CLASSIFIED_STATUSES = {"dns", "dsq"}
+# The tallies under a results table. "Classified / not classified" said very little
+# — every competitor was one or the other and neither number told the operator
+# which outcome they were looking at. These are the outcomes themselves, in the
+# order the status rows are listed.
+SUMMARY_STATUSES = [
+    (TimedRun.Status.DNS, "DNS"),
+    (TimedRun.Status.DNC, "DNC"),
+    (TimedRun.Status.DSQ, "DSQ"),
+]
 
 
 def _value(participant, key):
@@ -80,14 +86,27 @@ def _score_heading(method):
     return _("Total")
 
 
-def _run_cell(run, precision):
+def _run_cell(run, precision, offer_dns=False):
     """A run cell: the run time as mm:ss.xxx, and the penalty as ``+N s`` when
-    non-zero (penalties stay in whole seconds)."""
-    if run is None or run.run_time is None:
-        return {"time": "", "penalty": ""}
+    non-zero (penalties stay in whole seconds).
+
+    A run closed with a state code shows the code instead — that is what happened
+    in place of a time. A run that is neither timed nor marked carries its
+    start-order slot key when ``offer_dns``, so the not-yet-ranked table can put a
+    DNS button where the time would go (the run has never been recorded, so there
+    is no run id to name — only the competitor-and-run it would have been)."""
+    if run is None:
+        return {"time": "", "penalty": "", "status": "", "dns_key": ""}
+    if run.status:
+        return {"time": "", "penalty": "", "status": run.status.upper(), "dns_key": ""}
+    if run.run_time is None:
+        return {"time": "", "penalty": "", "status": "",
+                "dns_key": run.key if offer_dns else ""}
     return {
         "time": calc.format_clock(run.run_time, precision),
         "penalty": calc.format_penalty(run.penalty),
+        "status": "",
+        "dns_key": "",
     }
 
 
@@ -135,18 +154,23 @@ def build_layout(enabled, counted_count, training_count, include_class,
     return layout
 
 
-def build_table(competition, enabled, ranked, unranked, precision,
+def build_table(competition, enabled, ranked, status_rows, unranked, precision,
                 counted_count, training_count, include_class, score_heading):
     """Assemble the layout + per-row data both the class and Overall tables render.
 
-    Header and body come from one computed structure so they never drift."""
-    # Summary tallies from the competitors: every starter, those with a final time
-    # (classified), and those who did not start or were disqualified.
-    everyone = list(ranked) + list(unranked)
+    Header and body come from one computed structure so they never drift. Returns
+    ``(layout, ranked rows, status rows, unranked rows)`` — the status rows go at
+    the foot of the ranked table, the unranked ones in their own block below it.
+    """
+    # Summary tallies: every starter, then how many finished on each state code.
+    everyone = list(ranked) + list(status_rows) + list(unranked)
     summary = {
         "starters": len(everyone),
-        "classified": sum(1 for c in everyone if c.score is not None),
-        "not_classified": sum(1 for c in everyone if c.status in NOT_CLASSIFIED_STATUSES),
+        "statuses": [
+            {"label": label,
+             "count": sum(1 for c in everyone if c.final_status == status)}
+            for status, label in SUMMARY_STATUSES
+        ],
     }
     layout = build_layout(enabled, counted_count, training_count, include_class,
                           score_heading, summary)
@@ -168,14 +192,17 @@ def build_table(competition, enabled, ranked, unranked, precision,
             for k in keys
         ]
 
-    def build_row(competitor, participant, ranked_row):
+    def build_row(competitor, participant, kind):
         # The gap to first place is shown for every ranked-table row past first —
         # including a skipped repeat entry (no rank, but still compared to the winner).
         gap = ""
         is_first = competitor.rank == 1 and not competitor.skipped
-        if ranked_row and not is_first \
+        if kind == "ranked" and not is_first \
                 and competitor.score is not None and first_score is not None:
             gap = f"+{calc.format_clock(competitor.score - first_score, precision)}"
+        # Only the not-yet-ranked block offers a DNS button: it is the one place a
+        # counted run can still be neither timed nor marked.
+        offer_dns = kind == "unranked"
         return {
             "rank": competitor.rank,
             "bib": competitor.bib,
@@ -186,6 +213,9 @@ def build_table(competition, enabled, ranked, unranked, precision,
             "inspect": competitor.inspect,
             "skipped": competitor.skipped,
             "status": competitor.status,
+            # The competitor's own outcome (DNS / DNC / DSQ), for the rows that
+            # sit at the foot of the ranked table.
+            "final_status": competitor.final_status.upper() if competitor.final_status else "",
             "tie_group": competitor.tie_group,
             "tie_state": competitor.tie_state,
             "tie_start": competitor.tie_start,
@@ -195,28 +225,29 @@ def build_table(competition, enabled, ranked, unranked, precision,
             "vehicle": _value(participant, "vehicle") if has_vehicle else "",
             "licence_lines": block(participant, licence_keys),
             "training": [
-                _run_cell(competitor.training[i] if i < len(competitor.training) else None, precision)
+                _run_cell(competitor.training[i] if i < len(competitor.training) else None,
+                          precision, offer_dns)
                 for i in range(len(training_labels))
             ],
-            "counted": [_run_cell(run, precision) for run in competitor.runs],
+            "counted": [_run_cell(run, precision, offer_dns) for run in competitor.runs],
             "total": calc.format_clock(competitor.score, precision)
             if competitor.score is not None else "",
             "gap": gap,
         }
 
-    return layout, ranked_rows(ranked, competition, build_row, True), \
-        ranked_rows(unranked, competition, build_row, False)
-
-
-def ranked_rows(competitors, competition, build_row, is_ranked):
     participants = {
         entry.participant_id: entry.participant
         for entry in competition.entries.select_related("participant").all()
     }
-    return [
-        build_row(c, participants.get(c.participant_id), is_ranked)
-        for c in competitors
-    ]
+
+    def rows(competitors, kind):
+        return [
+            build_row(c, participants.get(c.participant_id), kind)
+            for c in competitors
+        ]
+
+    return (layout, rows(ranked, "ranked"), rows(status_rows, "status"),
+            rows(unranked, "unranked"))
 
 
 def class_section(competition, cclass):
@@ -225,8 +256,9 @@ def class_section(competition, cclass):
     results = resultscalc.compute_class_results(competition, cclass)
     precision = competition.competition_type.timing_precision
     enabled = ResultColumnSettings.columns_for(competition, cclass)
-    layout, ranked, unranked = build_table(
-        competition, enabled, results.ranked, results.unranked, precision,
+    layout, ranked, status_rows, unranked = build_table(
+        competition, enabled, results.ranked, results.status_rows, results.unranked,
+        precision,
         counted_count=cclass.counted_runs or 0,
         training_count=cclass.practice_runs or 0,
         include_class=False,
@@ -240,7 +272,8 @@ def class_section(competition, cclass):
         "scoring_label": cclass.get_scoring_method_display(),
         "class_label": class_title,
         "scope": resultscalc.class_scope(cclass),
-        "layout": layout, "ranked": ranked, "unranked": unranked,
+        "layout": layout, "ranked": ranked, "status_rows": status_rows,
+        "unranked": unranked,
         "cclass": cclass,
     }
 
@@ -251,8 +284,9 @@ def overall_section(competition, method, runs):
     results = resultscalc.compute_overall_results(competition, method, runs)
     precision = competition.competition_type.timing_precision
     enabled = ResultColumnSettings.general_columns(competition)
-    layout, ranked, unranked = build_table(
-        competition, enabled, results.ranked, results.unranked, precision,
+    layout, ranked, status_rows, unranked = build_table(
+        competition, enabled, results.ranked, results.status_rows, results.unranked,
+        precision,
         counted_count=results.counted_runs,
         training_count=results.training_runs,
         include_class=True,
@@ -267,7 +301,8 @@ def overall_section(competition, method, runs):
         "class_label": _("Overall · %(label)s · %(runs)s Runs") % {
             "label": results.method_label, "runs": results.counted_runs},
         "scope": resultscalc.overall_scope(method, runs),
-        "layout": layout, "ranked": ranked, "unranked": unranked,
+        "layout": layout, "ranked": ranked, "status_rows": status_rows,
+        "unranked": unranked,
         "results": results,
     }
 
@@ -299,7 +334,11 @@ def sample_section(competition, layout_ctx):
     # Enough rows to spill past one page (about 1.5) so the page-break handling —
     # a repeated header and rows kept whole — is visible in the preview.
     n = 30
-    summary = {"starters": n + 3, "classified": n, "not_classified": 3}
+    summary = {
+        "starters": n + 4,
+        "statuses": [{"label": label, "count": count}
+                     for (_status, label), count in zip(SUMMARY_STATUSES, (2, 1, 1))],
+    }
     layout = build_layout(enabled, counted, training, include_class=True,
                           score_heading="Total", summary=summary)
 
@@ -341,11 +380,12 @@ def sample_section(competition, layout_ctx):
             "total": f"01:{25 + i % 30:02d}.{(i * 13) % 100:02d}",
             "gap": "" if i == 0 else f"+{i}.{(i * 7) % 100:02d}",
             "status": "",
+            "final_status": "",
         })
     return {
         "title": "Sample", "scoring_label": "Total",
         "class_label": "Sample class", "layout": layout,
-        "ranked": rows, "unranked": [],
+        "ranked": rows, "status_rows": [], "unranked": [],
     }
 
 
@@ -527,7 +567,9 @@ class ResultsClassView(ActiveCompetitionMixin, View):
             "scope": section["scope"],
             "layout": section["layout"],
             "ranked": section["ranked"],
+            "status_rows": section["status_rows"],
             "unranked": section["unranked"],
+            "run_status_url": reverse("timing:run-status"),
             "export_url": reverse("results:export-class", args=[cclass.pk]),
         })
 
@@ -557,7 +599,9 @@ class ResultsOverallView(ActiveCompetitionMixin, View):
             "scope": section["scope"],
             "layout": section["layout"],
             "ranked": section["ranked"],
+            "status_rows": section["status_rows"],
             "unranked": section["unranked"],
+            "run_status_url": reverse("timing:run-status"),
             "export_url": reverse("results:export-overall", args=[method, runs]),
         })
 

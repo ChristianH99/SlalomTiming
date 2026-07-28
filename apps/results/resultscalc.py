@@ -9,12 +9,21 @@ Scoring per ``CompetitionClass.Scoring``:
   * best_run   – the single fastest counted run's total time
   * regularity – the spread (max − min) of the counted runs' totals; smaller wins
 
-Lower score is always better. A competitor is *rankable* with a live status once
-enough runs are recorded — every counted run for aggregate/regularity, but a single
-full run is enough for best-run; the rest are listed unranked. A participant entered
-into the same class more than once keeps only their best result ranked. Equal scores
-are separated by the type's tie-break (``CompetitionType.TieBreak``); when it can't
-separate them (or is Manual) both share the rank and are flagged for inspection.
+Lower score is always better. A competitor is *rankable* once enough runs are
+recorded — every counted run for aggregate/regularity, but a single full run is
+enough for best-run. A participant entered into the same class more than once keeps
+only their best result ranked. Equal scores are separated by the type's tie-break
+(``CompetitionType.TieBreak``); when it can't separate them (or is Manual) both
+share the rank and are flagged for inspection.
+
+A run can also end in a **state code** rather than a time — DNF, DNC, DNS or DSQ
+(``TimedRun.Status``, set on the timing views or, for DNS, from the results table).
+``_final_status`` turns those into the competitor's own outcome; the short version
+is that a state code on a *practice* run means nothing here, one on a counted run
+costs the score (DNC) unless best-run scoring can still place them on the runs they
+did drive, and an all-DSQ or all-DNS set of counted runs reads as that code. So
+every competitor is in exactly one of three groups (``_split``): ranked, finished
+on a state code, or still waiting for a run that is neither timed nor marked.
 """
 
 from collections import Counter
@@ -24,6 +33,7 @@ from decimal import Decimal
 from django.utils.translation import gettext
 
 from apps.competitions.models import CompetitionClass, CompetitionType
+from apps.participants.models import EventEntry
 from apps.timing import autotiming, calc
 from apps.timing.models import TimedRun
 
@@ -34,6 +44,14 @@ class RunResult:
     run_time: Decimal | None
     penalty: int
     total: Decimal | None
+    # DNF / DNC / DNS / DSQ when the run was closed with a state code instead of a
+    # time (``TimedRun.Status``), else "". A run carrying one has no ``total``
+    # whatever times sit on it — a disqualified run is usually a measured one.
+    status: str = ""
+    # The start-order slot this run stands for (``autotiming.slot_key``). Carried
+    # so the results table can mark a run that was never recorded DNS: there is no
+    # run id to name, only the competitor-and-run it would have been.
+    key: str = ""
 
     @property
     def recorded(self):
@@ -52,6 +70,10 @@ class CompetitorResult:
     score: Decimal | None
     best_total: Decimal | None
     complete: bool
+    # The competitor's own final state code — "dns" / "dnc" / "dsq" — when their
+    # counted runs (or the whole event) ended in one instead of a score. Empty for
+    # everyone else, ranked or still waiting. See _final_status for the rules.
+    final_status: str = ""
     class_pk: int = 0
     class_name: str = ""
     training: list[RunResult] = field(default_factory=list)
@@ -120,25 +142,95 @@ class RunIndex:
 
 
 def _run_totals(competition, index, bib, cclass, occurrence, precision, run_type):
-    """``{run_number: RunResult}`` for a competitor's finished runs of ``run_type``.
-    When a run number was recorded more than once the lowest total is kept."""
+    """``{run_number: RunResult}`` for a competitor's *settled* runs of
+    ``run_type`` — one that produced a time, and one closed with a state code.
+
+    When a run number was recorded more than once the better row is kept: a state
+    code beats a time (it is a timekeeper's decision about this run, while a
+    second timed row for the same run number is a stray), and between two timed
+    rows the lowest total wins."""
     runs = index.runs(bib, cclass, occurrence, run_type)
     by_number = {}
     for run in runs:
-        rt = calc.resolved_run_time(run, precision)
-        if rt is None or run.run_number is None:
+        if run.run_number is None:
             continue
+        rt = calc.resolved_run_time(run, precision)
+        status = run.status or ""
+        if rt is None and not status:
+            continue  # still to come
         penalty = run_penalty_seconds(run, competition)
-        total = rt + penalty
-        prev = by_number.get(run.run_number)
-        if prev is None or total < prev.total:
-            by_number[run.run_number] = RunResult(run.run_number, rt, penalty, total)
+        # A run closed with a state code is not scored, whatever time it carries.
+        result = RunResult(run.run_number, rt, penalty,
+                           None if status else rt + penalty, status)
+        previous = by_number.get(run.run_number)
+        if previous is None or _supersedes(result, previous):
+            by_number[run.run_number] = result
     return by_number
+
+
+def _supersedes(new, previous):
+    """Whether a second row recorded for the same run number replaces the first."""
+    if bool(new.status) != bool(previous.status):
+        return bool(new.status)          # the timekeeper's decision wins
+    if new.status:
+        return False                      # two state codes: keep the first
+    return new.total < previous.total
 
 
 # ----- scoring -----
 
-DNX_STATUSES = {"dns", "dnf", "dsq"}
+# An event-wide status on the EventEntry -> the competitor's final state code. The
+# whole-event disqualification set on the participant list writes DSQ here; DNS and
+# DNF are older per-entry values kept working (a did-not-finish leaves them
+# unclassified, which is what DNC says).
+_ENTRY_FINAL = {
+    EventEntry.Status.DSQ: TimedRun.Status.DSQ,
+    EventEntry.Status.DNS: TimedRun.Status.DNS,
+    EventEntry.Status.DNF: TimedRun.Status.DNC,
+}
+
+# Final state codes in the order they are listed below the ranked table.
+FINAL_STATUS_ORDER = [TimedRun.Status.DNS, TimedRun.Status.DNC, TimedRun.Status.DSQ]
+
+
+def _final_status(entry_status, cclass, runs):
+    """The competitor's own state code, or "" when their counted runs can still
+    produce a score. ``runs`` is their counted runs, one entry per run the class
+    grants (unrecorded ones blank).
+
+    Practice runs never reach here: a state code on one has no influence on the
+    result at all. The rules over the counted runs are:
+
+      * the whole event disqualified                            → DSQ, at once —
+        it is a decision about the competitor, not about a run
+      * a counted run still neither timed nor marked            → no status yet.
+        A competitor is only moved out of the running once *every* counted run has
+        settled one way or the other, so a DNF on their first run doesn't retire
+        them while they still have a second to drive
+      * every counted run DSQ                                   → DSQ
+      * every counted run DNS                                   → DNS
+      * best-run scoring with at least one counted run timed    → no status; they
+        rank on the runs they did drive
+      * anything else with a state code on a counted run        → DNC (a sum or a
+        spread over a run that was never driven is not a result)
+    """
+    from_entry = _ENTRY_FINAL.get(entry_status)
+    if from_entry:
+        return from_entry
+    if any(run.total is None and not run.status for run in runs):
+        return ""
+    marks = [run.status for run in runs if run.status]
+    if not marks:
+        return ""
+    if len(marks) == len(runs):
+        if all(mark == TimedRun.Status.DSQ for mark in marks):
+            return TimedRun.Status.DSQ
+        if all(mark == TimedRun.Status.DNS for mark in marks):
+            return TimedRun.Status.DNS
+    if cclass.scoring_method == CompetitionClass.Scoring.BEST_RUN \
+            and any(run.total is not None for run in runs):
+        return ""
+    return TimedRun.Status.DNC
 
 
 def _score(method, totals):
@@ -153,24 +245,36 @@ def _score(method, totals):
     return sum(totals)  # AGGREGATE
 
 
+def _slots(by_number, count, entry, cclass, occurrence, run_type):
+    """One ``RunResult`` per run the class grants, blank where nothing is settled
+    yet, each carrying the start-order slot key it stands for — which is how the
+    results table can mark a run that was never recorded DNS."""
+    slots = []
+    for number in range(1, count + 1):
+        result = by_number.get(number) or RunResult(number, None, 0, None)
+        result.key = autotiming.slot_key(
+            entry.pk, cclass.pk, occurrence, run_type, number
+        )
+        slots.append(result)
+    return slots
+
+
 def _competitor(competition, index, cclass, entry, occurrence, precision):
     by_number = _run_totals(
         competition, index, entry.bib_number, cclass, occurrence, precision,
         TimedRun.RunType.COUNTED,
     )
     counted = cclass.counted_runs or 0
-    runs = [
-        by_number.get(number, RunResult(number, None, 0, None))
-        for number in range(1, counted + 1)
-    ]
+    runs = _slots(by_number, counted, entry, cclass, occurrence,
+                  TimedRun.RunType.COUNTED)
     practice_by_number = _run_totals(
         competition, index, entry.bib_number, cclass, occurrence, precision,
         TimedRun.RunType.PRACTICE,
     )
-    training = [
-        practice_by_number.get(number, RunResult(number, None, 0, None))
-        for number in range(1, (cclass.practice_runs or 0) + 1)
-    ]
+    # A state code on a practice run is recorded but has no influence on the
+    # result, so training slots are never consulted below.
+    training = _slots(practice_by_number, cclass.practice_runs or 0, entry, cclass,
+                      occurrence, TimedRun.RunType.PRACTICE)
     totals = [r.total for r in runs if r.total is not None]
     # Best-run only needs one full counted run to place; the other methods need
     # every counted run (a sum/spread over a missing run would be meaningless).
@@ -178,8 +282,8 @@ def _competitor(competition, index, cclass, entry, occurrence, precision):
         enough = len(totals) >= 1
     else:
         enough = counted > 0 and len(totals) == counted
-    live = entry.status not in DNX_STATUSES
-    complete = enough and live
+    final_status = _final_status(entry.status, cclass, runs)
+    complete = enough and not final_status
     score = _score(cclass.scoring_method, totals) if complete else None
     return CompetitorResult(
         entry_pk=entry.pk,
@@ -192,6 +296,7 @@ def _competitor(competition, index, cclass, entry, occurrence, precision):
         score=score,
         best_total=min(totals) if totals else None,
         complete=complete,
+        final_status=final_status,
         class_pk=cclass.pk,
         class_name=cclass.name,
         training=training,
@@ -383,17 +488,40 @@ def validate_resolution(ranked, posted):
     return members, None
 
 
+def _split(competitors):
+    """Sort the competitors into the three groups a results table shows:
+
+      * **ranked** — every counted run settled with a time, so they have a score;
+      * **status** — settled, but on a state code: they belong at the bottom of the
+        final result, ordered DNS, then DNC, then DSQ, and by bib within each;
+      * **unranked** — still waiting on a run that is neither timed nor marked.
+
+    Returns ``(complete, status_rows, unranked)``; the caller ranks ``complete``.
+    """
+    complete = [c for c in competitors if c.complete]
+    status_rows = sorted(
+        (c for c in competitors if c.final_status and not c.complete),
+        key=lambda c: (FINAL_STATUS_ORDER.index(c.final_status), c.bib, c.occurrence),
+    )
+    waiting = [c for c in competitors if not c.complete and not c.final_status]
+    return complete, status_rows, waiting
+
+
 @dataclass
 class ClassResults:
     competition_class: CompetitionClass
     scoring_method: str
     ranked: list = field(default_factory=list)      # complete, in finishing order
-    unranked: list = field(default_factory=list)    # incomplete / DNS / DNF / DSQ
+    # Settled on a state code (DNS / DNC / DSQ): shown at the foot of the ranked
+    # table, since their event is over — they are simply not in the placings.
+    status_rows: list = field(default_factory=list)
+    unranked: list = field(default_factory=list)    # still missing a counted run
 
 
 def compute_class_results(competition, cclass):
     """The full result of one class: ranked complete competitors (repeat entries and
-    ties handled), then the unranked rest."""
+    ties handled), the ones whose event ended in a state code, then whoever is
+    still to finish."""
     precision = competition.competition_type.timing_precision
     entries = {
         entry.pk: entry
@@ -412,19 +540,17 @@ def compute_class_results(competition, cclass):
         )
 
     scope = class_scope(cclass)
-    complete = [c for c in competitors if c.complete]
+    complete, status_rows, waiting = _split(competitors)
     ranked = _rank(
         complete, competition.competition_type.tie_break,
         scope=scope, manual=load_manual(competition, scope),
     )
-    unranked = sorted(
-        (c for c in competitors if not c.complete),
-        key=lambda c: (c.bib, c.occurrence),
-    )
+    unranked = sorted(waiting, key=lambda c: (c.bib, c.occurrence))
     return ClassResults(
         competition_class=cclass,
         scoring_method=cclass.scoring_method,
         ranked=ranked,
+        status_rows=status_rows,
         unranked=unranked,
     )
 
@@ -470,6 +596,7 @@ class OverallResults:
     counted_runs: int
     training_runs: int
     ranked: list = field(default_factory=list)
+    status_rows: list = field(default_factory=list)
     unranked: list = field(default_factory=list)
 
 
@@ -500,16 +627,13 @@ def compute_overall_results(competition, method, counted_runs):
             )
 
     scope = overall_scope(method, counted_runs)
-    complete = [c for c in competitors if c.complete]
+    complete, status_rows, waiting = _split(competitors)
     ranked = _rank(
         complete, competition.competition_type.tie_break,
         dedup_key=lambda c: (c.participant_id, c.class_pk),
         scope=scope, manual=load_manual(competition, scope),
     )
-    unranked = sorted(
-        (c for c in competitors if not c.complete),
-        key=lambda c: (c.bib, c.class_name, c.occurrence),
-    )
+    unranked = sorted(waiting, key=lambda c: (c.bib, c.class_name, c.occurrence))
     training = max((cc.practice_runs or 0) for cc in classes) if classes else 0
     labels = dict(CompetitionClass.Scoring.choices)
     return OverallResults(
@@ -519,5 +643,6 @@ def compute_overall_results(competition, method, counted_runs):
         counted_runs=counted_runs,
         training_runs=training,
         ranked=ranked,
+        status_rows=status_rows,
         unranked=unranked,
     )

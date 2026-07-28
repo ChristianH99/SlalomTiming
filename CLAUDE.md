@@ -88,7 +88,9 @@ apps/accounts/           Access control. Login required everywhere and page-leve
                          (timing:signal — a device can't log in, so that view authorises itself:
                          see _signal_authorized, which requires the *timing* page for a
                          session-authenticated post). A URL may belong to two pages (the marshal
-                         endpoints serve both Timing and Marshal Posts), which is why those views
+                         endpoints serve both Timing and Marshal Posts; timing:run-status serves
+                         both Timing and Results, since a DNS is assigned from the results
+                         table), which is why those views
                          re-check who is calling rather than trusting the gate.
                          throttle.py: failed logins counted per (username, IP) in the cache and
                          locked out past a limit, every attempt logged; views.LoginView is the
@@ -226,6 +228,13 @@ apps/participants/
                          is scoped to the active competition's type and only shows the columns
                          that type collects (club, licence); with no competition selected it
                          prompts to pick one and shows nothing, and adding is blocked.
+                         The list row's expandable detail also carries the **whole-event
+                         disqualification** (participant_set_dsq -> EventEntry.status = DSQ,
+                         scoped to the *active* competition, needing a bib): the wider of the
+                         two DSQs, deliberately away from the per-run one on the timing views,
+                         and shown as a pill on the row so a disqualified starter reads as one.
+                         It rides in the panel's action row beside Edit/Delete with what it
+                         costs in its `title` — a rare action, not a field of the record.
                          ParticipantUpdateView re-renders its form with `confirm_bib_change`
                          (the modal) and participant_set_bib answers {"confirm": …} until the
                          caller sends `confirm` — see bibs.py.
@@ -253,9 +262,12 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          task_adjust/stopline_adjust — the Auto-timing timekeeper's signed +/- to
                          the totals in marshal mode (a Pylons/Task/Stop line stepper each),
                          `manual_run_time` [operator-typed run time, overrides the computed elapsed
-                         when the device gave no usable pair] and `manual_entry` [the operator owns
+                         when the device gave no usable pair], `manual_entry` [the operator owns
                          this run's identity: it claims its slot in the Auto order and the auto
-                         binding won't reassign it]), MarshalPenalty (one per run×marshal-post:
+                         binding won't reassign it] and `status` [TimedRun.Status — the run ended
+                         DNF/DNC/DNS/DSQ instead of in a time; never scored whatever times sit on
+                         it, and never filled by an incoming signal, see runstatus.py]),
+                         MarshalPenalty (one per run×marshal-post:
                          aggregate counts, a per-task `detail` JSON, and a `submitted` flag ==
                          locked, written from the Marshal Posts page and shown on Auto timing), and
                          legacy TimingEvent.
@@ -320,6 +332,17 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          rows(); rows() is newest-first with placeholders on top. effective_role()
                          handles a single light barrier (start_channel == finish_channel): the one
                          channel alternates start/finish/start/…
+  runstatus.py           Closing a run with a **state code** instead of a time: DNF / DNC / DNS /
+                         DSQ. Three surfaces write one — Manual timing (a Status column), Auto
+                         timing (Status buttons on the tiles) and the results table's
+                         not-yet-ranked block (a DNS button where the time would be) — and all
+                         three come through here, because two of them can name a run that does
+                         not exist yet: a competitor who never started has no signal, so
+                         `run_for_slot()` (moved here from views._run_from_slot, which still
+                         aliases it) builds the row from their **start-order slot key**. Setting
+                         a code takes the run over (`manual_entry`), so the positional binding
+                         can't hand it to the next starter. What a code means for a *result* is
+                         apps/results/resultscalc.py's business, not this module's.
   calc.py                Run time (integer-microsecond truncation to the type's precision, never
                          rounded); resolved_run_time() prefers a run's manual_run_time override;
                          total penalty; fixed-decimal formatting (format_precision) plus
@@ -331,6 +354,12 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          percent, the competitor on course now (bib/name/class/run + times and
                          penalties once finished), and headline counts (participants, classes
                          done, runs remaining, non-starters, marshal posts).
+                         Both sides of the progress bar answer to the state codes: a run is
+                         **done** once it is *settled* — a resolved time **or** a state code (a
+                         DNF is as final as a time) — and a competitor whose entry is DSQ/DNS/DNF
+                         has their **unsettled** runs taken out of the denominator, since runs
+                         they will now never take aren't outstanding work. Runs of theirs that
+                         did settle stay counted on both sides.
   forms.py               TimingSettingsForm (IP + TCP port required only for the CP540, but
                          kept — not cleared — when another device is selected; defaults
                          192.168.1.50:7000).
@@ -371,7 +400,9 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          field (IDENTITY_FIELDS: bib/class/run); a penalty stepper used to take the
                          run over too, which pinned an auto-bound run to the slot it happened to be
                          showing —, ignore, pair [also takes a slot_key, so a time can be
-                         dragged onto an upcoming Auto competitor with no run yet], set-time [type a
+                         dragged onto an upcoming Auto competitor with no run yet], run-status
+                         [close a run with DNF/DNC/DNS/DSQ or clear it — by run id, or by slot_key
+                         for a competitor with no run at all; see runstatus.py], set-time [type a
                          start/finish by hand, displaced device time kept on the rail], set-runtime
                          [type a run time]; the slot_key path creates the run via _run_from_slot).
                          Every operator-entered number is bounded here, because SQLite stores an
@@ -543,13 +574,27 @@ apps/results/           A "Results" landing page (index) listing every running c
                          lists the distinct (scoring_method, counted_runs) groups (one Overall page
                          each) and compute_overall_results() ranks across a group's classes (dedup by
                          participant *and* class, so one competitor shows once per class). Rankable =
-                         a live status with every counted run recorded — except best-run, one run.
-                         Incomplete / DNS / DNF / DSQ competitors are returned unranked, and a
-                         skipped repeat entry still shows its gap to the winner.
+                         every counted run recorded and no final state code — except best-run,
+                         which needs one run. A skipped repeat entry still shows its gap to the
+                         winner. **State codes** (`TimedRun.status`) become a competitor's own
+                         outcome in `_final_status()`: a code on a *practice* run means nothing
+                         here; a competitor is only settled once every counted run carries a time
+                         or a code (so a DNF on run 1 doesn't retire somebody with run 2 still to
+                         drive) — except a whole-event DSQ (`EventEntry.status`), which settles
+                         them at once. All counted runs DSQ → DSQ, all DNS → DNS, best-run
+                         scoring with a run still timed → they rank on it, anything else → DNC.
+                         `_split()` therefore puts every competitor in exactly one of three
+                         groups: `ranked`, `status_rows` (settled on a code — DNS, then DNC, then
+                         DSQ, by bib within each) and `unranked` (still waiting on a run).
   views.py               build_table() assembles the shared layout + per-row lines both the class
                          and Overall tables render (a column group renders only when a field in it
                          is enabled; each enabled field is one line so rows align; _value() renders
-                         each field, e.g. driver_name -> "Last, First"). ResultsIndexView (the
+                         each field, e.g. driver_name -> "Last, First"). It returns the rows in
+                         the engine's three groups; a run cell is a time, the state code the run
+                         was closed with, or — in the not-yet-ranked block only — the slot key a
+                         DNS button posts. The tally below the table names the outcomes
+                         (Starters / DNS / DNC / DSQ): "classified / not classified" never said
+                         which one was being looked at. ResultsIndexView (the
                          landing list), ResultsClassView (one class), ResultsOverallView
                          (a scoring-method × counted-run group, with an extra Class column and the
                          General columns) all sync identities then compute. ResultsSettingsView: the
@@ -607,7 +652,8 @@ apps/results/           A "Results" landing page (index) listing every running c
   admin.py               The results models registered for the Django admin.
 templates/results/       index.html (class + Overall cards), results_class.html, results_overall.html
                          (both include _results_table.html, which renders the ranked + unranked
-                         tables from _results_head.html and _results_midcells.html — the fixed
+                         tables from _results_head.html, _results_midcells.html and
+                         _results_runcell.html — the fixed
                          multi-line layout: Rank | Bib | [Class] | Name block (driver+co-driver bold,
                          club, e-mail, phone) | Street/City | Vehicle | Licence/Birthday/Birth-year |
                          Training + counted run cells (time as mm:ss.xxx over "+N s" penalty) | the
@@ -625,6 +671,14 @@ templates/results/       index.html (class + Overall cards), results_class.html,
                          runs, or a regularity test over a single run) says so above its empty
                          table — CompetitionClass.scoring_warning, the same sentence the Classes
                          setup page shows on the tile.
+                         **State codes**: competitors settled on one (DNS/DNC/DSQ) ride at the
+                         foot of the *ranked* table with the code in the last column — their
+                         event is over, they are just not in the placings. The not-yet-ranked
+                         block below has **no Total column** (they have no total, and the cell
+                         only ever echoed "REGISTERED" back) and puts a **DNS button** where a
+                         run's time would be; static/js/results_status.js posts its slot key to
+                         timing:run-status, which makes the run and closes it (a competitor who
+                         never started has no run to name — see apps/timing/runstatus.py).
                          results_settings.html also carries the **PDF layout editor**: two
                          contenteditable boxes (header/footer) with bold, three sizes and a
                          wildcard insert list, the orientation choice, the two logo uploads with
@@ -798,6 +852,9 @@ during the outage is otherwise invisible until the next one happens to arrive. A
   nothing. Nudging a stepper also no longer takes a run over — only entering a bib/class/run does.
   Hover between the header and the top row for a **+** to pre-enter an upcoming starter (an empty
   placeholder row); incoming starts fill placeholders oldest-first, so times populate bottom-to-top.
+  A **Status** column closes a run without a time — DNF / DNC / DNS / DSQ, for that run only; the
+  row goes amber, the Total cell carries the code, and it stops being a placeholder an incoming
+  time could fill.
   **Double-click** a Start, Finish or Run time (or an empty slot) to type it in by hand when the device
   didn't fire — a keyed-in time is a green "entered" chip (run time green + underlined), distinct from a
   measured one, and the run's total honours it. Ignoring is a **drag** to the Ignored-times panel on the
@@ -847,7 +904,11 @@ during the outage is otherwise invisible until the next one happens to arrive. A
   non-marshal run's steppers edit its own counts, shared with Manual timing). Clicking a box opens a
   speech-bubble pop-up under it: a locked post shows +/-
   steppers to edit each task's pylons (and toggle the stop line) plus an **Unlock** button; an unlocked
-  post shows the read-only breakdown and a **Lock** button. Ignore a wrong time by dragging it to the
+  post shows the read-only breakdown and a **Lock** button. A **Status** row of DNF / DNC / DNS /
+  DSQ buttons closes the shown run without a time (press the one already set to clear it) — offered
+  on an *upcoming* competitor too, since a did-not-start is exactly the case with nothing recorded;
+  the start-order tile then reads the code instead of a total.
+  Ignore a wrong time by dragging it to the
   Ignored-times panel (the same rail as Manual timing, with the red **Lock**
   switch above it), and drag it back onto a slot to re-pair. A time chip can also be dragged from the
   current competitor onto another tile's Start/Finish slot — including an *upcoming* competitor with no
@@ -951,9 +1012,13 @@ each exists because breaking it is what made the app read as several products st
   means redefining the tokens under `prefers-color-scheme` — and only then re-declaring
   `color-scheme`.
 - **One measure, one exception.** `.content` is `--content-max` on every page. The two timing views
-  are operator screens rather than documents, so they take the whole display through
+  are operator screens rather than documents, so they take the wider `--content-max-wide` through
   `{% block content_class %}content--wide{% endblock %}` — declared in the stylesheet, not injected
-  as an inline `<style>` override by whichever page felt cramped.
+  as an inline `<style>` override by whichever page felt cramped. Wide is still **bounded**: with
+  `max-width: none` the run table stretched to any monitor and its one unsized column (the
+  competitor's name) pocketed the difference. The Manual timing table is now `width: auto` with
+  every column sized, so a row is the sum of its columns and nothing is left over to inflate a
+  cell; the table and the Ignored rail centre together.
 - **A field label is sentence case; uppercase micro-caps are for things that aren't labels** (table
   column headings, stat-tile captions, status pills, section eyebrows). Setup and Settings used to
   shout theirs (`GERÄT`, `TRAININGSLÄUFE`) while every other page spoke normally — and all-caps is
@@ -968,6 +1033,14 @@ Two more that are about *saying the same thing the same way*:
   need the bare number, not for display. A penalty is a different quantity (whole seconds added,
   never measured) so it is written differently — and only one way, by `calc.format_penalty`
   (`+5 s`). Pinned by `test_every_view_writes_a_run_time_the_same_way`.
+- **A page's own name is singular; "Results" is the list of them.** The Results landing page is
+  "Results"; each class page is "Result Class 7" (`Ergebnis Klasse 7`) and the Overall page
+  "Result Overall", in the topbar and the browser tab alike. The PDF headline matches
+  (`Class 1 · Result · Aggregate times`).
+- **`_("…")` inside an f-string is never extracted.** xgettext does not look inside f-strings, so
+  such a string only translates by accident — when the same msgid happens to exist elsewhere.
+  Bind it to a name first (`word = _("Result")`), then interpolate. This is why the PDF headline
+  read "Ergebnisse" for years: it was borrowing the sidebar's msgid.
 - **Django's `{# #}` is single-line only.** Its lexer matches `{#.*?#}` without DOTALL, so a comment
   that wraps is rendered onto the page for the operator to read. This escaped review twice; multi-
   line commentary goes in `{% comment %}…{% endcomment %}`, and `config/tests.py` now checks every

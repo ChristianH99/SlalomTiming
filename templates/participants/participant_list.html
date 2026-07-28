@@ -52,7 +52,7 @@
             data-last="{{ participant.last_name|lower }}" data-first="{{ participant.first_name|lower }}"
             tabindex="0" role="button" aria-expanded="false" aria-controls="detail-{{ participant.pk }}">
           <td class="col-bib"><span data-bib-display>{{ participant.current_bib|default:"–" }}</span></td>
-          <td class="col-name" title="{{ participant.first_name }} {{ participant.last_name }}">{{ participant.first_name }} {{ participant.last_name }}</td>
+          <td class="col-name" title="{{ participant.first_name }} {{ participant.last_name }}">{{ participant.first_name }} {{ participant.last_name }}{% comment %}Out of the whole event: worth seeing without opening the row.{% endcomment %}<span class="status-pill status-pill--dsq" data-dsq-pill {% if participant.current_status != "dsq" %}hidden{% endif %}>{% trans "DSQ" %}</span></td>
           <td class="col-dob">{{ participant.date_of_birth|date:"d.m.Y"|default:"–" }}</td>
           <td class="col-class">
             {% with classes=participant|participant_classes:competition %}
@@ -91,8 +91,25 @@
                   <div class="pd-empty">{% trans "No further details recorded." %}</div>
                 {% endfor %}
               </dl>
+              {% comment %}Disqualification from the whole event, for this
+              competition only. The narrower kind — a DSQ costing one run — is
+              entered on the timing views. It sits in the action row rather than
+              in a band of its own: it is a rare action, not a field of the
+              record, so its explanation lives in the tooltip.{% endcomment %}
               <div class="pd-actions">
                 <a class="button button--secondary pd-edit" href="{% url 'participants:edit' participant.pk %}">{% trans "Edit full details" %}</a>
+                {% comment %}The disqualification rides at the right-hand end of the
+                row with Delete — Edit stays on the left. Both of the controls over
+                there end something; this one just ends the event rather than the
+                record.{% endcomment %}
+                <label class="pd-dsq"
+                       title="{% if participant.current_bib %}{% trans 'Removes them from every class result of this competition. A single run is disqualified on the timing views instead.' %}{% else %}{% trans 'Give this participant a bib first.' %}{% endif %}">
+                  <input type="checkbox" data-dsq-input
+                         {% if participant.current_status == "dsq" %}checked{% endif %}
+                         {% if not participant.current_bib %}disabled{% endif %}>
+                  <span>{% trans "Disqualified from this event" %}</span>
+                </label>
+                <span class="pd-dsq-msg" data-dsq-msg aria-live="polite"></span>
                 <a class="button pd-delete" href="{% url 'participants:delete' participant.pk %}">{% trans "Delete" %}</a>
               </div>
             </div>
@@ -107,7 +124,7 @@
   </div>
 
   <script>
-    window.PARTICIPANT_URLS = { setBib: "{{ set_bib_url }}" };
+    window.PARTICIPANT_URLS = { setBib: "{{ set_bib_url }}", setDsq: "{{ set_dsq_url }}" };
     window.PARTICIPANT_CSRF = "{{ csrf_token }}";
   </script>
   <script>
@@ -248,6 +265,37 @@
           // Clicks inside the detail shouldn't bubble to a row toggle.
           detail.addEventListener("click", (e) => e.stopPropagation());
         }
+        wireDsq(row);
+      }
+
+      // The whole-event disqualification switch. It saves on the spot rather than
+      // on collapse like the bib field: it is a single, consequential flag, and
+      // the pill in the row is what confirms it landed.
+      function wireDsq(row) {
+        const detail = detailFor(row.dataset.participant);
+        const box = detail && detail.querySelector("[data-dsq-input]");
+        if (!box) return;
+        const msg = detail.querySelector("[data-dsq-msg]");
+        const pill = row.querySelector("[data-dsq-pill]");
+        box.addEventListener("change", async () => {
+          const wanted = box.checked;
+          if (msg) { msg.textContent = ""; msg.className = "pd-dsq-msg"; }
+          const res = await fetch(URLS.setDsq, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+            body: JSON.stringify({ participant: row.dataset.participant, dsq: wanted }),
+          }).then((r) => r.json()).catch(() => ({ ok: false }));
+          if (res.ok) {
+            if (pill) pill.hidden = !wanted;
+            if (msg) { msg.textContent = "{% trans 'Saved'|escapejs %}"; msg.className = "pd-dsq-msg pd-dsq-msg--ok"; }
+          } else {
+            box.checked = !wanted;   // the server refused — don't show it as done
+            if (msg) {
+              msg.textContent = res.error || "{% trans 'Could not save.'|escapejs %}";
+              msg.className = "pd-dsq-msg pd-dsq-msg--error";
+            }
+          }
+        });
       }
 
       // ---- live search filtering --------------------------------------------

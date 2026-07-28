@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% load i18n %}
-{% block title %}{% blocktrans with name=cclass.name %}{{ name }} results{% endblocktrans %} – Slalom Timing{% endblock %}
-{% block topbar_title %}{% trans "Results" %}{% endblock %}
+{% comment %}Singular, and named: this page is one class's result, while the
+landing page that lists them all is "Results".{% endcomment %}
+{% block title %}{% blocktrans with name=cclass.display_name %}Result {{ name }}{% endblocktrans %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% blocktrans with name=cclass.display_name %}Result {{ name }}{% endblocktrans %}{% endblock %}
 {% block content %}
   <div class="results-header">
     <h1 class="page-heading">{{ cclass.display_name }}</h1>

@@ -13,6 +13,7 @@
       <div class="modal-body">
         <p>{% blocktrans %}The start order comes from <strong>Run order</strong> and the <strong>start pattern</strong>; times attach to it automatically. Drag a tile in the list to reorder, and drag an ignored time back onto a slot to re-pair it.{% endblocktrans %}</p>
         <p>{% blocktrans %}<strong>Double-click</strong> a Start, Finish or Run time to type it in by hand when the device didn't fire — keyed-in times are highlighted. <strong>Scroll</strong> the tiles (or click a tile in the list) to browse the field without changing the current starter; keying a start time onto an upcoming competitor makes them the current one.{% endblocktrans %}</p>
+        <p>{% blocktrans %}The <strong>Status</strong> buttons close a run without a time: <strong>DNF</strong> did not finish, <strong>DNC</strong> did not classify, <strong>DNS</strong> did not start, <strong>DSQ</strong> disqualified — for this run only, and on an upcoming competitor too. Press the one already set to clear it. Disqualifying somebody from the whole event is done on the Participants page.{% endblocktrans %}</p>
         <p>{% blocktrans %}The red <strong>Lock</strong> switch sends every incoming time straight to the Ignored list — a way to pause capture without disconnecting the device.{% endblocktrans %}</p>
       </div>
     </div>
@@ -77,6 +78,7 @@
         pair: "{% url 'timing:pair' %}",
         setTime: "{% url 'timing:set-time' %}",
         setRuntime: "{% url 'timing:set-runtime' %}",
+        runStatus: "{% url 'timing:run-status' %}",
         adjust: "{% url 'timing:auto-adjust' %}",
         unlock: "{% url 'timing:marshal-unlock' %}",
         lock: "{% url 'timing:marshal-lock' %}",

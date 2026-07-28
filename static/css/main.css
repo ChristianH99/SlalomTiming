@@ -90,9 +90,15 @@
   --radius-pill: 999px;
 
   /* ---- content width ----
-     One measure for every page. Timing views opt into `--content-wide`
-     explicitly via .shell-content--wide; nothing else may. */
+     One measure for every page. Timing views opt into the wider one explicitly
+     via `.content--wide`; nothing else may.
+     The wide measure is *bounded*, not unlimited: the run table's own columns
+     need more than 1100px, but with no cap at all the one flexible column (the
+     competitor's name) swallowed every spare pixel of a large monitor — half a
+     screen of white space inside one cell, and a page that no longer sat on the
+     same centre line as the rest of the app. */
   --content-max: 1100px;
+  --content-max-wide: 1700px;
 }
 
 * { box-sizing: border-box; }
@@ -401,7 +407,7 @@ a:hover { color: var(--flame-hover); }
    competitor's name — so they take the whole display via
    `{% block content_class %}content--wide{% endblock %}`. */
 .content { padding: var(--space-9); max-width: var(--content-max); margin: 0 auto; width: 100%; }
-.content--wide { max-width: none; }
+.content--wide { max-width: var(--content-max-wide); }
 
 /* ===== TABLE CARD ===== */
 .table-card {
@@ -1142,6 +1148,30 @@ body.modal-open { overflow: hidden; }
 }
 .pd-empty { color: var(--text-light); font-style: italic; font-size: var(--text-base); }
 
+/* Disqualification from the whole event: a rare action, so it rides quietly in
+   the action row rather than in a band of its own, and what it costs is in its
+   title rather than a line of body text. The `auto` margin moves *here* from
+   Delete, so this and Delete sit together at the right-hand end of the row while
+   Edit stays on the left. */
+.pd-dsq {
+  display: inline-flex; align-items: center; gap: var(--space-4);
+  margin-left: auto;
+  font-size: var(--text-base); color: var(--text-mid);
+  cursor: pointer;
+}
+.pd-dsq input:disabled + span { color: var(--text-muted); cursor: not-allowed; }
+.pd-dsq-msg { font-size: var(--text-sm); }
+/* No gap of its own until it has something to say. */
+.pd-dsq-msg:empty { display: none; }
+.pd-dsq-msg--ok { color: var(--glacier); }
+.pd-dsq-msg--error { color: var(--flame-hover); }
+/* The row's own marker, so a disqualified starter reads as one in the list. */
+.status-pill--dsq {
+  margin-left: var(--space-4);
+  background: var(--flame-bg); color: var(--flame-hover);
+  letter-spacing: 0.04em;
+}
+
 .pd-actions {
   display: flex;
   align-items: center;
@@ -1159,7 +1189,6 @@ body.modal-open { overflow: hidden; }
   color: var(--flame-hover);
   border: 1.5px solid var(--flame);
   box-shadow: none;
-  margin-left: auto;
 }
 .button.pd-delete:hover {
   background: var(--flame);
@@ -1898,8 +1927,15 @@ textarea:focus-visible,
    can't be reconstructed from the numbers around it. The card used to hug the
    table (`fit-content`), which spent the width on nothing and clipped the name
    at 7.5rem while the penalty steppers took three times that. */
-.timing-live .table-card { width: 100%; }
-.timing-table { width: 100%; border-collapse: collapse; font-size: var(--text-base); table-layout: fixed; }
+/* The table is exactly as wide as its columns need — `table-layout: fixed` with
+   every column sized and `width: auto` means the sum, and nothing more. It used
+   to be `width: 100%`, which on a wide monitor handed several hundred spare
+   pixels to the one unsized column: the competitor's name sat in a cell three
+   times wider than any name, and the page no longer read as part of the app.
+   The card scrolls (`.table-card` is `overflow-x: auto`) when the window is
+   narrower than the columns. */
+.timing-live .table-card { width: auto; }
+.timing-table { width: auto; border-collapse: collapse; font-size: var(--text-base); table-layout: fixed; }
 .timing-table thead th {
   text-align: left;
   font-family: 'Manrope', sans-serif;
@@ -1966,17 +2002,20 @@ textarea:focus-visible,
 }
 
 /* Every column below is a fixed width, so revealing a name or a class dropdown
-   on bib entry never shifts the columns to its right. The Competitor column is
-   deliberately NOT sized: with `table-layout: fixed` it absorbs whatever the
-   others leave, which on a wide screen is most of the row. */
-/* Sized to their content and no more — every rem taken here is a rem the name
-   doesn't get. A time is at most "00:50:01.234" at the finest device precision. */
+   on bib entry never shifts the columns to its right — and, since the table is
+   `width: auto`, the row is the sum of them and nothing is left over to inflate
+   one cell on a wide monitor.
+   Sized to their content and no more: a time is at most "00:50:01.234" at the
+   finest device precision. */
 .tt-time { width: 8rem; }
 .tt-run { width: 6rem; }
 .tt-bib { width: 4.5rem; }
 .bib-field { display: flex; align-items: center; }
 .bib-input { width: 3.6rem; }
-.tt-name { min-width: 8rem; }
+/* Sized like every other column now that the table hugs its content: wide enough
+   for a real name rather than the 7.5rem line it was clipped to, and no wider. A
+   name past this still ellipsises with the full one on hover. */
+.tt-name { width: 16rem; }
 .bib-name {
   display: block;
   font-size: var(--text-base); font-weight: 600; color: var(--text-dark);
@@ -1986,7 +2025,16 @@ textarea:focus-visible,
 .bib-name--unknown { color: var(--flame); font-weight: 500; font-style: italic; }
 .tt-class { width: 7rem; }
 .tt-run-sel { width: 4.5rem; }
-.class-select, .run-select { width: 100%; min-width: 0; }
+/* Wide enough for a three-letter code plus the select's arrow, and no wider —
+   every rem the fixed columns take is a rem the competitor's name doesn't get. */
+.tt-status { width: 4.75rem; }
+.class-select, .run-select, .status-select { width: 100%; min-width: 0; }
+/* A run closed with a state code (DNF/DNC/DNS/DSQ) instead of a time. Amber
+   rather than flame: it is a recorded outcome, not a mistake to fix — flame on
+   this table already means "more runs than the class grants". */
+.status-select--set { color: var(--amber); font-weight: 700; border-color: var(--amber-soft); }
+.timing-row--status { background: var(--amber-soft-bg); }
+.run-total--status { color: var(--amber); letter-spacing: 0.04em; }
 .class-static {
   display: inline-block; max-width: 100%;
   color: var(--text-dark); font-weight: 600;
@@ -2347,10 +2395,11 @@ textarea:focus-visible,
    rail. It used to hug its content and centre, which is what left the page's
    width unspent while names were clipped. */
 .timing-live-body {
-  display: flex; align-items: flex-start; gap: var(--space-7);
+  display: flex; align-items: flex-start; justify-content: center;
+  gap: var(--space-7);
   width: 100%;
 }
-.timing-live-main { flex: 1 1 auto; min-width: 0; }
+.timing-live-main { flex: 0 1 auto; min-width: 0; }
 
 /* Single-light-barrier phase (templates/timing/_barrier_phase.html). Only a
    one-channel rig shows it at all, so it is quiet by default and only the role
@@ -2634,6 +2683,29 @@ textarea:focus-visible,
 .auto-marshal--done .auto-marshal-counts { color: var(--success-strong); }
 .auto-marshal--open { box-shadow: 0 0 0 2px var(--ink); }
 
+/* How a run ended when it didn't end in a time. Amber rather than flame: it is a
+   recorded outcome, not an error — flame on this page means an unattributed time. */
+.auto-status {
+  display: flex; align-items: center; gap: var(--space-5); margin-top: var(--space-5);
+}
+.auto-status-label {
+  font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--text-light);
+}
+.auto-status-buttons { display: inline-flex; gap: var(--space-3); }
+.auto-status-btn {
+  padding: var(--space-2) var(--space-5);
+  border: 1px solid var(--border); background: var(--white);
+  border-radius: var(--radius-pill);
+  font-family: 'Manrope', sans-serif; font-size: var(--text-xs); font-weight: 700;
+  letter-spacing: 0.04em; color: var(--text-mid); cursor: pointer;
+}
+.auto-status-btn:hover { background: var(--snow); color: var(--ink); }
+.auto-status-btn--on {
+  background: var(--amber-bg); border-color: var(--amber-soft); color: var(--amber);
+}
+.auto-order-item--status { background: var(--amber-soft-bg); }
+
 /* Timekeeper manual +/- on the run's total pylon / task counts. */
 .auto-adjust { display: flex; gap: var(--space-8); margin-top: var(--space-5); }
 .auto-adjust-field { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -2720,6 +2792,10 @@ textarea:focus-visible,
 /* The total (run + penalties) is the emphasised figure. */
 .auto-runtime--total { color: var(--flame); }
 .auto-order-time { font-weight: 700; color: var(--flame-hover); }
+/* …unless the run was closed with a state code, which is what happened instead
+   of a time. Declared after the two above, which it overrides. */
+.auto-runtime--status,
+.auto-order-time--status { color: var(--amber); letter-spacing: 0.04em; }
 
 /* Scroll-to-current cues, floated over the order list when it's out of view. */
 .auto-order { position: relative; }
@@ -2792,6 +2868,25 @@ textarea:focus-visible,
 .rt-total-time { font-weight: 700; color: var(--text-dark); }
 .rt-gap { color: var(--text-mid); font-size: var(--text-xs); }
 .rt-status { font-weight: 600; color: var(--text-mid); }
+/* A state code where a time would be — on one run, or in the total column for a
+   competitor whose event ended on one. Amber: a recorded outcome, not an error. */
+.rt-status-code {
+  font-family: 'Manrope', sans-serif; font-weight: 800;
+  font-size: var(--text-xs); letter-spacing: 0.05em;
+  color: var(--amber);
+}
+/* The competitors below the placings: finished, just not in them. */
+.results-table .result-final-status td { background: var(--amber-soft-bg); }
+/* "This run was never started" — offered in the not-yet-ranked table only. */
+.rt-dns {
+  padding: var(--space-1) var(--space-4);
+  border: 1px dashed var(--border); background: var(--white);
+  border-radius: var(--radius-pill);
+  font-family: 'Manrope', sans-serif; font-size: var(--text-2xs); font-weight: 700;
+  letter-spacing: 0.05em; color: var(--text-light); cursor: pointer;
+}
+.rt-dns:hover { border-style: solid; border-color: var(--amber-soft); color: var(--amber); }
+.rt-dns--failed { border-color: var(--flame); color: var(--flame-hover); }
 
 /* A tie awaiting a manual decision. */
 .results-table .result-inspect td { background: var(--flame-bg); }

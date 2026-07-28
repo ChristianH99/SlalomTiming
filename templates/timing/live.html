@@ -13,6 +13,7 @@
       <div class="modal-body">
         <p>{% blocktrans %}Hover between the header and the top row for a <strong>+</strong> to pre-enter an upcoming starter. <strong>Double-click</strong> a Start, Finish or Run time (or an empty slot) to type it in by hand when the device didn't fire — keyed-in times are highlighted.{% endblocktrans %}</p>
         <p>{% blocktrans %}<strong>Drag</strong> a wrong time to the Ignored list on the right to ignore it; drag it back onto a slot (or double-click the chip) to use it again.{% endblocktrans %}</p>
+        <p>{% blocktrans %}The <strong>Status</strong> column closes a run without a time: <strong>DNF</strong> did not finish, <strong>DNC</strong> did not classify, <strong>DNS</strong> did not start, <strong>DSQ</strong> disqualified — for this run only. A run closed this way is never scored. Disqualifying somebody from the whole event is done on the Participants page.{% endblocktrans %}</p>
         <p>{% blocktrans %}The red <strong>Lock</strong> switch sends every incoming time straight to the Ignored list — a way to pause capture without disconnecting the device.{% endblocktrans %}</p>
       </div>
     </div>
@@ -46,6 +47,11 @@
                 <th class="tt-name">{% trans "Competitor" %}</th>
                 <th class="tt-class">{% trans "Class" %}</th>
                 <th class="tt-run-sel">{% trans "Run" %}</th>
+                {% comment %}A run that ends in a state code rather than a time —
+                the competitor did not finish, did not start, or was disqualified
+                for this run. Set here by bib and run; what it does to the class
+                result is decided in the results engine.{% endcomment %}
+                <th class="tt-status">{% trans "Status" %}</th>
                 {% if arrangement.penalties_enabled %}
                   <th class="tt-pen">{% trans "Pylon" %}</th>
                   <th class="tt-pen">{% trans "Task" %}</th>
@@ -73,6 +79,7 @@
         run: "{% url 'timing:run-update' %}",
         runAdd: "{% url 'timing:run-add' %}",
         runDelete: "{% url 'timing:run-delete' %}",
+        runStatus: "{% url 'timing:run-status' %}",
         ignore: "{% url 'timing:ignore' %}",
         pair: "{% url 'timing:pair' %}",
         setTime: "{% url 'timing:set-time' %}",

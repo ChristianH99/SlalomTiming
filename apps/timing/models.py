@@ -148,6 +148,22 @@ class TimedRun(models.Model):
         PRACTICE = "practice", _("Practice")
         COUNTED = "counted", _("Counted")
 
+    class Status(models.TextChoices):
+        """How a run ended when it did not end in a time.
+
+        A status *replaces* the run's time in the result — a run carrying one is
+        never scored, whatever times happen to sit on it (a disqualified run is
+        usually a measured one). Blank means the ordinary case: the run is either
+        timed or still to come. Which of these makes a competitor DNS/DNC/DSQ
+        overall is the class's business, not the run's — see
+        apps/results/resultscalc.py.
+        """
+
+        DNF = "dnf", _("Did Not Finish")
+        DNC = "dnc", _("Did Not Classify")
+        DNS = "dns", _("Did Not Start")
+        DSQ = "dsq", _("Disqualified")
+
     competition = models.ForeignKey(
         "competitions.Competition", on_delete=models.CASCADE, related_name="timed_runs"
     )
@@ -168,6 +184,10 @@ class TimedRun(models.Model):
     class_occurrence = models.PositiveSmallIntegerField(default=0)
     run_type = models.CharField(max_length=10, choices=RunType.choices, blank=True)
     run_number = models.PositiveIntegerField(null=True, blank=True)
+    # The run ended in a state code rather than a time (DNF/DNC/DNS/DSQ), set by
+    # the timekeeper on either timing view or — for DNS — from the results table.
+    # A run carrying one is never scored; blank is the ordinary case.
+    status = models.CharField(max_length=3, choices=Status.choices, blank=True)
     # The operator owns this run's identity (entered/edited it on the Manual timing
     # view). Such a run claims its matching slot in the Auto timing order and is
     # skipped by the positional binding, instead of being an auto-bound row whose

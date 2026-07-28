@@ -38,6 +38,11 @@ _MARSHAL_ENDPOINTS = {
     )
 }
 
+# Closing a run with a state code (DNF/DNC/DNS/DSQ) is a timekeeper's action from
+# either timing view *or* from the results table's not-yet-ranked block, so like
+# the marshal endpoints it belongs to two pages.
+_RUN_STATUS = {("timing", "run-status")}
+
 # page key -> set of (app_name, url_name) it covers.
 PAGE_URLS = {
     "dashboard": {
@@ -54,7 +59,7 @@ PAGE_URLS = {
     } | {("results", "settings")},
     "participants": {
         ("participants", name)
-        for name in ("list", "check", "set-bib", "add", "edit", "delete")
+        for name in ("list", "check", "set-bib", "set-dsq", "add", "edit", "delete")
     },
     "timing": {
         ("timing", name)
@@ -64,7 +69,7 @@ PAGE_URLS = {
             "pair", "set-time", "set-runtime", "auto", "auto-state",
             "auto-reorder", "auto-reset-order", "auto-adjust",
         )
-    } | _MARSHAL_ENDPOINTS,
+    } | _MARSHAL_ENDPOINTS | _RUN_STATUS,
     "marshal_posts": {("competitions", "marshal-posts")} | _MARSHAL_ENDPOINTS,
     "results": {
         ("results", name)
@@ -72,7 +77,7 @@ PAGE_URLS = {
             "index", "class", "overall", "tie-resolve", "pdf-logo-remove",
             "export-all", "export-sample", "export-overall", "export-class",
         )
-    },
+    } | _RUN_STATUS,
     # Moving whole events and every participant's personal data in and out of the
     # system is its own responsibility — deliberately not folded into Competition
     # Setup, so it can be granted (or withheld) on its own.
