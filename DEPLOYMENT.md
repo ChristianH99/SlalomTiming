@@ -115,6 +115,35 @@ Do **not** add `--workers`, do not run it under a process manager that spawns
 several copies, and do not use `runserver`: it is a development server, and Django
 says plainly that it is not for production use.
 
+### 3.3 Is it up?
+
+```bash
+curl -fsS http://127.0.0.1:8000/healthz     # {"status": "ok"}
+```
+
+`/healthz` is the one URL that needs no login, and it answers in one word on
+purpose. It is not a status page: it says nothing about which device is attached,
+whether this venue is timing or whether the backup is working, because nothing
+that needs a session can be a health check and anything more would be venue state
+handed to anyone who asks. What it does prove is the part a check cannot see from
+outside — that the process is serving *and* its database answers. A server whose
+disk has filled or whose migration never finished still accepts the connection;
+this returns **503** instead, and writes the reason to the log.
+
+Point systemd, Caddy or an uptime check at it. There is deliberately no
+`systemctl` health hook in the unit file: a restart loop on a failing database is
+how you lose an event rather than a request.
+
+Three other things happen at every start, so that none of them is a step anybody
+has to remember (all in `config/asgi.py`): expired **sessions** are swept — Django
+never prunes them for the database backend, so the table otherwise grows for the
+life of the install and every "who else is signed in?" scans it, which means
+**there is no `clearsessions` cron job to add**; the **CP540 link** is
+re-established if the operator left the device connected; and the **automatic
+backup** resumes. The backup's destination and interval are settings *in the app*
+(Backup → Automatic backup), not environment variables — there is nothing to put
+in `.env` for it.
+
 ### 3.4 TLS — pick one of these before the first event
 
 The app defaults to HTTPS and **there is one switch that turns that off**
@@ -161,6 +190,7 @@ uv sync
 uv run python manage.py migrate --noinput
 uv run python manage.py collectstatic --noinput
 sudo systemctl restart slalomtiming      # or restart start-server.ps1
+curl -fsS http://127.0.0.1:8000/healthz  # it came back up, and its database answers
 ```
 
 Never mid-event. Static file names are content-hashed, so browsers pick up new CSS
@@ -170,8 +200,9 @@ and JS on the next load without a forced refresh.
 
 **Before the event**
 
-- [ ] Server started; open `/` and confirm the Dashboard renders **styled** (an
-      unstyled page means `collectstatic` didn't run).
+- [ ] Server started; `curl -fsS http://127.0.0.1:8000/healthz` says `ok`, then open
+      `/` and confirm the Dashboard renders **styled** (an unstyled page means
+      `collectstatic` didn't run).
 - [ ] Log in from one of the marshals' phones over the venue network — this catches
       a wrong `ALLOWED_HOSTS`, a missing certificate and a firewall in one go.
 - [ ] The event is selected as the current competition, classes and run order are
@@ -229,6 +260,8 @@ Then start Caddy if it isn't already running as a service.
 | Results-PDF logo previews 404 | `DJANGO_SERVE_MEDIA=False` without the proxy serving `/media/` | Unset it, or add the `handle_path /media/*` block in the Caddyfile |
 | `ImproperlyConfigured: DJANGO_SECURE_COOKIES=False is no longer honoured` | An old `.env` from before the TLS decision | Section 3.4 — set up TLS, or set `DJANGO_ALLOW_PLAIN_HTTP=True` deliberately |
 | Login says "Too many failed attempts" | The failed-attempt lockout (username + IP) | Wait it out, restart the server, or raise `DJANGO_LOGIN_MAX_ATTEMPTS` |
+| `ImproperlyConfigured: DJANGO_ALLOWED_HOSTS is empty and DEBUG is False` | The `.env` never named the hosts this server answers on. Refused at startup rather than at every request: empty, the app starts and then rejects every phone at the venue with `DisallowedHost` | Set `DJANGO_ALLOWED_HOSTS` to the names and addresses in use (section 2). `collectstatic` does not need it and does not check |
+| `/healthz` returns 503 but pages load | The database refused the health check's own query — a full disk, a locked file, an unapplied migration | `<data dir>/logs/slalomtiming.log` has the exception; `manage.py migrate`, check free space |
 | `ImproperlyConfigured: DJANGO_SECRET_KEY is not set and DEBUG is False` | `.env` missing, or not loaded into the process. A deployment must bring its own signing key — there is deliberately no fallback | Section 2; systemd needs `EnvironmentFile=`, PowerShell uses `start-server.ps1` |
 | Backup page is red: "does not exist — is the drive plugged in?" | The destination is gone (stick unplugged, drive letter changed) | Plug it back in; the next tick writes again by itself. Nothing was deleted — pruning only runs after a copy succeeds |
 | The destination filled up | One copy a minute of a growing database | Lower **Keep**, or lengthen the interval. The newest copy is the one that fails when a disk is full, which is the one you wanted |

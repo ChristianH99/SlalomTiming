@@ -121,6 +121,12 @@ else:
 ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS')
 if DEBUG and not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+# Left empty with DEBUG off, the app *starts* and then refuses every request with
+# DisallowedHost — which on race morning reads as "the server is broken" from every
+# phone at the venue at once. It is refused at startup instead, but in config/asgi.py
+# rather than here: this setting only means anything to something that serves
+# requests, and `collectstatic` (a required release step, and the packaged build's
+# own) legitimately runs with DEBUG off and no hosts at all.
 
 # Origins allowed to send authenticated POSTs over HTTPS (the live domain(s)),
 # e.g. "https://timing.example.org". Needed for form posts from the real host.
@@ -231,6 +237,13 @@ if not DEBUG:
     # Trust the X-Forwarded-Proto header from a TLS-terminating reverse proxy.
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = not ALLOW_PLAIN_HTTP
+    # …except the health check. A local check does `curl http://127.0.0.1:8000/healthz`
+    # — the run-book, the unit file and any uptime probe on the box itself — and a 301
+    # to a hostname it isn't asking for makes every one of them report a healthy
+    # server as broken. It is safe to exempt precisely because of what it isn't: no
+    # cookie, no credential, no personal data, one word of output (config/health.py).
+    # Nothing else may be added to this list without the same argument.
+    SECURE_REDIRECT_EXEMPT = [r'^healthz$']
     SESSION_COOKIE_SECURE = not ALLOW_PLAIN_HTTP
     CSRF_COOKIE_SECURE = not ALLOW_PLAIN_HTTP
     # HSTS pins the hostname to HTTPS in every browser that saw the header, and it

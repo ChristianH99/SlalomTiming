@@ -22,6 +22,15 @@ timing.local {
 		# Django reads this to know the browser spoke HTTPS even though this hop
 		# is plain HTTP (SECURE_PROXY_SSL_HEADER in config/settings.py).
 		header_up X-Forwarded-Proto {scheme}
+
+		# Ask the app whether it is actually working, not merely accepting
+		# connections: /healthz runs a query against the database, so a process
+		# whose disk has filled reports itself unhealthy instead of serving 500s.
+		# Caddy stops sending traffic to a dead upstream — with one upstream that
+		# means a clean 502 rather than a page that half renders.
+		health_uri /healthz
+		health_interval 30s
+		health_timeout 5s
 	}
 
 	# Optional: serve the two file trees from Caddy instead of the Python process.

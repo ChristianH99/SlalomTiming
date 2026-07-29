@@ -21,9 +21,13 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.i18n import JavaScriptCatalog
 
+from config.health import health
 from config.media import serve_media
 
 urlpatterns = [
+    # Something a check can be pointed at without a session; see config/health.py
+    # for why it says so little. Ungated (apps/accounts/pages.py OPEN).
+    path('healthz', health, name='health'),
     path('admin/', admin.site.urls),
     # django.views.i18n.set_language: the topbar language selector POSTs here to
     # store the chosen language (session + cookie) and redirect back.

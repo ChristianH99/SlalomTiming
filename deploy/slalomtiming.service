@@ -28,6 +28,10 @@ EnvironmentFile=/srv/slalomtiming/.env
 # lock file, so a second start fails rather than half-works; do not add workers here.
 ExecStart=/usr/bin/env uv run daphne -b 127.0.0.1 -p 8000 config.asgi:application
 
+# "Is it up" without a login: curl -fsS http://127.0.0.1:8000/healthz — "ok", or a
+# 503 if the process is serving but its database has gone. Deliberately NOT wired to
+# Restart= here: a restart loop against a failing database is how you lose an event
+# rather than a request. Point an uptime check at it and let a person decide.
 Restart=on-failure
 RestartSec=3
 KillSignal=SIGINT

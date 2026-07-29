@@ -517,3 +517,163 @@ class TestDataDirectoryPermissions:
         this app's business."""
         source = (settings.BASE_DIR / 'config' / 'asgi.py').read_text(encoding='utf-8')
         assert '_harden_data_directory()' in source
+
+
+class TestAllowedHosts:
+    """OPS-8: a deployment must say which hosts it answers on.
+
+    Empty with DEBUG off, the app *starts* and then refuses every request with
+    DisallowedHost — which on race morning reads as "the server is broken" from
+    every phone at the venue at once.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _isolated_data_dir(self, tmp_path):
+        """A server start also writes a lock file and sweeps sessions. It does
+        that to whatever DATA_DIR says, which in a checkout is the checkout."""
+        self.data_dir = tmp_path
+        yield
+
+    def _asgi(self, **env):
+        """Import config.asgi in a subprocess, which is what a server does."""
+        environ = {**os.environ, **{k: v for k, v in env.items() if v is not None}}
+        for name, value in env.items():
+            if value is None:
+                environ.pop(name, None)
+        # A lock file of its own, or the developer's own server would refuse it.
+        environ['DJANGO_ALLOW_MULTIPLE_SERVERS'] = '1'
+        # Importing config.asgi is importing a *server*, and a server hardens its
+        # data directory (config/datasecurity.py) — which in a checkout is the
+        # checkout. Left on, this test silently breaks ACL inheritance on the
+        # developer's own working copy, once per run.
+        environ['DJANGO_HARDEN_DATA_DIR'] = 'False'
+        environ['SLALOM_DATA_DIR'] = str(self.data_dir)
+        return subprocess.run(
+            [sys.executable, '-c', 'import config.asgi'],
+            cwd=settings.BASE_DIR, env=environ, capture_output=True, text=True,
+        )
+
+    def test_a_deployment_with_no_hosts_is_refused_at_startup(self):
+        result = self._asgi(DJANGO_DEBUG='False', DJANGO_ALLOWED_HOSTS=None,
+                            DJANGO_SECRET_KEY='x' * 50,
+                            DJANGO_ALLOW_PLAIN_HTTP='True')
+        assert result.returncode != 0
+        assert 'DJANGO_ALLOWED_HOSTS' in result.stderr
+        # …and the message says what to do about it, not merely what is wrong.
+        assert 'DJANGO_ALLOWED_HOSTS=' in result.stderr
+
+    def test_a_deployment_that_names_them_starts(self):
+        result = self._asgi(DJANGO_DEBUG='False',
+                            DJANGO_ALLOWED_HOSTS='timing.example,127.0.0.1',
+                            DJANGO_SECRET_KEY='x' * 50,
+                            DJANGO_ALLOW_PLAIN_HTTP='True')
+        assert result.returncode == 0, result.stderr
+
+    def test_collectstatic_does_not_need_them(self):
+        """A required release step, and the packaged Windows build's own, run with
+        DEBUG off and no hosts at all — quite legitimately, since nothing is being
+        served. This is why the check is in config/asgi.py and not in settings."""
+        result = _run_manage('collectstatic', '--noinput', '--dry-run',
+                             DJANGO_DEBUG='False', DJANGO_ALLOWED_HOSTS=None,
+                             DJANGO_SECRET_KEY='x' * 50,
+                             DJANGO_ALLOW_PLAIN_HTTP='True')
+        assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.django_db
+class TestHealthEndpoint:
+    """OPS-3: something a check can be pointed at.
+
+    "Is it up" used to mean opening a page, which means logging in, which means a
+    person.
+    """
+
+    def test_it_answers_without_a_login(self):
+        from django.test import Client
+
+        response = Client().get('/healthz')
+        assert response.status_code == 200
+        assert response.json() == {'status': 'ok'}
+
+    def test_it_is_registered_as_ungated(self):
+        """Not by accident of URL shape: the access middleware gates on the
+        (app_name, url_name) pair, so the pair has to be in pages.OPEN."""
+        from apps.accounts import pages
+
+        match = resolve('/healthz')
+        assert (match.app_name, match.url_name) in pages.OPEN
+
+    def test_it_gives_away_no_venue_state(self):
+        """It is unauthenticated, so it must say nothing about which device is
+        attached, whether this venue is timing, or how many people are
+        registered. One word, the same to everybody."""
+        from django.test import Client
+
+        assert set(Client().get('/healthz').json()) == {'status'}
+
+    def test_it_creates_no_session(self):
+        """A monitor polling every few seconds must not fill the session table
+        the server start has just swept."""
+        from django.contrib.sessions.models import Session
+        from django.test import Client
+
+        before = Session.objects.count()
+        Client().get('/healthz')
+        assert Session.objects.count() == before
+
+    def test_a_database_that_has_gone_reports_unhealthy(self):
+        """The failure a check exists to catch: a process that is listening but
+        whose database is unusable. "The port answers" would report it healthy."""
+        from django.test import Client
+
+        from config import health
+
+        class Boom:
+            def __enter__(self):
+                raise OSError('the disk is full')
+
+            def __exit__(self, *exc):
+                return False
+
+        class FakeConnection:
+            def cursor(self):
+                return Boom()
+
+        original = health.connection
+        health.connection = FakeConnection()
+        try:
+            response = Client().get('/healthz')
+        finally:
+            health.connection = original
+        assert response.status_code == 503
+        assert response.json() == {'status': 'error'}
+
+    def test_it_is_never_cached(self):
+        """A cached health check is a lie about the present."""
+        from django.test import Client
+
+        assert Client().get('/healthz')['Cache-Control'] == 'no-store'
+
+    def test_it_answers_over_plain_http_behind_the_https_redirect(self):
+        """The run-book, the unit file and any probe on the box itself ask
+        `http://127.0.0.1:8000/healthz`. A 301 to a hostname they are not asking
+        for makes every one of them report a healthy server as broken."""
+        from django.test import Client
+
+        with override_settings(DEBUG=False, SECURE_SSL_REDIRECT=True,
+                               SECURE_REDIRECT_EXEMPT=[r'^healthz$'],
+                               ALLOWED_HOSTS=['testserver']):
+            response = Client().get('/healthz')
+        assert response.status_code == 200
+
+    def test_nothing_else_is_exempt_from_the_https_redirect(self):
+        """The exemption is safe only because of what /healthz isn't. A page that
+        carries a session cookie must never join this list."""
+        import config.settings as project_settings
+
+        source = Path(project_settings.__file__).read_text(encoding='utf-8')
+        exempt = re.search(r'SECURE_REDIRECT_EXEMPT = \[(.*?)\]', source, re.S)
+        assert exempt, 'SECURE_REDIRECT_EXEMPT is gone — was the health check moved?'
+        assert exempt.group(1).count(',') == 0, (
+            'something was added to SECURE_REDIRECT_EXEMPT: ' + exempt.group(1)
+        )

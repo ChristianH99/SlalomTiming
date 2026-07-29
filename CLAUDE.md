@@ -24,7 +24,16 @@ participants / entering penalties) — no rewrite planned, just wider access + a
 ## Layout
 
 ```
-config/                  Django project (settings, urls, asgi/wsgi). csp.py is the
+config/                  Django project (settings, urls, asgi/wsgi). health.py is /healthz —
+                         the one ungated URL outside the timing device's, answering "ok" or
+                         a 503 and deliberately nothing else: it is unauthenticated, so
+                         which device is attached or whether this venue is timing would be
+                         venue state handed to anyone who asks. It runs one SELECT 1,
+                         because a process listening while its database has gone is the
+                         failure a check exists to catch. It is also the only path exempt
+                         from the HTTPS redirect (settings SECURE_REDIRECT_EXEMPT) — every
+                         local probe asks for it over plain http — and a test refuses any
+                         second entry on that list. csp.py is the
                          Content-Security-Policy middleware (see Security); media.py puts
                          /media/ behind the login; datasecurity.py restricts DATA_DIR to the
                          account running the server at startup (a 0o077 umask + chmod on POSIX,
@@ -46,6 +55,14 @@ config/                  Django project (settings, urls, asgi/wsgi). csp.py is t
                          Django's fortnight) and the login-throttle limits. DATA_DIR (env
                          SLALOM_DATA_DIR, default BASE_DIR) is where everything the app *writes*
                          goes — db.sqlite3, media/, run/server.lock, timing_unrecorded.log. A
+                         asgi.py is where a *server's* startup rules live, as opposed to
+                         settings': the single-instance lock, the CP540 and backup
+                         autostarts, the data-dir hardening, the expired-session sweep (so
+                         there is no clearsessions schedule to add) and the refusal to
+                         start with DEBUG off and an empty ALLOWED_HOSTS. That last one is
+                         not in settings.py on purpose — collectstatic is a required
+                         release step and the packaged build's own, and runs with DEBUG off
+                         and no hosts quite legitimately.
                          checkout keeps them beside the code; the packaged Windows build points it
                          at %LOCALAPPDATA% because the next installer overwrites the code and the
                          database is the event. Anything written at runtime belongs under DATA_DIR,

@@ -19,6 +19,35 @@ django_asgi_app = get_asgi_application()
 
 from config import singleinstance  # noqa: E402
 
+
+def _require_allowed_hosts():
+    """A deployment must say which hosts it answers on.
+
+    With DEBUG off and ALLOWED_HOSTS empty, Django starts and then refuses every
+    single request with DisallowedHost. On race morning that reads as "the server
+    is broken" from every phone at the venue at once — the worst moment to go
+    looking for a setting. So it is refused here, where the message can say what
+    to do, and *here* rather than in settings.py because the setting only means
+    anything to something that serves requests: `collectstatic` is a required
+    release step (and the packaged build's own) and runs with DEBUG off and no
+    hosts at all, quite legitimately.
+    """
+    from django.conf import settings
+
+    if settings.DEBUG or settings.ALLOWED_HOSTS:
+        return
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        'DJANGO_ALLOWED_HOSTS is empty and DEBUG is False, so every request '
+        'would be refused with DisallowedHost. Set it to the names and '
+        'addresses this server answers on, comma-separated:\n'
+        '  DJANGO_ALLOWED_HOSTS=timing.club.example,192.168.1.10,localhost'
+    )
+
+
+_require_allowed_hosts()
+
 # One event, one server process (channel layer, CP540 reader and event loop are all
 # per-process). This is the only entry point a server goes through, so the rule is
 # enforced where it's real — management commands and tests never reach it.

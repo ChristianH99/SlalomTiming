@@ -24,8 +24,9 @@ the run-book's manual USB instruction was standing in for. **§4 (privacy) is st
 short**: five of its eight items were carried by §1–§3; **PRV-4 now has its half
 that has to exist first** (`Participant.last_used_at` — a record's last edit *or*
 entry, indexed and backfilled), with the bulk-delete screen still to come, and
-**PRV-5 (a privacy notice) is untouched**. §6 (bar OPS-1), §7, §8 and §9 still
-open.
+**PRV-5 (a privacy notice) is untouched**. **§6 (operability) is complete** — six
+fixed, one waived by the owner (OPS-4). §7 (UI/UX), §8 (docs) and §9 (test gaps)
+still open.
 
 ---
 
@@ -320,10 +321,15 @@ vehicle for every competitor, retained across events, and exports the lot in a p
 * **PRV-5** — **No privacy notice anywhere** in the UI, and no record of consent. For a
   German club running this on a public network, that is the paperwork side of the same
   gap.
-* **PRV-6** — **The database is unencrypted** and the packaged build puts it in
-  `%LOCALAPPDATA%`. DEPLOYMENT.md tells the operator to copy `db.sqlite3` to a USB
-  stick, which is the right advice and also an unencrypted copy of everyone's address.
-  Worth one sentence in the run-book.
+* **PRV-6 (⊘ WAIVED, ◔ MITIGATED)** — **The database is unencrypted** and the packaged
+  build puts it in `%LOCALAPPDATA%`. Owner: "The user is not supposed to copy the
+  database anywhere" and, on encryption, "the database should somehow be protected if
+  possible" — resolved as **file-permission hardening**, not encryption at rest
+  (`config/datasecurity.py`, §3). What has since changed around it: the app now writes
+  its own copies to a destination the operator chose (OPS-1), which is a copy made
+  deliberately rather than one the run-book told them to make with nowhere to put it —
+  the *manual* USB instruction this finding objected to is gone. Those copies are as
+  unencrypted as the original, which is the same accepted risk in a new place.
 * **PRV-7** — SEC-P: expired sessions are retained indefinitely.
 
 ---
@@ -389,18 +395,45 @@ checklist and the troubleshooting table are all there. What is missing:
   supposed to remember, and a button invites them to think they should.
 * **OPS-2 (✅ FIXED)** — BLK-5 gave the app a log file; §2c gave it an audit trail
   beside it, and both are named in the race-day checklist.
-* **OPS-3 (Med)** — **No health endpoint.** Nothing to point a check at; "is it up" means
-  loading a page.
-* **OPS-4 (Med)** — **`timing_unrecorded.log` has no replay path.** The run-book says the
-  time "needs entering by hand". A `manage.py replay_unrecorded` would close the loop.
-* **OPS-5 (Med)** — **No `clearsessions`** in the release or race-day steps (SEC-P).
-* **OPS-6 (Low)** — DEPLOYMENT.md says `timing_unrecorded.log` is "in the project root";
-  it is in `DATA_DIR`, which is only the project root for a checkout — not for the
-  packaged Windows install the same document describes.
-* **OPS-7 (Low)** — `.env.example` documents no logging and no backup variables.
-* **OPS-8 (Low)** — `ALLOWED_HOSTS` is described as "required (non-empty) once DEBUG is
-  off" but nothing checks it; the failure surfaces as `DisallowedHost` on every request
-  instead of at startup, unlike the secret-key check right above it.
+* **OPS-3 (✅ FIXED)** — **Health endpoint.** `/healthz` (`config/health.py`), ungated
+  (`pages.OPEN`), answering `{"status": "ok"}` or **503** `{"status": "error"}`. Two
+  decisions: it is **unauthenticated**, because a check that needs a session is not a
+  check — which is exactly why it says nothing else, since which device is attached and
+  whether this venue is timing are venue state and the pages behind the login are where
+  state belongs; and it **touches the database** (one `SELECT 1`), because a process
+  that is listening while its database has gone — a full disk, an unapplied migration —
+  is the failure a check exists to catch, and "the port answers" reports it as healthy.
+  It is also the one path exempt from the HTTPS redirect (`SECURE_REDIRECT_EXEMPT`):
+  every local probe asks `http://127.0.0.1:8000/healthz`, and a 301 to a hostname it
+  isn't asking for makes a healthy server read as broken. Safe only because of what the
+  endpoint isn't — no cookie, no credential, no data — and a test refuses any second
+  entry on that list.
+* **OPS-4 (⊘ WAIVED)** — **`timing_unrecorded.log` has no replay path.** Owner: "Is fine
+  for now, do not change anything there, as it is very unlikely to happen." The time is
+  in the file and the run-book says to enter it by hand; only the convenience is
+  missing.
+* **OPS-5 (✅ FIXED)** — **No `clearsessions`.** Resolved by SEC-P rather than by a step:
+  `config/asgi.py` sweeps expired sessions at every server start, which is once per event
+  day and cannot collide with anything because nothing is serving yet. DEPLOYMENT.md §3.3
+  now says so, and says explicitly that **there is no cron job to add** — a documented
+  manual step nobody runs is worse than none, because it reads as covered.
+* **OPS-6 (✅ FIXED)** — DEPLOYMENT.md said `timing_unrecorded.log` was "in the project
+  root". Corrected in the §1 pass: it names `DATA_DIR` (`SLALOM_DATA_DIR`) and gives both
+  values — the project directory for a checkout, `%LOCALAPPDATA%\SlalomTiming\data` for
+  the packaged install.
+* **OPS-7 (✅ FIXED)** — `.env.example` documents the logging variables (added with BLK-5
+  and §2c: `DJANGO_LOG_DIR`, `DJANGO_LOG_LEVEL`, `DJANGO_AUDIT_LOG_MAX_BYTES`,
+  `DJANGO_AUDIT_LOG_BACKUPS`). The backup deliberately has **none**: destination and
+  interval are settings inside the app, decided on the day while looking at the drive
+  that was just plugged in. `.env.example` now says that out loud under "Not configured
+  here", so nobody goes hunting for a variable that was never meant to exist.
+* **OPS-8 (✅ FIXED)** — `ALLOWED_HOSTS` empty with DEBUG off is now refused at startup
+  with a message that names the variable and shows a value, the same treatment the secret
+  key gets. In `config/asgi.py`, **not** in settings.py: this setting only means anything
+  to something that serves requests, and `collectstatic` is a required release step (and
+  the packaged Windows build's own) that legitimately runs with DEBUG off and no hosts at
+  all — putting the check in settings would have broken the installer build. A test pins
+  each half.
 
 ---
 
