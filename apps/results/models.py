@@ -66,17 +66,22 @@ class ResultColumnSettings(models.Model):
     # ----- column vocabulary -----
 
     @staticmethod
-    def available_keys(competition):
+    def available_keys(competition, running=None):
         """The result-column keys this competition can show, in canonical order —
         each detail its type collects, plus a Training column when any running class
-        has practice runs. Name and date-of-birth columns are always available."""
+        has practice runs. Name and date-of-birth columns are always available.
+
+        ``running`` is the running classes when the caller already has them: this is
+        asked once per class by ``columns_for``, and each ask was a query."""
         ctype = competition.competition_type
+        if running is None:
+            running = competition._running_classes_ordered()
         keys = []
         for key, (_label, setting, _group) in RESULT_COLUMNS.items():
             if setting is None:
                 keys.append(key)
             elif setting == "__training__":
-                if any(cc.practice_runs for cc in competition._running_classes_ordered()):
+                if any(cc.practice_runs for cc in running):
                     keys.append(key)
             elif getattr(ctype, setting):
                 keys.append(key)
@@ -101,10 +106,10 @@ class ResultColumnSettings(models.Model):
     DEFAULT_COLUMNS = ["driver_name", "club", "birth_year", "training"]
 
     @classmethod
-    def general_columns(cls, competition):
+    def general_columns(cls, competition, running=None):
         """The General column set, restricted to what the type still collects.
         Falls back to ``DEFAULT_COLUMNS`` when no General row is saved yet."""
-        available = cls.available_keys(competition)
+        available = cls.available_keys(competition, running=running)
         row = cls.objects.filter(
             competition=competition, competition_class__isnull=True
         ).first()
@@ -112,11 +117,11 @@ class ResultColumnSettings(models.Model):
         return [key for key in available if key in chosen]
 
     @classmethod
-    def class_additions(cls, competition, competition_class):
+    def class_additions(cls, competition, competition_class, running=None):
         """The extra columns a class enables on top of General (restricted to what's
         available and not already in General)."""
-        general = set(cls.general_columns(competition))
-        available = cls.available_keys(competition)
+        general = set(cls.general_columns(competition, running=running))
+        available = cls.available_keys(competition, running=running)
         row = cls.objects.filter(
             competition=competition, competition_class=competition_class
         ).first()
@@ -124,12 +129,13 @@ class ResultColumnSettings(models.Model):
         return [k for k in available if k in saved and k not in general]
 
     @classmethod
-    def columns_for(cls, competition, competition_class):
+    def columns_for(cls, competition, competition_class, running=None):
         """The columns to show for one class: the General set plus the class's own
         additions, in canonical order."""
-        general = set(cls.general_columns(competition))
-        additions = set(cls.class_additions(competition, competition_class))
-        available = cls.available_keys(competition)
+        general = set(cls.general_columns(competition, running=running))
+        additions = set(cls.class_additions(competition, competition_class,
+                                            running=running))
+        available = cls.available_keys(competition, running=running)
         return [k for k in available if k in general or k in additions]
 
     @classmethod

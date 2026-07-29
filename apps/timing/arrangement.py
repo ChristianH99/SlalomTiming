@@ -62,16 +62,17 @@ def reconcile(competition, settings):
     DB-lock race. Ignored signals (deliberately on the rail) are left alone.
     Idempotent: a signal already in a run is skipped, so this is safe to call
     often."""
-    placed = set(
-        TimedRun.objects.filter(competition=competition, start_signal__isnull=False)
-        .values_list("start_signal_id", flat=True)
-    ) | set(
-        TimedRun.objects.filter(competition=competition, finish_signal__isnull=False)
-        .values_list("finish_signal_id", flat=True)
-    )
+    # Left to the database rather than assembled in Python: pulling every placed
+    # signal id back and sending them all again as an IN-list grew with the event
+    # (two ids per run — 1200 parameters at 600 runs) and this runs on the timing
+    # rig's own thread for *every* incoming signal.
+    runs = TimedRun.objects.filter(competition=competition)
     orphans = (
         TimingSignal.objects.filter(competition=competition, ignored=False)
-        .exclude(id__in=placed)
+        .exclude(id__in=runs.filter(start_signal__isnull=False)
+                 .values("start_signal_id"))
+        .exclude(id__in=runs.filter(finish_signal__isnull=False)
+                 .values("finish_signal_id"))
         .order_by("received_at", "id")
     )
     for signal in orphans:

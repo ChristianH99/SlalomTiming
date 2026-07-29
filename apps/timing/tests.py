@@ -1840,6 +1840,17 @@ def _query_count(client, name):
     return ctx.captured_queries
 
 
+def _query_count_url(client, url):
+    """_query_count for a URL that needs arguments."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as ctx:
+        response = client.get(url)
+    assert response.status_code == 200
+    return ctx.captured_queries
+
+
 def _writes(queries):
     return [
         q["sql"] for q in queries
@@ -2234,3 +2245,140 @@ def test_a_reorder_drops_repeats(client):
                 content_type="application/json")
     competition.refresh_from_db()
     assert competition.auto_timing_order == [keys[1], keys[0]]
+
+
+# --- PRF-1: the rule held for *manual* assignment only ----------------------
+# AgeAssignment resolves a participant's class by walking the running classes, and
+# it asked for them inside the loop over the field: 34 / 64 / 114 queries at 20 /
+# 50 / 100 starters, against a flat 15 for manual. Re-paid by every open browser
+# on every incoming time. The test above only ever exercised manual assignment,
+# which is why nothing noticed.
+
+def _age_based_field(size):
+    comp = make_active_competition()
+    comp.assignment_method = "age"
+    comp.start_pattern = [{"window": None, "chips": ["practice", "counted"]}]
+    comp.save(update_fields=["assignment_method", "start_pattern"])
+    cclass = comp.classes.get(name="1")
+    cclass.is_running, cclass.run_position = True, 1
+    cclass.practice_runs, cclass.counted_runs = 1, 2
+    cclass.age_from, cclass.age_to = 0, 99
+    cclass.save()
+    for bib in range(1, size + 1):
+        make_participant(comp.competition_type, bib, comp)
+    return comp
+
+
+@pytest.mark.parametrize("name", LIVE_ENDPOINTS)
+def test_live_endpoint_cost_is_flat_under_age_assignment(client, name):
+    _age_based_field(5)
+    small = len(_query_count(client, name))
+    comp = Competition.get_current()
+    for bib in range(6, 46):
+        make_participant(comp.competition_type, bib, comp)
+    large = len(_query_count(client, name))
+    # Must not *grow*. Not "must be equal": a five-starter event takes a couple of
+    # conditional branches a full one doesn't, so the small case can legitimately
+    # cost slightly more. What matters is that nine times the field is not nine
+    # times the queries — it used to be 34 / 64 / 114 at 20 / 50 / 100.
+    assert large <= small, (
+        f"{name} costs {small} queries for 5 age-assigned starters and {large} "
+        f"for 45 — the class lookup is back inside the loop over the field"
+    )
+
+
+def test_resolving_a_whole_field_reads_the_classes_once(django_assert_num_queries):
+    """Where the cost actually was: starters_by_class walks the field and asked
+    the assignment method for each participant's classes, and the age method
+    answered by re-reading the running classes every time."""
+    comp = _age_based_field(30)
+    comp = Competition.objects.get(pk=comp.pk)
+    with django_assert_num_queries(3):     # classes, entries, assignments prefetch
+        comp.starters_by_class()
+
+
+# --- PRF-2: "export everything" re-read the event once per class ------------
+
+def test_export_all_does_not_re_read_the_event_per_class(client):
+    """RunIndex exists precisely so an event's runs are read once. export-all
+    built one per section, along with the entries, the starters and the column
+    vocabulary: 42 queries for one class and 137 for six."""
+    comp = make_active_competition()
+    comp.start_pattern = [{"window": None, "chips": ["practice", "counted"]}]
+    comp.save(update_fields=["start_pattern"])
+    for i, name in enumerate(["1", "2", "3", "4", "5", "6"]):
+        cc = comp.classes.get(name=name)
+        cc.is_running, cc.run_position = True, i
+        cc.practice_runs, cc.counted_runs = 1, 2
+        cc.save()
+    first = comp.classes.get(name="1")
+    for bib in range(1, 11):
+        participant = make_participant(comp.competition_type, bib, comp)
+        ClassAssignment.objects.create(participant=participant, competition_class=first)
+
+    one = len(_query_count_url(
+        client, reverse("results:export-class", args=[first.pk])))
+    everything = len(_query_count_url(client, reverse("results:export-all")))
+    # Six classes plus the Overall tables, for well under twice one class.
+    assert everything < one * 2, (
+        f"one class costs {one} queries and all six cost {everything} — the "
+        f"event is being re-read per table"
+    )
+
+
+# --- PRF-3: the live path does not want the device log ----------------------
+
+def test_the_device_link_check_does_not_copy_the_log():
+    """link_state is asked on every live refresh of both timing pages, by every
+    open browser. It used to call snapshot(), which copies the whole 400-entry
+    ring buffer to read two fields out of it."""
+    from apps.timing import cp540
+
+    for i in range(50):
+        cp540.reader._add_log(f"line {i}")
+    state = cp540.reader.state()
+    assert "log" not in state
+    assert "status" in state and "error" in state
+    assert len(cp540.reader.snapshot()["log"]) == 50   # still there for the settings page
+
+
+def test_the_device_log_survives_being_read_while_written():
+    """`list(deque)` raises RuntimeError if the deque is mutated while it
+    iterates, and the reader thread appends whenever the rig fires."""
+    import threading
+
+    from apps.timing import cp540
+
+    stop = threading.Event()
+
+    def writer():
+        while not stop.is_set():
+            cp540.reader._add_log("from the rig")
+
+    thread = threading.Thread(target=writer, daemon=True)
+    thread.start()
+    try:
+        for _ in range(200):
+            cp540.reader.snapshot()          # would raise without the lock
+    finally:
+        stop.set()
+        thread.join(timeout=2)
+
+
+# --- PRF-4: reconcile scaled its own SQL with the event ---------------------
+
+def test_reconcile_does_not_send_every_placed_signal_back(client):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    """It pulled every placed signal id into Python and sent them all again as an
+    IN-list — two ids per run, so 1200 parameters at 600 runs — on the timing
+    rig's own thread, for every incoming signal."""
+    comp, _cclass = _competition_with_field(20)
+    settings_row = TimingSettings.load()
+    with CaptureQueriesContext(connection) as ctx:
+        arrangement.reconcile(comp, settings_row)
+    for query in ctx.captured_queries:
+        assert query["sql"].count("%s") < 50 and query["sql"].count("?") < 50, (
+            "reconcile is building an IN-list that grows with the event"
+        )

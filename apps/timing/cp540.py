@@ -108,6 +108,10 @@ class CP540Reader:
 
     def __init__(self):
         self._lock = threading.Lock()
+        # Its own lock, not the control one: the reader thread appends to the log
+        # constantly while the settings page reads it, and taking the start/stop
+        # lock for that would make a poll wait on a connect.
+        self._log_lock = threading.Lock()
         self._thread = None
         self._running = threading.Event()
         self._log = deque(maxlen=_LOG_MAX)
@@ -153,7 +157,13 @@ class CP540Reader:
     def is_running(self):
         return self._thread is not None and self._thread.is_alive()
 
-    def snapshot(self):
+    def state(self):
+        """Just the connection state — no log.
+
+        What ``link_state`` needs, and it is asked on *every* live refresh of both
+        timing pages, by every open browser. It used to call ``snapshot()``, which
+        copies the whole 400-entry ring buffer to read two fields out of it.
+        """
         return {
             "status": self._status,
             "running": self.is_running,
@@ -161,13 +171,23 @@ class CP540Reader:
             "ip": self._ip,
             "port": self._port,
             "signals": self._signals,
-            "log": list(self._log),
         }
+
+    def snapshot(self):
+        """The state *and* the raw-line log — for the settings page, which polls
+        this once a second while somebody is watching the device stream."""
+        with self._log_lock:
+            lines = list(self._log)
+        return {**self.state(), "log": lines}
 
     def _add_log(self, text, kind="other"):
         # The device's own lines are logged verbatim (columns preserved) so the
         # stream reads exactly as it arrives; our own status notes go in as-is too.
-        self._log.appendleft({"text": text, "kind": kind})
+        # Under the lock: `list(deque)` on the reading side raises RuntimeError if
+        # the deque is mutated while it iterates, and the reader thread appends
+        # whenever the rig fires.
+        with self._log_lock:
+            self._log.appendleft({"text": text, "kind": kind})
 
     def _set_status(self, status, note="", kind="status"):
         """Move to a new connection state, log the note and — when the state
@@ -332,7 +352,8 @@ def link_state(settings=None):
     if settings.device != TimingSettings.Device.CP540:
         return {"monitored": False, "ok": True, "status": "", "message": ""}
 
-    snapshot = reader.snapshot()
+    # state(), not snapshot(): this is on the live path and does not want the log.
+    snapshot = reader.state()
     status = snapshot["status"]
     if status == "connected":
         message = gettext("Connected to the timing device.")

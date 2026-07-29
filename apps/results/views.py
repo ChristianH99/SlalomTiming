@@ -148,7 +148,8 @@ def build_layout(enabled, counted_count, training_count, include_class,
 
 
 def build_table(competition, enabled, ranked, status_rows, unranked, precision,
-                counted_count, training_count, include_class, score_heading):
+                counted_count, training_count, include_class, score_heading,
+                participants=None):
     """Assemble the layout + per-row data both the class and Overall tables render.
 
     Header and body come from one computed structure so they never drift. Returns
@@ -228,10 +229,13 @@ def build_table(competition, enabled, ranked, status_rows, unranked, precision,
             "gap": gap,
         }
 
-    participants = {
-        entry.participant_id: entry.participant
-        for entry in competition.entries.select_related("participant").all()
-    }
+    # Handed in by a caller rendering several tables (see resultscalc.event_data);
+    # read here when there is only one.
+    if participants is None:
+        participants = {
+            entry.participant_id: entry.participant
+            for entry in competition.entries.select_related("participant").all()
+        }
 
     def rows(competitors, kind):
         return [
@@ -243,12 +247,17 @@ def build_table(competition, enabled, ranked, status_rows, unranked, precision,
             rows(unranked, "unranked"))
 
 
-def class_section(competition, cclass):
+def class_section(competition, cclass, data=None):
     """The full render payload for one class results table (layout + rows + labels).
-    Shared by the on-screen view and the PDF export so both show the same table."""
-    results = resultscalc.compute_class_results(competition, cclass)
+    Shared by the on-screen view and the PDF export so both show the same table.
+
+    ``data`` is ``resultscalc.event_data(competition)`` for a caller rendering more
+    than one table — "export everything" otherwise re-read the whole event per
+    class."""
+    results = resultscalc.compute_class_results(competition, cclass, data=data)
     precision = competition.competition_type.timing_precision
-    enabled = ResultColumnSettings.columns_for(competition, cclass)
+    enabled = ResultColumnSettings.columns_for(
+        competition, cclass, running=data["running"] if data else None)
     layout, ranked, status_rows, unranked = build_table(
         competition, enabled, results.ranked, results.status_rows, results.unranked,
         precision,
@@ -256,6 +265,7 @@ def class_section(competition, cclass):
         training_count=cclass.practice_runs or 0,
         include_class=False,
         score_heading=_score_heading(cclass.scoring_method),
+        participants=data["participants"] if data else None,
     )
     # "Class 1" for a class named "1", but "Klasse 1" alone for one already named
     # that way — see CompetitionClass.display_name.
@@ -271,12 +281,13 @@ def class_section(competition, cclass):
     }
 
 
-def overall_section(competition, method, runs):
+def overall_section(competition, method, runs, data=None):
     """The full render payload for one Overall results table. Shared by the
-    on-screen view and the PDF export."""
-    results = resultscalc.compute_overall_results(competition, method, runs)
+    on-screen view and the PDF export. ``data`` as in ``class_section``."""
+    results = resultscalc.compute_overall_results(competition, method, runs, data=data)
     precision = competition.competition_type.timing_precision
-    enabled = ResultColumnSettings.general_columns(competition)
+    enabled = ResultColumnSettings.general_columns(
+        competition, running=data["running"] if data else None)
     layout, ranked, status_rows, unranked = build_table(
         competition, enabled, results.ranked, results.status_rows, results.unranked,
         precision,
@@ -284,6 +295,7 @@ def overall_section(competition, method, runs):
         training_count=results.training_runs,
         include_class=True,
         score_heading=_score_heading(method),
+        participants=data["participants"] if data else None,
     )
     return {
         # title/scoring_label feed the PDF headline only (the web view reads
@@ -436,12 +448,15 @@ class ResultsExportAllView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             raise Http404("No active competition.")
+        # One read of the event for the whole document, not one per table.
+        data = resultscalc.event_data(competition)
         sections = []
         if ResultColumnSettings.overall_enabled(competition):
-            for g in resultscalc.overall_groups(competition):
-                sections.append(overall_section(competition, g["method"], g["counted_runs"]))
-        for cclass in competition._running_classes_ordered():
-            sections.append(class_section(competition, cclass))
+            for g in resultscalc.overall_groups(competition, running=data["running"]):
+                sections.append(overall_section(
+                    competition, g["method"], g["counted_runs"], data=data))
+        for cclass in data["running"]:
+            sections.append(class_section(competition, cclass, data=data))
         if not sections:
             raise Http404("No running classes to export.")
         layout = ResultsPdfLayout.for_competition(competition)

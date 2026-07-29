@@ -1118,7 +1118,15 @@ until an event is big enough to hurt:
 
 - **The cost must not grow with the field.** Anything per row, per competitor or per dropdown
   option belongs in a batch read: `views._RowContext` (Manual timing), `resultscalc.RunIndex`
-  (results), `autotiming.all_runs` + one `apply_bindings` pass (Auto timing, Dashboard).
+  and `resultscalc.event_data` (results — the second is what a *multi-table* export reads
+  once instead of per class), `autotiming.all_runs` + one `apply_bindings` pass (Auto
+  timing, Dashboard). The running classes are the other thing a loop must not ask for:
+  `starters_by_class`, `run_groups`, `starters_by_run`, `start_lists`,
+  `classes_for_participant`, `class_for_birth_year` and the results column vocabulary all
+  take an optional `running=`, because age-based assignment resolves a competitor's class
+  by walking them and asking inside the loop cost one query per starter — 114 at 100,
+  against a flat 15 for manual. The rule was only ever *tested* for manual assignment,
+  which is why nothing noticed; both are pinned now.
 - **A read must not write.** See `autotiming.sync_bindings` — a GET that writes takes the lock the
   CP540 reader thread needs to record a time, and several browsers refreshing on one nudge raced
   each other on the same rows.
@@ -1128,9 +1136,17 @@ event reaches by mid-afternoon), before → after the stage-5 work:
 
 | | before | after |
 |---|---|---|
-| `timing:arrangement`, one client | 1415 ms (1413 queries) | **95 ms** (16 queries) |
+| `timing:arrangement`, one client | 1415 ms (1413 queries) | **95 ms** (15 queries) |
 | `results:class`, 200 competitors | 629 queries | **29 queries** |
 | six clients refreshing flat out, worst recorded signal | 1851 ms | **796 ms** |
+
+And from the audit's §5 (the same harness shape, query counts only):
+
+| | before | after |
+|---|---|---|
+| `timing:auto-state`, age-based assignment, 20 / 50 / 100 starters | 34 / 64 / 114 | **14 flat** |
+| `results:export-all`, 1 / 3 / 6 classes | 42 / 80 / 137 | **24 / 32 / 44** |
+| `timing:auto-state` payload, 200 starters | 389 KiB | **257 KiB** |
 
 No signal was lost and no refresh failed in either run, so `REL-8` (SQLite vs a live multi-user
 event) is **survivable at 200 starters** and does not force Postgres. The remaining headroom is

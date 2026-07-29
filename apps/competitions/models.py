@@ -227,7 +227,11 @@ class Competition(models.Model):
 
     def _running_classes_ordered(self):
         """Running classes in run order: by run_position (unplaced last), then
-        by list position."""
+        by list position.
+
+        One query. Callers in a loop pass the result back down rather than asking
+        again — see ``starters_by_class``.
+        """
         return sorted(
             self.classes.filter(is_running=True),
             key=lambda cc: (
@@ -237,14 +241,16 @@ class Competition(models.Model):
             ),
         )
 
-    def run_groups(self):
+    def run_groups(self, running=None):
         """Ordered runs as a list of lists of running CompetitionClass.
         Classes sharing a run_position start together; runs execute in ascending
         run_position. A running class with run_position=None becomes its own
-        single-class run, appended in list order after the placed runs."""
+        single-class run, appended in list order after the placed runs.
+
+        ``running`` for a caller that has already read them."""
         placed = {}
         unplaced = []
-        for cc in self._running_classes_ordered():
+        for cc in (self._running_classes_ordered() if running is None else running):
             if cc.run_position is None:
                 unplaced.append([cc])
             else:
@@ -257,19 +263,27 @@ class Competition(models.Model):
         """The stored start pattern as startpattern.Block values."""
         return startpattern.parse(self.start_pattern)
 
-    def starters_by_class(self):
+    def starters_by_class(self, running=None):
         """Map class pk -> the Starters entered in it, in bib order. One Starter
         per entry-in-a-class, so a participant entered into a class twice (or into
-        two classes) yields a Starter each time."""
+        two classes) yields a Starter each time.
+
+        ``running`` for a caller that has already read the running classes."""
         entries = (
             self.entries.select_related("participant")
             .prefetch_related("participant__class_assignments__competition_class")
             .order_by("bib_number")
         )
+        # Read once, not once per entry. Age-based assignment resolves a
+        # participant's class by walking these, so asking inside the loop cost one
+        # query per starter — 114 at 100 starters, on an endpoint every open
+        # browser re-fetches on every incoming time.
+        if running is None:
+            running = self._running_classes_ordered()
         by_class = {}
         repeats = Counter()  # (entry, class) -> Starters already made, to key repeats apart
         for entry in entries:
-            for cc in self.classes_for_participant(entry.participant):
+            for cc in self.classes_for_participant(entry.participant, running=running):
                 occurrence = repeats[(entry.pk, cc.pk)]
                 repeats[(entry.pk, cc.pk)] += 1
                 by_class.setdefault(cc.pk, []).append(
@@ -284,13 +298,15 @@ class Competition(models.Model):
                 )
         return by_class
 
-    def starters_by_run(self):
+    def starters_by_run(self, running=None):
         """``(run, starters)`` for every run in ``run_groups()``. A run's starters
         are those of all its classes merged into one start list ordered by bib —
         classes sharing a run start together, so they interleave."""
-        by_class = self.starters_by_class()
+        if running is None:
+            running = self._running_classes_ordered()
+        by_class = self.starters_by_class(running=running)
         runs = []
-        for run in self.run_groups():
+        for run in self.run_groups(running=running):
             starters = []
             for cc in run:
                 starters.extend(by_class.get(cc.pk, []))
@@ -298,17 +314,21 @@ class Competition(models.Model):
             runs.append((run, starters))
         return runs
 
-    def start_lists(self):
+    def start_lists(self, running=None):
         """``(run, slots)`` for every run: the start pattern played out over each
         run's starters — who starts, in which run type, in order."""
         blocks = self.start_pattern_blocks()
         return [
             (run, startpattern.expand(blocks, starters))
-            for run, starters in self.starters_by_run()
+            for run, starters in self.starters_by_run(running=running)
         ]
 
-    def class_for_birth_year(self, birth_year):
+    def class_for_birth_year(self, birth_year, running=None):
         """The running class whose age range covers this birth year, or None.
+
+        ``running`` lets a caller in a loop hand in the classes it has already
+        read. Without it this is one query *per participant* — see
+        ``starters_by_class``, which is where that cost was being paid.
 
         **Age is the competition year minus the birth year** — the age the
         competitor reaches during the season, not their age on the day. That is
@@ -323,7 +343,8 @@ class Competition(models.Model):
         if birth_year is None:
             return None
         age = self.date.year - birth_year
-        for competition_class in self._running_classes_ordered():
+        for competition_class in (self._running_classes_ordered()
+                                  if running is None else running):
             if (
                 competition_class.age_from is not None
                 and competition_class.age_to is not None
@@ -387,10 +408,13 @@ class Competition(models.Model):
         both the method (must support it) and the competition's toggle."""
         return self.assignment().configurable_multiple and self.allow_multiple_classes
 
-    def classes_for_participant(self, participant):
+    def classes_for_participant(self, participant, running=None):
         """Resolve the class(es) a participant belongs to under the current
-        assignment method (may repeat for manual multi-entry)."""
-        return self.assignment().classes_for(self, participant)
+        assignment method (may repeat for manual multi-entry).
+
+        ``running`` is the running classes, for a caller resolving a whole field:
+        without it an age-based competition re-reads them once per participant."""
+        return self.assignment().classes_for(self, participant, running=running)
 
     def assigned_task_numbers(self):
         """Every task number watched by any marshal post, deduplicated and sorted."""

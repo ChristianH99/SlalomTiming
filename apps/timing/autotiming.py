@@ -335,6 +335,15 @@ def _empty_reason(competition):
 
 
 def _item(precision, ctype, marshal_mode, index, slot, run, posts):
+    """One row of the Auto timing payload.
+
+    Every open browser re-downloads all of these on every nudge (a nudge carries
+    no payload), so what is *not* here matters: the penalty steppers and the
+    marshal boxes are only rendered for a slot that has a run, and the marshal
+    boxes only when there are posts at all. At 200 starters that is 600 items,
+    and the two of them were being written out in full for every one — including
+    the ~500 that have not started yet.
+    """
     start = run.start_signal if run else None
     finish = run.finish_signal if run else None
     rt = calc.resolved_run_time(run, precision) if run else None
@@ -342,6 +351,13 @@ def _item(precision, ctype, marshal_mode, index, slot, run, posts):
     lines = _penalty_lines(run, marshal_mode)
     seconds = _penalty_seconds(lines, ctype)
     total_time = calc.format_clock(rt + seconds, precision) if rt is not None else ""
+    # The steppers are only rendered for a slot that *has* a run (auto_timing.js
+    # guards on item.run_id), and three penalty lines per slot is most of the
+    # payload on a field that has barely started — 600 slots, ~500 of them not yet
+    # run. The marshal boxes are deliberately still sent for a run-less slot: the
+    # page shows an upcoming competitor's posts as empty boxes, and dropping them
+    # would be a change to what the operator sees, not just to the wire.
+    penalties = lines if run is not None else []
     return {
         "index": index,
         "key": slot["key"] if slot else None,
@@ -362,7 +378,8 @@ def _item(precision, ctype, marshal_mode, index, slot, run, posts):
         "status": run.status if run else "",
         # One line per penalty type: its non-editable base, the run field the Auto
         # stepper edits, its value, and the grand count. Drives the +/- steppers.
-        "penalties": lines,
+        # Empty for a slot with no run — there is nothing to step.
+        "penalties": penalties,
         # Grand counts (for the boxes / callers that just want the totals).
         "total_pylons": lines[0]["total"],
         "total_tasks": lines[1]["total"],
@@ -585,9 +602,13 @@ def marshal_state(competition, post_number):
     # detail lets the marshal's board resume its exact per-task state after an
     # unlock; submitted == locked.
     penalty = {"detail": {}, "submitted": False}
-    post = competition.marshal_posts.filter(number=post_number).first()
+    post = next((p for p in competition.marshal_posts.all()
+                 if p.number == post_number), None)
     if post is not None:
-        mp = run.marshal_penalties.filter(marshal_post=post).first()
+        # From the prefetch the run already carries (autotiming.all_runs), not a
+        # fresh query: this is polled by every marshal phone on the course.
+        mp = next((m for m in run.marshal_penalties.all()
+                   if m.marshal_post_id == post.id), None)
         if mp is not None:
             penalty = {"detail": mp.detail or {}, "submitted": mp.submitted}
     return {

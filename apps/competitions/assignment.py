@@ -18,9 +18,15 @@ class AssignmentMethod:
     configurable_multiple = False  # the top "allow multiple classes" toggle is usable
     manual = False                # participants pick classes on their form; per-class repeat toggle shown
 
-    def classes_for(self, competition, participant):
+    def classes_for(self, competition, participant, running=None):
         """Return the list of CompetitionClass this participant belongs to for the
-        competition (may contain repeats for manual multi-entry)."""
+        competition (may contain repeats for manual multi-entry).
+
+        ``running`` is the competition's running classes when the caller has
+        already read them — a whole field is resolved in a loop, and a method that
+        goes back to the database per participant costs one query per starter on
+        an endpoint every open browser re-fetches on every incoming time. A method
+        that doesn't need them may ignore it."""
         raise NotImplementedError
 
 
@@ -30,9 +36,10 @@ class ManualAssignment(AssignmentMethod):
     manual = True
     configurable_multiple = True
 
-    def classes_for(self, competition, participant):
+    def classes_for(self, competition, participant, running=None):
         # Prefetch-friendly: iterate the participant's assignments in Python rather
         # than filtering in the DB, so a prefetch on the list view avoids N+1.
+        # `running` is not needed here — the assignments name their class.
         return [
             a.competition_class
             for a in participant.class_assignments.all()
@@ -46,10 +53,11 @@ class AgeAssignment(AssignmentMethod):
     label = _("Based on age")
     uses_age = True
 
-    def classes_for(self, competition, participant):
+    def classes_for(self, competition, participant, running=None):
         if participant.date_of_birth is None:
             return []
-        cc = competition.class_for_birth_year(participant.date_of_birth.year)
+        cc = competition.class_for_birth_year(
+            participant.date_of_birth.year, running=running)
         return [cc] if cc else []
 
 

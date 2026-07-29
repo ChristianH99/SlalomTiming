@@ -17,10 +17,11 @@ A **failing** probe is a confirmed defect: its assertion states the behaviour th
 
 Baseline at audit time: the shipped suite was **603 passed, 0 failed** (8 m 29 s).
 
-**Progress:** §1 (release blockers), §2 (security & access control) and §3 (data
-integrity) are complete. §4 (privacy) went with them — the database is not
-encrypted at rest, but the data directory is now restricted to the account running
-the server (PRV-8). §5 (performance) next; §6–§9 still open.
+**Progress:** §1 (release blockers), §2 (security & access control), §3 (data
+integrity) and §5 (performance) are complete. **§4 (privacy) is not** — five of its eight items were
+carried by §1–§3, but **PRV-4 (retention and bulk erase) and PRV-5 (a privacy
+notice) are untouched**, and PRV-6's waiver contradicts the run-book (DOC-5).
+§6–§9 still open, plus PRV-4/PRV-5 and DOC-5.
 
 ---
 
@@ -291,10 +292,11 @@ The system holds name, date of birth, address, e-mail, phone, club, licence numb
 vehicle for every competitor, retained across events, and exports the lot in a plaintext
 `.zip`.
 
-* **PRV-1** — BLK-3: contact details are on by default in the published results.
-* **PRV-2** — SEC-A: uploaded media is world-readable.
-* **PRV-3** — SEC-C: the duplicate check leaks across disciplines.
-* **PRV-4** — **No retention policy and no bulk erase.** Participants persist forever;
+* **PRV-1 (✅ FIXED, §1)** — BLK-3: contact details were on by default in the
+  published results.
+* **PRV-2 (✅ FIXED, §1)** — SEC-A: uploaded media was world-readable.
+* **PRV-3 (✅ FIXED, §2a)** — SEC-C: the duplicate check leaked across disciplines.
+* **PRV-4 (OPEN)** — **No retention policy and no bulk erase.** Participants persist forever;
   there is no "delete everyone from before year X", and no way to honour an erasure
   request other than deleting one participant at a time (which silently blanks their
   name in past results).
@@ -313,34 +315,35 @@ vehicle for every competitor, retained across events, and exports the lot in a p
 
 Measured (`audit_measure_test.py`), on top of the numbers already in CLAUDE.md:
 
-| Scenario | Result |
-| --- | --- |
-| `timing:auto-state`, **manual** assignment | **15 queries flat** at 20 / 50 / 100 starters ✅ |
-| `timing:auto-state`, **age-based** assignment | **34 / 64 / 114 queries** at 20 / 50 / 100 starters ❌ |
-| `results:export-all`, 30 starters | **42 / 80 / 137 queries** at 1 / 3 / 6 classes ❌ |
-| `timing:auto-state` payload, 200 starters | 386 KiB (20 runs recorded) |
-| `timing:arrangement`, 200 starters | 16 KiB, ≤40 queries ✅ |
+| Scenario | Before | After |
+| --- | --- | --- |
+| `timing:auto-state`, **manual** assignment | 15 flat | **15 flat** |
+| `timing:auto-state`, **age-based** assignment | 34 / 64 / 114 at 20 / 50 / 100 starters | **14 flat** |
+| `results:export-all`, 30 starters | 42 / 80 / 137 at 1 / 3 / 6 classes | **24 / 32 / 44** |
+| `timing:auto-state` payload, 200 starters | 389 KiB | **257 KiB** |
+| `timing:dashboard-state` | 22 | **22** |
+| `timing:arrangement` | 15 | **15** |
 
-* **PRF-1 (High)** — **The documented "cost must not grow with the field" rule holds only
+* **PRF-1 (✅ FIXED)** — **The documented "cost must not grow with the field" rule holds only
   for Manual assignment.** `AgeAssignment.classes_for` → `Competition.class_for_birth_year`
   → `self.classes.filter(is_running=True)`, called once **per participant** inside
   `starters_by_class()`. That is exactly `N + 14` queries, re-paid by every open browser
   on every incoming time. `test_live_endpoint_cost_does_not_grow_with_the_field` only
   exercises Manual, so nothing catches it.
-* **PRF-2 (Med)** — **`results:export-all` rebuilds `RunIndex` once per section**
+* **PRF-2 (✅ FIXED)** — **`results:export-all` rebuilds `RunIndex` once per section**
   (~19 queries/class). The whole point of `RunIndex` was to read the event's runs once;
   "export everything" still reads them once per class.
-* **PRF-3 (Med)** — **`link_state()` copies the entire 400-entry CP540 ring buffer** on
+* **PRF-3 (✅ FIXED)** — **`link_state()` copies the entire 400-entry CP540 ring buffer** on
   every live refresh (`cp540.snapshot()` → `list(self._log)`), to read two fields. Both
   timing pages call it on every nudge.
-* **PRF-4 (Med)** — `arrangement.reconcile()` runs on **every incoming signal** and
+* **PRF-4 (✅ FIXED)** — `arrangement.reconcile()` runs on **every incoming signal** and
   builds an `id__in` list of every placed signal (2 × run count). At 600 runs that is a
   1200-parameter `IN` clause on the timing thread, per signal.
-* **PRF-5 (Low)** — `snapshot()` does `list(deque)` while the reader thread appends —
+* **PRF-5 (✅ FIXED)** — `snapshot()` does `list(deque)` while the reader thread appends —
   `RuntimeError: deque mutated during iteration` is possible on the settings poll.
-* **PRF-6 (Low)** — `autotiming.marshal_state` calls `current_run()`, which re-runs
+* **PRF-6 (✅ FIXED)** — `autotiming.marshal_state` calls `current_run()`, which re-runs
   `apply_bindings` over the whole event, for every marshal phone poll.
-* **PRF-7 (Info)** — PRF-6 from CLAUDE.md (payload size) confirmed: nudges carry no
+* **PRF-7 (◔ IMPROVED)** — PRF-6 from CLAUDE.md (payload size) confirmed: nudges carry no
   payload, so every client re-downloads the full `auto-state`. Still the next lever.
 
 ---
@@ -504,6 +507,7 @@ names actually present. Four things are wrong:
 | DOC-1 | CLAUDE.md:611 | The PDF filename "goes out as `filename*=UTF-8''<percent-encoded>` … (SEC-6)" | It is raw f-string interpolation and demonstrably splits the header (BLK-4). |
 | DOC-2 | CLAUDE.md:721 | `transfer.filename()` is "percent-encoded, the pattern results/views.py copies" | It is a character-substitution sanitiser, and there is no percent-encoding in either place. |
 | DOC-3 | `competitions/views.py:651` | `MarshalPostsView`: "Submitting is a no-op stub for now — the transmission back into the system is a later feature." | Stale by several features. `marshal_posts.js` posts to `timing:marshal-submit` with a retrying outbox. |
+| DOC-5 | DEPLOYMENT.md §5 vs the PRV-6 waiver | The run-book tells the operator to copy `db.sqlite3` to a USB stick | The owner's position is that the database is not to be copied anywhere. That instruction is also the app's only backup (OPS-1), so resolving this means deciding what the backup *is*. |
 | DOC-4 | CLAUDE.md "Security", `views.py:29-47` | "Every value that arrives in a file is hostile until checked"; "numbers keyed in by an operator are bounded" | Imported media is not checked at all (BLK-1); `running_number` is not bounded (BLK-2). |
 
 Also: DEPLOYMENT.md's `timing_unrecorded.log` location (OPS-6), and the CLAUDE.md
