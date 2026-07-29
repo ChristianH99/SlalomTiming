@@ -338,10 +338,14 @@
         all.addEventListener("click", () => lockAll(item.run_id).then(refresh));
         boxes.append(all);
       }
-      item.marshals.forEach((m) => boxes.append(marshalBox(m, item)));
+      // `marshals` is null when nothing has been recorded against this run — every
+      // box would be the blank template `posts` already carries, so the payload
+      // sends it once instead of per item (see autotiming.serialize).
+      const marshals = item.marshals || state.posts;
+      marshals.forEach((m) => boxes.append(marshalBox(m, item)));
       div.append(boxes);
       if (openPopup && openPopup.runId === item.run_id) {
-        const box = item.marshals.find((m) => m.number === openPopup.post);
+        const box = marshals.find((m) => m.number === openPopup.post);
         if (box) div.append(popup(box, item));
         else openPopup = null;
       }

@@ -320,7 +320,8 @@ Measured (`audit_measure_test.py`), on top of the numbers already in CLAUDE.md:
 | `timing:auto-state`, **manual** assignment | 15 flat | **15 flat** |
 | `timing:auto-state`, **age-based** assignment | 34 / 64 / 114 at 20 / 50 / 100 starters | **14 flat** |
 | `results:export-all`, 30 starters | 42 / 80 / 137 at 1 / 3 / 6 classes | **24 / 32 / 44** |
-| `timing:auto-state` payload, 200 starters | 389 KiB | **257 KiB** |
+| `timing:auto-state` payload, 200 starters, no posts | 389 KiB | **259 KiB** |
+| `timing:auto-state` payload, 200 starters, **4 marshal posts** | 1341 KiB | **260 KiB** |
 | `timing:dashboard-state` | 22 | **22** |
 | `timing:arrangement` | 15 | **15** |
 
@@ -343,7 +344,7 @@ Measured (`audit_measure_test.py`), on top of the numbers already in CLAUDE.md:
   `RuntimeError: deque mutated during iteration` is possible on the settings poll.
 * **PRF-6 (✅ FIXED)** — `autotiming.marshal_state` calls `current_run()`, which re-runs
   `apply_bindings` over the whole event, for every marshal phone poll.
-* **PRF-7 (◔ IMPROVED)** — PRF-6 from CLAUDE.md (payload size) confirmed: nudges carry no
+* **PRF-7 (✅ FIXED)** — PRF-6 from CLAUDE.md (payload size) confirmed: nudges carry no
   payload, so every client re-downloads the full `auto-state`. Still the next lever.
 
 ---

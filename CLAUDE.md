@@ -1146,13 +1146,19 @@ And from the audit's §5 (the same harness shape, query counts only):
 |---|---|---|
 | `timing:auto-state`, age-based assignment, 20 / 50 / 100 starters | 34 / 64 / 114 | **14 flat** |
 | `results:export-all`, 1 / 3 / 6 classes | 42 / 80 / 137 | **24 / 32 / 44** |
-| `timing:auto-state` payload, 200 starters | 389 KiB | **257 KiB** |
+| `timing:auto-state` payload, 200 starters | 389 KiB | **259 KiB** |
+| …the same with 4 marshal posts watching 6 tasks each | 1341 KiB | **260 KiB** |
 
 No signal was lost and no refresh failed in either run, so `REL-8` (SQLite vs a live multi-user
-event) is **survivable at 200 starters** and does not force Postgres. The remaining headroom is
-payload, not queries: `timing:auto-state` ships ~1.1 MiB per refresh because a nudge carries no
-payload and each client re-downloads everything (`PRF-6`) — that is the next lever if a bigger
-field ever needs one. The harness that produced these numbers is a scratchpad script, not part of
+event) is **survivable at 200 starters** and does not force Postgres. The payload headroom the earlier note called `PRF-6` is now taken too: a nudge still
+carries nothing and each client re-downloads the state, but what it downloads no longer
+repeats itself. A marshal post's box is derived entirely from the *post* until somebody
+records against the run, so it is sent **once** as `posts` and an item with nothing
+recorded sends `marshals: null`; the page substitutes it (`auto_timing.js`). At four posts
+watching six tasks that was 958 KiB of a 1341 KiB payload. The penalty steppers likewise go
+only to items that have a run. A delta protocol is what is left, and it buys ~10 KiB a
+refresh against a gzip that already exists in `deploy/Caddyfile` — not worth its failure
+mode (a screen quietly wrong mid-event). The harness that produced these numbers is a scratchpad script, not part of
 the repo; re-create it from this table's shape if you need to re-measure.
 
 ## Notes

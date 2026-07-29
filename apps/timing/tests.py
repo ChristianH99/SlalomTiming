@@ -2382,3 +2382,175 @@ def test_reconcile_does_not_send_every_placed_signal_back(client):
         assert query["sql"].count("%s") < 50 and query["sql"].count("?") < 50, (
             "reconcile is building an IN-list that grows with the event"
         )
+
+
+# --- PRF-7: the marshal boxes are sent once, not once per slot --------------
+# Every field of a post's box is derived from the *post* until somebody records
+# something against the run: the number, the tasks it watches, whether it judges
+# the stop line. So for a field of 200 it was the same object written out 600
+# times — at four posts watching six tasks each, 958 KiB of a 1.34 MiB payload,
+# re-downloaded by every open browser on every incoming time.
+#
+# The wire changed; the screen must not have. These tests are about that: what the
+# page reconstructs (`item.marshals || state.posts`, see auto_timing.js) has to
+# equal what the old payload put in `item.marshals`, item for item, in every
+# configuration.
+
+def _marshal_competition(posts_spec, starters=4):
+    """A marshal-mode competition. `posts_spec` is [(number, tasks, stop_line)]."""
+    comp = make_active_competition()
+    comp.penalties_by_marshal_posts = True
+    comp.start_pattern = [{"window": None, "chips": ["practice", "counted"]}]
+    comp.save(update_fields=["penalties_by_marshal_posts", "start_pattern"])
+    cclass = comp.classes.get(name="1")
+    cclass.is_running, cclass.run_position = True, 1
+    cclass.practice_runs, cclass.counted_runs = 1, 1
+    cclass.save()
+    for bib in range(1, starters + 1):
+        participant = make_participant(comp.competition_type, bib, comp)
+        ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+    for number, tasks, stop_line in posts_spec:
+        MarshalPost.objects.create(competition=comp, number=number, tasks=tasks,
+                                   handles_stop_line=stop_line)
+    return comp, cclass
+
+
+def _as_the_page_sees_it(state):
+    """What auto_timing.js renders per item: its own boxes, or the shared blank."""
+    return [item["marshals"] or state["posts"] for item in state["items"]]
+
+
+def _boxes_the_old_way(competition, state):
+    """What `marshals` held before the trim: _marshals() for every item."""
+    posts = list(competition.marshal_posts.all())
+    runs = {r.id: r for r in autotiming.all_runs(competition)}
+    out = []
+    for item in state["items"]:
+        run = runs.get(item["run_id"])
+        stored = ({mp.marshal_post_id: mp for mp in run.marshal_penalties.all()}
+                  if run else {})
+        out.append(autotiming._marshals(run, posts, stored))
+    return out
+
+
+@pytest.mark.parametrize("posts_spec", [
+    [],                                              # no posts at all
+    [(1, "1-3", True)],                              # one post, stop line
+    [(1, "1-3", True), (2, "4-6", False)],           # two, different tasks
+    [(1, "", True), (2, "1", False), (3, "2-9", False)],   # one watching nothing
+])
+def test_the_page_reconstructs_exactly_the_boxes_it_used_to_be_sent(client, posts_spec):
+    comp, _cclass = _marshal_competition(posts_spec)
+    signal_in(comp, 1, "10:00:00.000", running=1)
+    signal_in(comp, 2, "10:00:42.000", running=2)
+    signal_in(comp, 1, "10:01:00.000", running=3)
+
+    state = autotiming.serialize(comp)
+    assert _as_the_page_sees_it(state) == _boxes_the_old_way(comp, state)
+
+
+def test_the_reconstruction_holds_once_marshals_have_recorded_things(client):
+    """The interesting half: some runs have penalties, some don't, one post has
+    submitted and another hasn't, and there is per-task detail to resume from."""
+    comp, _cclass = _marshal_competition([(1, "1-3", True), (2, "4-6", False)])
+    for pair in range(3):
+        signal_in(comp, 1, f"10:0{pair}:00.000", running=pair * 2 + 1)
+        signal_in(comp, 2, f"10:0{pair}:42.000", running=pair * 2 + 2)
+
+    runs = list(TimedRun.objects.filter(competition=comp).order_by("id"))
+    assert len(runs) >= 3
+    posts = list(comp.marshal_posts.all())
+    # One run judged by both posts, one by a single post, the rest untouched.
+    MarshalPenalty.objects.create(
+        timed_run=runs[0], marshal_post=posts[0], pylon_count=2, task_count=1,
+        stopline_count=1, submitted=True,
+        detail={"tasks": {"1": {"pylons": 2}, "2": {"task": True}}, "stop_line": True})
+    MarshalPenalty.objects.create(
+        timed_run=runs[0], marshal_post=posts[1], pylon_count=0, submitted=False,
+        detail={"tasks": {}, "stop_line": False})
+    MarshalPenalty.objects.create(
+        timed_run=runs[1], marshal_post=posts[1], pylon_count=3, submitted=True,
+        detail={"tasks": {"5": {"pylons": 3}}, "stop_line": False})
+
+    state = autotiming.serialize(comp)
+    assert _as_the_page_sees_it(state) == _boxes_the_old_way(comp, state)
+
+    # …and the runs that were judged carry their own boxes rather than the blank.
+    by_run = {item["run_id"]: item for item in state["items"] if item["run_id"]}
+    assert by_run[runs[0].id]["marshals"] is not None
+    assert by_run[runs[0].id]["marshals"][0]["pylons"] == 2
+    assert by_run[runs[0].id]["marshals"][0]["submitted"] is True
+    assert by_run[runs[1].id]["marshals"][1]["pylons"] == 3
+    # Whatever else got a run, nothing was recorded against it, so it sends null.
+    judged = {runs[0].id, runs[1].id}
+    untouched = [i for rid, i in by_run.items() if rid not in judged]
+    assert untouched, "the scenario needs a run nobody judged"
+    assert all(item["marshals"] is None for item in untouched)
+
+
+def test_a_partly_judged_run_still_ships_every_post(client):
+    """Post 1 recorded something, post 2 didn't: the run must still carry a box
+    for *both*, or the second post's box would silently disappear from the tile."""
+    comp, _cclass = _marshal_competition([(1, "1-3", True), (2, "4-6", False)])
+    signal_in(comp, 1, "10:00:00.000", running=1)
+    run = TimedRun.objects.filter(competition=comp).first()
+    MarshalPenalty.objects.create(
+        timed_run=run, marshal_post=comp.marshal_posts.first(), pylon_count=1)
+
+    state = autotiming.serialize(comp)
+    boxes = next(i["marshals"] for i in state["items"] if i["run_id"] == run.id)
+    assert [b["number"] for b in boxes] == [1, 2]
+    assert boxes[0]["entered"] is True and boxes[1]["entered"] is False
+
+
+def test_the_blank_template_is_a_real_box_not_a_stub(client):
+    """`posts` used to be [{number}] and is now the whole blank box, because the
+    page renders it. It must carry the tasks each post watches and its stop-line
+    flag, or an upcoming competitor's tile would come out empty."""
+    comp, _cclass = _marshal_competition([(1, "1-3", True), (2, "4-6", False)])
+    state = autotiming.serialize(comp)
+    first, second = state["posts"]
+    assert first["number"] == 1 and second["number"] == 2
+    assert [row["task"] for row in first["detail"]["tasks"]] == [1, 2, 3]
+    assert [row["task"] for row in second["detail"]["tasks"]] == [4, 5, 6]
+    assert first["detail"]["handles_stop_line"] is True
+    assert second["detail"]["handles_stop_line"] is False
+    assert first["pylons"] == 0 and first["entered"] is False
+
+
+def test_with_no_posts_there_is_nothing_to_render(client):
+    """The page guards on `state.posts.length`, so the empty case has to stay
+    empty rather than becoming a list of nothing."""
+    comp, _cclass = _marshal_competition([])
+    signal_in(comp, 1, "10:00:00.000", running=1)
+    state = autotiming.serialize(comp)
+    assert state["posts"] == []
+    assert all(item["marshals"] is None for item in state["items"])
+
+
+def test_the_payload_no_longer_grows_with_the_number_of_posts(client):
+    """What the trim was for: `marshals` was 94% of a 1.34 MiB payload at four
+    posts, and every open browser re-downloaded it on every incoming time."""
+    import json as _json
+
+    from django.core.serializers.json import DjangoJSONEncoder
+
+    sizes = {}
+    for count in (0, 4):
+        # The type is PROTECTed by its competitions *and* its participants, and
+        # its name is unique — so the second pass needs all three gone.
+        Competition.objects.all().delete()
+        Participant.objects.all().delete()
+        CompetitionType.objects.all().delete()
+        spec = [(n, "1-6", n == 1) for n in range(1, count + 1)]
+        comp, _cclass = _marshal_competition(spec, starters=25)
+        for bib in range(1, 11):
+            signal_in(comp, 1, f"10:{bib:02d}:00.000", running=bib * 2 - 1)
+            signal_in(comp, 2, f"10:{bib:02d}:42.000", running=bib * 2)
+        # The penalty labels are lazy translation proxies, as they are on the wire.
+        sizes[count] = len(_json.dumps(autotiming.serialize(comp),
+                                       cls=DjangoJSONEncoder))
+    assert sizes[4] < sizes[0] * 1.1, (
+        f"four posts cost {sizes[4]} bytes against {sizes[0]} with none — the "
+        f"boxes are being written out per item again"
+    )

@@ -285,6 +285,15 @@ def serialize(competition):
     # request (sync_bindings, then bind_runs again, then current_run).
     slots, aligned, orphans, _ = apply_bindings(competition)
     posts = list(competition.marshal_posts.all())
+    # What a post's box looks like with nothing recorded against it. Every field
+    # of it comes from the *post* — the number, the tasks it watches, whether it
+    # judges the stop line — so it is the same object for every run that has no
+    # marshal penalty yet, which on a field of 200 is most of them. It used to be
+    # written out per item: at four posts watching six tasks each, `marshals` was
+    # 958 KiB of a 1.34 MiB payload, re-downloaded by every open browser on every
+    # incoming time. Sent once here; an item with nothing recorded sends `null`
+    # and the page falls back to this (see auto_timing.js).
+    blank_marshals = _marshals(None, posts, {})
     runs_in_order = aligned + orphans  # index lines up with the items below
     items = [
         _item(precision, ctype, marshal_mode, index,
@@ -314,7 +323,9 @@ def serialize(competition):
         "empty_reason": _empty_reason(competition) if not items else "",
         # The state codes a run can be closed with — one list for the page.
         "status_options": runstatus.options(),
-        "posts": [{"number": post.number} for post in posts],
+        # The blank box per post — both "which posts exist" (the page checks the
+        # length) and the template an item with nothing recorded renders from.
+        "posts": blank_marshals,
     }
 
 
@@ -354,10 +365,13 @@ def _item(precision, ctype, marshal_mode, index, slot, run, posts):
     # The steppers are only rendered for a slot that *has* a run (auto_timing.js
     # guards on item.run_id), and three penalty lines per slot is most of the
     # payload on a field that has barely started — 600 slots, ~500 of them not yet
-    # run. The marshal boxes are deliberately still sent for a run-less slot: the
-    # page shows an upcoming competitor's posts as empty boxes, and dropping them
-    # would be a change to what the operator sees, not just to the wire.
+    # run.
     penalties = lines if run is not None else []
+    # `null` when no post has recorded anything against this run: every box would
+    # then be the blank template the payload already carries once (`posts`), and
+    # the page substitutes it. The operator still sees the empty boxes on an
+    # upcoming competitor's tile — this changes the wire, not the screen.
+    marshals = _marshals(run, posts, stored) if stored else None
     return {
         "index": index,
         "key": slot["key"] if slot else None,
@@ -386,7 +400,7 @@ def _item(precision, ctype, marshal_mode, index, slot, run, posts):
         "total_stop": lines[2]["total"],
         "started": start is not None,
         "finished": finish is not None,
-        "marshals": _marshals(run, posts, stored),
+        "marshals": marshals,
         # A run with no matching slot (more starts than the order expects).
         "orphan": run is not None and slot is None,
     }
