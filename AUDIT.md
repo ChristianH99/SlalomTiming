@@ -18,10 +18,12 @@ A **failing** probe is a confirmed defect: its assertion states the behaviour th
 Baseline at audit time: the shipped suite was **603 passed, 0 failed** (8 m 29 s).
 
 **Progress:** §1 (release blockers), §2 (security & access control), §3 (data
-integrity) and §5 (performance) are complete. **§4 (privacy) is not** — five of its eight items were
-carried by §1–§3, but **PRV-4 (retention and bulk erase) and PRV-5 (a privacy
-notice) are untouched**, and PRV-6's waiver contradicts the run-book (DOC-5).
-§6–§9 still open, plus PRV-4/PRV-5 and DOC-5.
+integrity) and §5 (performance) are complete. **DOC-5 and OPS-1 are done** — the app
+now backs its own database up on a timer (Backup → Automatic backup), which is what
+the run-book's manual USB instruction was standing in for. **§4 (privacy) is still
+short**: five of its eight items were carried by §1–§3, but **PRV-4 (retention and
+bulk erase) and PRV-5 (a privacy notice) remain**. §6 (bar OPS-1), §7, §8 and §9
+still open.
 
 ---
 
@@ -354,10 +356,22 @@ Measured (`audit_measure_test.py`), on top of the numbers already in CLAUDE.md:
 DEPLOYMENT.md is genuinely good — the TLS decision, the single-process rule, the race-day
 checklist and the troubleshooting table are all there. What is missing:
 
-* **OPS-1 (High)** — **No automatic backup.** The run-book says so out loud ("There is no
-  automatic backup yet") and offers a manual `VACUUM INTO` between runs. For a
-  multi-user event where the database *is* the event, a scheduled `VACUUM INTO` on a
-  timer is a small feature and the difference between a hiccup and a lost day.
+* **OPS-1 (✅ FIXED)** — **Automatic backup.** New sidebar section **Backup** (the old
+  "Import / Export"), whose landing page is **Automatic backup**: a destination folder,
+  an interval of 1–10 minutes, how many copies to keep, and a background thread that
+  writes them (`apps/transfer/backup.py`, started from `config/asgi.py` like the CP540
+  reader). Three decisions worth recording, each of which was a wrong first attempt:
+  the copy uses **SQLite's online-backup API**, not `VACUUM INTO` on a command line and
+  not a file copy — in WAL mode the recent writes live in the `-wal` file beside the
+  database, so a copied file is both torn and short; it runs in **one step**
+  (`pages=-1`), because a batched backup gives up its read lock and SQLite *restarts*
+  it whenever another connection writes, which under sustained writes never finishes;
+  and it is written to a `.partial` and **renamed**, so an interrupted copy is never
+  sitting there under a plausible name. The destination is checked when it is saved
+  *and* before every copy, and the page's first element is the state of the last
+  attempt — a stick is unplugged far more often than a setting is changed, and copies
+  stop silently. There is deliberately **no "back up now" button**: the operator is not
+  supposed to remember, and a button invites them to think they should.
 * **OPS-2 (✅ FIXED)** — BLK-5 gave the app a log file; §2c gave it an audit trail
   beside it, and both are named in the race-day checklist.
 * **OPS-3 (Med)** — **No health endpoint.** Nothing to point a check at; "is it up" means
@@ -508,7 +522,7 @@ names actually present. Four things are wrong:
 | DOC-1 | CLAUDE.md:611 | The PDF filename "goes out as `filename*=UTF-8''<percent-encoded>` … (SEC-6)" | It is raw f-string interpolation and demonstrably splits the header (BLK-4). |
 | DOC-2 | CLAUDE.md:721 | `transfer.filename()` is "percent-encoded, the pattern results/views.py copies" | It is a character-substitution sanitiser, and there is no percent-encoding in either place. |
 | DOC-3 | `competitions/views.py:651` | `MarshalPostsView`: "Submitting is a no-op stub for now — the transmission back into the system is a later feature." | Stale by several features. `marshal_posts.js` posts to `timing:marshal-submit` with a retrying outbox. |
-| DOC-5 | DEPLOYMENT.md §5 vs the PRV-6 waiver | The run-book tells the operator to copy `db.sqlite3` to a USB stick | The owner's position is that the database is not to be copied anywhere. That instruction is also the app's only backup (OPS-1), so resolving this means deciding what the backup *is*. |
+| DOC-5 (✅ FIXED) | DEPLOYMENT.md §5 vs the PRV-6 waiver | The run-book told the operator to copy `db.sqlite3` to a USB stick by hand | Resolved by OPS-1: the app makes the copies itself, to a destination the operator chose. The manual `VACUUM INTO` line is gone from §5 and from the after-event checklist; the race-day checklist now sets the backup up instead, and §5 says what green and red on that page mean. A copy made deliberately by the app to a private destination is a different thing from a database carried about, so PRV-6's waiver stands. |
 | DOC-4 | CLAUDE.md "Security", `views.py:29-47` | "Every value that arrives in a file is hostile until checked"; "numbers keyed in by an operator are bounded" | Imported media is not checked at all (BLK-1); `running_number` is not bounded (BLK-2). |
 
 Also: DEPLOYMENT.md's `timing_unrecorded.log` location (OPS-6), and the CLAUDE.md

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-28 23:36+0200\n"
+"POT-Creation-Date: 2026-07-29 21:23+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -56,8 +56,8 @@ msgid "Results"
 msgstr "Ergebnisse"
 
 #: .\apps\accounts\pages.py:24 .\templates\base.html:76
-msgid "Import / Export"
-msgstr "Import / Export"
+msgid "Backup"
+msgstr "Sicherung"
 
 #: .\apps\accounts\views.py:154
 msgid "There is nothing in the audit log yet."
@@ -142,12 +142,12 @@ msgstr "Der letzte Superuser kann nicht gelöscht werden."
 msgid "User “%(name)s” deleted."
 msgstr "Benutzer „%(name)s“ gelöscht."
 
-#: .\apps\competitions\assignment.py:29 .\apps\competitions\models.py:42
+#: .\apps\competitions\assignment.py:35 .\apps\competitions\models.py:42
 #: .\templates\timing\simulator.html:46
 msgid "Manual"
 msgstr "Manuell"
 
-#: .\apps\competitions\assignment.py:46
+#: .\apps\competitions\assignment.py:53
 msgid "Based on age"
 msgstr "Nach Alter"
 
@@ -159,12 +159,12 @@ msgstr "Typ auswählen…"
 msgid "Pylon"
 msgstr "Pylone"
 
-#: .\apps\competitions\forms.py:42 .\apps\timing\autotiming.py:381
+#: .\apps\competitions\forms.py:42 .\apps\timing\autotiming.py:412
 #: .\templates\timing\live.html:59
 msgid "Task"
 msgstr "Aufgabe"
 
-#: .\apps\competitions\forms.py:43 .\apps\timing\autotiming.py:382
+#: .\apps\competitions\forms.py:43 .\apps\timing\autotiming.py:413
 #: .\templates\timing\live.html:60
 msgid "Stop line"
 msgstr "Stopplinie"
@@ -284,7 +284,7 @@ msgstr ""
 "Streckenposten geben Strafen für ihren eigenen Bereich ein, statt dass der "
 "Zeitnehmer jede Strafe einträgt."
 
-#: .\apps\competitions\models.py:355
+#: .\apps\competitions\models.py:376
 #, python-format
 msgid ""
 "“%(name)s” runs from age %(a)s to %(b)s, which is backwards — nobody falls "
@@ -293,7 +293,7 @@ msgstr ""
 "„%(name)s“ geht von Alter %(a)s bis %(b)s, also rückwärts — dort fällt "
 "niemand hinein."
 
-#: .\apps\competitions\models.py:363
+#: .\apps\competitions\models.py:384
 #, python-format
 msgid ""
 "“%(first)s” and “%(second)s” both cover age %(range)s — a competitor that "
@@ -303,7 +303,7 @@ msgstr ""
 "Teilnehmer dieses Alters kommt in „%(first)s“, weil diese Klasse in der "
 "Liste zuerst steht."
 
-#: .\apps\competitions\models.py:376
+#: .\apps\competitions\models.py:397
 #, python-format
 msgid ""
 "No running class covers age %(range)s — a competitor that age is assigned no "
@@ -312,42 +312,42 @@ msgstr ""
 "Keine startende Klasse deckt Alter %(range)s ab — ein Teilnehmer dieses "
 "Alters bekommt keine Klasse und taucht in keiner Startliste auf."
 
-#: .\apps\competitions\models.py:414 .\apps\results\pdf.py:287
+#: .\apps\competitions\models.py:438 .\apps\results\pdf.py:287
 #: .\templates\participants\participant_form.html:37
 #: .\templates\participants\participant_list.html:41
 #: .\templates\results\_results_head.html:4 .\templates\timing\live.html:49
 msgid "Class"
 msgstr "Klasse"
 
-#: .\apps\competitions\models.py:426
+#: .\apps\competitions\models.py:450
 msgid "Aggregate times"
 msgstr "Zeiten summiert"
 
-#: .\apps\competitions\models.py:427
+#: .\apps\competitions\models.py:451
 msgid "Best run only"
 msgstr "Nur bester Lauf"
 
-#: .\apps\competitions\models.py:428
+#: .\apps\competitions\models.py:452
 msgid "Regularity test"
 msgstr "Gleichmäßigkeitsprüfung"
 
-#: .\apps\competitions\models.py:432
+#: .\apps\competitions\models.py:456
 msgid "Display order in the classes list."
 msgstr "Anzeigereihenfolge in der Klassenliste."
 
-#: .\apps\competitions\models.py:434
+#: .\apps\competitions\models.py:458
 msgid "Starting age, e.g. 6"
 msgstr "Startalter, z. B. 6"
 
-#: .\apps\competitions\models.py:435
+#: .\apps\competitions\models.py:459
 msgid "Ending age, e.g. 7"
 msgstr "Endalter, z. B. 7"
 
-#: .\apps\competitions\models.py:442
+#: .\apps\competitions\models.py:466
 msgid "How this class's counted runs are turned into a result."
 msgstr "Wie die Wertungsläufe dieser Klasse zu einem Ergebnis werden."
 
-#: .\apps\competitions\models.py:446
+#: .\apps\competitions\models.py:470
 msgid ""
 "Manual assignment only: may a participant be entered into this class more "
 "than once."
@@ -355,7 +355,7 @@ msgstr ""
 "Nur bei manueller Zuordnung: darf ein Teilnehmer mehr als einmal in diese "
 "Klasse eingetragen werden."
 
-#: .\apps\competitions\models.py:451
+#: .\apps\competitions\models.py:475
 msgid ""
 "The run this class belongs to. Classes sharing a run_position start "
 "together; runs execute in ascending order. Null when not placed."
@@ -364,16 +364,16 @@ msgstr ""
 "starten gemeinsam; Läufe werden in aufsteigender Reihenfolge ausgeführt. "
 "Null, wenn nicht zugeordnet."
 
-#: .\apps\competitions\models.py:478
+#: .\apps\competitions\models.py:502
 #, python-format
 msgid "Class %(name)s"
 msgstr "Klasse %(name)s"
 
-#: .\apps\competitions\models.py:499
+#: .\apps\competitions\models.py:523
 msgid "No counted runs, so nobody in this class can be ranked."
 msgstr "Keine Wertungsläufe – in dieser Klasse kann niemand gewertet werden."
 
-#: .\apps\competitions\models.py:502
+#: .\apps\competitions\models.py:526
 msgid ""
 "A regularity test needs at least two counted runs — over a single run every "
 "competitor scores 0 and the class is ranked by fastest run."
@@ -382,15 +382,15 @@ msgstr ""
 "einen einzigen Lauf erreicht jeder 0 und die Klasse wird nach der "
 "schnellsten Zeit gewertet."
 
-#: .\apps\competitions\models.py:528
+#: .\apps\competitions\models.py:552
 msgid "1-based post number, in setup order."
 msgstr "1-basierte Postennummer, in Einrichtungsreihenfolge."
 
-#: .\apps\competitions\models.py:532
+#: .\apps\competitions\models.py:556
 msgid "Task numbers this post watches, e.g. “1, 5, 11-15”."
 msgstr "Aufgabennummern, die dieser Posten überwacht, z. B. „1, 5, 11-15“."
 
-#: .\apps\competitions\models.py:536
+#: .\apps\competitions\models.py:560
 msgid "This post also judges the stop line (at most one post per competition)."
 msgstr ""
 "Dieser Posten bewertet auch die Stopplinie (höchstens ein Posten pro "
@@ -554,7 +554,7 @@ msgid "No competition is selected."
 msgstr "Es ist kein Wettbewerb ausgewählt."
 
 #: .\apps\participants\views.py:350 .\apps\participants\views.py:426
-#: .\apps\results\views.py:611
+#: .\apps\results\views.py:626
 msgid "Malformed request."
 msgstr "Fehlerhafte Anfrage."
 
@@ -655,15 +655,15 @@ msgstr "Geburtsjahr"
 msgid "Training runs"
 msgstr "Trainingsläufe"
 
-#: .\apps\results\models.py:160
+#: .\apps\results\models.py:166
 msgid "Portrait"
 msgstr "Hochformat"
 
-#: .\apps\results\models.py:161
+#: .\apps\results\models.py:167
 msgid "Landscape"
 msgstr "Querformat"
 
-#: .\apps\results\models.py:162
+#: .\apps\results\models.py:168
 msgid "Auto (fit the table)"
 msgstr "Automatisch (an Tabelle anpassen)"
 
@@ -754,7 +754,7 @@ msgstr ""
 "Die Ränge müssen der Reihe nach vergeben werden – bei Gleichstand bleibt die "
 "kleinere Zahl."
 
-#: .\apps\results\resultscalc.py:584 .\apps\results\views.py:292
+#: .\apps\results\resultscalc.py:609 .\apps\results\views.py:304
 #, python-format
 msgid "%(label)s · %(runs)s Runs"
 msgstr "%(label)s · %(runs)s Läufe"
@@ -771,36 +771,36 @@ msgstr "Differenz"
 msgid "Total"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:291 .\templates\results\index.html:13
+#: .\apps\results\views.py:303 .\templates\results\index.html:13
 msgid "Overall"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:294 .\templates\base.html:66
+#: .\apps\results\views.py:306 .\templates\base.html:66
 #, python-format
 msgid "Overall · %(label)s · %(runs)s Runs"
 msgstr "Gesamt · %(label)s · %(runs)s Läufe"
 
-#: .\apps\results\views.py:501 .\apps\results\views.py:602
+#: .\apps\results\views.py:516 .\apps\results\views.py:617
 msgid "No active competition."
 msgstr "Kein aktiver Wettbewerb."
 
-#: .\apps\results\views.py:616
+#: .\apps\results\views.py:631
 msgid "Unknown results table."
 msgstr "Unbekannte Ergebnistabelle."
 
-#: .\apps\results\views.py:710
+#: .\apps\results\views.py:725
 msgid "Results settings saved."
 msgstr "Ergebnis-Einstellungen gespeichert."
 
-#: .\apps\timing\autotiming.py:380
+#: .\apps\timing\autotiming.py:411
 msgid "Pylons"
 msgstr "Pylonen"
 
-#: .\apps\timing\cp540.py:338
+#: .\apps\timing\cp540.py:359
 msgid "Connected to the timing device."
 msgstr "Mit dem Zeitmessgerät verbunden."
 
-#: .\apps\timing\cp540.py:340
+#: .\apps\timing\cp540.py:361
 msgid ""
 "No contact with the timing device — reconnecting. Times are not being "
 "recorded."
@@ -808,14 +808,14 @@ msgstr ""
 "Keine Verbindung zum Zeitmessgerät — es wird neu verbunden. Zeiten werden "
 "derzeit nicht aufgezeichnet."
 
-#: .\apps\timing\cp540.py:342
+#: .\apps\timing\cp540.py:363
 msgid ""
 "The timing device is not connected. Connect it on the Timing settings page."
 msgstr ""
 "Das Zeitmessgerät ist nicht verbunden. Stellen Sie die Verbindung auf der "
 "Seite Zeitmessung-Einstellungen her."
 
-#: .\apps\timing\cp540.py:344
+#: .\apps\timing\cp540.py:365
 msgid "The timing device is disconnected — times are not being recorded."
 msgstr "Das Zeitmessgerät ist getrennt — Zeiten werden nicht aufgezeichnet."
 
@@ -1009,6 +1009,10 @@ msgstr "Startnummer %(bib)s ist in diesem Wettbewerb schon vergeben."
 msgid "Bib %(bib)s is also used on line %(line)s."
 msgstr "Startnummer %(bib)s wird auch in Zeile %(line)s verwendet."
 
+#: .\apps\transfer\forms.py:44
+msgid "Where should the copies go?"
+msgstr "Wohin sollen die Kopien?"
+
 #: .\apps\transfer\importers.py:74
 msgid "Use the existing type and keep its current settings"
 msgstr "Vorhandenen Typ verwenden und dessen Einstellungen behalten"
@@ -1080,6 +1084,55 @@ msgstr "gleiche Lizenznummer"
 msgid "same name and date of birth"
 msgstr "gleicher Name und gleiches Geburtsdatum"
 
+#: .\apps\transfer\models.py:33
+msgid "Copy the database to the destination on a timer."
+msgstr "Die Datenbank in regelmäßigen Abständen an das Ziel kopieren."
+
+#: .\apps\transfer\models.py:37
+msgid "Destination folder"
+msgstr "Zielordner"
+
+#: .\apps\transfer\models.py:38
+msgid ""
+"Where the copies go — a USB stick or another drive, so a copy survives "
+"whatever happens to this computer."
+msgstr "Wohin die Kopien geschrieben werden – ein USB-Stick oder ein anderes Laufwerk, damit eine Kopie überlebt, was auch immer mit diesem Rechner passiert."
+
+#: .\apps\transfer\models.py:44
+msgid "Every"
+msgstr "Alle"
+
+#: .\apps\transfer\models.py:45
+msgid "Minutes between copies (1–10)."
+msgstr "Minuten zwischen zwei Kopien (1–10)."
+
+#: .\apps\transfer\models.py:50
+msgid "Keep"
+msgstr "Aufbewahren"
+
+#: .\apps\transfer\models.py:51
+msgid "How many copies to keep. Older ones are deleted."
+msgstr "Wie viele Kopien aufbewahrt werden. Ältere werden gelöscht."
+
+#: .\apps\transfer\models.py:93
+msgid "No destination folder is set."
+msgstr "Es ist kein Zielordner festgelegt."
+
+#: .\apps\transfer\models.py:95
+#, python-format
+msgid "“%(path)s” does not exist — is the drive plugged in?"
+msgstr "„%(path)s“ existiert nicht – ist das Laufwerk angeschlossen?"
+
+#: .\apps\transfer\models.py:98
+#, python-format
+msgid "“%(path)s” is a file, not a folder."
+msgstr "„%(path)s“ ist eine Datei, kein Ordner."
+
+#: .\apps\transfer\models.py:104
+#, python-format
+msgid "“%(path)s” can’t be written to (%(error)s)."
+msgstr "„%(path)s“ kann nicht beschrieben werden (%(error)s)."
+
 #: .\apps\transfer\schema.py:195
 #, python-format
 msgid "The export holds a value %(model)s.%(field)s cannot store."
@@ -1087,15 +1140,23 @@ msgstr ""
 "Die Exportdatei enthält einen Wert, den %(model)s.%(field)s nicht speichern "
 "kann."
 
-#: .\apps\transfer\views.py:66
+#: .\apps\transfer\views.py:64
+msgid "Backups are on. The first copy is being written now."
+msgstr "Die Sicherung ist eingeschaltet. Die erste Kopie wird jetzt geschrieben."
+
+#: .\apps\transfer\views.py:67
+msgid "Backups are off."
+msgstr "Die Sicherung ist ausgeschaltet."
+
+#: .\apps\transfer\views.py:135
 msgid "Choose what to export."
 msgstr "Wähle aus, was exportiert werden soll."
 
-#: .\apps\transfer\views.py:113
+#: .\apps\transfer\views.py:182
 msgid "Choose a file to import."
 msgstr "Wähle eine Datei zum Importieren aus."
 
-#: .\apps\transfer\views.py:117
+#: .\apps\transfer\views.py:186
 #, python-format
 msgid ""
 "That file is %(size)s MB — too large for an export archive (the limit is "
@@ -1104,12 +1165,12 @@ msgstr ""
 "Diese Datei ist %(size)s MB groß — zu groß für ein Export-Archiv (die Grenze "
 "liegt bei %(limit)s MB)."
 
-#: .\apps\transfer\views.py:141
+#: .\apps\transfer\views.py:210
 msgid "Choose a competition to import participants into."
 msgstr ""
 "Wähle einen Wettbewerb, in den die Teilnehmer importiert werden sollen."
 
-#: .\apps\transfer\views.py:147
+#: .\apps\transfer\views.py:216
 #, python-format
 msgid ""
 "That file is %(size)s MB — too large for a participant list (the limit is "
@@ -1118,19 +1179,19 @@ msgstr ""
 "Diese Datei ist %(size)s MB groß — zu groß für eine Teilnehmerliste (die "
 "Grenze liegt bei %(limit)s MB)."
 
-#: .\apps\transfer\views.py:160
+#: .\apps\transfer\views.py:229
 msgid "Participants imported."
 msgstr "Teilnehmer importiert."
 
-#: .\apps\transfer\views.py:217
+#: .\apps\transfer\views.py:286
 msgid "Import finished."
 msgstr "Import abgeschlossen."
 
-#: .\apps\transfer\views.py:237
+#: .\apps\transfer\views.py:306
 msgid "Import cancelled — nothing was changed."
 msgstr "Import abgebrochen – es wurde nichts geändert."
 
-#: .\apps\transfer\views.py:250
+#: .\apps\transfer\views.py:319
 msgid "The upload has expired. Please choose the file again."
 msgstr "Der Upload ist abgelaufen. Bitte wähle die Datei erneut aus."
 
@@ -1203,7 +1264,7 @@ msgstr "Passwort anzeigen (halten)"
 
 #: .\templates\accounts\user_access.html:3
 #: .\templates\accounts\user_access.html:4
-#: .\templates\accounts\user_access.html:6 .\templates\base.html:86
+#: .\templates\accounts\user_access.html:6 .\templates\base.html:87
 msgid "User Access"
 msgstr "Benutzerzugriff"
 
@@ -1337,7 +1398,7 @@ msgstr "leer lassen zum Beibehalten"
 #: .\templates\competitions\competitiontype_settings.html:83
 #: .\templates\participants\participant_form.html:130
 #: .\templates\results\results_settings.html:176
-#: .\templates\timing\settings.html:38
+#: .\templates\timing\settings.html:38 .\templates\transfer\backup.html:78
 msgid "Save"
 msgstr "Speichern"
 
@@ -1378,8 +1439,8 @@ msgstr ""
 #, python-format
 msgid "%(size)s in %(n)s file"
 msgid_plural "%(size)s in %(n)s files"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "%(size)s in %(n)s Datei"
+msgstr[1] "%(size)s in %(n)s Dateien"
 
 #: .\templates\accounts\user_access.html:171
 msgid "Download audit log"
@@ -1389,7 +1450,7 @@ msgstr "Protokoll herunterladen"
 msgid "Nothing recorded yet."
 msgstr "Noch nichts aufgezeichnet."
 
-#: .\templates\base.html:6 .\templates\base.html:106
+#: .\templates\base.html:6 .\templates\base.html:107
 msgid "Slalom Timing"
 msgstr "Slalom Timing"
 
@@ -1455,39 +1516,44 @@ msgstr "Einstellungen"
 msgid "No running classes"
 msgstr "Keine laufenden Klassen"
 
-#: .\templates\base.html:78 .\templates\transfer\export.html:3
+#: .\templates\base.html:78 .\templates\transfer\backup.html:3
+#: .\templates\transfer\backup.html:4 .\templates\transfer\backup.html:6
+msgid "Automatic backup"
+msgstr "Automatische Sicherung"
+
+#: .\templates\base.html:79 .\templates\transfer\export.html:3
 #: .\templates\transfer\export.html:4 .\templates\transfer\export.html:6
 msgctxt "transfer"
 msgid "Export"
 msgstr "Export"
 
-#: .\templates\base.html:79 .\templates\transfer\import.html:3
+#: .\templates\base.html:80 .\templates\transfer\import.html:3
 #: .\templates\transfer\import.html:4 .\templates\transfer\import.html:6
 #: .\templates\transfer\import_review.html:151
 msgid "Import"
 msgstr "Import"
 
-#: .\templates\base.html:93
+#: .\templates\base.html:94
 msgid "Log out"
 msgstr "Abmelden"
 
-#: .\templates\base.html:102
+#: .\templates\base.html:103
 msgid "Toggle navigation"
 msgstr "Navigation umschalten"
 
-#: .\templates\base.html:111
+#: .\templates\base.html:112
 msgid "No event selected"
 msgstr "Keine Veranstaltung ausgewählt"
 
-#: .\templates\base.html:111
+#: .\templates\base.html:112
 msgid "choose one"
 msgstr "auswählen"
 
-#: .\templates\base.html:135
+#: .\templates\base.html:136
 msgid "Unsaved changes"
 msgstr "Nicht gespeicherte Änderungen"
 
-#: .\templates\base.html:136
+#: .\templates\base.html:137
 msgid ""
 "You have unsaved changes on this page. Do you want to save them before "
 "leaving?"
@@ -1495,15 +1561,15 @@ msgstr ""
 "Sie haben nicht gespeicherte Änderungen auf dieser Seite. Möchten Sie sie "
 "vor dem Verlassen speichern?"
 
-#: .\templates\base.html:138
+#: .\templates\base.html:139
 msgid "Save changes"
 msgstr "Änderungen speichern"
 
-#: .\templates\base.html:139
+#: .\templates\base.html:140
 msgid "Discard"
 msgstr "Verwerfen"
 
-#: .\templates\base.html:140 .\templates\competitions\competition_add.html:52
+#: .\templates\base.html:141 .\templates\competitions\competition_add.html:52
 #: .\templates\competitions\competition_classes.html:85
 #: .\templates\competitions\competition_confirm_delete.html:30
 #: .\templates\competitions\competition_confirm_switch.html:33
@@ -3097,6 +3163,60 @@ msgstr "Leeren"
 #: .\templates\timing\simulator.html:62
 msgid "No signals sent yet."
 msgstr "Noch keine Signale gesendet."
+
+#: .\templates\transfer\backup.html:8
+msgid ""
+"The event is the database. This copies it somewhere else while you time — so "
+"a copy survives a laptop that dies, a disk that fills or a folder somebody "
+"deletes."
+msgstr "Die Veranstaltung ist die Datenbank. Diese Seite kopiert sie während der Zeitmessung an einen anderen Ort – damit eine Kopie einen defekten Rechner, eine volle Festplatte oder einen versehentlich gelöschten Ordner überlebt."
+
+#: .\templates\transfer\backup.html:18
+msgid "Backups are not being written"
+msgstr "Es werden keine Sicherungen geschrieben"
+
+#: .\templates\transfer\backup.html:21
+#, python-format
+msgid "The last good copy was at %(when)s."
+msgstr "Die letzte erfolgreiche Kopie war am %(when)s."
+
+#: .\templates\transfer\backup.html:23
+msgid "No copy has ever been written."
+msgstr "Es wurde noch nie eine Kopie geschrieben."
+
+#: .\templates\transfer\backup.html:28
+msgid "Backups are running"
+msgstr "Die Sicherung läuft"
+
+#: .\templates\transfer\backup.html:31
+#, python-format
+msgid "Last copy at %(when)s, then every minute."
+msgid_plural "Last copy at %(when)s, then every %(every)s minutes."
+msgstr[0] "Letzte Kopie am %(when)s, danach jede Minute."
+msgstr[1] "Letzte Kopie am %(when)s, danach alle %(every)s Minuten."
+
+#: .\templates\transfer\backup.html:33
+msgid "Waiting for the first copy…"
+msgstr "Warten auf die erste Kopie…"
+
+#: .\templates\transfer\backup.html:47
+msgid "Copy the database automatically"
+msgstr "Die Datenbank automatisch kopieren"
+
+#: .\templates\transfer\backup.html:62
+msgid "min"
+msgstr "Min."
+
+#: .\templates\transfer\backup.html:69
+msgid "copies"
+msgstr "Kopien"
+
+#: .\templates\transfer\backup.html:83
+msgid ""
+"There is no “back up now” button on purpose: the point is that you don’t "
+"have to remember. Saving a destination checks it can be written to and "
+"starts a copy straight away."
+msgstr "Es gibt bewusst keine Schaltfläche „Jetzt sichern“: Sie sollen nicht daran denken müssen. Beim Speichern eines Ziels wird geprüft, ob es beschreibbar ist, und sofort eine Kopie geschrieben."
 
 #: .\templates\transfer\export.html:7
 msgid ""

@@ -3455,6 +3455,14 @@ textarea:focus-visible,
    attribute, which a Content-Security-Policy blocks along with every other
    inline style — there is no way to allow ours and not an injected one. */
 .inline-form { display: inline; }
+/* A page-level state: backups are being written, or they are not. "Not" is the
+   one that matters — an unplugged stick stops them silently — so it gets the
+   flame this app reserves for an alarm, and the working case stays quiet. */
+.notice--ok { border-color: var(--success-border); background: var(--success-bg); }
+.notice--ok .notice-title { color: var(--success-strong); }
+.notice--danger { border-color: var(--flame); background: var(--flame-bg); }
+.notice--danger .notice-title { color: var(--flame-hover); }
+
 /* A page-level warning: something is set up in a way that will behave oddly, but
    is legal to save and may simply be half-edited. Amber, which this app already
    uses for "a human did this by hand" — not the flame it uses for an alarm. */
@@ -3483,7 +3491,7 @@ textarea:focus-visible,
 .access-new-user-roles .pdf-label { display: block; margin-bottom: var(--space-4); }
 .access-denied { max-width: 34rem; }
 
-/* --- Import / Export ------------------------------------------------------ */
+/* --- Backup: automatic backup, import, export ------------------------------ */
 
 /* Export tiles carry their own little form (the timing switch + the button),
    stacked so the switch never crowds the action. */

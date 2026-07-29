@@ -705,10 +705,14 @@ templates/results/       index.html (class + Overall cards), results_class.html,
                          static/js/results_pdf_editor.js, which only ever produces the restricted
                          markup pdfmarkup.sanitize_* accepts (the server re-checks; the editor is
                          convenience, not the guard).
-apps/transfer/          Moving data between Slalom Timing systems: an Export page and a
-                        three-step Import wizard (top-level sidebar item "Import / Export",
-                        its own access-control page key `import_export`). No models — the
-                        wizard's state is a staged file plus the session. Two export scopes:
+apps/transfer/          Getting the data out: the **automatic backup** (the section's landing
+                        page), an Export page and a three-step Import wizard — sidebar section
+                        "Backup", one access-control page key `import_export` for all three.
+                        The two halves answer different questions and are deliberately not the
+                        same feature: a *backup* is the whole database on a timer, for getting
+                        the event back after a laptop dies; an *export* is one event as a
+                        portable `.zip`, for moving or archiving it.
+                        The wizard's state is a staged file plus the session. Two export scopes:
                         a whole **event** (competition + type + classes + marshal posts +
                         participants/entries/assignments + timing + results config) and a whole
                         **competition type** (the type + every participant registered under it,
@@ -799,10 +803,42 @@ apps/transfer/          Moving data between Slalom Timing systems: an Export pag
                          Not handled: class assignment. Imported starters get a bib but no
                          ClassAssignment, so a Manual-assignment competition still needs them
                          assigned afterwards.
+  models.py              BackupSettings — the *only* model in this app: one row (pk forced to
+                         1) holding the destination folder, the interval (1–10 minutes), how
+                         many copies to keep, and what happened last time. The last-attempt
+                         fields are persisted rather than held in the thread because "when was
+                         the last good copy" is the question the page exists to answer and has
+                         to survive a restart. destination_problem() is checked when the
+                         setting is saved *and* before every copy — a stick is unplugged far
+                         more often than a setting is changed, and a backup that has quietly
+                         been failing since lunchtime is worse than none.
+  backup.py              The copy and the timer. Three things about the copy, each of which
+                         was a wrong first attempt: it uses **SQLite's own online-backup API**,
+                         not a file copy (the rig is writing through the database, and in WAL
+                         mode the recent writes are in the `-wal` file beside it, so a copied
+                         file is torn *and* short); **in one step** (`pages=-1`), because a
+                         batched backup gives up its read lock between batches and SQLite
+                         *restarts* it whenever another connection writes — under sustained
+                         writes it never finishes, and one step costs nothing since WAL readers
+                         don't block the writer; and **written to a `.partial` and renamed**,
+                         so an interrupted copy is never sitting there under a plausible name.
+                         prune() keeps the newest N (480 copies of a growing database is a full
+                         stick, and then the copy that fails is the newest one). BackupRunner is
+                         the thread — ticks every 2 s so switching it off takes effect now, never
+                         lets an exception end itself, and records the failure on the row instead
+                         of raising at nobody. autostart() from config/asgi.py, like cp540's.
+                         There is deliberately **no "back up now" button**: the point is that the
+                         operator doesn't have to remember, and a button invites them to think
+                         they should. Saving a destination runs a copy immediately instead.
   staging.py             Where an uploaded archive waits between the wizard's steps: a temp file
                          under a random token that only the session knows. Archives carry personal
                          data, so a staged file is deleted on commit/cancel and stale ones swept.
-  views.py               ExportView (page + the .zip download), ImportView — the one Import page,
+  views.py               BackupView (the settings form; a save validates the destination, so a
+                         bad one is refused while the operator is still looking at it, then
+                         starts/stops the runner) + backup_status (JSON, polled by
+                         static/js/backup_page.js — which reloads only when the last attempt
+                         actually changed and nobody is typing).
+                         ExportView (page + the .zip download), ImportView — the one Import page,
                          offering both kinds of file and dispatching on which file field was
                          submitted: an *archive* is step 1 of the wizard (parsed on upload so a
                          wrong one is rejected while the file picker is still in front of the

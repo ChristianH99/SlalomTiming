@@ -21,7 +21,7 @@ PAGES = [
     ("timing", _("Timing")),
     ("marshal_posts", _("Marshal Posts")),
     ("results", _("Results")),
-    ("import_export", _("Import / Export")),
+    ("import_export", _("Backup")),
 ]
 
 PAGE_KEYS = [key for key, _ in PAGES]
@@ -83,7 +83,8 @@ PAGE_URLS = {
     # Setup, so it can be granted (or withheld) on its own.
     "import_export": {
         ("transfer", name)
-        for name in ("export", "import", "review", "cancel", "csv-sample")
+        for name in ("backup", "backup-status", "export", "import", "review",
+                     "cancel", "csv-sample")
     },
 }
 

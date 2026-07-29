@@ -1,6 +1,7 @@
 import datetime
 import io
 import zipfile
+from pathlib import Path
 from decimal import Decimal
 
 import pytest
@@ -1269,3 +1270,296 @@ def test_every_fault_in_a_file_is_reported_in_one_pass():
     assert not report.ok
     assert [line for line, _message in report.errors] == [2, 3]
     assert "77" in messages_of(report)
+
+
+# --- Automatic backup (DOC-5 / OPS-1) ---------------------------------------
+# The event *is* the database, and the only backup used to be a line in the
+# run-book asking the operator to run VACUUM INTO between runs and copy the
+# result to a USB stick — a thing to remember while timing a race.
+
+import sqlite3
+import threading
+
+from apps.transfer import backup
+from apps.transfer.models import BackupSettings
+
+
+def _write_source(path, rows=200):
+    """A database that looks like one of ours: WAL, and something to lose."""
+    conn = sqlite3.connect(path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE timing (id INTEGER PRIMARY KEY, t TEXT)")
+    conn.executemany("INSERT INTO timing (t) VALUES (?)",
+                     [(f"10:00:{i:02d}",) for i in range(rows)])
+    conn.commit()
+    conn.close()
+    return path
+
+
+def _rows(path):
+    conn = sqlite3.connect(path)
+    try:
+        return conn.execute("SELECT COUNT(*) FROM timing").fetchone()[0]
+    finally:
+        conn.close()
+
+
+class TestCopyingTheDatabase:
+    def test_the_copy_holds_every_row(self, tmp_path):
+        source = _write_source(tmp_path / "db.sqlite3")
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        written = backup.copy_database(source, destination, keep=5)
+        assert written.exists()
+        assert _rows(written) == 200
+
+    def test_the_copy_is_readable_on_its_own(self, tmp_path):
+        """A file copy of a WAL database leaves the recent writes in the -wal
+        file beside it; carried off on a stick alone it is missing them. SQLite's
+        backup API writes a self-contained database."""
+        source = _write_source(tmp_path / "db.sqlite3")
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        written = backup.copy_database(source, destination, keep=5)
+        carried = tmp_path / "elsewhere.sqlite3"
+        carried.write_bytes(written.read_bytes())   # the file, and nothing else
+        assert _rows(carried) == 200
+
+    def test_a_copy_taken_while_the_database_is_written_finishes_and_is_consistent(
+            self, tmp_path):
+        """The rig records times through this database while the copy runs, so a
+        torn copy is worse than none — it looks like a backup.
+
+        This also pins the reason the copy is taken in *one* step: a batched
+        backup gives up its read lock between batches and SQLite restarts it
+        whenever another connection has written, so against a writer like the one
+        below it restarts for ever and never produces a file. The first version of
+        this code did exactly that, and this test is what found it — it hung."""
+        source = _write_source(tmp_path / "db.sqlite3")
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        stop = threading.Event()
+
+        def writer():
+            conn = sqlite3.connect(source, timeout=30)
+            conn.execute("PRAGMA journal_mode=WAL")
+            n = 0
+            while not stop.is_set():
+                conn.execute("INSERT INTO timing (t) VALUES (?)", (f"x{n}",))
+                conn.commit()
+                n += 1
+            conn.close()
+
+        thread = threading.Thread(target=writer, daemon=True)
+        thread.start()
+        try:
+            written = backup.copy_database(source, destination, keep=5)
+        finally:
+            stop.set()
+            thread.join(timeout=5)
+        # Readable, integral, and holding at least what was there when it started.
+        conn = sqlite3.connect(written)
+        try:
+            assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            assert conn.execute("SELECT COUNT(*) FROM timing").fetchone()[0] >= 200
+        finally:
+            conn.close()
+
+    def test_an_interrupted_copy_leaves_no_plausible_looking_file(self, tmp_path, monkeypatch):
+        """Half a database sitting there under a backup's name is the worst
+        outcome: it is the one you would reach for."""
+        source = _write_source(tmp_path / "db.sqlite3")
+        destination = tmp_path / "stick"
+        destination.mkdir()
+
+        # sqlite3.Connection is immutable, so the interruption goes in through
+        # the one seam this module has: the rename that publishes the file.
+        def explode(self, target):
+            raise OSError("the stick was pulled out")
+
+        monkeypatch.setattr(Path, "replace", explode)
+        with pytest.raises(OSError):
+            backup.copy_database(source, destination, keep=5)
+        assert list(destination.glob("*.sqlite3")) == [], (
+            "a half-written copy is sitting there under a backup's name"
+        )
+        assert list(destination.glob("*.partial")), "the partial should still be there"
+
+        # …and the next good copy sweeps the leftover away.
+        monkeypatch.undo()
+        backup.copy_database(source, destination, keep=5)
+        assert list(destination.glob("*.partial")) == []
+        assert len(list(destination.glob("*.sqlite3"))) == 1
+
+    def test_it_keeps_only_the_newest_copies(self, tmp_path):
+        """One a minute over an eight-hour event is 480 copies of a growing
+        database. A full stick means the newest copy is the one that failed."""
+        source = _write_source(tmp_path / "db.sqlite3")
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        for minute in range(8):
+            backup.copy_database(source, destination, keep=3,
+                                 now=datetime.datetime(2026, 7, 1, 10, minute, 0))
+        kept = sorted(p.name for p in destination.glob("*.sqlite3"))
+        assert len(kept) == 3
+        assert kept[-1].endswith("100700.sqlite3")     # the newest survived
+
+
+class TestTheDestination:
+    def test_a_missing_folder_is_named_as_such(self, tmp_path):
+        settings = BackupSettings(destination=str(tmp_path / "not-plugged-in"))
+        assert "does not exist" in settings.destination_problem()
+
+    def test_a_file_is_not_a_folder(self, tmp_path):
+        target = tmp_path / "afile"
+        target.write_text("x")
+        assert "not a folder" in BackupSettings(destination=str(target)).destination_problem()
+
+    def test_no_destination_at_all(self):
+        assert BackupSettings(destination="").destination_problem()
+
+    def test_a_usable_folder_has_no_problem(self, tmp_path):
+        assert BackupSettings(destination=str(tmp_path)).destination_problem() == ""
+
+
+class TestTheBackupPage:
+    def test_saving_a_destination_turns_it_on(self, client, tmp_path, monkeypatch):
+        # The runner would otherwise start a thread that reads the suite's own
+        # in-memory database — see TestTheTimer for why that hangs.
+        monkeypatch.setattr(backup.runner, "start", lambda: None)
+        monkeypatch.setattr(backup.runner, "run_soon", lambda: None)
+        response = client.post(reverse("transfer:backup"), {
+            "enabled": "on", "destination": str(tmp_path),
+            "interval_minutes": "5", "keep": "12",
+        })
+        assert response.status_code == 302
+        settings = BackupSettings.load()
+        assert settings.enabled and settings.destination == str(tmp_path)
+
+    def test_a_destination_that_cannot_be_written_is_refused_on_save(self, client, tmp_path):
+        """Finding out at the next tick, from a page they have navigated away
+        from, is not telling the operator."""
+        response = client.post(reverse("transfer:backup"), {
+            "enabled": "on", "destination": str(tmp_path / "nowhere"),
+            "interval_minutes": "5", "keep": "12",
+        })
+        assert response.status_code == 200
+        assert "does not exist" in response.content.decode()
+        assert BackupSettings.load().enabled is False
+
+    def test_turning_it_off_needs_no_destination(self, client):
+        response = client.post(reverse("transfer:backup"), {
+            "destination": "", "interval_minutes": "5", "keep": "12",
+        })
+        assert response.status_code == 302
+        assert BackupSettings.load().enabled is False
+
+    def test_the_interval_is_bounded(self, client, tmp_path):
+        for minutes in ("0", "11", "600"):
+            response = client.post(reverse("transfer:backup"), {
+                "enabled": "on", "destination": str(tmp_path),
+                "interval_minutes": minutes, "keep": "12",
+            })
+            assert response.status_code == 200, f"{minutes} min was accepted"
+
+    def test_the_status_endpoint_reports_the_last_attempt(self, client, tmp_path):
+        settings = BackupSettings.load()
+        settings.enabled = True
+        settings.destination = str(tmp_path)
+        settings.last_error = "the stick was pulled out"
+        settings.save()
+        data = client.get(reverse("transfer:backup-status")).json()
+        assert data["enabled"] is True
+        assert data["last_error"] == "the stick was pulled out"
+
+    def test_there_is_no_back_up_now_button(self, client, tmp_path):
+        """On purpose: the point is that the operator does not have to remember,
+        and a button invites them to think they should. (The page *says* so in
+        words, so this looks for a control rather than for the phrase.)"""
+        import re as _re
+
+        body = client.get(reverse("transfer:backup")).content.decode()
+        # data-unsaved-guard, not just method="post": the app shell's own logout
+        # form comes first in the document.
+        form = _re.search(r"<form[^>]*data-unsaved-guard[^>]*>(.*?)</form>",
+                          body, _re.S | _re.I)
+        assert form, "the settings form is missing"
+        controls = _re.findall(r"<button[^>]*>(.*?)</button>", form.group(1), _re.S | _re.I)
+        assert [c.strip() for c in controls] == ["Save"], controls
+
+
+class TestTheTimer:
+    """The timer reads the *live* database file.
+
+    These point it at a real file rather than at the suite's own database: the
+    test database is SQLite in shared-cache memory and pytest-django holds an
+    uncommitted transaction on it for the length of each test, so a second
+    connection reading it blocks for ever. That is an artefact of how the tests
+    are run — a deployment's database is a file in WAL mode, where a reader never
+    waits on the writer — but it would hang the suite, so it is avoided here and
+    said out loud rather than left to be rediscovered.
+    """
+
+    @pytest.fixture
+    def live_db(self, settings, tmp_path):
+        path = tmp_path / "live.sqlite3"
+        conn = sqlite3.connect(path)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("CREATE TABLE timing (id INTEGER PRIMARY KEY)")
+        conn.commit()
+        conn.close()
+        # Only what backup.copy_database reads; the ORM keeps its own connection.
+        settings.DATABASES = {**settings.DATABASES,
+                              "default": {**settings.DATABASES["default"],
+                                          "NAME": str(path)}}
+        return path
+
+    def test_a_broken_destination_is_recorded_rather_than_thrown(self, live_db, tmp_path):
+        """A backup that has quietly been failing since lunchtime is worse than
+        none, because nobody is looking for the fault."""
+        settings = BackupSettings.load()
+        settings.enabled = True
+        settings.destination = str(tmp_path / "gone")
+        settings.save()
+        backup.runner._tick()
+        settings.refresh_from_db()
+        assert settings.last_error
+        assert settings.last_ok_at is None
+
+    def test_a_good_destination_records_the_file_it_wrote(self, live_db, tmp_path):
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        settings = BackupSettings.load()
+        settings.enabled = True
+        settings.destination = str(destination)
+        settings.save()
+        backup.runner._tick()
+        settings.refresh_from_db()
+        assert settings.last_error == ""
+        assert settings.last_ok_at is not None
+        assert settings.last_bytes and settings.last_bytes > 0
+        assert Path(settings.last_file).exists()
+
+    def test_it_does_nothing_until_the_interval_has_passed(self, live_db, tmp_path):
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        settings = BackupSettings.load()
+        settings.enabled = True
+        settings.destination = str(destination)
+        settings.interval_minutes = 10
+        settings.save()
+        backup.runner._tick()
+        first = list(destination.glob("*.sqlite3"))
+        assert first, "the first tick should have written one"
+        backup.runner._tick()
+        assert list(destination.glob("*.sqlite3")) == first
+
+    def test_it_does_nothing_at_all_when_switched_off(self, live_db, tmp_path):
+        destination = tmp_path / "stick"
+        destination.mkdir()          # a directory of its own: live_db is in tmp_path
+        settings = BackupSettings.load()
+        settings.enabled = False
+        settings.destination = str(destination)
+        settings.save()
+        backup.runner._tick()
+        assert list(destination.glob("*.sqlite3")) == []

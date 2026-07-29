@@ -37,6 +37,13 @@ from apps.timing.routing import websocket_urlpatterns  # noqa: E402
 # that is actually a running server.
 cp540.autostart()
 
+# The event is the database, so it is copied somewhere else on a timer. Here for
+# the same reason as the reader thread: this is the one entry point that is a
+# running server (see apps/transfer/backup.py).
+from apps.transfer import backup  # noqa: E402
+
+backup.autostart()
+
 
 def _harden_data_directory():
     """Restrict DATA_DIR to the account running the server (config/datasecurity.py).

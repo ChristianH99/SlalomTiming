@@ -5,7 +5,9 @@ from . import views
 app_name = "transfer"
 
 urlpatterns = [
-    path("", views.ExportView.as_view(), name="export"),
+    path("", views.BackupView.as_view(), name="backup"),
+    path("status/", views.backup_status, name="backup-status"),
+    path("export/", views.ExportView.as_view(), name="export"),
     path("import/", views.ImportView.as_view(), name="import"),
     path("import/review/", views.ImportReviewView.as_view(), name="review"),
     path("import/cancel/", views.cancel_import, name="cancel"),

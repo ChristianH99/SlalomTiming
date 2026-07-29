@@ -180,7 +180,10 @@ and JS on the next load without a forced refresh.
       the live line log ticking.
 - [ ] Fire one test start/finish through the Simulator or the real rig and see it
       land on the Manual timing view.
-- [ ] Copy `db.sqlite3` somewhere else *now*, so there is a known-good starting point.
+- [ ] **Backup → Automatic backup**: plug a USB stick in, set it as the destination
+      and switch the copies on. Saving checks the folder can be written to and takes
+      the first copy straight away — the green panel names the file it wrote. That is
+      the whole backup procedure; there is nothing to do again during the day.
 
 **Starting the server**
 
@@ -200,14 +203,19 @@ Then start Caddy if it isn't already running as a service.
   project directory for a checkout and `%LOCALAPPDATA%\SlalomTiming\data` for the
   packaged install) should stay empty. Anything in it is a timing signal the database
   refused — the time is in that file, not lost, and needs entering by hand.
-- Take a snapshot between runs:
-  `uv run python -c "import sqlite3; sqlite3.connect('db.sqlite3').execute('VACUUM INTO ?', ('backup-YYYYMMDD-HHMM.sqlite3',))"`
-  and copy it to a USB stick or a second machine. There is no automatic backup yet.
+- **Backup → Automatic backup** is the one page worth a glance between runs. Green
+  means copies are being written and names the last one; red means they are not, and
+  says why — almost always the stick has been unplugged. The copies stop *silently*
+  otherwise, so a look at this page is the only thing that catches it.
+  A copy is a complete, self-contained database (SQLite's own online-backup API, not
+  a file copy, so it is consistent even though the rig is recording through it). To
+  use one, stop the server and put it in place of `db.sqlite3` — nothing else.
 
 **After the event**
 
-- Export the event from **Import / Export → Export** (a self-contained `.zip`) and
-  keep it with the results PDFs.
+- Export the event from **Backup → Export** (a self-contained `.zip`) and keep it
+  with the results PDFs. The automatic copies are a whole database, for getting the
+  event *back*; the export is one event, for moving or archiving it.
 - Download the audit log (**User Access → Audit log**) and keep it with them. It is
   the only record of who changed what, and it rotates.
 - Stop the server; keep `db.sqlite3` until the results are final and published.
@@ -222,6 +230,8 @@ Then start Caddy if it isn't already running as a service.
 | `ImproperlyConfigured: DJANGO_SECURE_COOKIES=False is no longer honoured` | An old `.env` from before the TLS decision | Section 3.4 — set up TLS, or set `DJANGO_ALLOW_PLAIN_HTTP=True` deliberately |
 | Login says "Too many failed attempts" | The failed-attempt lockout (username + IP) | Wait it out, restart the server, or raise `DJANGO_LOGIN_MAX_ATTEMPTS` |
 | `ImproperlyConfigured: DJANGO_SECRET_KEY is not set and DEBUG is False` | `.env` missing, or not loaded into the process. A deployment must bring its own signing key — there is deliberately no fallback | Section 2; systemd needs `EnvironmentFile=`, PowerShell uses `start-server.ps1` |
+| Backup page is red: "does not exist — is the drive plugged in?" | The destination is gone (stick unplugged, drive letter changed) | Plug it back in; the next tick writes again by itself. Nothing was deleted — pruning only runs after a copy succeeds |
+| The destination filled up | One copy a minute of a growing database | Lower **Keep**, or lengthen the interval. The newest copy is the one that fails when a disk is full, which is the one you wanted |
 | A logo or an imported emblem doesn't appear | It was refused as not-an-image (uploads say so; an import drops it silently and imports everything else) | Upload the emblem again from Results settings |
 | A browser insists on HTTPS after you moved to plain HTTP | An HSTS pin from an earlier HTTPS run | Nothing server-side can revoke it; clear the site's HSTS entry in the browser and see section 3.4 |
 | `DisallowedHost` in the log | The hostname isn't in `DJANGO_ALLOWED_HOSTS` | Add it (including the bare IP if people type that), restart |
@@ -229,5 +239,5 @@ Then start Caddy if it isn't already running as a service.
 | Live views stop updating for *some* browsers | Two server processes | See rule 1 — one process only |
 | `database is locked` in the log | Heavy write contention on SQLite | Reduce open dashboards; WAL + a 30 s busy timeout are already configured |
 | Setup says Slalom Timing is running | The launcher holds a mutex while the server is up | Close the black server window, then run Setup again |
-| The installed app opens an empty event | Its database is `%LOCALAPPDATA%\SlalomTiming\data`, not the checkout's | Import the event's `.zip` (Import / Export), or copy `db.sqlite3` in with the app closed |
+| The installed app opens an empty event | Its database is `%LOCALAPPDATA%\SlalomTiming\data`, not the checkout's | Import the event's `.zip` (Backup → Import), or copy `db.sqlite3` in with the app closed |
 | Setup warns "unknown publisher" | The installer isn't code-signed | "More info" → "Run anyway"; see build/README.md |
