@@ -883,3 +883,144 @@ def test_a_bib_taken_between_the_check_and_the_write_is_reported(client):
     assert response.status_code == 200
     assert response.json()["ok"] is False
     assert "7" in response.json()["error"]
+
+
+# --- PRV-4: when a participant record was last actually used -----------------
+# A personal record kept because it might be needed again stops being kept for
+# that reason once it stops being used. updated_at can't answer that question: a
+# competitor who has raced every year since 2019 and never changed their address
+# has an updated_at of 2019 and is not stale at all.
+
+class TestLastUsed:
+    def _participant(self, ctype=None, **kw):
+        return Participant.objects.create(
+            competition_type=ctype or make_type(),
+            first_name=kw.get("first_name", "Ida"),
+            last_name=kw.get("last_name", "Nine"),
+            date_of_birth=datetime.date(2000, 1, 1),
+        )
+
+    def test_creating_one_stamps_it(self):
+        assert self._participant().last_used_at is not None
+
+    def test_editing_one_moves_it(self):
+        participant = self._participant()
+        Participant.objects.filter(pk=participant.pk).update(
+            last_used_at=datetime.datetime(2019, 1, 1, tzinfo=datetime.UTC))
+        participant.refresh_from_db()
+        was = participant.last_used_at
+
+        participant.club = "RRR"
+        participant.save()
+        participant.refresh_from_db()
+        assert participant.last_used_at > was
+
+    def test_a_partial_save_moves_it_too(self):
+        """update_fields is how half the app saves. A save that names its fields
+        is still an edit, and the stamp has to be added to the list or the write
+        silently doesn't include it."""
+        participant = self._participant()
+        Participant.objects.filter(pk=participant.pk).update(
+            last_used_at=datetime.datetime(2019, 1, 1, tzinfo=datetime.UTC))
+        participant.refresh_from_db()
+        was = participant.last_used_at
+
+        participant.club = "RRR"
+        participant.save(update_fields=["club"])
+        participant.refresh_from_db()
+        assert participant.last_used_at > was
+        assert participant.club == "RRR"      # …and the named field still saved
+
+    def test_being_given_a_bib_moves_it(self):
+        """The half updated_at cannot see: an entry is a different row, written
+        without touching the participant at all."""
+        competition = make_competition()
+        participant = self._participant(competition.competition_type)
+        Participant.objects.filter(pk=participant.pk).update(
+            last_used_at=datetime.datetime(2019, 1, 1, tzinfo=datetime.UTC))
+        participant.refresh_from_db()
+        was, edited = participant.last_used_at, participant.updated_at
+
+        EventEntry.objects.create(participant=participant, competition=competition,
+                                  bib_number=4)
+        participant.refresh_from_db()
+        assert participant.last_used_at > was
+        # …and it is not an edit of the participant, so updated_at stays put.
+        assert participant.updated_at == edited
+
+    def test_changing_a_bib_moves_it(self):
+        competition = make_competition()
+        participant = self._participant(competition.competition_type)
+        entry = EventEntry.objects.create(participant=participant,
+                                          competition=competition, bib_number=4)
+        Participant.objects.filter(pk=participant.pk).update(
+            last_used_at=datetime.datetime(2019, 1, 1, tzinfo=datetime.UTC))
+
+        entry.bib_number = 5
+        entry.save()
+        participant.refresh_from_db()
+        assert participant.last_used_at.year > 2019
+
+    def test_the_csv_import_counts_as_use(self):
+        """A participant already on file who turns up in this year's list is
+        reused rather than duplicated (csvimport) — which is precisely a use, and
+        the one most likely to be the only sign of it."""
+        from apps.transfer import csvimport
+
+        competition = make_competition()
+        participant = self._participant(competition.competition_type,
+                                        first_name="Ida", last_name="Nine")
+        Participant.objects.filter(pk=participant.pk).update(
+            last_used_at=datetime.datetime(2019, 1, 1, tzinfo=datetime.UTC))
+
+        # The app's own sample file with our competitor's details written into
+        # it, so the test follows whatever columns this type collects rather
+        # than pinning a header of its own.
+        columns = csvimport.columns_for(competition)
+        header = csvimport.sample_csv(competition).lstrip("﻿").splitlines()[0]
+        values = {"first_name": "Ida", "last_name": "Nine",
+                  "date_of_birth": "2000-01-01", "email": "ida@example.de"}
+        row = ";".join(values.get(c.key, c.example or "x") for c in columns)
+        csv = f"{header}\n{row}\n".encode("utf-8")
+        report = csvimport.read(csv, competition)
+        assert report.ok, report.errors
+        csvimport.commit(report, competition)
+        assert Participant.objects.count() == 1      # reused, not duplicated
+        participant.refresh_from_db()
+        assert participant.last_used_at.year > 2019
+
+    def test_reading_a_participant_is_not_a_use(self):
+        """Rendering the list, a start order or a results table must not refresh
+        the stamp, or nothing would ever age at all."""
+        competition = make_competition()
+        participant = self._participant(competition.competition_type)
+        EventEntry.objects.create(participant=participant, competition=competition,
+                                  bib_number=4)
+        Participant.objects.filter(pk=participant.pk).update(
+            last_used_at=datetime.datetime(2019, 1, 1, tzinfo=datetime.UTC))
+
+        from django.test import Client
+        client = Client()
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.create_superuser("looker", "l@x.de", "pw")
+        client.force_login(user)
+        client.get(reverse("participants:list"))
+        client.get(reverse("results:index"))
+
+        participant.refresh_from_db()
+        assert participant.last_used_at.year == 2019
+
+    def test_the_stale_ones_can_be_found_in_one_query(self, django_assert_num_queries):
+        """What the field is for: a bulk delete by age asks the whole table, so
+        the column is indexed and the question is one query."""
+        ctype = make_type()
+        old = self._participant(ctype, last_name="Old")
+        fresh = self._participant(ctype, last_name="Fresh")
+        Participant.objects.filter(pk=old.pk).update(
+            last_used_at=datetime.datetime(2019, 1, 1, tzinfo=datetime.UTC))
+
+        cutoff = datetime.datetime(2024, 1, 1, tzinfo=datetime.UTC)
+        with django_assert_num_queries(1):
+            stale = list(Participant.objects.filter(last_used_at__lt=cutoff))
+        assert [p.pk for p in stale] == [old.pk]
+        assert fresh.pk not in [p.pk for p in stale]

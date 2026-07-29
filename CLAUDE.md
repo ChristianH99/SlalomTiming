@@ -222,6 +222,16 @@ apps/participants/
                          run status, unique per competition) + ClassAssignment (participant↔class
                          join for Manual assignment; explicit model, not a M2M, so duplicate
                          rows allow entering the same class multiple times).
+                         Participant.last_used_at is when the record was last *used* —
+                         edited (every save, so an import or a merge counts) or entered
+                         into a competition (a bib assigned or changed, via the post_save
+                         on EventEntry, which is a different row and would not otherwise
+                         touch this one). It exists because updated_at cannot answer the
+                         retention question: somebody who has raced every year since 2019
+                         and never changed their address has an updated_at of 2019 and is
+                         not stale. Indexed — the sweep that will use it asks the whole
+                         table. Not carried by apps/transfer: an import *is* a use, so the
+                         importer's own save stamps it fresh.
                          Only name and date-of-birth are required at the DB level — licence,
                          co-driver, vehicle, address, club, e-mail and phone are all blank=True
                          because whether they're collected (and mandatory) is a per-discipline

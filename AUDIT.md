@@ -21,9 +21,11 @@ Baseline at audit time: the shipped suite was **603 passed, 0 failed** (8 m 29 s
 integrity) and §5 (performance) are complete. **DOC-5 and OPS-1 are done** — the app
 now backs its own database up on a timer (Backup → Automatic backup), which is what
 the run-book's manual USB instruction was standing in for. **§4 (privacy) is still
-short**: five of its eight items were carried by §1–§3, but **PRV-4 (retention and
-bulk erase) and PRV-5 (a privacy notice) remain**. §6 (bar OPS-1), §7, §8 and §9
-still open.
+short**: five of its eight items were carried by §1–§3; **PRV-4 now has its half
+that has to exist first** (`Participant.last_used_at` — a record's last edit *or*
+entry, indexed and backfilled), with the bulk-delete screen still to come, and
+**PRV-5 (a privacy notice) is untouched**. §6 (bar OPS-1), §7, §8 and §9 still
+open.
 
 ---
 
@@ -298,10 +300,23 @@ vehicle for every competitor, retained across events, and exports the lot in a p
   published results.
 * **PRV-2 (✅ FIXED, §1)** — SEC-A: uploaded media was world-readable.
 * **PRV-3 (✅ FIXED, §2a)** — SEC-C: the duplicate check leaked across disciplines.
-* **PRV-4 (OPEN)** — **No retention policy and no bulk erase.** Participants persist forever;
-  there is no "delete everyone from before year X", and no way to honour an erasure
-  request other than deleting one participant at a time (which silently blanks their
-  name in past results).
+* **PRV-4 (◔ PART DONE)** — **No retention policy and no bulk erase.** Participants persist
+  forever; there is no "delete everyone from before year X", and no way to honour an
+  erasure request other than deleting one participant at a time (which silently blanks
+  their name in past results).
+  **Done:** the app now records *when a participant record was last used* —
+  `Participant.last_used_at`, moved by an edit (any save, so imports and merges count)
+  and by an entry being written for them (a bib assigned or changed, through a
+  `post_save` on `EventEntry`). `updated_at` could not answer the question: a
+  competitor who has raced every year since 2019 and never changed their address has
+  an `updated_at` of 2019 and is not stale at all. The column is indexed, so "everyone
+  not used since <date>" is one query over the whole table, and the migration backfills
+  every existing row from the later of its own `updated_at` and its most recent entry
+  — a new nullable column would otherwise read as "never used" for the club's entire
+  membership, which is the set a sweep deletes first.
+  **Still to do:** the bulk-delete screen itself (owner: "we'll add a bulk delete
+  option depending on that age later"), and what deleting does to a name already
+  printed in past results.
 * **PRV-5** — **No privacy notice anywhere** in the UI, and no record of consent. For a
   German club running this on a public network, that is the paperwork side of the same
   gap.

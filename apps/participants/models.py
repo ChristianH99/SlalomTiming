@@ -2,6 +2,8 @@ import datetime
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -62,12 +64,32 @@ class Participant(models.Model):
     phone_number = models.CharField(max_length=30, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # When this record was last edited *or* entered into a competition. Not the
+    # same question as updated_at, which only moves when the row itself is
+    # written: a competitor who has raced every year since 2019 and never
+    # changed their address has an updated_at of 2019 and is not stale at all.
+    # A personal record kept because it might be needed again stops being kept
+    # for that reason once it stops being used, so this is the field a retention
+    # sweep has to age off — indexed because that sweep asks the whole table.
+    last_used_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         ordering = ["last_name", "first_name"]
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
+
+    def save(self, *args, **kwargs):
+        """Every write is a use — an edit, an import, a merge.
+
+        The other half (a bib assigned, in a competition) can't go here: an entry
+        is a different row, and is written without touching this one. It comes
+        through touch_last_used() below.
+        """
+        self.last_used_at = timezone.now()
+        if (fields := kwargs.get("update_fields")) is not None:
+            kwargs["update_fields"] = {*fields, "last_used_at"}
+        super().save(*args, **kwargs)
 
 
 class ClassAssignment(models.Model):
@@ -116,3 +138,17 @@ class EventEntry(models.Model):
 
     def __str__(self):
         return f"#{self.bib_number} {self.participant} @ {self.competition}"
+
+
+@receiver(post_save, sender=EventEntry)
+def touch_last_used(sender, instance, **kwargs):
+    """Being given a bib is the loudest possible "this record is still in use".
+
+    A queryset update rather than participant.save(): this is not an edit of the
+    participant, so it must not move updated_at, and it must not fire whatever
+    else a save might come to do. post_save rather than an override of
+    EventEntry.save() so it covers create(), get_or_create() and the CSV and
+    archive imports without each of them having to remember.
+    """
+    Participant.objects.filter(pk=instance.participant_id).update(
+        last_used_at=timezone.now())
