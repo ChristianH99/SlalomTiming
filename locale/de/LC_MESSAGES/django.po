@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-29 21:23+0200\n"
+"POT-Creation-Date: 2026-07-30 08:46+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -508,16 +508,16 @@ msgstr ""
 "Der Typ dieses Teilnehmers passt nicht zum aktuellen Wettbewerb, daher kann "
 "keine Startnummer zugewiesen werden."
 
-#: .\apps\participants\models.py:29
+#: .\apps\participants\models.py:31
 msgid "A date of birth can’t be in the future."
 msgstr "Ein Geburtsdatum kann nicht in der Zukunft liegen."
 
-#: .\apps\participants\models.py:32
+#: .\apps\participants\models.py:34
 #, python-format
 msgid "A date of birth before %(year)s is a typo — please check it."
 msgstr "Ein Geburtsdatum vor %(year)s ist ein Tippfehler — bitte prüfen."
 
-#: .\apps\participants\models.py:42
+#: .\apps\participants\models.py:44
 msgid ""
 "Discipline this participant is registered under (e.g. Motorcycle, Go-Cart). "
 "A participant can only ever belong to one type."
@@ -525,23 +525,23 @@ msgstr ""
 "Disziplin, unter der dieser Teilnehmer registriert ist (z. B. Motorrad, Go-"
 "Kart). Ein Teilnehmer kann immer nur zu einem Typ gehören."
 
-#: .\apps\participants\models.py:97
+#: .\apps\participants\models.py:119
 msgid "Registered"
 msgstr "Gemeldet"
 
-#: .\apps\participants\models.py:98 .\apps\timing\models.py:164
+#: .\apps\participants\models.py:120 .\apps\timing\models.py:164
 msgid "Did Not Start"
 msgstr "Nicht angetreten"
 
-#: .\apps\participants\models.py:99 .\apps\timing\models.py:162
+#: .\apps\participants\models.py:121 .\apps\timing\models.py:162
 msgid "Did Not Finish"
 msgstr "Nicht beendet"
 
-#: .\apps\participants\models.py:100 .\apps\timing\models.py:165
+#: .\apps\participants\models.py:122 .\apps\timing\models.py:165
 msgid "Disqualified"
 msgstr "Disqualifiziert"
 
-#: .\apps\participants\models.py:101
+#: .\apps\participants\models.py:123
 msgid "Finished"
 msgstr "Beendet"
 
@@ -1009,6 +1009,29 @@ msgstr "Startnummer %(bib)s ist in diesem Wettbewerb schon vergeben."
 msgid "Bib %(bib)s is also used on line %(line)s."
 msgstr "Startnummer %(bib)s wird auch in Zeile %(line)s verwendet."
 
+#: .\apps\transfer\folders.py:70
+msgid "That is not a folder on this computer."
+msgstr "Das ist kein Ordner auf diesem Rechner."
+
+#: .\apps\transfer\folders.py:72
+#, python-format
+msgid "“%(path)s” is not a folder on this computer."
+msgstr "„%(path)s“ ist kein Ordner auf diesem Rechner."
+
+#: .\apps\transfer\folders.py:82
+#, python-format
+msgid "This computer won’t let the server read “%(path)s”."
+msgstr "Dieser Rechner lässt den Server „%(path)s“ nicht lesen."
+
+#: .\apps\transfer\folders.py:90
+#, python-format
+msgid "“%(path)s” can’t be read — is the drive still connected?"
+msgstr "„%(path)s“ kann nicht gelesen werden – ist das Laufwerk noch angeschlossen?"
+
+#: .\apps\transfer\folders.py:145
+msgid "This computer"
+msgstr "Dieser Rechner"
+
 #: .\apps\transfer\forms.py:44
 msgid "Where should the copies go?"
 msgstr "Wohin sollen die Kopien?"
@@ -1096,7 +1119,10 @@ msgstr "Zielordner"
 msgid ""
 "Where the copies go — a USB stick or another drive, so a copy survives "
 "whatever happens to this computer."
-msgstr "Wohin die Kopien geschrieben werden – ein USB-Stick oder ein anderes Laufwerk, damit eine Kopie überlebt, was auch immer mit diesem Rechner passiert."
+msgstr ""
+"Wohin die Kopien geschrieben werden – ein USB-Stick oder ein anderes "
+"Laufwerk, damit eine Kopie überlebt, was auch immer mit diesem Rechner "
+"passiert."
 
 #: .\apps\transfer\models.py:44
 msgid "Every"
@@ -1140,23 +1166,24 @@ msgstr ""
 "Die Exportdatei enthält einen Wert, den %(model)s.%(field)s nicht speichern "
 "kann."
 
-#: .\apps\transfer\views.py:64
+#: .\apps\transfer\views.py:69
 msgid "Backups are on. The first copy is being written now."
-msgstr "Die Sicherung ist eingeschaltet. Die erste Kopie wird jetzt geschrieben."
+msgstr ""
+"Die Sicherung ist eingeschaltet. Die erste Kopie wird jetzt geschrieben."
 
-#: .\apps\transfer\views.py:67
+#: .\apps\transfer\views.py:72
 msgid "Backups are off."
 msgstr "Die Sicherung ist ausgeschaltet."
 
-#: .\apps\transfer\views.py:135
+#: .\apps\transfer\views.py:153
 msgid "Choose what to export."
 msgstr "Wähle aus, was exportiert werden soll."
 
-#: .\apps\transfer\views.py:182
+#: .\apps\transfer\views.py:200
 msgid "Choose a file to import."
 msgstr "Wähle eine Datei zum Importieren aus."
 
-#: .\apps\transfer\views.py:186
+#: .\apps\transfer\views.py:204
 #, python-format
 msgid ""
 "That file is %(size)s MB — too large for an export archive (the limit is "
@@ -1165,12 +1192,12 @@ msgstr ""
 "Diese Datei ist %(size)s MB groß — zu groß für ein Export-Archiv (die Grenze "
 "liegt bei %(limit)s MB)."
 
-#: .\apps\transfer\views.py:210
+#: .\apps\transfer\views.py:228
 msgid "Choose a competition to import participants into."
 msgstr ""
 "Wähle einen Wettbewerb, in den die Teilnehmer importiert werden sollen."
 
-#: .\apps\transfer\views.py:216
+#: .\apps\transfer\views.py:234
 #, python-format
 msgid ""
 "That file is %(size)s MB — too large for a participant list (the limit is "
@@ -1179,27 +1206,27 @@ msgstr ""
 "Diese Datei ist %(size)s MB groß — zu groß für eine Teilnehmerliste (die "
 "Grenze liegt bei %(limit)s MB)."
 
-#: .\apps\transfer\views.py:229
+#: .\apps\transfer\views.py:247
 msgid "Participants imported."
 msgstr "Teilnehmer importiert."
 
-#: .\apps\transfer\views.py:286
+#: .\apps\transfer\views.py:304
 msgid "Import finished."
 msgstr "Import abgeschlossen."
 
-#: .\apps\transfer\views.py:306
+#: .\apps\transfer\views.py:324
 msgid "Import cancelled — nothing was changed."
 msgstr "Import abgebrochen – es wurde nichts geändert."
 
-#: .\apps\transfer\views.py:319
+#: .\apps\transfer\views.py:337
 msgid "The upload has expired. Please choose the file again."
 msgstr "Der Upload ist abgelaufen. Bitte wähle die Datei erneut aus."
 
-#: .\config\settings.py:478
+#: .\config\settings.py:491
 msgid "German"
 msgstr "Deutsch"
 
-#: .\config\settings.py:479
+#: .\config\settings.py:492
 msgid "English"
 msgstr "Englisch"
 
@@ -1398,7 +1425,7 @@ msgstr "leer lassen zum Beibehalten"
 #: .\templates\competitions\competitiontype_settings.html:83
 #: .\templates\participants\participant_form.html:130
 #: .\templates\results\results_settings.html:176
-#: .\templates\timing\settings.html:38 .\templates\transfer\backup.html:78
+#: .\templates\timing\settings.html:38 .\templates\transfer\backup.html:90
 msgid "Save"
 msgstr "Speichern"
 
@@ -1581,6 +1608,7 @@ msgstr "Verwerfen"
 #: .\templates\participants\participant_form.html:131
 #: .\templates\participants\participant_form.html:157
 #: .\templates\results\_results_table.html:79
+#: .\templates\transfer\backup.html:120
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -1681,6 +1709,7 @@ msgstr "Wie Klassen funktionieren"
 #: .\templates\competitions\competition_classes.html:11
 #: .\templates\competitions\competition_runorder.html:15
 #: .\templates\timing\auto.html:11 .\templates\timing\live.html:11
+#: .\templates\transfer\backup.html:105
 msgid "Close"
 msgstr "Schließen"
 
@@ -3169,7 +3198,10 @@ msgid ""
 "The event is the database. This copies it somewhere else while you time — so "
 "a copy survives a laptop that dies, a disk that fills or a folder somebody "
 "deletes."
-msgstr "Die Veranstaltung ist die Datenbank. Diese Seite kopiert sie während der Zeitmessung an einen anderen Ort – damit eine Kopie einen defekten Rechner, eine volle Festplatte oder einen versehentlich gelöschten Ordner überlebt."
+msgstr ""
+"Die Veranstaltung ist die Datenbank. Diese Seite kopiert sie während der "
+"Zeitmessung an einen anderen Ort – damit eine Kopie einen defekten Rechner, "
+"eine volle Festplatte oder einen versehentlich gelöschten Ordner überlebt."
 
 #: .\templates\transfer\backup.html:18
 msgid "Backups are not being written"
@@ -3203,20 +3235,45 @@ msgstr "Warten auf die erste Kopie…"
 msgid "Copy the database automatically"
 msgstr "Die Datenbank automatisch kopieren"
 
-#: .\templates\transfer\backup.html:62
+#: .\templates\transfer\backup.html:61
+msgid "Browse…"
+msgstr "Durchsuchen…"
+
+#: .\templates\transfer\backup.html:71
 msgid "min"
 msgstr "Min."
 
-#: .\templates\transfer\backup.html:69
+#: .\templates\transfer\backup.html:78
 msgid "copies"
 msgstr "Kopien"
 
-#: .\templates\transfer\backup.html:83
+#: .\templates\transfer\backup.html:95
 msgid ""
 "There is no “back up now” button on purpose: the point is that you don’t "
 "have to remember. Saving a destination checks it can be written to and "
 "starts a copy straight away."
-msgstr "Es gibt bewusst keine Schaltfläche „Jetzt sichern“: Sie sollen nicht daran denken müssen. Beim Speichern eines Ziels wird geprüft, ob es beschreibbar ist, und sofort eine Kopie geschrieben."
+msgstr ""
+"Es gibt bewusst keine Schaltfläche „Jetzt sichern“: Sie sollen nicht daran "
+"denken müssen. Beim Speichern eines Ziels wird geprüft, ob es beschreibbar "
+"ist, und sofort eine Kopie geschrieben."
+
+#: .\templates\transfer\backup.html:106
+msgid "Choose a folder"
+msgstr "Ordner auswählen"
+
+#: .\templates\transfer\backup.html:108
+msgid ""
+"These are the folders on the computer running Slalom Timing — not on this "
+"device."
+msgstr "Dies sind die Ordner auf dem Rechner, auf dem Slalom Timing läuft – nicht auf diesem Gerät."
+
+#: .\templates\transfer\backup.html:112
+msgid "Up"
+msgstr "Nach oben"
+
+#: .\templates\transfer\backup.html:122
+msgid "Use this folder"
+msgstr "Diesen Ordner verwenden"
 
 #: .\templates\transfer\export.html:7
 msgid ""

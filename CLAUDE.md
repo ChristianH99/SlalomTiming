@@ -860,11 +860,28 @@ apps/transfer/          Getting the data out: the **automatic backup** (the sect
   staging.py             Where an uploaded archive waits between the wizard's steps: a temp file
                          under a random token that only the session knows. Archives carry personal
                          data, so a staged file is deleted on commit/cancel and stale ones swept.
+  folders.py             Browsing the *host's* folders, so the destination can be picked
+                         instead of typed. A file input can't do this job: the browser
+                         would offer the folders of whichever machine is displaying the
+                         page, and the point of this app is that other people open it over
+                         the venue network — a Desktop path from a marshal's phone means
+                         nothing to the laptop doing the writing. Being a directory-listing
+                         endpoint, it is deliberate about three things: **folders only**
+                         (never a file name, never contents), **no path is trusted**
+                         (resolved and checked to be a directory, so a `..` walk and junk
+                         both come back as one sentence), and it is **gated** by the same
+                         page key as the rest of the section. It does *not* report whether a
+                         folder is writable — that means writing a probe file, and browsing
+                         must not leave a trail of them; the one folder that matters is
+                         checked by the form on Save.
   views.py               BackupView (the settings form; a save validates the destination, so a
                          bad one is refused while the operator is still looking at it, then
                          starts/stops the runner) + backup_status (JSON, polled by
                          static/js/backup_page.js — which reloads only when the last attempt
-                         actually changed and nobody is typing).
+                         actually changed and the operator is not in the middle of something:
+                         typing, *or* holding a dialog open, since a copy a minute meant a
+                         reload a minute and the folder picker closed under whoever was three
+                         folders deep in it) + backup_folders (the folder listing above).
                          ExportView (page + the .zip download), ImportView — the one Import page,
                          offering both kinds of file and dispatching on which file field was
                          submitted: an *archive* is step 1 of the wizard (parsed on upload so a

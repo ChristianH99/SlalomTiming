@@ -1484,8 +1484,17 @@ class TestTheBackupPage:
         form = _re.search(r"<form[^>]*data-unsaved-guard[^>]*>(.*?)</form>",
                           body, _re.S | _re.I)
         assert form, "the settings form is missing"
-        controls = _re.findall(r"<button[^>]*>(.*?)</button>", form.group(1), _re.S | _re.I)
-        assert [c.strip() for c in controls] == ["Save"], controls
+        controls = [c.strip() for c in
+                    _re.findall(r"<button[^>]*>(.*?)</button>", form.group(1),
+                                _re.S | _re.I)]
+        # Submits, specifically. "Browse…" is a control on the form and is not one
+        # of these; asserting on *every* button made adding it look like this
+        # regression, which it wasn't.
+        submits = [c.strip() for c in
+                   _re.findall(r"<button[^>]*type=\"submit\"[^>]*>(.*?)</button>",
+                               form.group(1), _re.S | _re.I)]
+        assert submits == ["Save"], submits
+        assert not any("now" in c.lower() for c in controls), controls
 
 
 class TestTheTimer:
@@ -1563,3 +1572,114 @@ class TestTheTimer:
         settings.save()
         backup.runner._tick()
         assert list(destination.glob("*.sqlite3")) == []
+
+
+# --- The destination picker --------------------------------------------------
+# A file input is no use here: the browser would offer the folders of whichever
+# machine is displaying the page, and over the venue network that is usually
+# somebody else's phone. So the listing comes from the server.
+
+class TestBrowsingTheHostsFolders:
+    def test_no_path_lists_the_drives(self, client):
+        data = client.get(reverse("transfer:backup-folders")).json()
+        assert data["entries"], "no roots at all"
+        assert data["at_root"] is True
+        assert data["path"] == ""
+
+    def test_it_lists_the_folders_in_a_folder(self, client, tmp_path):
+        (tmp_path / "keep").mkdir()
+        (tmp_path / "toss").mkdir()
+        (tmp_path / "a-file.txt").write_text("x")
+        data = client.get(reverse("transfer:backup-folders"),
+                          {"path": str(tmp_path)}).json()
+        assert [e["name"] for e in data["entries"]] == ["keep", "toss"]
+        assert data["path"] == str(tmp_path)
+
+    def test_it_never_lists_files(self, client, tmp_path):
+        """Folders only. Somebody who can reach this may learn that a folder
+        exists, and nothing about what is in it."""
+        (tmp_path / "secret.sqlite3").write_text("x")
+        (tmp_path / "addresses.csv").write_text("x")
+        data = client.get(reverse("transfer:backup-folders"),
+                          {"path": str(tmp_path)}).json()
+        assert data["entries"] == []
+
+    def test_a_path_that_is_not_a_folder_comes_back_as_a_sentence(self, client, tmp_path):
+        target = tmp_path / "a-file.txt"
+        target.write_text("x")
+        for bad in (str(target), str(tmp_path / "nowhere"), "\x00nonsense"):
+            data = client.get(reverse("transfer:backup-folders"), {"path": bad}).json()
+            assert data["problem"], f"{bad!r} produced no message"
+            # …and it lands somewhere usable rather than on an error page.
+            assert data["entries"] or data["at_root"]
+
+    def test_it_is_gated_like_the_rest_of_the_section(self):
+        """The endpoint lists a filesystem. It must be exactly as reachable as
+        the page it serves, and no more."""
+        from django.test import Client
+        from django.urls import resolve
+
+        from apps.accounts import pages
+
+        match = resolve(reverse("transfer:backup-folders"))
+        assert (match.app_name, match.url_name) in pages.PAGE_URLS["import_export"]
+        assert (match.app_name, match.url_name) not in pages.OPEN
+        response = Client().get(reverse("transfer:backup-folders"))
+        assert response.status_code == 302        # anonymous → login
+
+    def test_a_long_folder_is_cut_off_and_says_so(self, client, tmp_path):
+        """Thousands of entries is a list nobody can use and a payload nobody
+        asked for."""
+        from apps.transfer import folders
+
+        for i in range(folders.MAX_ENTRIES + 5):
+            (tmp_path / f"d{i:04d}").mkdir()
+        data = client.get(reverse("transfer:backup-folders"),
+                          {"path": str(tmp_path)}).json()
+        assert len(data["entries"]) == folders.MAX_ENTRIES
+        assert data["truncated"] == 5
+
+    def test_browsing_writes_nothing(self, client, tmp_path):
+        """destination_problem() probes by writing a file. Browsing must not
+        leave a trail of those through every folder the operator clicks past."""
+        (tmp_path / "sub").mkdir()
+        before = sorted(p.name for p in tmp_path.iterdir())
+        client.get(reverse("transfer:backup-folders"), {"path": str(tmp_path)})
+        assert sorted(p.name for p in tmp_path.iterdir()) == before
+
+    def test_the_parent_of_a_folder_is_offered(self, client, tmp_path):
+        (tmp_path / "sub").mkdir()
+        data = client.get(reverse("transfer:backup-folders"),
+                          {"path": str(tmp_path / "sub")}).json()
+        assert data["parent"] == str(tmp_path)
+        assert data["at_root"] is False
+
+
+class TestTheBackupTimestampsReadAsLocalTime:
+    """The operator reads "last copy at 08:37" against the clock on the wall
+    beside the laptop. TIME_ZONE used to be UTC, so all summer it was an hour or
+    two out in a way that is easy to misread as right."""
+
+    def test_the_setting_follows_the_machine(self):
+        from config.settings import _local_time_zone
+
+        assert _local_time_zone()      # never empty; UTC is the last resort
+
+    def test_an_explicit_zone_wins(self, monkeypatch):
+        from config.settings import _local_time_zone
+
+        monkeypatch.setenv("DJANGO_TIME_ZONE", "Pacific/Auckland")
+        assert _local_time_zone() == "Pacific/Auckland"
+
+    def test_the_page_renders_the_zone_it_is_configured_for(self, client, settings):
+        import datetime
+
+        settings.TIME_ZONE = "Europe/Berlin"       # UTC+2 in July
+        row = BackupSettings.load()
+        row.enabled = True
+        row.destination = str(Path(__file__).parent)
+        row.last_run_at = row.last_ok_at = datetime.datetime(
+            2026, 7, 30, 6, 37, tzinfo=datetime.UTC)
+        row.save()
+        body = client.get(reverse("transfer:backup")).content.decode()
+        assert "08:37" in body, "the timestamp is still being rendered in UTC"

@@ -211,10 +211,12 @@ and JS on the next load without a forced refresh.
       the live line log ticking.
 - [ ] Fire one test start/finish through the Simulator or the real rig and see it
       land on the Manual timing view.
-- [ ] **Backup → Automatic backup**: plug a USB stick in, set it as the destination
-      and switch the copies on. Saving checks the folder can be written to and takes
-      the first copy straight away — the green panel names the file it wrote. That is
-      the whole backup procedure; there is nothing to do again during the day.
+- [ ] **Backup → Automatic backup**: plug a USB stick in, then **Browse…** and pick the
+      folder — the list is the folders on *this* machine, whichever device you happen to
+      be looking at the page from. Switch the copies on and save: that checks the folder
+      can be written to and takes the first copy straight away, and the green panel names
+      the file it wrote. That is the whole backup procedure; there is nothing to do again
+      during the day.
 
 **Starting the server**
 

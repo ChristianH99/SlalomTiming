@@ -23,7 +23,8 @@ from django.views.decorators.http import require_POST
 from apps.common import other_signed_in_users
 from apps.competitions.models import Competition, CompetitionType
 
-from . import archive, backup, csvimport, exporters, importers, merge, staging
+from . import (archive, backup, csvimport, exporters, folders, importers,
+               merge, staging)
 from .forms import BackupSettingsForm
 from .models import BackupSettings
 from .schema import TransferError
@@ -78,7 +79,10 @@ class BackupView(View):
         return {
             "form": form,
             "settings": settings,
-            "page_urls": {"status": reverse("transfer:backup-status")},
+            "page_urls": {
+                "status": reverse("transfer:backup-status"),
+                "folders": reverse("transfer:backup-folders"),
+            },
             "running": backup.runner.is_running,
             # Named here rather than in the template so the page can say what is
             # wrong with a destination that has stopped working — an unplugged
@@ -100,6 +104,16 @@ def backup_status(request):
         "last_file": settings.last_file,
         "last_bytes": settings.last_bytes,
     })
+
+
+def backup_folders(request):
+    """The folders on *this* machine, for the destination picker.
+
+    A file input would offer the folders of whichever machine is displaying the
+    page, and over the venue network that is usually somebody else's phone — see
+    apps/transfer/folders.py for what this does and does not hand out.
+    """
+    return JsonResponse(folders.listing(request.GET.get("path") or ""))
 
 
 class ExportView(View):

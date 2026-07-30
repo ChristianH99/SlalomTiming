@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-29 21:23+0200\n"
+"POT-Creation-Date: 2026-07-30 08:46+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -156,6 +156,21 @@ msgstr "Strafe"
 #: .\static\js\auto_timing.js:623
 msgid "Unlock"
 msgstr "Entsperren"
+
+#: .\static\js\backup_page.js:87
+msgid "No folders in here."
+msgstr "Hier sind keine Ordner."
+
+#: .\static\js\backup_page.js:104
+#, javascript-format
+msgid "%s more folder is not shown."
+msgid_plural "%s more folders are not shown."
+msgstr[0] "%s weiterer Ordner wird nicht angezeigt."
+msgstr[1] "%s weitere Ordner werden nicht angezeigt."
+
+#: .\static\js\backup_page.js:117
+msgid "Could not read the folders on the server."
+msgstr "Die Ordner auf dem Server konnten nicht gelesen werden."
 
 #: .\static\js\competition_classes.js:110
 msgid "This class"

@@ -7,6 +7,7 @@ app_name = "transfer"
 urlpatterns = [
     path("", views.BackupView.as_view(), name="backup"),
     path("status/", views.backup_status, name="backup-status"),
+    path("folders/", views.backup_folders, name="backup-folders"),
     path("export/", views.ExportView.as_view(), name="export"),
     path("import/", views.ImportView.as_view(), name="import"),
     path("import/review/", views.ImportReviewView.as_view(), name="review"),

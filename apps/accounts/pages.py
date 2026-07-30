@@ -83,7 +83,8 @@ PAGE_URLS = {
     # Setup, so it can be granted (or withheld) on its own.
     "import_export": {
         ("transfer", name)
-        for name in ("backup", "backup-status", "export", "import", "review",
+        for name in ("backup", "backup-status", "backup-folders",
+                     "export", "import", "review",
                      "cancel", "csv-sample")
     },
 }

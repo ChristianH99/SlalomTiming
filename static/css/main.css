@@ -84,6 +84,10 @@
 
   /* ---- radii ---- */
   --radius-xs: 4px;
+  /* A path, a device line, a wildcard: things that must be read exactly as
+     written. Two components spelled this stack out separately, with different
+     fallbacks, before it was a token. */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -1300,7 +1304,7 @@ body.modal-open { overflow: hidden; }
   background: var(--snow);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
 }
 .device-log-line {
@@ -3314,7 +3318,7 @@ textarea:focus-visible,
 .pdf-chips { display: flex; gap: var(--space-3); flex-wrap: wrap; }
 .pdf-chip {
   padding: var(--space-2) var(--space-4);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--glacier);
   background: var(--frost-bg);
@@ -3692,3 +3696,39 @@ textarea:focus-visible,
   cursor: pointer;
 }
 .live-notice-action:hover { background: var(--white); color: var(--ink); }
+
+/* The backup destination picker. The path belongs to the machine running the
+   server, so the field is paired with a button that asks *it* — see
+   static/js/backup_page.js. */
+.folder-pick { display: flex; gap: var(--space-3); align-items: center; }
+.folder-pick input { flex: 1 1 auto; min-width: 0; }
+
+.folder-panel { width: min(34rem, 92vw); }
+.folder-crumb {
+  display: flex; gap: var(--space-3); align-items: center;
+  margin-top: var(--space-4);
+}
+/* The path is the one thing here that must not be paraphrased, so it gets the
+   monospace treatment and wraps rather than being cut off mid-folder. */
+.folder-here {
+  flex: 1 1 auto; min-width: 0;
+  font-size: var(--text-sm); color: var(--text-mid);
+  overflow-wrap: anywhere;
+}
+.folder-here--path { font-family: var(--font-mono); }
+.folder-list {
+  max-height: 18rem; margin: var(--space-4) 0; padding: 0;
+  overflow-y: auto; list-style: none;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.folder-entry {
+  display: block; width: 100%;
+  padding: var(--space-2) var(--space-4);
+  font: inherit; font-size: var(--text-sm); color: var(--text-dark); text-align: left;
+  cursor: pointer; background: none; border: 0;
+}
+.folder-entry::before { content: "📁"; margin-right: var(--space-3); }
+.folder-entry:hover { background: var(--snow); }
+.folder-empty {
+  padding: var(--space-4); font-size: var(--text-sm); color: var(--text-muted);
+}

@@ -496,7 +496,31 @@ LANGUAGES = [
 # translation catalogs.
 LOCALE_PATHS = [BASE_DIR / 'locale']
 
-TIME_ZONE = 'UTC'
+def _local_time_zone():
+    """The zone this machine keeps, because that is the clock the operator reads.
+
+    This app runs on a laptop at a venue. Every timestamp it shows — when the last
+    backup was written, when somebody signed in, the audit trail — is read against
+    the clock on the wall next to it, so a default of UTC is simply wrong by an hour
+    or two all summer, in a way that is easy to misread as right.
+
+    Django needs an IANA key, and Windows does not have one: it reports a localised
+    display name ("Mitteleuropäische Sommerzeit"), which is neither a key nor stable
+    across languages. tzlocal does the CLDR mapping, which is the whole reason it is
+    a dependency. Failing that, UTC — a wrong clock is better than a server that
+    won't start, and DJANGO_TIME_ZONE is the way to say it outright.
+    """
+    if (explicit := os.environ.get('DJANGO_TIME_ZONE')):
+        return explicit
+    try:
+        import tzlocal
+
+        return tzlocal.get_localzone_name() or 'UTC'
+    except Exception:  # noqa: BLE001 - no zone is worth failing a boot over
+        return 'UTC'
+
+
+TIME_ZONE = _local_time_zone()
 
 USE_I18N = True
 

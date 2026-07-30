@@ -49,7 +49,15 @@
 
       <label class="settings-field settings-field--wide" for="{{ form.destination.id_for_label }}">
         <span class="settings-label">{{ form.destination.label }}</span>
-        <span class="settings-control">{{ form.destination }}</span>
+        {% comment %}The path is on the *server*, so a file input is no use: the
+        browser would offer the folders of whichever machine is displaying the
+        page, which over the venue network is usually somebody else's phone. The
+        Browse button asks the server instead (transfer:backup-folders).{% endcomment %}
+        <span class="settings-control folder-pick">
+          {{ form.destination }}
+          <button type="button" class="button button--secondary" data-folder-open
+                  data-no-dirty>{% trans "Browse…" %}</button>
+        </span>
         <span class="hint">{{ form.destination.help_text }}</span>
         <span class="field-error">{{ form.destination.errors|join:" " }}</span>
       </label>
@@ -83,6 +91,34 @@
   <p class="hint">
     {% blocktrans %}There is no “back up now” button on purpose: the point is that you don’t have to remember. Saving a destination checks it can be written to and starts a copy straight away.{% endblocktrans %}
   </p>
+
+  {% comment %}The folder picker. Browsing happens on the machine running the
+  server, which is the only machine whose paths mean anything here.{% endcomment %}
+  <div class="modal-overlay" id="folder-modal" hidden data-folder-modal>
+    <div class="modal folder-panel" role="dialog" aria-modal="true"
+         aria-labelledby="folder-title">
+      <button type="button" class="modal-close" data-folder-close
+              aria-label="{% trans 'Close' %}">×</button>
+      <h2 class="modal-title" id="folder-title">{% trans "Choose a folder" %}</h2>
+      <p class="hint">
+        {% blocktrans %}These are the folders on the computer running Slalom Timing — not on this device.{% endblocktrans %}
+      </p>
+      <div class="folder-crumb">
+        <button type="button" class="button button--secondary button--small" data-folder-up
+                hidden>{% trans "Up" %}</button>
+        <span class="folder-here" data-folder-here></span>
+      </div>
+      <p class="notice notice--warning" data-folder-problem hidden></p>
+      <ul class="folder-list" data-folder-list></ul>
+      <p class="hint" data-folder-truncated hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="button button--secondary" data-folder-close>
+          {% trans "Cancel" %}</button>
+        <button type="button" class="button" data-folder-use disabled>
+          {% trans "Use this folder" %}</button>
+      </div>
+    </div>
+  </div>
 {% endblock %}
 
 {% block scripts %}
