@@ -33,7 +33,9 @@ never compared it against how the nav renders. **§7.3 is complete** — twelve
 fixed, one waived (UI-19), and on the owner's instruction every remaining
 browser dialog became one of the app's own: the only `window.confirm` /
 `alert` left in the codebase is the `beforeunload` on tab close, which a page
-cannot draw itself. §8 (docs) and §9 (test gaps) still open.
+cannot draw itself. **§8 (documentation) is complete** — all four DOC items
+fixed, plus a mechanical re-check of every symbol, path and environment
+variable the two documents name. §9 (test gaps) still open.
 
 ---
 
@@ -668,19 +670,35 @@ What follows is what is left.
 CLAUDE.md is unusually accurate — I checked its claims about `_RowContext`, `RunIndex`,
 `sync_bindings`, `live_socket.js` exclusivity, the multi-line `{# #}` check, the
 `format_clock` rule and the open SEC items, and all of those hold, with the tests it
-names actually present. Four things are wrong:
+names actually present. Four things were wrong; **all four are fixed**.
+
+Worth saying what the four had in common: every one described an *earlier* state of the
+code that a later fix had moved on from, and three of the four described a security
+property that had since become true by a different mechanism than the one written down.
+A doc that is wrong in that direction is worse than one that is merely out of date — it
+tells the next reader the hole is closed by machinery that is not there.
+
+Re-checked mechanically as part of this section, and all clean: every function, module
+and test name CLAUDE.md cites exists in the code; every path and environment variable
+DEPLOYMENT.md names exists or is read somewhere (`DJANGO_ALLOW_MULTIPLE_SERVERS` in
+`config/singleinstance.py`, `SLALOM_BIND` in `build/launcher.py` — neither is a settings
+variable, which is why a narrow grep of `settings.py` misses them); every environment
+variable `settings.py` reads is documented in `.env.example`. Two modules had grown
+since the audit without an entry in the layout tree — `apps/results/logos.py` (added by
+BLK-1) and `apps/nav.py` (added by UI-31) — and both have one now.
 
 | ID | Where | Claim | Reality |
 | --- | --- | --- | --- |
-| DOC-1 | CLAUDE.md:611 | The PDF filename "goes out as `filename*=UTF-8''<percent-encoded>` … (SEC-6)" | It is raw f-string interpolation and demonstrably splits the header (BLK-4). |
-| DOC-2 | CLAUDE.md:721 | `transfer.filename()` is "percent-encoded, the pattern results/views.py copies" | It is a character-substitution sanitiser, and there is no percent-encoding in either place. |
-| DOC-3 | `competitions/views.py:651` | `MarshalPostsView`: "Submitting is a no-op stub for now — the transmission back into the system is a later feature." | Stale by several features. `marshal_posts.js` posts to `timing:marshal-submit` with a retrying outbox. |
+| DOC-1 ✅ | CLAUDE.md:611 | The PDF filename "goes out as `filename*=UTF-8''<percent-encoded>` … (SEC-6)" | It was raw f-string interpolation and demonstrably split the header (BLK-4). Both ends fixed: the header is now built by Django's `content_disposition_header()`, and CLAUDE.md says so — including the two failures beyond SEC-6 that the same f-string caused (an unreadable RFC-2047 encoding for non-latin-1 names, and a 500 on a name with a newline). |
+| DOC-2 ✅ | CLAUDE.md:721 | `transfer.filename()` is "percent-encoded, the pattern results/views.py copies" | It is a character-substitution sanitiser, and there is no percent-encoding in either place. Now described as what it is, *and* why the two are deliberately different: an export filename is only a suggestion, so reducing it costs nothing, while a results-PDF filename carries a class name a person typed into a header and has to survive intact. |
+| DOC-3 ✅ | `competitions/views.py:651` | `MarshalPostsView`: "Submitting is a no-op stub for now — the transmission back into the system is a later feature." | Stale by several features. The docstring now describes the retrying localStorage outbox, the shared rows behind Auto timing's boxes, and the part that matters most to anyone changing it: a post's claim token is what *authorises* a marshal's write, because the access gate cannot tell a marshal from a timekeeper. |
 | DOC-5 (✅ FIXED) | DEPLOYMENT.md §5 vs the PRV-6 waiver | The run-book told the operator to copy `db.sqlite3` to a USB stick by hand | Resolved by OPS-1: the app makes the copies itself, to a destination the operator chose. The manual `VACUUM INTO` line is gone from §5 and from the after-event checklist; the race-day checklist now sets the backup up instead, and §5 says what green and red on that page mean. A copy made deliberately by the app to a private destination is a different thing from a database carried about, so PRV-6's waiver stands. |
-| DOC-4 | CLAUDE.md "Security", `views.py:29-47` | "Every value that arrives in a file is hostile until checked"; "numbers keyed in by an operator are bounded" | Imported media is not checked at all (BLK-1); `running_number` is not bounded (BLK-2). |
+| DOC-4 ✅ | CLAUDE.md "Security", `views.py:29-47` | "Every value that arrives in a file is hostile until checked"; "numbers keyed in by an operator are bounded" | Both were false when written — imported media was not checked at all (BLK-1) and `running_number` was not bounded (BLK-2). Both are true now, and the doc names the machinery that makes them true rather than asserting the property: `apps/results/logos.py` (one module, both doors) and `MAX_RUNNING_NUMBER` at `timing:signal`. |
 
-Also: DEPLOYMENT.md's `timing_unrecorded.log` location (OPS-6), and the CLAUDE.md
-performance table's "cost does not grow with the field" which is Manual-assignment-only
-(PRF-1).
+Also: DEPLOYMENT.md's `timing_unrecorded.log` location (OPS-6 — fixed in §6, it names the
+data directory), and the CLAUDE.md performance table's "cost does not grow with the field"
+which was Manual-assignment-only (PRF-1 — fixed in §5; the `running=` parameter and the
+age-based case are both written up).
 
 ---
 

@@ -712,8 +712,16 @@ class MarshalPostsView(ActiveCompetitionMixin, View):
     """Top-level operator surface a marshal uses on their phone: pick your post,
     then tap the task buttons to enter penalties for the current starter. The
     config (which tasks, stop-line) comes from the active competition's setup;
-    penalty amounts come from its type. Submitting is a no-op stub for now — the
-    transmission back into the system is a later feature."""
+    penalty amounts come from its type.
+
+    Submitting is real, and has been for several features: static/js/marshal_posts.js
+    posts each tap and the final submit to timing:marshal-submit through a
+    localStorage outbox that retries until the server takes it, and the boxes on
+    Auto timing fill from the same rows. A post is claimed by one device at a time
+    (marshal-claim, heartbeated), and that claim is what *authorises* a write from
+    a non-timekeeper — the access gate cannot tell the two roles apart, since both
+    pages grant the same URLs.
+    """
 
     template_name = "competitions/marshal_posts.html"
 

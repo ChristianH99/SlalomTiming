@@ -679,17 +679,30 @@ apps/results/           A "Results" landing page (index) listing every running c
                          (every running class + every Overall table in one file), export-sample
                          (the made-up rows sample_section() builds, so the settings page can
                          preview the layout before an event has any results) and pdf-logo-remove.
-                         A filename carries a class name, so it goes out as
-                         `filename*=UTF-8''<percent-encoded>` — interpolating it raw let a class
-                         named `A"; x` break Content-Disposition apart (SEC-6).
+                         A filename carries a class name, which an organiser types, so the
+                         Content-Disposition header is built by Django's own
+                         `content_disposition_header()` rather than interpolated. Three
+                         separate things went wrong when it was an f-string: a class named
+                         `A"; x` closed the quoted string and appended a second `filename=`
+                         of its choosing (SEC-6); a name in a script the header's latin-1
+                         encoding can't hold came out RFC-2047-encoded and unreadable to
+                         every browser; and a name with a newline in it raised
+                         BadHeaderError, i.e. a 500. Django's builder handles all three,
+                         reaching for RFC 5987 `filename*=` only when it is needed.
                          class_section()/overall_section() are the shared payload: title,
                          scoring_label, class_label (what `#class` resolves to), layout and rows.
                          A class heading is cclass.display_name(), never "Class " + name.
                          All reuse competitions.ActiveCompetitionMixin. The two PDF logos are
                          assigned straight from request.FILES (there is no ModelForm here), so
-                         _clean_logo() is what checks them at all: MAX_LOGO_BYTES, then Pillow's own
-                         verification via forms.ImageField. A refused logo is a message and the rest
-                         of the settings still save.
+                         nothing checks them unless this page does — `_clean_logo` is an alias
+                         for apps/results/logos.clean_upload, and the *import* path
+                         (apps/transfer/importers) goes through logos.clean_bytes. One module
+                         for both doors is the point: the import used to write whatever bytes
+                         the archive carried under whatever name it asked for, which is how a
+                         crafted `.zip` could plant an HTML file under /media/ and have the app
+                         serve it from its own origin (BLK-1). Size, then Pillow's own
+                         verification, then a name we generate rather than one we were given.
+                         A refused logo is a message and the rest of the settings still save.
   pdf.py                 The **results-PDF export**: the same tables, on A4, for the notice board.
                          render_results_pdf() takes the *sections* views.class_section /
                          overall_section already built (layout + row dicts — the screen and the
@@ -705,6 +718,17 @@ apps/results/           A "Results" landing page (index) listing every running c
                          page/total bottom-right). Orientation is the layout's, or auto-fit from
                          the column count. Wildcards are resolved per section, because `#class`
                          means the table on *that* page.
+  logos.py               The one door a results-PDF logo comes through, for both the
+                         settings page (clean_upload, from request.FILES) and the import
+                         (clean_bytes, from the archive). Size, then Pillow's own
+                         verification, then a filename **we** generate — the archive's own
+                         name is never used. It exists because the two doors were guarded
+                         differently: the import wrote whatever bytes it was given under
+                         whatever name it asked for, so a crafted `.zip` could plant
+                         `evil.html` under /media/ and have the app serve it as text/html
+                         from its own origin (BLK-1) — with `SuspiciousFileOperation` one
+                         `../` away. Same shape as the pdfmarkup sanitiser below, and the
+                         same lesson: one check per *column*, not one per page.
   pdfmarkup.py           The header/footer's two halves. **Wildcards**: WILDCARDS is the token
                          vocabulary (#name, #date, #event_date_long, #year, #increment,
                          #discipline, #class) with the description the editor lists;
@@ -794,8 +818,13 @@ apps/transfer/          Getting the data out: the **automatic backup** (the sect
                          resolutions) and type_document() takes a competition type with every
                          participant registered under it. Each returns `(document, media)` —
                          media being the PDF logo files the archive carries alongside data.json —
-                         and filename() builds the download name (percent-encoded, the pattern
-                         results/views.py copies for its PDFs).
+                         and filename() builds the download name. It is a *substitution*
+                         sanitiser — anything not alphanumeric, `-` or `_` becomes a dash —
+                         not an encoding: the name is only ever a suggestion here, so
+                         reducing it is fine and losing a character costs nothing. That is a
+                         different problem from results/views.py's, which has to put a
+                         class name a person typed into a *header* and so hands it to
+                         Django's builder intact.
   archive.py             The .zip read/write, and the one place a hand-picked file meets the app:
                          every way it can be wrong (not a zip, not ours, newer version, damaged,
                          too big) comes back as a TransferError sentence. Its JSON encoder
@@ -1143,6 +1172,23 @@ each exist because breaking one is what made the app read as several products st
   scale, because they are a component's own dimension rather than a step: a scroll cap and the
   simulator clock's fluid `clamp()`. **Breakpoints can't be tokens** — `@media` cannot read a
   custom property — so the five are listed in the token block instead, to keep the set closed.
+- **Every dialog is the app's own, and goes through `modalController`.** Nothing calls
+  `window.confirm`/`alert`/`prompt`: a browser dialog wears the OS's styling, can't be
+  translated by us, states its question as one unformatted string (which is why callers were
+  gluing `"\n\n"` into it) and puts the answer behind a control that looks nothing like the
+  page. `window.appConfirm({title, body, accept, danger})` and `window.appAlert(…)` in
+  `shell.js` return a promise and fill the shared dialog in `base.html`. The **one exception**
+  is `beforeunload` on tab close — the browser's is the only thing that can stop a tab
+  closing, and the string is ignored by every browser anyway. `shell.js::modalController` is
+  the other half: focus in, Tab wrapped, focus restored to whatever opened it, Escape and
+  backdrop handled once — including for a dialog the *server* rendered already open (the
+  type-change, penalty-loss and bib-change confirmations), which is the case that had a
+  question on screen with the keyboard behind it. Pinned by `TestEveryDialogIsTheAppsOwn`
+  and `TestModalsManageFocus`; a page toggling a modal's `.hidden` itself fails.
+- **`form.submit()` is never what you want.** It skips HTML5 constraint validation *and*
+  every `submit` listener, so an invalid form posts and the page's own submit handlers never
+  run — including, in one case, the destructive-save guard that was itself a submit listener.
+  Use `requestSubmit()`.
 - **A focus ring is never taken away, only quietened.** The global `:focus-visible` outline is
   outranked on specificity by any component rule (`form input:focus` beats `input:focus-visible`),
   so a component's own `outline: none` silently removed the keyboard indicator from every input in
