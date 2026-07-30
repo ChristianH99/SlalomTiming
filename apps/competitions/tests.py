@@ -1228,14 +1228,39 @@ def test_only_a_running_class_is_flagged():
 
 # ----- stage 7: how a class is titled -----
 
-def test_a_class_named_after_the_word_is_not_titled_twice():
+def test_the_word_is_always_added():
+    """UI-8. The prefix used to be conditional — a name already opening with the
+    word (in any shipped language) was shown alone — so the heading depended on
+    how somebody had typed a name. The organiser owns the name, the app owns the
+    word; a name that repeats it is answered by name_hint(), on the page where
+    it can be changed."""
     competition = make_competition()
     plain = competition.classes.create(name="7", is_running=True)
     already = competition.classes.create(name="Klasse 7", is_running=True)
-    english = competition.classes.create(name="Class 8", is_running=True)
     assert plain.display_name() == "Class 7"
-    assert already.display_name() == "Klasse 7"    # not "Class Klasse 7"
-    assert english.display_name() == "Class 8"
+    assert already.display_name() == "Class Klasse 7"
+
+
+def test_a_name_that_repeats_the_word_is_pointed_out_where_it_can_be_fixed():
+    competition = make_competition()
+    plain = competition.classes.create(name="7", is_running=True)
+    assert plain.name_hint() == ""
+    for name, suggested in (("Klasse 7", "7"), ("Class 8", "8"),
+                            ("klasse-9", "9"), ("Klasse: Bobbycar", "Bobbycar")):
+        cclass = competition.classes.create(name=name, is_running=True)
+        hint = str(cclass.name_hint())
+        assert f"“{suggested}”" in hint, (name, hint)
+        # It shows what the class will actually read as, so the advice is
+        # checkable rather than abstract.
+        assert cclass.display_name() in hint
+
+
+def test_a_class_named_only_the_word_keeps_its_name_as_the_suggestion():
+    """Stripping the word off "Klasse" leaves nothing to suggest, and a hint
+    telling somebody to name a class "" is worse than none."""
+    competition = make_competition()
+    cclass = competition.classes.create(name="Klasse", is_running=True)
+    assert "“Klasse”" in str(cclass.name_hint())
 
 
 # ----- stage 7: the German page says the same thing the English one does -----
@@ -1255,13 +1280,24 @@ def test_run_order_palette_and_chips_use_the_same_words(client, settings):
     assert "Practice" not in palette and "Counted" not in palette
 
 
-def test_a_german_class_heading_is_not_klasse_klasse(settings):
+def test_the_german_heading_uses_the_german_word(settings):
     settings.LANGUAGE_CODE = "de"
     competition = make_competition()
     plain = competition.classes.create(name="7", is_running=True)
-    already = competition.classes.create(name="Klasse 7", is_running=True)
     assert plain.display_name() == "Klasse 7"
-    assert already.display_name() == "Klasse 7"
+
+
+def test_the_sidebar_names_a_class_as_a_class(client, settings):
+    """UI-8: the Results sub-list read "1", "2", "Bobbycar Mini" while every one
+    of those links opens a page titled "Result Class 7"."""
+    settings.LANGUAGE_CODE = "en"
+    competition = make_competition()
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+    competition.classes.filter(name="1").update(is_running=True, run_position=0)
+    body = client.get(reverse("results:index")).content.decode()
+    sidebar = body[body.index('<nav class="shell-nav">'):body.index("</nav>")]
+    assert ">Class 1</a>" in sidebar
 
 
 # --- INT-2: exactly one active competition ----------------------------------

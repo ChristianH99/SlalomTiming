@@ -818,6 +818,105 @@ class TestAutoTimingWithoutAStartPattern:
             )
 
 
+class TestTheScalesAreClosed:
+    """§7.2. The stylesheet's own rule is that a value appearing twice is a
+    token; three kinds of value were exempt from it in practice, and each one
+    had a bug living in the gap."""
+
+    def test_nothing_sets_a_raw_z_index(self):
+        """UI-10. The ladder ran 3, 5, 10, 20, 30, 40, 199, 200, 200, 300, 1000
+        — 200 shared by the sidebar and the event-changed bar, so which of two
+        overlapping *fixed* elements won came down to document order."""
+        css = CSS.read_text(encoding='utf-8')
+        raw = re.findall(r'z-index:\s*(-?\d+)', css)
+        assert raw == [], f'raw z-index values outside the token block: {raw}'
+
+    def test_the_stacking_order_has_no_ties(self):
+        from collections import Counter
+
+        css = CSS.read_text(encoding='utf-8')
+        steps = re.findall(r'--z-[a-z-]+:\s*(\d+);', css)
+        repeated = [value for value, n in Counter(steps).items() if n > 1]
+        assert not repeated, f'two layers share a step: {repeated}'
+
+    def test_nothing_sets_a_raw_transition_duration(self):
+        """UI-11. Seven durations were in use, several a rounding apart, so the
+        same interaction felt different depending on the component."""
+        css = CSS.read_text(encoding='utf-8')
+        raw = []
+        for decl in re.findall(r'transition:[^;}]*', css):
+            raw += re.findall(r'(?<!\()\b\d*\.?\d+s\b', decl)
+        assert raw == [], f'raw durations: {raw}'
+
+    def test_spacing_and_type_come_from_the_scales(self):
+        """UI-13. Seven lengths sat outside them — chevron nudges, a drag-gap
+        height, a `font-size: 0.85em`."""
+        css = CSS.read_text(encoding='utf-8')
+        offenders = []
+        for line in css.splitlines():
+            if '--' in line.split(':')[0]:      # the token block's own declarations
+                continue
+            for decl in re.findall(
+                    r'(?:padding|margin|gap|font-size)[a-z-]*:\s*[^;}]+', line):
+                if 'var(--' in decl or 'clamp(' in decl:
+                    continue
+                if re.search(r'[\d.]+(px|rem|em)', decl):
+                    offenders.append(line.strip())
+        assert offenders == [], offenders
+
+    def test_the_sidebar_width_is_written_once(self):
+        """UI-12. The width and the room the main column leaves for it are two
+        numbers that must agree, and were written out separately."""
+        css = CSS.read_text(encoding='utf-8')
+        assert re.search(r'--sidebar-w:\s*\d+px;', css)
+        # Both declarations read the token. (Not "240px appears once in the
+        # file": an unrelated dropdown's scroll cap is 240px too, and coupling
+        # those two numbers is the bug this fixes, not the fix.)
+        for rule, prop in (('.shell-sidebar', 'width'), ('.shell-main', 'margin-left')):
+            block = re.search(re.escape(rule) + r'\s*\{([^}]*)\}', css)
+            assert block, rule
+            assert f'{prop}: var(--sidebar-w)' in block.group(1), rule
+
+
+class TestKeyboardFocusIsVisible:
+    """UI-9. There is a correct global `:focus-visible` outline — and then eight
+    component rules turning the outline off, every one of which outranks it on
+    specificity (`form input:focus` beats `input:focus-visible`). So on almost
+    every input in the app a keyboard user got a border-colour change, and on
+    the PDF header editor nothing at all: its `outline: none` was on the element
+    rather than on `:focus`, so no state could bring it back."""
+
+    def test_no_rule_suppresses_a_visible_focus_ring(self):
+        # Comments out first — several of them quote the declaration they are
+        # explaining, and a comment is not a rule.
+        css = re.sub(r'/\*.*?\*/', '', CSS.read_text(encoding='utf-8'), flags=re.S)
+        for line_no, line in enumerate(css.splitlines(), 1):
+            if 'outline: none' not in line:
+                continue
+            # Walk back to the selector this declaration belongs to.
+            selector = line if '{' in line else _selector_above(css, line_no)
+            assert ':not(:focus-visible)' in selector, (
+                f'main.css:{line_no} takes the focus ring away for good: {selector!r}'
+            )
+
+    def test_the_global_rule_still_covers_everything_focusable(self):
+        css = CSS.read_text(encoding='utf-8')
+        rule = re.search(r'((?:[^{}]*:focus-visible,\s*)+[^{}]*:focus-visible)\s*\{'
+                         r'([^}]*outline:[^;]*;[^}]*)\}', css)
+        assert rule, 'the global :focus-visible outline is gone'
+        for tag in ('a', 'button', 'input', 'select', 'textarea'):
+            assert f'{tag}:focus-visible' in rule.group(1), tag
+
+
+def _selector_above(css, line_no):
+    """The selector of the block a declaration on `line_no` sits in."""
+    lines = css.splitlines()
+    for candidate in reversed(lines[:line_no]):
+        if '{' in candidate:
+            return candidate.strip()
+    return ''
+
+
 def _url_names_in_the_project():
     """Every (app_name, url_name) pair the project's URLconf can resolve to."""
     from django.urls import get_resolver

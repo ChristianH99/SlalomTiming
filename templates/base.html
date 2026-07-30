@@ -66,8 +66,11 @@
           {% for g in results_overall %}
             <a class="shell-nav-subitem{% if 'results.overall' in nav_current and request.resolver_match.kwargs.method == g.method and request.resolver_match.kwargs.runs == g.counted_runs %} active{% endif %}" href="{% url 'results:overall' g.method g.counted_runs %}">{% blocktrans with label=g.method_label runs=g.counted_runs %}Overall · {{ label }} · {{ runs }} Runs{% endblocktrans %}</a>
           {% endfor %}
+          {% comment %}display_name, not the bare name: these entries used to
+          read "1", "2", "Bobbycar Mini" while the page each one opens is
+          titled "Result Class 7". A class is named as a class here.{% endcomment %}
           {% for cc in results_classes %}
-            <a class="shell-nav-subitem{% if 'results.class' in nav_current and request.resolver_match.kwargs.pk == cc.pk %} active{% endif %}" href="{% url 'results:class' cc.pk %}">{{ cc.name }}</a>
+            <a class="shell-nav-subitem{% if 'results.class' in nav_current and request.resolver_match.kwargs.pk == cc.pk %} active{% endif %}" href="{% url 'results:class' cc.pk %}">{{ cc.display_name }}</a>
           {% empty %}
             <span class="shell-nav-subitem shell-nav-subitem--muted">{% trans "No running classes" %}</span>
           {% endfor %}

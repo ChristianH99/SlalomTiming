@@ -45,6 +45,13 @@ by the Classes page JS according to the selected assignment method.{% endcomment
       <p class="class-tile-warning">{{ class_form.instance.scoring_warning }}</p>
     {% endif %}
 
+    {% comment %}The name repeats the word display_name() adds itself, so every
+    heading and PDF will read "Class Class 3". A hint rather than a refusal —
+    it is a legal name (see CompetitionClass.name_hint).{% endcomment %}
+    {% if class_form.instance.name_hint %}
+      <p class="class-tile-hint">{{ class_form.instance.name_hint }}</p>
+    {% endif %}
+
     <label class="switch class-repeat" data-manual-only>
       {{ class_form.allow_multiple_entries }}
       <span class="switch-track"><span class="switch-thumb"></span></span>

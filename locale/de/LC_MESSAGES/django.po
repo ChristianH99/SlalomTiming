@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-30 09:22+0200\n"
+"POT-Creation-Date: 2026-07-30 20:13+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -15,12 +15,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: .\apps\accounts\pages.py:18 .\templates\base.html:30
+#: .\apps\accounts\pages.py:18 .\templates\base.html:35
 #: .\templates\timing\dashboard.html:3 .\templates\timing\dashboard.html:4
 msgid "Dashboard"
 msgstr "Dashboard"
 
-#: .\apps\accounts\pages.py:19 .\templates\base.html:33
+#: .\apps\accounts\pages.py:19 .\templates\base.html:38
 #: .\templates\competitions\competition_list.html:3
 #: .\templates\competitions\competition_list.html:4
 #: .\templates\competitions\no_active_competition.html:3
@@ -28,19 +28,19 @@ msgstr "Dashboard"
 msgid "Competition Setup"
 msgstr "Wettbewerb einrichten"
 
-#: .\apps\accounts\pages.py:20 .\templates\base.html:46
+#: .\apps\accounts\pages.py:20 .\templates\base.html:49
 #: .\templates\participants\participant_list.html:3
 #: .\templates\participants\participant_list.html:4
 #: .\templates\transfer\import_review.html:78
 msgid "Participants"
 msgstr "Teilnehmer"
 
-#: .\apps\accounts\pages.py:21 .\templates\base.html:52
+#: .\apps\accounts\pages.py:21 .\templates\base.html:55
 #: .\templates\timing\settings.html:6
 msgid "Timing"
 msgstr "Zeitmessung"
 
-#: .\apps\accounts\pages.py:22 .\templates\base.html:60
+#: .\apps\accounts\pages.py:22 .\templates\base.html:63
 #: .\templates\competitions\marshal_posts.html:3
 #: .\templates\competitions\marshal_posts.html:4
 #: .\templates\competitions\marshal_posts.html:7
@@ -48,14 +48,14 @@ msgid "Marshal Posts"
 msgstr "Streckenposten"
 
 #: .\apps\accounts\pages.py:23 .\apps\results\pdf.py:632
-#: .\templates\base.html:42 .\templates\base.html:63
+#: .\templates\base.html:45 .\templates\base.html:66
 #: .\templates\results\index.html:3 .\templates\results\index.html:4
 #: .\templates\results\index.html:7
 #: .\templates\results\results_settings.html:6
 msgid "Results"
 msgstr "Ergebnisse"
 
-#: .\apps\accounts\pages.py:24 .\templates\base.html:76
+#: .\apps\accounts\pages.py:24 .\templates\base.html:86
 msgid "Backup"
 msgstr "Sicherung"
 
@@ -312,42 +312,42 @@ msgstr ""
 "Keine startende Klasse deckt Alter %(range)s ab — ein Teilnehmer dieses "
 "Alters bekommt keine Klasse und taucht in keiner Startliste auf."
 
-#: .\apps\competitions\models.py:438 .\apps\results\pdf.py:287
+#: .\apps\competitions\models.py:441 .\apps\results\pdf.py:287
 #: .\templates\participants\participant_form.html:37
 #: .\templates\participants\participant_list.html:41
 #: .\templates\results\_results_head.html:4 .\templates\timing\live.html:54
 msgid "Class"
 msgstr "Klasse"
 
-#: .\apps\competitions\models.py:450
+#: .\apps\competitions\models.py:453
 msgid "Aggregate times"
 msgstr "Zeiten summiert"
 
-#: .\apps\competitions\models.py:451
+#: .\apps\competitions\models.py:454
 msgid "Best run only"
 msgstr "Nur bester Lauf"
 
-#: .\apps\competitions\models.py:452
+#: .\apps\competitions\models.py:455
 msgid "Regularity test"
 msgstr "Gleichmäßigkeitsprüfung"
 
-#: .\apps\competitions\models.py:456
+#: .\apps\competitions\models.py:459
 msgid "Display order in the classes list."
 msgstr "Anzeigereihenfolge in der Klassenliste."
 
-#: .\apps\competitions\models.py:458
+#: .\apps\competitions\models.py:461
 msgid "Starting age, e.g. 6"
 msgstr "Startalter, z. B. 6"
 
-#: .\apps\competitions\models.py:459
+#: .\apps\competitions\models.py:462
 msgid "Ending age, e.g. 7"
 msgstr "Endalter, z. B. 7"
 
-#: .\apps\competitions\models.py:466
+#: .\apps\competitions\models.py:469
 msgid "How this class's counted runs are turned into a result."
 msgstr "Wie die Wertungsläufe dieser Klasse zu einem Ergebnis werden."
 
-#: .\apps\competitions\models.py:470
+#: .\apps\competitions\models.py:473
 msgid ""
 "Manual assignment only: may a participant be entered into this class more "
 "than once."
@@ -355,7 +355,7 @@ msgstr ""
 "Nur bei manueller Zuordnung: darf ein Teilnehmer mehr als einmal in diese "
 "Klasse eingetragen werden."
 
-#: .\apps\competitions\models.py:475
+#: .\apps\competitions\models.py:478
 msgid ""
 "The run this class belongs to. Classes sharing a run_position start "
 "together; runs execute in ascending order. Null when not placed."
@@ -364,16 +364,25 @@ msgstr ""
 "starten gemeinsam; Läufe werden in aufsteigender Reihenfolge ausgeführt. "
 "Null, wenn nicht zugeordnet."
 
-#: .\apps\competitions\models.py:502
+#: .\apps\competitions\models.py:507
 #, python-format
 msgid "Class %(name)s"
 msgstr "Klasse %(name)s"
 
-#: .\apps\competitions\models.py:523
+#: .\apps\competitions\models.py:526
+#, python-format
+msgid ""
+"The word is added automatically, so this reads “%(shown)s”. Name the class "
+"“%(suggested)s”."
+msgstr ""
+"Das Wort wird automatisch ergänzt, dies liest sich also als „%(shown)s“. "
+"Nenne die Klasse „%(suggested)s“."
+
+#: .\apps\competitions\models.py:550
 msgid "No counted runs, so nobody in this class can be ranked."
 msgstr "Keine Wertungsläufe – in dieser Klasse kann niemand gewertet werden."
 
-#: .\apps\competitions\models.py:526
+#: .\apps\competitions\models.py:553
 msgid ""
 "A regularity test needs at least two counted runs — over a single run every "
 "competitor scores 0 and the class is ranked by fastest run."
@@ -382,15 +391,15 @@ msgstr ""
 "einen einzigen Lauf erreicht jeder 0 und die Klasse wird nach der "
 "schnellsten Zeit gewertet."
 
-#: .\apps\competitions\models.py:552
+#: .\apps\competitions\models.py:579
 msgid "1-based post number, in setup order."
 msgstr "1-basierte Postennummer, in Einrichtungsreihenfolge."
 
-#: .\apps\competitions\models.py:556
+#: .\apps\competitions\models.py:583
 msgid "Task numbers this post watches, e.g. “1, 5, 11-15”."
 msgstr "Aufgabennummern, die dieser Posten überwacht, z. B. „1, 5, 11-15“."
 
-#: .\apps\competitions\models.py:560
+#: .\apps\competitions\models.py:587
 msgid "This post also judges the stop line (at most one post per competition)."
 msgstr ""
 "Dieser Posten bewertet auch die Stopplinie (höchstens ein Posten pro "
@@ -775,7 +784,7 @@ msgstr "Gesamt"
 msgid "Overall"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:306 .\templates\base.html:66
+#: .\apps\results\views.py:306 .\templates\base.html:72
 #, python-format
 msgid "Overall · %(label)s · %(runs)s Runs"
 msgstr "Gesamt · %(label)s · %(runs)s Läufe"
@@ -1223,11 +1232,11 @@ msgstr "Import abgebrochen – es wurde nichts geändert."
 msgid "The upload has expired. Please choose the file again."
 msgstr "Der Upload ist abgelaufen. Bitte wähle die Datei erneut aus."
 
-#: .\config\settings.py:491
+#: .\config\settings.py:495
 msgid "German"
 msgstr "Deutsch"
 
-#: .\config\settings.py:492
+#: .\config\settings.py:496
 msgid "English"
 msgstr "Englisch"
 
@@ -1292,7 +1301,7 @@ msgstr "Passwort anzeigen (halten)"
 
 #: .\templates\accounts\user_access.html:3
 #: .\templates\accounts\user_access.html:4
-#: .\templates\accounts\user_access.html:6 .\templates\base.html:87
+#: .\templates\accounts\user_access.html:6 .\templates\base.html:96
 msgid "User Access"
 msgstr "Benutzerzugriff"
 
@@ -1478,7 +1487,7 @@ msgstr "Protokoll herunterladen"
 msgid "Nothing recorded yet."
 msgstr "Noch nichts aufgezeichnet."
 
-#: .\templates\base.html:6 .\templates\base.html:107
+#: .\templates\base.html:6 .\templates\base.html:116
 msgid "Slalom Timing"
 msgstr "Slalom Timing"
 
@@ -1486,11 +1495,11 @@ msgstr "Slalom Timing"
 msgid "Skip to content"
 msgstr "Zum Inhalt springen"
 
-#: .\templates\base.html:37
+#: .\templates\base.html:40
 msgid "Manage competitions"
 msgstr "Wettbewerbe verwalten"
 
-#: .\templates\base.html:38
+#: .\templates\base.html:41
 #: .\templates\competitions\competition_general.html:3
 #: .\templates\competitions\competition_general.html:4
 #: .\templates\competitions\competition_general.html:6
@@ -1499,7 +1508,7 @@ msgstr "Wettbewerbe verwalten"
 msgid "General"
 msgstr "Allgemein"
 
-#: .\templates\base.html:39
+#: .\templates\base.html:42
 #: .\templates\competitions\competition_classes.html:3
 #: .\templates\competitions\competition_classes.html:4
 #: .\templates\competitions\competition_classes.html:12
@@ -1509,7 +1518,7 @@ msgstr "Allgemein"
 msgid "Classes"
 msgstr "Klassen"
 
-#: .\templates\base.html:40
+#: .\templates\base.html:43
 #: .\templates\competitions\competition_runorder.html:3
 #: .\templates\competitions\competition_runorder.html:4
 #: .\templates\competitions\competition_runorder.html:16
@@ -1517,7 +1526,7 @@ msgstr "Klassen"
 msgid "Run order"
 msgstr "Laufreihenfolge"
 
-#: .\templates\base.html:41
+#: .\templates\base.html:44
 #: .\templates\competitions\competition_penalties.html:3
 #: .\templates\competitions\competition_penalties.html:4
 #: .\templates\competitions\competition_penalties.html:6
@@ -1525,65 +1534,65 @@ msgstr "Laufreihenfolge"
 msgid "Penalties"
 msgstr "Strafen"
 
-#: .\templates\base.html:54 .\templates\timing\live.html:3
+#: .\templates\base.html:57 .\templates\timing\live.html:3
 #: .\templates\timing\live.html:4 .\templates\timing\live.html:12
 #: .\templates\timing\live.html:30
 msgid "Manual timing"
 msgstr "Manuelle Zeitmessung"
 
-#: .\templates\base.html:55 .\templates\timing\auto.html:3
+#: .\templates\base.html:58 .\templates\timing\auto.html:3
 #: .\templates\timing\auto.html:4 .\templates\timing\auto.html:12
 #: .\templates\timing\auto.html:31 .\templates\timing\auto.html:41
 msgid "Auto timing"
 msgstr "Automatische Zeitmessung"
 
-#: .\templates\base.html:56
+#: .\templates\base.html:59
 #: .\templates\competitions\competitiontype_list.html:38
 msgid "Settings"
 msgstr "Einstellungen"
 
-#: .\templates\base.html:71
+#: .\templates\base.html:81
 msgid "No running classes"
 msgstr "Keine laufenden Klassen"
 
-#: .\templates\base.html:78 .\templates\transfer\backup.html:3
+#: .\templates\base.html:88 .\templates\transfer\backup.html:3
 #: .\templates\transfer\backup.html:4 .\templates\transfer\backup.html:6
 msgid "Automatic backup"
 msgstr "Automatische Sicherung"
 
-#: .\templates\base.html:79 .\templates\transfer\export.html:3
+#: .\templates\base.html:89 .\templates\transfer\export.html:3
 #: .\templates\transfer\export.html:4 .\templates\transfer\export.html:6
 msgctxt "transfer"
 msgid "Export"
 msgstr "Export"
 
-#: .\templates\base.html:80 .\templates\transfer\import.html:3
+#: .\templates\base.html:90 .\templates\transfer\import.html:3
 #: .\templates\transfer\import.html:4 .\templates\transfer\import.html:6
 #: .\templates\transfer\import_review.html:151
 msgid "Import"
 msgstr "Import"
 
-#: .\templates\base.html:94
+#: .\templates\base.html:103
 msgid "Log out"
 msgstr "Abmelden"
 
-#: .\templates\base.html:103
+#: .\templates\base.html:112
 msgid "Toggle navigation"
 msgstr "Navigation umschalten"
 
-#: .\templates\base.html:112
+#: .\templates\base.html:121
 msgid "No event selected"
 msgstr "Keine Veranstaltung ausgewählt"
 
-#: .\templates\base.html:112
+#: .\templates\base.html:121
 msgid "choose one"
 msgstr "auswählen"
 
-#: .\templates\base.html:136
+#: .\templates\base.html:145
 msgid "Unsaved changes"
 msgstr "Nicht gespeicherte Änderungen"
 
-#: .\templates\base.html:137
+#: .\templates\base.html:146
 msgid ""
 "You have unsaved changes on this page. Do you want to save them before "
 "leaving?"
@@ -1591,15 +1600,15 @@ msgstr ""
 "Sie haben nicht gespeicherte Änderungen auf dieser Seite. Möchten Sie sie "
 "vor dem Verlassen speichern?"
 
-#: .\templates\base.html:139
+#: .\templates\base.html:148
 msgid "Save changes"
 msgstr "Änderungen speichern"
 
-#: .\templates\base.html:140
+#: .\templates\base.html:149
 msgid "Discard"
 msgstr "Verwerfen"
 
-#: .\templates\base.html:141 .\templates\competitions\competition_add.html:52
+#: .\templates\base.html:150 .\templates\competitions\competition_add.html:52
 #: .\templates\competitions\competition_classes.html:85
 #: .\templates\competitions\competition_confirm_delete.html:30
 #: .\templates\competitions\competition_confirm_switch.html:33
@@ -1643,11 +1652,11 @@ msgstr "Alter bis"
 msgid "Birth years"
 msgstr "Geburtsjahre"
 
-#: .\templates\competitions\_class_tile.html:53
+#: .\templates\competitions\_class_tile.html:61
 msgid "Allow multiple entries per participant"
 msgstr "Mehrfachnennungen pro Teilnehmer erlauben"
 
-#: .\templates\competitions\_class_tile.html:59
+#: .\templates\competitions\_class_tile.html:67
 msgid "Remove class"
 msgstr "Klasse entfernen"
 

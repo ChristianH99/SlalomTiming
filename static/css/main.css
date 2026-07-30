@@ -3,9 +3,12 @@
    Everything visual comes from here. Three rules keep it that way:
 
    - No raw colour outside this block. A value that appears twice is a token.
-   - No raw length for padding, gap, margin or font-size. Both scales below are
-     closed sets — if a component needs a step that isn't here, the step is
-     missing from the scale, not from the component.
+   - No raw length for padding, gap, margin or font-size, no raw transition
+     duration and no raw z-index. Every scale below is a closed set — if a
+     component needs a step that isn't here, the step is missing from the
+     scale, not from the component. (Sizes that are a component's own dimension
+     rather than a step on a scale — a scroll cap, a fluid clamp — are the
+     exception, and there are two of them.)
    - The app is deliberately light-only. `color-scheme` is NOT declared: naming
      a dark scheme without shipping dark rules is what made the browser paint
      inputs, selects, date pickers and scrollbars dark against a permanently
@@ -84,14 +87,61 @@
 
   /* ---- radii ---- */
   --radius-xs: 4px;
-  /* A path, a device line, a wildcard: things that must be read exactly as
-     written. Two components spelled this stack out separately, with different
-     fallbacks, before it was a token. */
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-pill: 999px;
+
+  /* ---- type ----
+     A path, a device line, a wildcard: things that must be read exactly as
+     written. Two components spelled this stack out separately, with different
+     fallbacks, before it was a token. */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ---- motion ----
+     A closed set, like the scales above. Seven durations were in use (0.05,
+     0.06, 0.12, 0.15, 0.2, 0.25, 0.6), several of them a rounding apart, so the
+     same interaction felt slightly different depending on which component you
+     touched. */
+  --dur-1: 0.06s;  /* a press: as near instant as still reads as a change */
+  --dur-2: 0.12s;
+  --dur-3: 0.15s;  /* hover and focus, the app's default */
+  --dur-4: 0.2s;   /* something that moves rather than recolours */
+  --dur-5: 0.6s;   /* a bar filling, a panel sliding in */
+
+  /* ---- stacking order ----
+     The ladder ran 3, 5, 10, 20, 30, 40, 199, 200, 200, 300, 1000 — with 200
+     used by both the sidebar and the event-changed bar, so which of two
+     overlapping fixed elements won was settled by document order. Named steps,
+     bottom of the page to the top of it; nothing sets a raw z-index. */
+  --z-sticky-heading: 1;  /* a run divider sticking to the top of its own list */
+  --z-floating-cue: 2;    /* the "▲ current" cue floating over that list */
+  --z-topbar: 10;
+  --z-popover: 20;        /* a pop-up anchored to a control */
+  --z-dropdown: 30;
+  --z-menu: 40;
+  --z-scrim: 50;          /* the sidebar's backdrop on a narrow screen */
+  --z-sidebar: 60;
+  --z-banner: 70;         /* "somebody changed the current event" — over the sidebar */
+  --z-modal: 80;
+  --z-skip-link: 90;      /* reachable from anywhere, so it is above everything */
+
+  /* ---- sidebar ----
+     The width, and the room the main column leaves for it. Two numbers that
+     have to agree, written out separately in both places until now. */
+  --sidebar-w: 240px;
+
+  /* ---- breakpoints ----
+     Not tokens, because `@media` cannot read a custom property — the values are
+     written out at each rule. Listed here so the set stays closed like the
+     scales above, and so adding a sixth is a decision rather than a habit:
+
+       1100px  the Auto timing three-column layout folds to one
+        900px  the sidebar goes off-canvas behind the hamburger
+        820px  the Dashboard grid folds to one column
+        700px  page padding and table type step down
+        480px  the simulator's keypad grows to thumb size
+  */
 
   /* ---- content width ----
      One measure for every page. Timing views opt into the wider one explicitly
@@ -135,7 +185,7 @@ h1 {
   align-items: center;
 }
 
-a { color: var(--flame); text-decoration: none; transition: color 0.2s; }
+a { color: var(--flame); text-decoration: none; transition: color var(--dur-4); }
 a:hover { color: var(--flame-hover); }
 
 /* ===== SKIP LINK ===== */
@@ -143,7 +193,7 @@ a:hover { color: var(--flame-hover); }
   position: absolute;
   top: 8px;
   left: 8px;
-  z-index: 1000;
+  z-index: var(--z-skip-link);
   padding: var(--space-4) var(--space-5);
   background: var(--ink);
   color: white;
@@ -168,7 +218,7 @@ a:hover { color: var(--flame-hover); }
 
 /* ===== SIDEBAR ===== */
 .shell-sidebar {
-  width: 240px;
+  width: var(--sidebar-w);
   flex-shrink: 0;
   background: var(--ink);
   color: white;
@@ -178,9 +228,9 @@ a:hover { color: var(--flame-hover); }
   top: 0;
   bottom: 0;
   left: 0;
-  z-index: 200;
+  z-index: var(--z-sidebar);
   overflow-y: auto;
-  transition: transform 0.25s ease;
+  transition: transform var(--dur-4) ease;
 }
 
 .shell-brand {
@@ -209,7 +259,7 @@ a:hover { color: var(--flame-hover); }
   font-weight: 500;
   text-decoration: none;
   border-left: 3px solid transparent;
-  transition: all 0.2s;
+  transition: all var(--dur-4);
 }
 .shell-nav-item:hover {
   color: white;
@@ -236,7 +286,7 @@ a:hover { color: var(--flame-hover); }
   font-weight: 500;
   text-decoration: none;
   border-left: 3px solid transparent;
-  transition: all 0.2s;
+  transition: all var(--dur-4);
 }
 .shell-nav-subitem:hover { color: white; background: rgba(255,255,255,0.05); }
 .shell-nav-subitem.active {
@@ -255,7 +305,7 @@ a:hover { color: var(--flame-hover); }
   font-size: var(--text-sm);
   color: rgba(255,255,255,0.65);
   margin-bottom: var(--space-5);
-  transition: color 0.2s;
+  transition: color var(--dur-4);
 }
 .shell-admin-link:hover { color: var(--flame-light); }
 
@@ -264,17 +314,17 @@ a:hover { color: var(--flame-hover); }
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.4);
-  z-index: 199;
+  z-index: var(--z-scrim);
 }
 
 /* ===== MAIN ===== */
 .shell-main {
   flex: 1;
-  margin-left: 240px;
+  margin-left: var(--sidebar-w);
   min-width: 0;
   display: flex;
   flex-direction: column;
-  transition: margin-left 0.25s ease;
+  transition: margin-left var(--dur-4) ease;
 }
 
 /* Desktop: hamburger collapses the sidebar out of the way. */
@@ -290,7 +340,7 @@ a:hover { color: var(--flame-hover); }
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--z-topbar);
   min-height: 56px;
 }
 
@@ -329,7 +379,7 @@ a:hover { color: var(--flame-hover); }
   border: 1.5px solid var(--border); border-radius: 50%;
   background: var(--white); color: var(--text-mid);
   font-family: 'Manrope', sans-serif; font-weight: 800; font-size: var(--text-lg);
-  cursor: pointer; transition: all 0.15s;
+  cursor: pointer; transition: all var(--dur-3);
 }
 .topbar-help:hover { border-color: var(--glacier); color: var(--glacier); }
 
@@ -339,7 +389,7 @@ a:hover { color: var(--flame-hover); }
 .lang-toggle { padding: 0; }
 .lang-toggle[aria-expanded="true"] { border-color: var(--glacier); color: var(--glacier); }
 .lang-menu {
-  position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 40;
+  position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: var(--z-menu);
   min-width: 9rem;
   display: flex; flex-direction: column;
   background: var(--white); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
@@ -353,7 +403,7 @@ a:hover { color: var(--flame-hover); }
   padding: var(--space-4) var(--space-4); border: none; border-radius: var(--radius-sm);
   background: transparent; color: var(--text-mid); cursor: pointer;
   font-family: 'Inter', sans-serif; font-size: var(--text-base); font-weight: 500; text-align: left;
-  transition: background 0.12s, color 0.12s;
+  transition: background var(--dur-2), color var(--dur-2);
 }
 .lang-option:hover { background: var(--snow); color: var(--text-dark); }
 .lang-option--active { color: var(--text-dark); font-weight: 600; }
@@ -395,7 +445,7 @@ a:hover { color: var(--flame-hover); }
   height: 2px;
   background: var(--text-dark);
   border-radius: var(--radius-xs);
-  transition: transform 0.2s ease, opacity 0.15s ease, top 0.2s ease;
+  transition: transform var(--dur-4) ease, opacity var(--dur-3) ease, top var(--dur-4) ease;
 }
 .shell-hamburger-icon span:nth-child(1) { top: 0; }
 .shell-hamburger-icon span:nth-child(2) { top: 6px; }
@@ -520,7 +570,7 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   font-size: var(--text-md);
   min-width: 260px;
   width: 100%;
-  transition: all 0.2s;
+  transition: all var(--dur-4);
 }
 /* Small × to clear the field, floated inside the input's right edge. */
 .search-clear {
@@ -541,15 +591,15 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   font-size: var(--text-xl);
   line-height: 1;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--dur-3), color var(--dur-3);
 }
 .search-clear:hover { background: var(--border-light); color: var(--text-dark); }
 .search-form input[type="text"]:focus {
   border-color: var(--ink);
   background: var(--white);
-  outline: none;
   box-shadow: 0 0 0 3px rgba(22,35,63,0.08);
 }
+.search-form input[type="text"]:focus:not(:focus-visible) { outline: none; }
 
 /* ===== BUTTONS ===== */
 .button {
@@ -565,7 +615,7 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   font-weight: 700;
   font-size: var(--text-base);
   box-shadow: 0 4px 12px rgba(232,73,29,0.25);
-  transition: all 0.2s;
+  transition: all var(--dur-4);
   cursor: pointer;
 }
 .button:hover {
@@ -661,7 +711,7 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   border-left: 4px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.05s;
+  transition: border-color var(--dur-3), box-shadow var(--dur-3), transform var(--dur-1);
 }
 .competition-tile:hover { box-shadow: 0 4px 14px rgba(22,35,63,0.08); }
 .competition-tile--active { border-left-color: var(--flame); }
@@ -732,7 +782,7 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   height: 22px;
   border-radius: var(--radius-pill);
   background: var(--border);
-  transition: background 0.15s;
+  transition: background var(--dur-3);
 }
 .switch-thumb {
   position: absolute;
@@ -743,7 +793,7 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   border-radius: 50%;
   background: var(--white);
   box-shadow: 0 1px 3px rgba(22,35,63,0.3);
-  transition: transform 0.15s;
+  transition: transform var(--dur-3);
 }
 .switch input:checked + .switch-track { background: var(--flame); }
 .switch input:checked + .switch-track .switch-thumb { transform: translateX(16px); }
@@ -810,6 +860,16 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   font-size: var(--text-sm);
   line-height: 1.45;
   color: var(--text-dark);
+}
+/* Advice about a name, not a setup that can never rank anybody — so it is
+   quieter than the warning above it and wears no colour of its own. */
+.class-tile-hint {
+  margin: 0;
+  padding-left: var(--space-5);
+  border-left: 3px solid var(--border);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text-mid);
 }
 .field-mini {
   display: inline-flex;
@@ -882,14 +942,23 @@ form input, form select, form textarea {
   font-size: var(--text-md);
   font-family: inherit;
   color: var(--text-dark);
-  transition: all 0.2s;
+  transition: all var(--dur-4);
 }
+/* The soft ring is the *pointer* focus style. It must not take the outline
+   away, because it outranks the global :focus-visible rule below on
+   specificity (`form input:focus` beats `input:focus-visible`), which is how a
+   keyboard user came to be left with a border-colour change on almost every
+   input in the app. `:not(:focus-visible)` is what confines it to the pointer:
+   when the browser decides focus deserves an indicator, this stops matching and
+   the outline comes back. Same shape everywhere below (UI-9). */
 form input:focus, form select:focus, form textarea:focus {
   border-color: var(--ink);
   background: var(--white);
-  outline: none;
   box-shadow: 0 0 0 3px rgba(22,35,63,0.08);
 }
+form input:focus:not(:focus-visible),
+form select:focus:not(:focus-visible),
+form textarea:focus:not(:focus-visible) { outline: none; }
 
 /* ===== BACK LINK ===== */
 .back-link {
@@ -922,7 +991,7 @@ body.modal-open { overflow: hidden; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 300;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1011,7 +1080,7 @@ body.modal-open { overflow: hidden; }
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  z-index: 30;
+  z-index: var(--z-dropdown);
   margin: 0;
   padding: var(--space-2);
   list-style: none;
@@ -1061,7 +1130,7 @@ body.modal-open { overflow: hidden; }
 .participants-table .col-actions { width: 13%; }
 
 /* ----- Expandable rows: click a row to reveal its detail panel ----- */
-.participant-row { cursor: pointer; transition: background 0.12s ease; }
+.participant-row { cursor: pointer; transition: background var(--dur-2) ease; }
 .participant-row:hover { background: var(--snow); }
 .participant-row:focus-visible { outline: 2px solid var(--glacier); outline-offset: -2px; }
 .participant-row--open { background: var(--frost-bg); }
@@ -1076,12 +1145,12 @@ body.modal-open { overflow: hidden; }
   border-right: 2px solid var(--text-light);
   border-bottom: 2px solid var(--text-light);
   transform: rotate(45deg);
-  transition: transform 0.15s ease, border-color 0.15s ease;
-  margin-right: 4px;
-  margin-bottom: 3px;
+  transition: transform var(--dur-3) ease, border-color var(--dur-3) ease;
+  margin-right: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 .participant-row:hover .pr-chevron { border-color: var(--text-mid); }
-.participant-row--open .pr-chevron { transform: rotate(-135deg); margin-bottom: -1px; }
+.participant-row--open .pr-chevron { transform: rotate(-135deg); margin-bottom: 0; }
 
 /* The detail panel row overrides the fixed-cell truncation rules. */
 .participant-detail-row > td {
@@ -1121,10 +1190,10 @@ body.modal-open { overflow: hidden; }
   color: var(--text-dark);
 }
 .pd-bib-input:focus {
-  outline: none;
   border-color: var(--glacier);
   box-shadow: 0 0 0 3px rgba(62,142,222,0.15);
 }
+.pd-bib-input:focus:not(:focus-visible) { outline: none; }
 .pd-bib-input--error {
   border-color: var(--flame);
   box-shadow: 0 0 0 3px rgba(232,73,29,0.12);
@@ -1253,7 +1322,7 @@ body.modal-open { overflow: hidden; }
   grid-template-columns: repeat(auto-fit, minmax(10rem, 11rem));
   align-items: start;
   gap: var(--space-6) var(--space-8);
-  transition: opacity 0.2s;
+  transition: opacity var(--dur-4);
 }
 /* Penalties off: the amounts stay readable but clearly don't apply. */
 .settings-row--off { opacity: 0.45; }
@@ -1366,7 +1435,7 @@ body.modal-open { overflow: hidden; }
   font-size: var(--text-2xs);
   padding: var(--space-2) var(--space-3);
   line-height: 1;
-  transition: color 0.2s;
+  transition: color var(--dur-4);
 }
 .expander:hover { color: var(--ink); }
 .type-competitions > td { background: var(--snow); padding-top: var(--space-3); padding-bottom: var(--space-3); }
@@ -1397,7 +1466,7 @@ body.modal-open { overflow: hidden; }
   border-radius: 50%;
   background: var(--text-muted);
   margin-right: var(--space-4);
-  transition: background 0.2s;
+  transition: background var(--dur-4);
 }
 .live-dot.connected {
   background: var(--success);
@@ -1498,9 +1567,9 @@ textarea:focus-visible,
   height: 0.5rem;
   border: 1.5px dashed transparent;
   border-radius: var(--radius-sm);
-  transition: height 0.12s, background 0.12s, border-color 0.12s;
+  transition: height var(--dur-2), background var(--dur-2), border-color var(--dur-2);
 }
-#run-order.chip-dragging .run-gap { height: 1.6rem; }
+#run-order.chip-dragging .run-gap { height: var(--space-8); }
 #run-order.chip-dragging .run-gap.gap-active {
   border-color: var(--glacier);
   background: var(--frost-bg);
@@ -1514,7 +1583,7 @@ textarea:focus-visible,
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--dur-3), box-shadow var(--dur-3);
 }
 .run-row.run-dragging { opacity: 0.55; }
 .run-handle {
@@ -1550,7 +1619,7 @@ textarea:focus-visible,
   padding: var(--space-1) var(--space-3);
   border: 1.5px dashed transparent;
   border-radius: var(--radius-sm);
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--dur-3), background var(--dur-3);
 }
 .run-zone.zone-over { border-color: var(--glacier); background: var(--frost-bg); }
 .run-zone:empty::after {
@@ -1570,7 +1639,7 @@ textarea:focus-visible,
   font-size: var(--text-sm);
   font-weight: 700;
   cursor: grab;
-  transition: box-shadow 0.15s, transform 0.05s;
+  transition: box-shadow var(--dur-3), transform var(--dur-1);
 }
 .class-chip:hover { box-shadow: 0 2px 6px rgba(62,142,222,0.25); }
 .class-chip.dragging { opacity: 0.5; }
@@ -1622,7 +1691,8 @@ textarea:focus-visible,
   text-align: center;
   color: var(--text-dark);
 }
-.pattern-window > input:focus { outline: none; border-color: var(--glacier); }
+.pattern-window > input:focus { border-color: var(--glacier); }
+.pattern-window > input:focus:not(:focus-visible) { outline: none; }
 .pattern-window > input:disabled { background: var(--snow); color: var(--text-muted); }
 .pattern-window-suffix {
   font-size: var(--text-xs);
@@ -1654,7 +1724,7 @@ textarea:focus-visible,
   font-size: var(--text-sm);
   font-weight: 700;
   cursor: grab;
-  transition: box-shadow 0.15s, transform 0.05s;
+  transition: box-shadow var(--dur-3), transform var(--dur-1);
 }
 .run-chip--practice {
   background: var(--snow);
@@ -1706,7 +1776,8 @@ textarea:focus-visible,
   text-align: center;
   color: var(--text-dark);
 }
-.preview-dummy-count input:focus { outline: none; border-color: var(--glacier); }
+.preview-dummy-count input:focus { border-color: var(--glacier); }
+.preview-dummy-count input:focus:not(:focus-visible) { outline: none; }
 .preview-run-note {
   font-size: var(--text-xs);
   color: var(--text-light);
@@ -1881,7 +1952,7 @@ textarea:focus-visible,
   font-size: var(--text-3xl);
   color: var(--white);
   cursor: pointer;
-  transition: transform 0.06s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  transition: transform var(--dur-1) ease, box-shadow var(--dur-4) ease, filter var(--dur-4) ease;
   -webkit-tap-highlight-color: transparent;
 }
 .sim-btn--barrier {
@@ -2231,7 +2302,7 @@ textarea:focus-visible,
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
-  transition: background 0.15s, border-color 0.15s, transform 0.05s;
+  transition: background var(--dur-3), border-color var(--dur-3), transform var(--dur-1);
 }
 .marshal-task:active { transform: scale(0.97); }
 .marshal-task-num { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: var(--text-3xl); line-height: 1; }
@@ -2343,7 +2414,7 @@ textarea:focus-visible,
   font-size: var(--text-base);
   cursor: pointer;
   user-select: none;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: background var(--dur-3), border-color var(--dur-3), color var(--dur-3), box-shadow var(--dur-3);
 }
 .input-lock:hover { border-color: var(--flame); color: var(--flame-hover); }
 /* Takes the slack between the glyph and the track, so the switch itself stays
@@ -2361,7 +2432,7 @@ textarea:focus-visible,
   width: 38px; height: 22px;
   border-radius: var(--radius-pill);
   background: var(--border);
-  transition: background 0.15s;
+  transition: background var(--dur-3);
   flex: none;
 }
 .input-lock-knob {
@@ -2371,7 +2442,7 @@ textarea:focus-visible,
   border-radius: 50%;
   background: var(--white);
   box-shadow: 0 1px 2px rgba(22,35,63,0.35);
-  transition: transform 0.15s;
+  transition: transform var(--dur-3);
 }
 /* On: solid red pill, white text, red glow, knob slid across. */
 .input-lock--on {
@@ -2400,7 +2471,7 @@ textarea:focus-visible,
   display: block; width: 100%; height: 1rem;
   border: none; background: transparent; color: transparent;
   cursor: pointer; font: 800 0.95rem/1rem 'Manrope', sans-serif;
-  transition: color 0.12s, background 0.12s;
+  transition: color var(--dur-2), background var(--dur-2);
 }
 .tt-add-strip:hover .tt-add-btn { color: var(--flame); background: var(--flame-bg); }
 .row-delete {
@@ -2573,7 +2644,7 @@ textarea:focus-visible,
   border-left: 3px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: grab;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--dur-3), background var(--dur-3);
 }
 .auto-order-item--running { border-left-color: var(--glacier); }
 .auto-order-item--done { opacity: 0.6; }
@@ -2753,7 +2824,7 @@ textarea:focus-visible,
 .auto-tile { position: relative; }
 .auto-popup {
   position: absolute; left: 1rem; right: auto; top: calc(100% - 0.4rem);
-  z-index: 20;
+  z-index: var(--z-popover);
   width: max-content; max-width: 20rem;
   background: var(--white); border: 1px solid var(--border);
   border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
@@ -2796,7 +2867,7 @@ textarea:focus-visible,
   list-style: none;
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: var(--z-sticky-heading);
   margin: 0 0 var(--space-1);
   padding: var(--space-3) var(--space-2);
   /* Opaque, and with the list's own gap absorbed above it — a translucent or
@@ -2830,7 +2901,7 @@ textarea:focus-visible,
 .auto-order { position: relative; }
 .auto-scroll-cue {
   position: absolute; left: 50%; transform: translateX(-50%);
-  z-index: 5;
+  z-index: var(--z-floating-cue);
   padding: var(--space-4) var(--space-6);
   background: var(--ink); color: var(--white);
   border: none; border-radius: var(--radius-pill);
@@ -2941,7 +3012,7 @@ textarea:focus-visible,
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   text-decoration: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--dur-3), box-shadow var(--dur-3);
 }
 .results-index-card:hover { border-color: var(--glacier); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .results-index-name { font-weight: 600; color: var(--text-dark); }
@@ -3088,7 +3159,7 @@ textarea:focus-visible,
   stroke: var(--glacier);
   stroke-width: 12;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.6s ease;
+  transition: stroke-dashoffset var(--dur-5) ease;
 }
 .ring-arc--done { stroke: var(--success); }
 .ring-center {
@@ -3274,7 +3345,7 @@ textarea:focus-visible,
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--glacier);
-  transition: width 0.6s ease;
+  transition: width var(--dur-5) ease;
 }
 .dash-class--done .dash-bar-fill { background: var(--success); }
 .dash-class-foot {
@@ -3322,9 +3393,11 @@ textarea:focus-visible,
   font-size: var(--text-lg);
   line-height: 1.4;
   text-align: center;
-  outline: none;
 }
 .pdf-editor:focus { border-color: var(--glacier); box-shadow: 0 0 0 3px var(--frost-bg); }
+/* This one carried `outline: none` on the element itself rather than on :focus,
+   so the contenteditable had no keyboard focus indicator in any state at all. */
+.pdf-editor:focus:not(:focus-visible) { outline: none; }
 .pdf-editor:empty::before {
   content: attr(data-placeholder);
   color: var(--text-muted);
@@ -3356,7 +3429,8 @@ textarea:focus-visible,
 
 .pdf-year { width: 8rem; padding: var(--space-4) var(--space-4); font-size: var(--text-md);
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--white); }
-.pdf-year:focus { outline: none; border-color: var(--glacier); box-shadow: 0 0 0 3px var(--frost-bg); }
+.pdf-year:focus { border-color: var(--glacier); box-shadow: 0 0 0 3px var(--frost-bg); }
+.pdf-year:focus:not(:focus-visible) { outline: none; }
 
 /* Orientation radios. */
 .pdf-orientation { display: flex; gap: var(--space-7); flex-wrap: wrap; }
@@ -3373,7 +3447,7 @@ textarea:focus-visible,
   text-transform: uppercase; letter-spacing: 0.03em; }
 .pdf-logo-preview-wrap { display: flex; align-items: center; gap: var(--space-4); }
 .pdf-logo-preview { max-width: 9rem; max-height: 3.2rem; object-fit: contain;
-  background: var(--white); border: 1px solid var(--border-light); border-radius: var(--radius-xs); padding: 4px; }
+  background: var(--white); border: 1px solid var(--border-light); border-radius: var(--radius-xs); padding: var(--space-2); }
 .pdf-logo-remove {
   padding: var(--space-2) var(--space-5); font-size: var(--text-sm); font-family: inherit;
   color: var(--flame-hover); background: var(--flame-bg);
@@ -3386,7 +3460,8 @@ textarea:focus-visible,
   width: 4rem; padding: var(--space-3) var(--space-4); font-size: var(--text-base);
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--white);
 }
-.pdf-height input:focus { outline: none; border-color: var(--glacier); box-shadow: 0 0 0 3px var(--frost-bg); }
+.pdf-height input:focus { border-color: var(--glacier); box-shadow: 0 0 0 3px var(--frost-bg); }
+.pdf-height input:focus:not(:focus-visible) { outline: none; }
 .pdf-height .hint { font-size: var(--text-xs); }
 
 .pdf-sample { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; }
@@ -3429,7 +3504,7 @@ textarea:focus-visible,
   position: absolute; top: 0; right: 0; height: 100%; width: 2.5rem;
   display: flex; align-items: center; justify-content: center;
   background: none; border: none; padding: 0; cursor: pointer;
-  color: var(--text-light); transition: color 0.15s;
+  color: var(--text-light); transition: color var(--dur-3);
 }
 .pw-reveal:hover { color: var(--text-mid); }
 .pw-reveal--on { color: var(--flame); }
@@ -3445,7 +3520,7 @@ textarea:focus-visible,
 .shell-logout {
   background: none; border: 1px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.8);
   font-size: var(--text-xs); font-weight: 600; padding: var(--space-2) var(--space-5); border-radius: var(--radius-sm);
-  cursor: pointer; transition: all 0.2s;
+  cursor: pointer; transition: all var(--dur-4);
 }
 .shell-logout:hover { border-color: var(--flame); color: var(--flame-light); }
 
@@ -3557,7 +3632,7 @@ textarea:focus-visible,
 
 /* CSV import: the column specification and the per-line complaints. */
 .transfer-csv-columns, .transfer-csv-error-table { width: auto; min-width: min(100%, 32rem); }
-.transfer-csv-columns code { font-size: 0.85em; }
+.transfer-csv-columns code { font-size: var(--text-sm); }
 .transfer-csv-columns th[scope="row"], .transfer-csv-error-table th[scope="row"] {
   font-weight: 600; color: var(--text-mid); white-space: nowrap;
 }
@@ -3692,7 +3767,9 @@ textarea:focus-visible,
 .live-notice {
   position: fixed;
   top: 0; left: 0; right: 0;
-  z-index: 200;
+  /* Above the sidebar, not level with it: these two used to share a z-index
+     and the bar covered the sidebar only because it is appended later. */
+  z-index: var(--z-banner);
   display: flex;
   align-items: center;
   gap: var(--space-6);

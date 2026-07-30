@@ -26,7 +26,10 @@ that has to exist first** (`Participant.last_used_at` — a record's last edit *
 entry, indexed and backfilled), with the bulk-delete screen still to come, and
 **PRV-5 (a privacy notice) is untouched**. **§6 (operability) is complete** — six
 fixed, one waived by the owner (OPS-4). **§7.1 (broken or misleading states) is
-complete** — six fixed, one waived (UI-5). §7.2/§7.3, §8 (docs) and §9 (test
+complete** — six fixed, one waived (UI-5). **§7.2 (consistency) is complete** —
+all six fixed, plus UI-29, which the audit itself missed: two sidebar entries
+were marked at once, because the sweep read the access-control registry and
+never compared it against how the nav renders. §7.3, §8 (docs) and §9 (test
 gaps) still open.
 
 ---
@@ -512,26 +515,53 @@ What follows is what is left.
   fell out of it: `results:settings` marked the Results *sub-entry* while its
   Competition Setup parent stayed unmarked, because the parent required
   `app_name == 'competitions'`.
-* **UI-8 (Med)** — **The sidebar names classes bare** (`{{ cc.name }}` → "1", "2",
-  "Bobbycar Mini") while the page it links to is titled "Ergebnis Klasse Bobbycar Mini".
-  The documented rule is that `display_name()` is the one way a class is written where
-  it has to be named as a class. `base.html:65` is the exception.
-* **UI-9 (Med)** — **Focus rings are removed on most inputs.** There is a correct global
-  `:focus-visible { outline: 2px solid var(--flame) }` at line 1406 — and then
-  `form input:focus, form select:focus, form textarea:focus { outline: none }` at 879,
-  plus five more component-level `outline: none`s. Keyboard users get a border-colour
-  change only. WCAG 2.4.7 / 2.4.11.
-* **UI-10 (Med)** — **`z-index` is not tokenised** and the ladder is ad-hoc: 3, 5, 10,
-  20, 30, 40, 199, 200, 200, 300, 1000 — with **200 used twice** by unrelated components
-  (sidebar and one other). The stylesheet's own rule is "a value that appears twice is a
-  token".
-* **UI-11 (Low)** — Same for **transition durations** (0.05 / 0.06 / 0.15 / 0.2 / 0.25 /
-  0.6 s, several repeated) and **breakpoints** (480 / 700 / 820 / 900 / 1100 px).
-* **UI-12 (Low)** — The sidebar width `240px` is hard-coded at `main.css:167` and again
-  at `:269`. Should be `--sidebar-w`.
-* **UI-13 (Low)** — Seven remaining raw lengths outside the scale: `main.css:1072-1076`
-  (4px / 3px / -1px chevron nudges), `:1495` (1.6rem), `:1905` (15rem), `:2378` (1rem),
-  `:3500` (`font-size: 0.85em`).
+* **UI-8 (Med) (✅ FIXED)** — **The sidebar names classes bare** (`{{ cc.name }}` → "1",
+  "2", "Bobbycar Mini") while the page it links to is titled "Ergebnis Klasse Bobbycar
+  Mini". `display_name()` is meant to be the one way a class is written where it has to
+  be named as a class; the sidebar was the exception. Now uses it.
+  Per the owner's decision the prefix is also **unconditional** — it used to be skipped
+  for a name that already opened with the word in any shipped language, which made the
+  heading depend on how somebody had typed a name. The organiser owns the name, the app
+  owns the word. Consequence, and the reason `name_hint()` came with it: **this
+  installation's database has ~20 classes literally named "Klasse 3", "Klasse 4"…**,
+  which now read "Klasse Klasse 3" on every heading and PDF. Rather than have the code
+  guess, the Classes page now says so per class and suggests the name to use ("Name the
+  class “3”") — a hint, not a refusal, since the name is legal.
+* **UI-9 (Med) (✅ FIXED)** — **Focus rings are removed on most inputs.** There is a
+  correct global `:focus-visible { outline: 2px solid var(--flame) }` — and then eight
+  component-level `outline: none`s, every one of which outranks it on specificity
+  (`form input:focus` is 0-0-1-2 against `input:focus-visible`'s 0-0-1-1). WCAG 2.4.7.
+  Each is now scoped `:focus:not(:focus-visible)`, so the component's soft ring stays
+  the *pointer* style and the outline returns the moment the browser decides focus
+  deserves an indicator. One was worse than the audit recorded: `.pdf-editor` carried
+  `outline: none` **on the element**, not on `:focus`, so the PDF header editor had no
+  keyboard focus indicator in any state at all.
+* **UI-10 (Med) (✅ FIXED)** — **`z-index` is not tokenised** and the ladder is ad-hoc:
+  3, 5, 10, 20, 30, 40, 199, 200, 200, 300, 1000 — with **200 used twice**, by
+  `.shell-sidebar` and by `.live-notice` (the "somebody changed the current event" bar).
+  Both are `position: fixed` and overlap, so which one won was settled by document
+  order. Now eleven named steps (`--z-sticky-heading` … `--z-skip-link`) with the bar
+  explicitly above the sidebar, and a test that no two share a value.
+* **UI-11 (Low) (✅ FIXED / ⚠️ PARTLY)** — Same for **transition durations** — seven of
+  them (0.05 / 0.06 / 0.12 / 0.15 / 0.2 / 0.25 / 0.6 s), several a rounding apart, so
+  the same interaction felt different depending on which component you touched. Now
+  `--dur-1…5`; 0.05 folded into 0.06 and 0.25 into 0.2, which is the only visible change.
+  **Breakpoints cannot be tokens** — `@media` cannot read a custom property, so there is
+  no fix of that shape. The five (480 / 700 / 820 / 900 / 1100 px) are instead listed in
+  the token block with what each one does, so the set stays closed and a sixth is a
+  decision rather than a habit.
+* **UI-12 (Low) (✅ FIXED)** — The sidebar width `240px` is hard-coded twice: its own
+  `width` and the `margin-left` the main column leaves for it — two numbers that must
+  agree. Now `--sidebar-w`. (The test checks *those two declarations*, not that "240px"
+  appears once: an unrelated dropdown's scroll cap is also 240px, and coupling those is
+  the bug, not the fix.)
+* **UI-13 (Low) (✅ FIXED)** — Remaining raw lengths outside the scale: the chevron
+  nudges (4px / 3px / -1px), a drag-gap height (1.6rem), a `padding: 4px` the original
+  sweep missed, and a `font-size: 0.85em`. All on the scale now, pinned by a test that
+  scans every `padding`/`margin`/`gap`/`font-size` declaration. Two are deliberately
+  left: the simulator log's `max-height: 15rem` and the simulator clock's
+  `clamp(3rem, 14vw, 5rem)` are a component's own dimension, not a step on a scale —
+  the same category as `--content-max`.
 
 ### 7.3 Interaction and accessibility
 

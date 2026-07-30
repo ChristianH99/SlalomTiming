@@ -187,15 +187,22 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          apps/results/resultscalc.py),
                          plus position (list order) and run_position (which run it starts in;
                          classes sharing a run_position start together). Competition.run_groups()
-                         returns the ordered runs. Two class methods are about how a class *reads*
+                         returns the ordered runs. Three class methods are about how a class *reads*
                          and whether it works at all: display_name() writes it the one way every
-                         results heading and PDF does ("Class 7", but "Klasse 7" alone for a class
-                         already named that — the prefix used to double), and scoring_warning()
+                         results heading, the sidebar's Results sub-list and every PDF does —
+                         "Class 7", the word **always** prefixed, never conditionally. It used to
+                         be skipped for a name already opening with the word in any shipped
+                         language, which made the heading depend on how somebody had typed a name;
+                         the division is now that the organiser owns the name and the app owns the
+                         word. name_hint() is the other half: a name that repeats the word ("Klasse
+                         3" → "Klasse Klasse 3") is pointed out on the Classes page, where it can
+                         be changed, rather than papered over at every render. And
+                         scoring_warning()
                          names a setup that can never rank anybody (no counted runs; a regularity
                          test over a single run, which scores the whole field 0 and is then
-                         silently ranked by fastest run). Both combinations are legal to save, so
-                         the warning is shown on the Classes tile and above the empty results
-                         table rather than refused. Setup UI is a section: a tile list
+                         silently ranked by fastest run). All of these are legal to save, so they
+                         are shown on the Classes tile (and, for scoring, above the empty results
+                         table) rather than refused. Setup UI is a section: a tile list
                          ("Manage competitions") + General / Classes / Run order / Penalties /
                          Results sub-pages that all edit the *active* competition (no pk in the
                          URL; the Results sub-page lives in apps/results).
@@ -1119,15 +1126,29 @@ troubleshooting) is in **DEPLOYMENT.md**, with the artefacts in `deploy/`. What 
 
 ## Design system
 
-Everything visual comes from the token block at the top of `static/css/main.css`. Four rules, and
-each exists because breaking it is what made the app read as several products stitched together:
+Everything visual comes from the token block at the top of `static/css/main.css`. The rules below
+each exist because breaking one is what made the app read as several products stitched together:
 
-- **No raw colour, spacing or font-size outside the token block.** `--space-1…10` (a 4px grid) for
-  padding, gap and margin; `--text-2xs…4xl` for type; `--radius-*`; the palette plus the `--success`
-  and `--amber` families. A value that appears twice is a token. The scales are closed sets: a
-  component that needs a step which isn't there means the *scale* is missing a step. This replaced
-  33 distinct font sizes, 25 gaps and 25+ paddings, which is why the same relationship used to be
-  expressed slightly differently on every page.
+- **No raw colour, spacing, font-size, duration or z-index outside the token block.**
+  `--space-1…10` (a 4px grid) for padding, gap and margin; `--text-2xs…4xl` for type; `--radius-*`;
+  `--font-mono`; `--dur-1…5` for transitions; `--z-*` for stacking; `--sidebar-w`; the palette plus
+  the `--success` and `--amber` families. A value that appears twice is a token. The scales are
+  closed sets: a component that needs a step which isn't there means the *scale* is missing a step.
+  This replaced 33 distinct font sizes, 25 gaps and 25+ paddings, which is why the same relationship
+  used to be expressed slightly differently on every page — and later seven transition durations
+  (several a rounding apart, so the same interaction felt different per component) and an
+  eleven-rung z-index ladder in which **200 was used twice**, by the sidebar and by the
+  event-changed bar, so which of two overlapping *fixed* elements won was settled by document
+  order. Pinned by `config/tests.py::TestTheScalesAreClosed`. Two things are deliberately not on a
+  scale, because they are a component's own dimension rather than a step: a scroll cap and the
+  simulator clock's fluid `clamp()`. **Breakpoints can't be tokens** — `@media` cannot read a
+  custom property — so the five are listed in the token block instead, to keep the set closed.
+- **A focus ring is never taken away, only quietened.** The global `:focus-visible` outline is
+  outranked on specificity by any component rule (`form input:focus` beats `input:focus-visible`),
+  so a component's own `outline: none` silently removed the keyboard indicator from every input in
+  the app — and on the PDF header editor it sat on the *element*, so no state brought it back. A
+  component that wants its own soft ring for the pointer scopes the suppression with
+  `:focus:not(:focus-visible)`. `TestKeyboardFocusIsVisible` fails on a bare one.
 - **The app is light-only, and says so by staying silent.** `color-scheme` is deliberately *not*
   declared. Naming a dark scheme without shipping dark rules is what made browsers paint inputs,
   selects, date pickers and scrollbars dark against a permanently light page. A real dark theme

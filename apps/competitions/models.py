@@ -431,7 +431,10 @@ class Competition(models.Model):
 @lru_cache(maxsize=1)
 def _class_words():
     """The word "Class" in every language the app is translated into, lower-cased.
-    Language-independent, so it is computed once per process."""
+    Language-independent, so it is computed once per process. Used by
+    CompetitionClass.name_hint to spot a name that repeats the word the app adds
+    itself — a name is typed in the organiser's language and read in whatever
+    language the page is being read in, so one language is not enough."""
     words = set()
     for code, _label in settings.LANGUAGES:
         with translation.override(code):
@@ -485,21 +488,45 @@ class CompetitionClass(models.Model):
 
     def display_name(self):
         """The class as it is written where it has to be named as a class — the
-        results index tiles, every results table heading and every exported PDF.
+        results index tiles, every results table heading, the sidebar's Results
+        sub-list and every exported PDF.
 
-        Classes are usually named just "1" or "E", so the word is prefixed. But
-        people also name a class "Klasse 1" outright, and the German catalogue
-        renders the prefix as "Klasse" — which read "Klasse Klasse 1" on every one
-        of those surfaces. A name that already opens with the word is shown alone,
-        checked against *every* language the app ships rather than only the active
-        one: the name was typed in the organiser's language, which is not
-        necessarily the language the page is being read in.
+        Classes are usually named just "1" or "E", so the word is prefixed —
+        always, without inspecting the name. It used to be conditional: a name
+        that already opened with the word (in *any* shipped language, since a
+        name is typed in the organiser's language and read in the reader's) was
+        shown alone. That made the heading depend on how somebody had typed a
+        name, which is the kind of rule nobody can see working and everybody
+        sees failing.
+
+        So the division is: the organiser owns the name, the app owns the word.
+        A class meant to read "Klasse 3" is named "3" — and `name_hint()` says
+        so on the Classes page for a name that repeats the word, rather than
+        this method quietly papering over it.
+        """
+        return gettext("Class %(name)s") % {"name": self.name.strip()}
+
+    def name_hint(self):
+        """Why this class's name will read oddly — or "" when it won't.
+
+        The word is added by `display_name()`, so a class *named* "Klasse 3"
+        comes out as "Klasse Klasse 3" on every heading and PDF. It is a legal
+        name and might be deliberate, so this is a hint on the Classes page
+        rather than a refusal — the same shape as `scoring_warning()`.
         """
         name = self.name.strip()
         lowered = name.lower()
-        if any(lowered.startswith(word) for word in _class_words()):
-            return name
-        return gettext("Class %(name)s") % {"name": name}
+        for word in _class_words():
+            if not lowered.startswith(word):
+                continue
+            # What the name would be with the word taken off the front; the
+            # separators are what people put between it and the number.
+            suggested = name[len(word):].strip(" -–—:.") or name
+            return gettext(
+                "The word is added automatically, so this reads “%(shown)s”. "
+                "Name the class “%(suggested)s”."
+            ) % {"shown": self.display_name(), "suggested": suggested}
+        return ""
 
     def scoring_warning(self):
         """Why this class, as configured, can't produce a ranking — or "" when it
