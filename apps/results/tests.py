@@ -281,6 +281,47 @@ def test_state_code_on_a_practice_run_does_not_affect_the_result():
     assert not results.status_rows
 
 
+def test_a_practice_code_beside_a_zero_tally_is_explained(client):
+    """UI-24. The tally counts a *competitor's* outcome, and a code on a
+    practice run is not one — so the table legitimately showed "DNS" in a cell
+    above a tally reading "DNS: 0", and the two together read as a bug. In
+    exactly that case the table now says which of the two it is counting."""
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    cclass.practice_runs = 1
+    cclass.save(update_fields=["practice_runs"])
+    make_competitor(competition, cclass, 1)
+    mark_run(competition, cclass, 1, 1, "dns", run_type=TimedRun.RunType.PRACTICE)
+    add_run(competition, cclass, 1, 1, 30)
+    add_run(competition, cclass, 1, 2, 30)
+
+    response = client.get(reverse("results:class", args=[cclass.pk]))
+    summary = response.context["layout"]["summary"]
+    # The competitor is ranked: the practice code settled nothing.
+    assert summary["statuses"] == [
+        {"label": "DNS", "count": 0},
+        {"label": "DNC", "count": 0},
+        {"label": "DSQ", "count": 0},
+    ]
+    assert summary["practice_only_code"] is True
+    assert b"does not end anybody" in response.content
+
+
+def test_the_note_stays_off_when_a_competitor_really_is_settled(client):
+    """Only the confusing case earns a sentence. A DNS that *did* end somebody's
+    event needs no explaining — the tally shows it."""
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    cclass.practice_runs = 1
+    cclass.save(update_fields=["practice_runs"])
+    make_competitor(competition, cclass, 1)
+    mark_run(competition, cclass, 1, 1, "dns", run_type=TimedRun.RunType.PRACTICE)
+    mark_run(competition, cclass, 1, 1, "dns")
+    mark_run(competition, cclass, 1, 2, "dns")
+
+    response = client.get(reverse("results:class", args=[cclass.pk]))
+    assert response.context["layout"]["summary"]["practice_only_code"] is False
+    assert b"does not end anybody" not in response.content
+
+
 @pytest.mark.parametrize("status", ["dnf", "dnc", "dns", "dsq"])
 def test_aggregate_over_several_runs_is_dnc_when_one_is_marked(status):
     _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
@@ -401,14 +442,16 @@ def test_summary_counts_each_state_code(client):
     add_run(competition, cclass, 3, 1, 30)      # still waiting on run 2
 
     section = views.class_section(competition, cclass)
-    assert section["layout"]["summary"] == {
-        "starters": 3,
-        "statuses": [
-            {"label": "DNS", "count": 1},
-            {"label": "DNC", "count": 1},
-            {"label": "DSQ", "count": 0},
-        ],
-    }
+    summary = section["layout"]["summary"]
+    assert summary["starters"] == 3
+    assert summary["statuses"] == [
+        {"label": "DNS", "count": 1},
+        {"label": "DNC", "count": 1},
+        {"label": "DSQ", "count": 0},
+    ]
+    # Nothing here is settled on a *practice* code, so the note that explains
+    # the difference stays off. See test_a_practice_code_is_explained_...
+    assert summary["practice_only_code"] is False
 
 
 def test_unranked_run_cells_offer_a_dns_key_and_the_table_renders(client):
@@ -679,14 +722,13 @@ def test_results_summary_counts(client):
     # "Classified / not classified" told the operator nothing about which outcome
     # they were looking at; the summary names the outcomes themselves.
     assert b"DNS:" in body and b"DNC:" in body and b"DSQ:" in body
-    assert response.context["layout"]["summary"] == {
-        "starters": 4,
-        "statuses": [
-            {"label": "DNS", "count": 1},
-            {"label": "DNC", "count": 0},
-            {"label": "DSQ", "count": 1},
-        ],
-    }
+    summary = response.context["layout"]["summary"]
+    assert summary["starters"] == 4
+    assert summary["statuses"] == [
+        {"label": "DNS", "count": 1},
+        {"label": "DNC", "count": 0},
+        {"label": "DSQ", "count": 1},
+    ]
 
 
 def test_best_run_column_heading(client):

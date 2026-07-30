@@ -20,6 +20,8 @@ from django.urls import resolve, reverse
 from config import singleinstance
 
 TEMPLATE_DIR = Path(settings.BASE_DIR) / 'templates'
+CSS = Path(settings.BASE_DIR) / 'static' / 'css' / 'main.css'
+JS_DIR = Path(settings.BASE_DIR) / 'static' / 'js'
 
 
 def _run_manage(*args, **env):
@@ -679,8 +681,7 @@ class TestHealthEndpoint:
         )
 
 
-CSS = Path(settings.BASE_DIR) / 'static' / 'css' / 'main.css'
-JS_DIR = Path(settings.BASE_DIR) / 'static' / 'js'
+
 
 
 class TestStatusRowsStayReadable:
@@ -816,6 +817,111 @@ class TestAutoTimingWithoutAStartPattern:
             assert 'class="notice"' not in source, (
                 f'{name} still states "nothing to operate" as a notice'
             )
+
+
+class TestEveryDialogIsTheAppsOwn:
+    """§7.3 + the owner's rule: an operator only ever sees this app's dialogs.
+
+    A browser dialog is chrome. It wears the OS's styling, cannot be translated
+    by us, states its question as one unformatted string (which is why every
+    caller was gluing "\\n\\n" into it) and puts the answer behind a control that
+    looks nothing like the rest of the page. The single exception is the "leave
+    this page?" on tab close, which a page is not allowed to draw itself."""
+
+    def test_nothing_calls_the_browsers_confirm_alert_or_prompt(self):
+        offenders = []
+        for path in sorted(JS_DIR.rglob('*.js')):
+            source = re.sub(r'/\*.*?\*/|//[^\n]*', '', path.read_text(encoding='utf-8'),
+                            flags=re.S)
+            for call in re.findall(r'(?:window\.)?\b(confirm|alert|prompt)\s*\(', source):
+                offenders.append(f'{path.name}: {call}()')
+        assert offenders == [], offenders
+
+    def test_the_one_allowed_browser_dialog_is_the_tab_closing(self):
+        """beforeunload is the exception, and it only fires when there is
+        something to lose — a guard that always warns gets clicked through."""
+        source = (JS_DIR / 'shell.js').read_text(encoding='utf-8')
+        block = re.search(r'window\.addEventListener\("beforeunload".*?\}\);', source, re.S)
+        assert block, 'the tab-close guard is gone (UI-16)'
+        assert 'if (!dirty || bypass) return;' in block.group(0)
+
+    def test_the_app_dialog_is_on_every_page(self, client):
+        body = client.get(reverse('accounts:users')).content.decode()
+        assert 'data-app-dialog' in body
+        for hook in ('data-dialog-title', 'data-dialog-body',
+                     'data-dialog-accept', 'data-dialog-cancel'):
+            assert hook in body, hook
+
+
+class TestModalsManageFocus:
+    """UI-14. Every dialog was `role="dialog" aria-modal="true"` and none of them
+    moved focus in, kept it there or gave it back — so Tab walked straight
+    through to the page behind the overlay, and a keyboard user could type into a
+    form they could not see."""
+
+    def test_no_page_opens_a_modal_behind_the_shared_controller(self):
+        """The controller is the only thing that knows about focus, so a page
+        toggling `.hidden` itself is a dialog without any of it."""
+        offenders = []
+        for path in sorted(JS_DIR.rglob('*.js')):
+            if path.name == 'shell.js':
+                continue
+            source = re.sub(r'/\*.*?\*/|//[^\n]*', '', path.read_text(encoding='utf-8'),
+                            flags=re.S)
+            for line in source.splitlines():
+                if re.search(r'\w*[Mm]odal\w*\.hidden\s*=', line):
+                    offenders.append(f'{path.name}: {line.strip()}')
+                if 'classList' in line and 'modal-open' in line:
+                    offenders.append(f'{path.name}: {line.strip()}')
+        assert offenders == [], offenders
+
+    def test_the_controller_traps_restores_and_adopts(self):
+        source = (JS_DIR / 'shell.js').read_text(encoding='utf-8')
+        assert 'window.modalController' in source
+        # Focus goes in…
+        assert 'function focusIn()' in source
+        # …Tab wraps rather than leaving…
+        assert 'event.shiftKey && document.activeElement === first' in source
+        # …and it is handed back to whatever opened the dialog.
+        assert 'lastFocused.focus()' in source
+        # A dialog the *server* rendered open never called open(), and was the
+        # one kind with no focus in it at all.
+        assert re.search(r'if \(!modal\.hidden\) \{\s*\n\s*document\.body\.classList\.add',
+                         source)
+
+    @pytest.mark.parametrize('template', sorted(TEMPLATE_DIR.rglob('*.html')), ids=str)
+    def test_every_dialog_is_labelled(self, template):
+        source = template.read_text(encoding='utf-8')
+        for tag in re.findall(r'<div[^>]*role="dialog"[^>]*>', source):
+            assert 'aria-modal="true"' in tag, tag
+            assert 'aria-labelledby=' in tag or 'aria-label=' in tag, tag
+
+
+class TestTheUnsavedGuardCoversLeaving:
+    """UI-16/17. The guard caught a click on a link we render and nothing else —
+    closing the tab and pressing Back both discarded silently — and its own
+    "Save changes" then posted through form.submit(), which skips HTML5
+    validation and every submit listener."""
+
+    def test_back_is_guarded_too(self):
+        source = (JS_DIR / 'shell.js').read_text(encoding='utf-8')
+        assert 'popstate' in source, 'the Back button still discards silently'
+        assert 'history.pushState' in source, (
+            'popstate cannot fire without an entry of our own to pop'
+        )
+
+    def test_nothing_submits_a_form_past_its_own_validation(self):
+        offenders = []
+        for path in sorted(JS_DIR.rglob('*.js')):
+            source = re.sub(r'/\*.*?\*/|//[^\n]*', '', path.read_text(encoding='utf-8'),
+                            flags=re.S)
+            for line in source.splitlines():
+                # requestSubmit is the one that validates and fires listeners;
+                # the bare fallback beside it is for a browser without it.
+                if re.search(r'\bform\.submit\(\)', line) and 'requestSubmit' not in source[
+                        max(0, source.index(line) - 120):source.index(line)]:
+                    offenders.append(f'{path.name}: {line.strip()}')
+        assert offenders == [], offenders
 
 
 class TestTheScalesAreClosed:

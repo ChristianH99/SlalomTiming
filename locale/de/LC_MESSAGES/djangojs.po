@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-30 09:22+0200\n"
+"POT-Creation-Date: 2026-07-30 21:08+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -172,25 +172,25 @@ msgstr[1] "%s weitere Ordner werden nicht angezeigt."
 msgid "Could not read the folders on the server."
 msgstr "Die Ordner auf dem Server konnten nicht gelesen werden."
 
-#: .\static\js\competition_classes.js:110
+#: .\static\js\competition_classes.js:109
 msgid "This class"
 msgstr "Diese Klasse"
 
-#: .\static\js\competition_classes.js:112
+#: .\static\js\competition_classes.js:111
 msgid "recorded run(s) — the times are kept but lose their class"
 msgstr ""
 "erfasste(r) Lauf/Läufe — die Zeiten bleiben erhalten, verlieren aber ihre "
 "Klasse"
 
-#: .\static\js\competition_classes.js:113
+#: .\static\js\competition_classes.js:112
 msgid "participant assignment(s) — removed"
 msgstr "Teilnehmerzuordnung(en) — entfernt"
 
-#: .\static\js\competition_classes.js:114
+#: .\static\js\competition_classes.js:113
 msgid "has:"
 msgstr "hat:"
 
-#: .\static\js\competition_classes.js:115
+#: .\static\js\competition_classes.js:114
 msgid "It will be deleted when you press Save."
 msgstr "Sie wird gelöscht, wenn Sie auf Speichern drücken."
 
@@ -222,7 +222,7 @@ msgstr "Aufgaben {tasks} zugewiesen"
 msgid "No tasks assigned yet"
 msgstr "Noch keine Aufgaben zugewiesen"
 
-#: .\static\js\competition_penalties.js:190
+#: .\static\js\competition_penalties.js:193
 msgid ""
 "This will delete <strong>{n}</strong> penalty already recorded by a marshal "
 "post."
@@ -230,7 +230,7 @@ msgstr ""
 "Dadurch wird <strong>{n}</strong> bereits von einem Streckenposten erfasste "
 "Strafe gelöscht."
 
-#: .\static\js\competition_penalties.js:191
+#: .\static\js\competition_penalties.js:194
 msgid ""
 "This will delete <strong>{n}</strong> penalties already recorded by marshal "
 "posts."
@@ -465,46 +465,54 @@ msgstr ""
 "registriert zu sein. Sie können trotzdem fortfahren, abbrechen oder den "
 "vorhandenen Datensatz öffnen:"
 
-#: .\static\js\participant_form_page.js:51
+#: .\static\js\participant_form_page.js:53
 msgid "Invalid date"
 msgstr "Ungültiges Datum"
 
-#: .\static\js\participant_form_page.js:54
+#: .\static\js\participant_form_page.js:56
 msgid ""
 "That’s not a valid date — please check the day exists in that month/year."
 msgstr ""
 "Das ist kein gültiges Datum — bitte prüfen Sie, ob der Tag in diesem Monat/"
 "Jahr existiert."
 
-#: .\static\js\participant_form_page.js:112
+#: .\static\js\participant_form_page.js:114
 msgid "Remove"
 msgstr "Entfernen"
 
-#: .\static\js\participant_list.js:59 .\static\js\participant_list.js:83
-#: .\static\js\participant_list.js:169 .\static\js\results_tie.js:132
+#: .\static\js\participant_list.js:59 .\static\js\participant_list.js:87
+#: .\static\js\participant_list.js:188 .\static\js\results_tie.js:132
 #: .\static\js\results_tie.js:135
 msgid "Could not save."
 msgstr "Konnte nicht gespeichert werden."
 
-#: .\static\js\participant_list.js:64
-msgid "Change the bib anyway?"
-msgstr "Startnummer trotzdem ändern?"
+#: .\static\js\participant_list.js:65
+msgid "Change the bib?"
+msgstr "Startnummer ändern?"
 
-#: .\static\js\participant_list.js:72 .\static\js\participant_list.js:165
+#: .\static\js\participant_list.js:67
+msgid "Change the bib"
+msgstr "Startnummer ändern"
+
+#: .\static\js\participant_list.js:76 .\static\js\participant_list.js:184
 msgid "Saved"
 msgstr "Gespeichert"
 
-#: .\static\js\results_pdf_editor.js:139
-msgid "Could not remove the logo (%(error)s)."
-msgstr "Logo konnte nicht entfernt werden (%(error)s)."
+#: .\static\js\results_pdf_editor.js:140
+msgid "Could not remove the logo"
+msgstr "Logo konnte nicht entfernt werden"
 
-#: .\static\js\results_pdf_editor.js:153
+#: .\static\js\results_pdf_editor.js:156
 msgid "Building…"
 msgstr "Wird erstellt…"
 
-#: .\static\js\results_pdf_editor.js:165
-msgid "Could not build the sample PDF (%(error)s)."
-msgstr "Beispiel-PDF konnte nicht erstellt werden (%(error)s)."
+#: .\static\js\results_pdf_editor.js:169
+msgid "Could not build the sample PDF"
+msgstr "Beispiel-PDF konnte nicht erstellt werden"
+
+#: .\static\js\results_status.js:25
+msgid "Mark as DNS"
+msgstr "Als DNS markieren"
 
 #: .\static\js\results_tie.js:42
 msgid "Drag to reorder"
@@ -619,6 +627,18 @@ msgstr "{name} — {cls}, {type} Lauf {n}"
 #: .\static\js\run_order.js:561
 msgid "Not scheduled: {list}."
 msgstr "Nicht geplant: {list}."
+
+#: .\static\js\shell.js:177 .\static\js\shell.js:186
+msgid "OK"
+msgstr "OK"
+
+#: .\static\js\shell.js:184 .\static\js\shell.js:319
+msgid "Continue"
+msgstr "Fortfahren"
+
+#: .\static\js\shell.js:413
+msgid "Dismiss"
+msgstr "Schließen"
 
 #: .\static\js\simulator.js:69
 msgid "Signal rejected."

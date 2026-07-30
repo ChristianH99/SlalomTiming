@@ -92,12 +92,11 @@
     { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
   ));
 
-  function closeDeleteModal() {
-    if (!deleteModal) return;
-    deleteModal.hidden = true;
-    document.body.classList.remove("modal-open");
-    pendingTile = null;
-  }
+  // Focus in, trapped, and back where it came from on close — see
+  // shell.js::modalController. Every dialog in the app shares it.
+  const deleteDialog = deleteModal
+    && window.modalController(deleteModal, { onClose: () => { pendingTile = null; } });
+  function closeDeleteModal() { if (deleteDialog) deleteDialog.close(); }
 
   container.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-remove-class]");
@@ -114,8 +113,7 @@
       deleteBody.innerHTML = `<p>“${escapeHtml(name)}” ${gettext("has:")}</p><ul>${items.join("")}</ul>`
         + `<p>${gettext("It will be deleted when you press Save.")}</p>`;
       pendingTile = tile;
-      deleteModal.hidden = false;
-      document.body.classList.add("modal-open");
+      deleteDialog.open();
       return;
     }
     removeTile(tile);
@@ -128,12 +126,6 @@
       if (tile) removeTile(tile);
     });
     deleteModal.querySelector("[data-delete-class-cancel]").addEventListener("click", closeDeleteModal);
-    deleteModal.addEventListener("click", (event) => {
-      if (event.target === deleteModal) closeDeleteModal();
-    });
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !deleteModal.hidden) closeDeleteModal();
-    });
   }
 
   applyMethod();

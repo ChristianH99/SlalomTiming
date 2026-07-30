@@ -171,6 +171,9 @@
   const lossModal = document.getElementById("penalty-loss-modal");
   const lossBody = lossModal && lossModal.querySelector("[data-penalty-loss-body]");
   const lossField = document.getElementById("confirm-penalty-loss");
+  // Focus in, trapped, restored — and focused even when the server rendered it
+  // already open, which this one does when it refused a destructive save.
+  const lossDialog = lossModal && window.modalController(lossModal);
   const penaltyCounts = JSON.parse(document.getElementById("penalty-counts").textContent);
 
   // How many recorded penalties the form as it stands would delete.
@@ -191,14 +194,9 @@
         : gettext("This will delete <strong>{n}</strong> penalties already recorded by marshal posts.")
       ).replace("{n}", count);
     }
-    lossModal.hidden = false;
-    document.body.classList.add("modal-open");
+    lossDialog.open();
   }
-  function closeLossModal() {
-    if (!lossModal) return;
-    lossModal.hidden = true;
-    document.body.classList.remove("modal-open");
-  }
+  function closeLossModal() { if (lossDialog) lossDialog.close(); }
 
   form.addEventListener("submit", (event) => {
     if (lossField.value) return;             // already confirmed
@@ -212,17 +210,11 @@
     lossModal.querySelector("[data-penalty-loss-confirm]").addEventListener("click", () => {
       lossField.value = "1";
       closeLossModal();
-      form.submit();
+      // requestSubmit, not submit: submit() skips constraint validation and
+      // every submit listener, including the guard directly above.
+      form.requestSubmit();
     });
     lossModal.querySelector("[data-penalty-loss-cancel]").addEventListener("click", closeLossModal);
-    lossModal.addEventListener("click", (event) => {
-      if (event.target === lossModal) closeLossModal();
-    });
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !lossModal.hidden) closeLossModal();
-    });
-    // Rendered already open: the view refused a destructive save.
-    if (!lossModal.hidden) document.body.classList.add("modal-open");
   }
 
   applyToggle();

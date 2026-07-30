@@ -69,6 +69,13 @@ are finished, just not in the placings.{% endcomment %}
     <span><strong>{{ entry.label }}:</strong> {{ entry.count }}</span>
   {% endfor %}
 </div>
+{% comment %}A code on a practice run has no bearing on the result, so the table
+can show "DNS" in a cell while the tally beside it reads "DNS: 0". Both are
+correct and together they look like a bug, so in exactly that case the table
+says which of the two things is being counted.{% endcomment %}
+{% if layout.summary.practice_only_code %}
+  <p class="hint results-summary-note">{% trans "Counting how each competitor’s event ended. A state code on a practice run is shown in its own cell but does not end anybody’s event." %}</p>
+{% endif %}
 
 <div id="tie-editor" data-scope="{{ scope }}" data-resolve-url="{% url 'results:tie-resolve' %}" hidden>{% csrf_token %}</div>
 <div class="tie-toolbar" id="tie-toolbar" hidden>

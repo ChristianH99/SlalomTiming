@@ -15,9 +15,11 @@
   const modal = document.getElementById("bib-change-modal");
   const cancel = modal && modal.querySelector("[data-bib-change-cancel]");
   if (!cancel) return;
-  // Cancel leaves the form exactly as it was posted, so the bib can be put
-  // back (or anything else corrected) before trying again.
-  cancel.addEventListener("click", () => { modal.hidden = true; });
+  // Rendered already open — the server is asking — so the controller focuses it
+  // where it stands (shell.js). Cancel leaves the form exactly as it was posted,
+  // so the bib can be put back (or anything else corrected) before trying again.
+  const dialog = window.modalController(modal);
+  cancel.addEventListener("click", dialog.close);
 })();
 
 (function () {

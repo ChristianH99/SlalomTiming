@@ -157,7 +157,15 @@ def build_table(competition, enabled, ranked, status_rows, unranked, precision,
     the foot of the ranked table, the unranked ones in their own block below it.
     """
     # Summary tallies: every starter, then how many finished on each state code.
+    # These count a *competitor's* outcome, which is not the same thing as a code
+    # on a run: a DNS on a practice run means nothing to a result, so a table can
+    # legitimately show "DNS" in a cell above a tally reading "DNS: 0". Both are
+    # right and together they read as a bug, so when it happens the table says
+    # which of the two it is counting.
     everyone = list(ranked) + list(status_rows) + list(unranked)
+    practice_only_code = any(
+        run.status for c in everyone for run in c.training
+    ) and not any(c.final_status for c in everyone)
     summary = {
         "starters": len(everyone),
         "statuses": [
@@ -165,6 +173,7 @@ def build_table(competition, enabled, ranked, status_rows, unranked, precision,
              "count": sum(1 for c in everyone if c.final_status == status)}
             for status, label in SUMMARY_STATUSES
         ],
+        "practice_only_code": practice_only_code,
     }
     layout = build_layout(enabled, counted_count, training_count, include_class,
                           score_heading, summary)

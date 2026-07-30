@@ -8,7 +8,7 @@ landing page that lists them all is "Results".{% endcomment %}
   <div class="results-header">
     <h1 class="page-heading">{{ cclass.display_name }}</h1>
     <span class="results-method">{{ scoring_label }}</span>
-    <a class="button button--small results-export" href="{{ export_url }}" target="_blank" rel="noopener">{% trans "Export PDF" %}</a>
+    <a class="button button--secondary button--small results-export" href="{{ export_url }}" target="_blank" rel="noopener">{% trans "Export PDF" %}</a>
   </div>
   <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }}</p>
 

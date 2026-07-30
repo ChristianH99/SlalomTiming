@@ -49,8 +49,12 @@
         <tr class="participant-row" data-participant="{{ participant.pk }}"
             data-search-base="{{ participant.first_name|lower }} {{ participant.last_name|lower }} {{ participant.club|lower }}"
             data-search="{{ participant.first_name|lower }} {{ participant.last_name|lower }} {{ participant.club|lower }} {{ participant.current_bib|default:'' }}"
-            data-last="{{ participant.last_name|lower }}" data-first="{{ participant.first_name|lower }}"
-            tabindex="0" role="button" aria-expanded="false" aria-controls="detail-{{ participant.pk }}">
+            data-last="{{ participant.last_name|lower }}" data-first="{{ participant.first_name|lower }}">
+          {% comment %}The row was `role="button" tabindex="0"`, which tells a
+          screen reader it is not a row at all — no column headers, no position
+          in the table. The row stays a row; the control that opens it is the
+          real <button> in the last cell, which is what carries aria-expanded.
+          Clicking anywhere on the row still works, for the mouse.{% endcomment %}
           <td class="col-bib"><span data-bib-display>{{ participant.current_bib|default:"–" }}</span></td>
           <td class="col-name" title="{{ participant.first_name }} {{ participant.last_name }}">{{ participant.first_name }} {{ participant.last_name }}{% comment %}Out of the whole event: worth seeing without opening the row.{% endcomment %}<span class="status-pill status-pill--dsq" data-dsq-pill {% if participant.current_status != "dsq" %}hidden{% endif %}>{% trans "DSQ" %}</span></td>
           <td class="col-dob">{{ participant.date_of_birth|date:"d.m.Y"|default:"–" }}</td>
@@ -71,7 +75,11 @@
           {% if "requires_club" in collected_info %}<td class="col-club" title="{{ participant.club }}">{{ participant.club }}</td>{% endif %}
           {% if "requires_license" in collected_info %}<td class="col-licence" title="{{ participant.license_number }}">{{ participant.license_number }}</td>{% endif %}
           <td class="col-actions">
-            <span class="pr-chevron" aria-hidden="true"></span>
+            <button type="button" class="pr-toggle" data-row-toggle
+                    aria-expanded="false" aria-controls="detail-{{ participant.pk }}"
+                    aria-label="{% blocktrans with first=participant.first_name last=participant.last_name %}Details for {{ first }} {{ last }}{% endblocktrans %}">
+              <span class="pr-chevron" aria-hidden="true"></span>
+            </button>
           </td>
         </tr>
         <tr class="participant-detail-row" id="detail-{{ participant.pk }}" data-detail-for="{{ participant.pk }}" hidden>

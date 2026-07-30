@@ -1062,6 +1062,23 @@ body.modal-open { overflow: hidden; }
 .delete-warning li { margin: var(--space-2) 0; }
 
 .messages { list-style: none; padding: 0; margin: 0 0 var(--space-6); }
+/* Room for the dismiss button shell.js appends. A message used to sit above the
+   form the operator was working in until they navigated away. */
+.messages .notice { position: relative; padding-right: var(--space-9); }
+.notice-dismiss {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-4);
+  border: 0;
+  background: none;
+  padding: var(--space-2);
+  line-height: 1;
+  font-size: var(--text-xl);
+  color: var(--text-light);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+}
+.notice-dismiss:hover { color: var(--text-dark); }
 .notice-list {
   margin: var(--space-4) 0 0;
   padding-left: var(--space-6);
@@ -1132,7 +1149,16 @@ body.modal-open { overflow: hidden; }
 /* ----- Expandable rows: click a row to reveal its detail panel ----- */
 .participant-row { cursor: pointer; transition: background var(--dur-2) ease; }
 .participant-row:hover { background: var(--snow); }
-.participant-row:focus-visible { outline: 2px solid var(--glacier); outline-offset: -2px; }
+/* The tab stop is the toggle button in the last cell now, not the row — a
+   <tr role="button"> is not a row to a screen reader. The row still highlights
+   when that button has focus, so the whole line reads as the thing being
+   opened. */
+.participant-row:focus-within { outline: 2px solid var(--glacier); outline-offset: -2px; }
+.pr-toggle {
+  border: 0; background: none; padding: var(--space-2); cursor: pointer;
+  line-height: 0;
+  border-radius: var(--radius-xs);
+}
 .participant-row--open { background: var(--frost-bg); }
 .participant-row--open td { border-bottom-color: transparent; }
 
@@ -1149,7 +1175,8 @@ body.modal-open { overflow: hidden; }
   margin-right: var(--space-2);
   margin-bottom: var(--space-1);
 }
-.participant-row:hover .pr-chevron { border-color: var(--text-mid); }
+.participant-row:hover .pr-chevron,
+.pr-toggle:hover .pr-chevron { border-color: var(--text-mid); }
 .participant-row--open .pr-chevron { transform: rotate(-135deg); margin-bottom: 0; }
 
 /* The detail panel row overrides the fixed-cell truncation rules. */
@@ -2466,14 +2493,27 @@ textarea:focus-visible,
 /* Pre-entered (placeholder) rows and the hover strip that adds them. */
 .timing-row--placeholder { background: rgba(62,142,222,0.05); }
 .bib-input--unknown { border-color: var(--flame); background: var(--flame-bg); }
-.tt-add-strip td { padding: 0; height: 1rem; border-bottom: none; }
+/* Pre-enter an upcoming starter. It used to be `color: transparent` until the
+   row was hovered — so it was undiscoverable, unreachable on a touch screen (a
+   phone has no hover) and invisible even when it had keyboard focus. It now
+   always shows a quiet dashed insert line and brightens on hover or focus.
+   Glacier, not flame: flame in this app means "seconds added". */
+.tt-add-strip td { padding: 0; height: var(--space-7); border-bottom: none; }
 .tt-add-btn {
-  display: block; width: 100%; height: 1rem;
-  border: none; background: transparent; color: transparent;
-  cursor: pointer; font: 800 0.95rem/1rem 'Manrope', sans-serif;
-  transition: color var(--dur-2), background var(--dur-2);
+  display: block; width: 100%; height: var(--space-7);
+  border: none; background: transparent;
+  border-top: 1px dashed var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: 'Manrope', sans-serif;
+  font-size: var(--text-base); font-weight: 800; line-height: var(--space-7);
+  transition: color var(--dur-2), background var(--dur-2), border-color var(--dur-2);
 }
-.tt-add-strip:hover .tt-add-btn { color: var(--flame); background: var(--flame-bg); }
+.tt-add-strip:hover .tt-add-btn,
+.tt-add-btn:hover,
+.tt-add-btn:focus-visible {
+  color: var(--glacier); background: var(--frost-bg); border-color: var(--glacier-light);
+}
 .row-delete {
   margin-left: var(--space-4); border: none; background: transparent;
   color: var(--text-muted); cursor: pointer; font-size: var(--text-lg); line-height: 1;
@@ -2501,6 +2541,17 @@ textarea:focus-visible,
 .timing-live-main { flex: 0 1 auto; min-width: 0; width: max-content; max-width: 100%; }
 .timing-live-main > .time-legend,
 .timing-live-main > .barrier-phase { width: 0; min-width: 100%; }
+/* Stack, at the width its sibling .auto-layout already stacks at. This was a
+   plain flex row with no wrap and no breakpoint, so on a tablet at the finish
+   line the Ignored rail took its share out of the run table — the one thing on
+   the page that has to stay readable. Below the fold is better than squeezed. */
+@media (max-width: 1100px) {
+  .timing-live-body { flex-direction: column; align-items: stretch; }
+  .timing-live-main { width: auto; max-width: none; }
+  .timing-live-main > .time-legend,
+  .timing-live-main > .barrier-phase { width: auto; min-width: 0; }
+  .table-card { overflow-x: auto; }
+}
 
 /* Single-light-barrier phase (templates/timing/_barrier_phase.html). Only a
    one-channel rig shows it at all, so it is quiet by default and only the role
@@ -3270,9 +3321,12 @@ textarea:focus-visible,
 }
 
 /* ---- classes board ---- */
+/* auto-fit, not auto-fill: auto-fill keeps the empty tracks, so five classes in
+   a three-wide board left a ragged gap where the sixth would be. auto-fit
+   collapses them and the row's cards take the width instead. */
 .dash-classes {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--space-6);
 }
 .dash-class {

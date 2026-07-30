@@ -27,10 +27,13 @@ entry, indexed and backfilled), with the bulk-delete screen still to come, and
 **PRV-5 (a privacy notice) is untouched**. **§6 (operability) is complete** — six
 fixed, one waived by the owner (OPS-4). **§7.1 (broken or misleading states) is
 complete** — six fixed, one waived (UI-5). **§7.2 (consistency) is complete** —
-all six fixed, plus UI-29, which the audit itself missed: two sidebar entries
+all six fixed, plus UI-31, which the audit itself missed: two sidebar entries
 were marked at once, because the sweep read the access-control registry and
-never compared it against how the nav renders. §7.3, §8 (docs) and §9 (test
-gaps) still open.
+never compared it against how the nav renders. **§7.3 is complete** — twelve
+fixed, one waived (UI-19), and on the owner's instruction every remaining
+browser dialog became one of the app's own: the only `window.confirm` /
+`alert` left in the codebase is the `beforeunload` on tab close, which a page
+cannot draw itself. §8 (docs) and §9 (test gaps) still open.
 
 ---
 
@@ -498,7 +501,8 @@ What follows is what is left.
 
 ### 7.2 Consistency
 
-* **UI-29 (Med) (✅ FIXED)** — **Two sidebar entries marked at once.** Opening
+* **UI-31 (Med) (✅ FIXED)** — **Two sidebar entries marked at once.** (Filed as
+  UI-29 in commit a29e428 before that number was found to be taken.) Opening
   Competition Setup → **Results** (`results:settings`) also marked Timing →
   **Settings** (`timing:settings`). Each entry decided whether it was current by
   comparing `request.resolver_match.url_name` against a literal, and a `url_name` is
@@ -565,18 +569,36 @@ What follows is what is left.
 
 ### 7.3 Interaction and accessibility
 
-* **UI-14 (Med)** — **No modal focus management.** Both `base.html` dialogs (and the help
-  modals) are `role="dialog" aria-modal="true"` but nothing moves focus in, traps it, or
-  restores it on close. Tab goes straight behind the overlay.
-* **UI-15 (Med)** — **Django messages are not announced.** `base.html:118` renders them
-  as a plain `<ul>` with no `role="status"` / `aria-live`, so "Timing settings saved"
-  never reaches a screen reader. They also have no dismiss control.
-* **UI-16 (Med)** — **The unsaved-changes guard covers only in-app link clicks.** Closing
-  the tab, pressing Back, or an external link all discard silently — no `beforeunload`,
-  no `popstate`.
-* **UI-17 (Med)** — The guard's **"Save changes" calls `form.submit()`**, which bypasses
-  HTML5 constraint validation and any `submit` listener. An invalid form posts. Should be
-  `requestSubmit()`.
+* **UI-14 (Med) (✅ FIXED)** — **No modal focus management.** Seven dialogs, every one
+  `role="dialog" aria-modal="true"`, and not one of them moved focus in, kept it there or
+  gave it back: Tab went straight through to the page behind the overlay, so a keyboard
+  user could type into a form they could not see, and the control they had pressed lost
+  its place for good. Each rolled its own show/hide, which is why they were all wrong the
+  same way. They now share `shell.js::modalController` — focus in, Tab wrapped, focus
+  restored on close, Escape and backdrop handled once. It also adopts a dialog the
+  *server* rendered already open (the type-change, penalty-loss and bib-change
+  confirmations): those never called `open()`, so they were the worst case — a question
+  on screen with the keyboard behind it. A test fails on any page toggling a modal's
+  `.hidden` itself.
+* **UI-15 (Med) (✅ FIXED)** — **Django messages are not announced.** A plain `<ul>` with
+  no `role="status"` / `aria-live`, so "Timing settings saved" never reached a screen
+  reader — the page simply had one more list on it than before. Now `role="status"`
+  (polite, which is right for a confirmation) and each message gets a dismiss button;
+  they used to sit above the very form the operator was working in until the next
+  navigation.
+* **UI-16 (Med) (✅ FIXED)** — **The unsaved-changes guard covers only in-app link
+  clicks.** Closing the tab and pressing Back both discarded silently. `beforeunload` now
+  covers the tab — the owner asked for the browser's own dialog there, and it is the one
+  case a page cannot draw its own. Back needed more than a listener: `beforeunload` does
+  not fire for it, so a history entry is pushed once the form goes dirty and popped in a
+  `popstate` handler, and the entry is *put back* before the dialog opens — so "Cancel"
+  leaves the operator on the page they were editing rather than one step further back.
+* **UI-17 (Med) (✅ FIXED)** — The guard's **"Save changes" calls `form.submit()`**, which
+  skips HTML5 constraint validation *and* every `submit` listener — so an invalid form
+  posted, and the page's own submit handlers (where several pages serialise their state)
+  never ran. `requestSubmit()` now, here and in the penalties dialog, which had the same
+  call and whose own destructive-save guard is a submit listener it was skipping. A test
+  fails on a bare `form.submit()`.
 * **UI-30 (✅ FIXED)** — *(reported after §2b, pre-existing)* **The Manual timing
   table sat in a band of empty white.** `.timing-live-main` is `flex: 0 1 auto`,
   so it sized to its *widest* child — and that was the time legend below the
@@ -586,36 +608,53 @@ What follows is what is left.
   from the table (`width: max-content`) and the two full-width strips below it
   (legend, barrier phase) are taken out of the intrinsic measurement, so the
   legend wraps to the table instead of stretching it.
-* **UI-18 (Med)** — **The Manual timing layout never stacks.** `.timing-live-body` is a
-  plain flex row with no `flex-wrap` and no breakpoint, while its sibling `.auto-layout`
-  stacks at ≤1100 px. On a tablet at the finish line the Ignored rail crushes the table.
+* **UI-18 (Med) (✅ FIXED)** — **The Manual timing layout never stacks.** A plain flex row
+  with no `flex-wrap` and no breakpoint, while its sibling `.auto-layout` stacks at
+  ≤1100 px. Now stacks at the same width, and the table card scrolls sideways rather than
+  compressing: below the fold beats squeezed when the squeezed thing is the run table.
 * **UI-19 (Low)** — **No `@media print`** anywhere. Printing a results page from the
   browser prints the sidebar. (The PDF export is the intended path, but people press
   Ctrl-P.)
-* **UI-20 (Low)** — **The sidebar collapse state is not persisted** — it resets on every
-  navigation, so an operator who wants the full width has to collapse it on every page.
-* **UI-21 (Low)** — `aria-expanded="true"` is hard-coded on the hamburger in the HTML,
-  so the server-rendered state is wrong on mobile until `syncAria()` runs.
-* **UI-22 (Low)** — `<tr role="button">` on the participant row (`participant_list.html:53`)
-  overrides the row semantics for screen readers.
-* **UI-23 (Low)** — The **`+` strip to pre-enter a starter** on Manual timing is
-  hover-only with no persistent affordance — undiscoverable, and unreachable by touch.
-* **UI-24 (Low)** — On the results table, a DNS on a **training** run displays "DNS" while
-  the tally below reads "DNS: 0". Both are correct (a practice state code has no bearing
-  on the result) and together they look like a bug.
-* **UI-25 (Low)** — "PDF exportieren" is a filled flame primary button, louder than the
-  result it sits above — the same critique the codebase already applied to Auto timing's
-  "Reset order".
-* **UI-26 (Low)** — The Dashboard's class board leaves a ragged gap when the class count
-  is not a multiple of three.
+* **UI-20 (Low) (✅ FIXED)** — **The sidebar collapse state is not persisted.** It is a
+  preference about the app, not about one page. Kept in `localStorage`, desktop only (on
+  mobile the sidebar is off-canvas anyway and opening it is momentary).
+* **UI-21 (Low) (✅ FIXED)** — `aria-expanded="true"` hard-coded on the hamburger, so the
+  rendered state was simply wrong on a phone. The attribute is gone from the template —
+  the server cannot know the viewport — and `syncAria()` sets it from the real state on
+  load.
+* **UI-22 (Low) (✅ FIXED)** — `<tr role="button" tabindex="0">` told a screen reader the
+  row was not a row: no column headers, no position in the table. The row is a row again;
+  the control that opens it is a real `<button>` in the last cell carrying `aria-expanded`
+  and a label naming the competitor. Clicking anywhere on the row still works, for the
+  mouse. `:focus-within` keeps the whole line highlighted, so it still reads as the thing
+  being opened.
+* **UI-23 (Low) (✅ FIXED)** — The **`+` strip to pre-enter a starter** was
+  `color: transparent` until its row was hovered: undiscoverable, unreachable on a touch
+  screen (a phone has no hover) and invisible *even while it held keyboard focus*. It now
+  always shows a quiet dashed insert line and brightens on hover or focus — in glacier,
+  the app's interactive accent, not flame, which here means "seconds added".
+* **UI-24 (Low) (✅ FIXED)** — On the results table, a DNS on a **training** run displays
+  "DNS" while the tally below reads "DNS: 0". Both are correct — the tally counts a
+  *competitor's* outcome and a practice code has no bearing on one — and together they
+  read as a bug. In exactly that case (a practice run carries a code and nobody is
+  settled on one) the table now says which of the two it is counting.
+* **UI-25 (Low) (✅ FIXED)** — "PDF exportieren" was a filled flame primary button, louder
+  than the result it sits above — the same critique already applied to Auto timing's
+  "Reset order". Secondary now, on all three results pages.
+* **UI-26 (Low) (✅ FIXED)** — The Dashboard's class board leaves a ragged gap when the
+  class count is not a multiple of three: `repeat(auto-fill, …)` keeps the empty tracks.
+  `auto-fit` collapses them and the row's cards take the width.
 * **UI-27 (✅ FIXED)** — `base.html` carried ~130 lines of inline JS in four IIFEs
   while every other script lived in `static/js/`. Also the blocker for SEC-H; both
   went together in §2b.
-* **UI-28 (Low)** — *(found during §2b)* The participant form shows German page
-  furniture around **English field labels** ("First name", "Last name", "Date of
-  birth"): those come from `Participant`'s field names, which carry no
-  `verbose_name`, so there is nothing for the catalogue to translate. Every other
-  label on the page is translated, which makes it read as a half-finished form.
+* **UI-28 (Low) (✅ FIXED)** — *(found during §2b)* The participant form shows German page
+  furniture around **English field labels** ("First name", "Last name", "Date of birth"):
+  Django builds a label from the attribute name when a field has no `verbose_name`, and
+  there is nothing in that for the catalogue to translate. All thirteen now carry one
+  (migration `0012`). Worth knowing for the next round: `makemessages` matched three of
+  the new msgids to *older, longer* ones and marked them fuzzy — a fuzzy entry compiles
+  to nothing, and two of these carried a stale `%(error)s` no longer in the string. Seven
+  fuzzies in total came out of this section's work; all resolved by hand.
 * **UI-29 (✅ FIXED)** — *(found during §2b)* `gettext("a" + "b")` in
   `auto_timing.js` put `"a"` in the catalogue while the browser looked up `"ab"`,
   so the "unattributed time" sentence had been rendering in English in a German

@@ -9,14 +9,12 @@ refuses an unconfirmed change, this re-submits once the answer is given.
   const form = document.getElementById("general-form");
   const flag = document.getElementById("confirm-type-change");
   if (!modal || !form || !flag) return;
+  // Rendered already open by the server when the answer is missing, which is
+  // why the controller focuses a dialog it finds open — see shell.js.
+  const dialog = window.modalController(modal, { onClose: () => { flag.value = ""; } });
   modal.querySelector("[data-type-change-confirm]").addEventListener("click", () => {
     flag.value = "1";
     form.requestSubmit();
   });
-  const cancel = () => { modal.hidden = true; flag.value = ""; };
-  modal.querySelector("[data-type-change-cancel]").addEventListener("click", cancel);
-  modal.addEventListener("click", (e) => { if (e.target === modal) cancel(); });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !modal.hidden) cancel();
-  });
+  modal.querySelector("[data-type-change-cancel]").addEventListener("click", dialog.close);
 })();

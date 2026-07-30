@@ -61,9 +61,13 @@
     // A bib carries its recorded times with it (DAT-2), so the server refuses
     // a move like that until it has been said out loud and agreed to.
     if (!res.ok && res.confirm) {
-      if (!window.confirm(res.confirm + "\n\n" + gettext("Change the bib anyway?"))) {
-        return false;
-      }
+      const agreed = await window.appConfirm({
+        title: gettext("Change the bib?"),
+        body: res.confirm,
+        accept: gettext("Change the bib"),
+        danger: true,
+      });
+      if (!agreed) return false;
       res = await post(true);
     }
     if (res.ok) {
@@ -86,11 +90,19 @@
     return false;
   }
 
+  // aria-expanded belongs to the button that does the expanding, not to the
+  // row: a <tr role="button"> stops being a row for a screen reader, losing its
+  // headers and its place in the table.
+  function setExpanded(row, open) {
+    const button = row.querySelector("[data-row-toggle]");
+    if (button) button.setAttribute("aria-expanded", String(open));
+  }
+
   function collapse(row) {
     if (!row) return;
     const detail = detailFor(row.dataset.participant);
     saveBib(row);
-    row.setAttribute("aria-expanded", "false");
+    setExpanded(row, false);
     row.classList.remove("participant-row--open");
     if (detail) detail.hidden = true;
     if (openRow === row) openRow = null;
@@ -99,7 +111,7 @@
   function expand(row) {
     if (openRow && openRow !== row) collapse(openRow);
     const detail = detailFor(row.dataset.participant);
-    row.setAttribute("aria-expanded", "true");
+    setExpanded(row, true);
     row.classList.add("participant-row--open");
     if (detail) detail.hidden = false;
     openRow = row;
@@ -117,9 +129,10 @@
       if (e.target.closest("a")) return;  // links do their own thing
       toggle(row);
     });
-    row.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(row); }
-    });
+    // The button is a real button, so Enter and Space already work on it; the
+    // row only needs the mouse handler above.
+    const button = row.querySelector("[data-row-toggle]");
+    if (button) button.addEventListener("click", (e) => { e.stopPropagation(); toggle(row); });
     const detail = detailFor(row.dataset.participant);
     const field = detail && detail.querySelector(".pd-bib-input");
     if (field) {
@@ -135,7 +148,13 @@
       field.addEventListener("keydown", async (e) => {
         if (e.key !== "Enter") return;
         e.preventDefault();
-        if (await saveBib(row)) { collapse(row); row.focus(); }
+        // Back to the row's toggle, which is now what holds the tab stop —
+        // the row itself no longer has one (it is a row again, not a button).
+        if (await saveBib(row)) {
+          collapse(row);
+          const toggleBtn = row.querySelector("[data-row-toggle]");
+          if (toggleBtn) toggleBtn.focus();
+        }
       });
       // Clicks inside the detail shouldn't bubble to a row toggle.
       detail.addEventListener("click", (e) => e.stopPropagation());

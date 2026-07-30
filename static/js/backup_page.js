@@ -118,32 +118,26 @@
     }
   }
 
+  // Focus in, trapped, and handed back to the Browse button on close — see
+  // shell.js::modalController, which every dialog in the app goes through.
+  const dialog = window.modalController(modal);
+
   function show() {
-    modal.hidden = false;
+    dialog.open();
     // Start where the field already points, so re-picking is one step from where
     // they were rather than back at the drive list.
     open(field.value.trim());
   }
 
-  function hide() {
-    modal.hidden = true;
-  }
-
   document.querySelectorAll("[data-folder-open]").forEach((button) =>
     button.addEventListener("click", show));
   modal.querySelectorAll("[data-folder-close]").forEach((button) =>
-    button.addEventListener("click", hide));
+    button.addEventListener("click", dialog.close));
   up.addEventListener("click", () => open(parent));
   use.addEventListener("click", () => {
     field.value = current;
     // The unsaved-changes guard watches for input events, not assignments.
     field.dispatchEvent(new Event("input", { bubbles: true }));
-    hide();
-  });
-  modal.addEventListener("click", (event) => {
-    if (event.target === modal) hide();
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !modal.hidden) hide();
+    dialog.close();
   });
 })();

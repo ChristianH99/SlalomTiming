@@ -103,7 +103,11 @@
     <div class="shell-overlay" id="shell-overlay"></div>
     <div class="shell-main">
       <header class="shell-topbar">
-        <button class="shell-hamburger" id="shell-hamburger" aria-expanded="true" aria-controls="shell-sidebar" aria-label="{% trans 'Toggle navigation' %}">
+        {% comment %}No aria-expanded here: the server cannot know the viewport,
+        and the sidebar is shown by default on desktop but off-canvas on mobile,
+        so a rendered "true" was simply wrong on a phone until shell.js ran.
+        shell.js sets it from the actual state on load.{% endcomment %}
+        <button class="shell-hamburger" id="shell-hamburger" aria-controls="shell-sidebar" aria-label="{% trans 'Toggle navigation' %}">
           <span class="shell-hamburger-icon"><span></span><span></span><span></span></span>
         </button>
         <div class="topbar-titles">
@@ -122,8 +126,12 @@
         </div>
       </header>
       <main class="content {% block content_class %}{% endblock %}" id="main-content">
+        {% comment %}role="status" (an aria-live="polite" region), so a message
+        is announced rather than silently added to the page — it is the app's
+        answer to something the operator just did. shell.js adds each one a
+        dismiss button.{% endcomment %}
         {% if messages %}
-          <ul class="messages">
+          <ul class="messages" role="status">
             {% for message in messages %}
               <li class="notice notice--{{ message.tags|default:'info' }}">{{ message }}</li>
             {% endfor %}
@@ -131,6 +139,26 @@
         {% endif %}
         {% block content %}{% endblock %}
       </main>
+    </div>
+  </div>
+
+  {% comment %}The app's own confirm/alert dialog, on every page. Nothing calls
+  window.confirm() or window.alert(): a browser dialog is chrome, not this app —
+  it wears the OS's styling, cannot be translated by us, states its question in a
+  single unformatted string and puts the operator's answer behind a control that
+  looks nothing like the rest of the page. The one exception is the browser's own
+  "leave this page?" on tab close, which no page is allowed to draw.
+
+  Filled by window.appConfirm()/appAlert() in shell.js, which also give it the
+  focus management every dialog here gets.{% endcomment %}
+  <div class="modal-overlay" id="app-dialog" hidden data-app-dialog>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
+      <h2 class="modal-title" id="app-dialog-title" data-dialog-title></h2>
+      <div class="modal-body" data-dialog-body></div>
+      <div class="modal-actions">
+        <button type="button" class="button" data-dialog-accept></button>
+        <button type="button" class="button button--secondary" data-dialog-cancel>{% trans "Cancel" %}</button>
+      </div>
     </div>
   </div>
 
