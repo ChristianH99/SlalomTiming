@@ -125,10 +125,11 @@ Cross-cutting bits       Each app also carries the ordinary Django plumbing: adm
                          app's own screens don't edit), apps.py, urls.py and migrations/.
                          apps/timing/routing.py is the WebSocket URL map (ws/timing/ → the legacy
                          TimingConsumer, ws/timing/live/ → TimingLiveConsumer), reached from
-                         config/asgi.py. Two **context processors** run on every render (settings
+                         config/asgi.py. Three **context processors** run on every render (settings
                          TEMPLATES): apps/competitions/context_processors.active_competition (the
                          active competition plus its running classes and Overall groups, which is
-                         how the sidebar lists a Results sub-page each) and the accounts one above.
+                         how the sidebar lists a Results sub-page each), the accounts one above,
+                         and apps/nav.context (which sidebar entry is the current page).
                          **templatetags/**: apps/competitions/templatetags/competitions_tags.py
                          (participant_classes — a participant's classes under the competition's
                          assignment method) and apps/results/templatetags/pdf_markup.py.
@@ -149,6 +150,18 @@ apps/common.py           Helpers shared across apps: safe_next() resolves the PO
                          other_signed_in_users() reads the live session table — how a page
                          owning an installation-wide setting knows whether changing it
                          would move somebody else's screen (see select_competition).
+apps/nav.py              Which sidebar entry base.html marks as current: entry id ->
+                         the (app_name, url_name) pairs that are that page, plus
+                         PARENTS (a parent is marked when any child is). A context
+                         processor exposes it as `nav_current`. It is a registry rather
+                         than a comparison in the template because a url_name is only
+                         unique *within* an app: both entries asking whether url_name ==
+                         "settings" is what made Competition Setup -> Results
+                         (`results:settings`) light up Timing -> Settings as well. The
+                         sets being pairwise disjoint, and every pair in them still
+                         existing in the URLconf, are what config/tests.py
+                         ::TestTheSidebarMarksOnePage checks — so the *class* of bug
+                         fails a test rather than being noticed on a screen.
 apps/competitions/       Competition, CompetitionType, CompetitionClass; active-competition
                          selection — which is one global flag for the whole installation, so
                          select_competition() names the other people signed in and refuses

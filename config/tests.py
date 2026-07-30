@@ -816,3 +816,125 @@ class TestAutoTimingWithoutAStartPattern:
             assert 'class="notice"' not in source, (
                 f'{name} still states "nothing to operate" as a notice'
             )
+
+
+def _url_names_in_the_project():
+    """Every (app_name, url_name) pair the project's URLconf can resolve to."""
+    from django.urls import get_resolver
+    from django.urls.resolvers import URLPattern, URLResolver
+
+    found = set()
+
+    def walk(resolver, app_name):
+        for entry in resolver.url_patterns:
+            if isinstance(entry, URLResolver):
+                walk(entry, entry.app_name or app_name)
+            elif isinstance(entry, URLPattern) and entry.name:
+                found.add((app_name, entry.name))
+
+    walk(get_resolver(), '')
+    return found
+
+
+class TestTheSidebarMarksOnePage:
+    """Opening Competition Setup -> Results marked Timing -> Settings as well.
+
+    Both sidebar entries decided they were current by comparing
+    `request.resolver_match.url_name` against "settings", and a url_name is only
+    unique within its app: `results:settings` and `timing:settings` are two
+    different pages with the same name. Some entries did name their app and some
+    didn't, so the collision was an accident of which line you read.
+
+    The mapping now lives in apps/nav.py, keyed on the (app, url_name) pair. The
+    two tests below are the reason that fixes the class of bug rather than this
+    one instance: no pair may appear under two entries, and every pair must
+    still exist in the URLconf.
+    """
+
+    def test_no_url_can_mark_two_entries(self):
+        from apps import nav
+
+        seen = {}
+        for entry, urls in nav.ITEMS.items():
+            for url in urls:
+                assert url not in seen, (
+                    f'{url[0]}:{url[1]} marks both {seen.get(url)} and {entry}'
+                )
+                seen[url] = entry
+
+    def test_every_mapped_url_still_exists(self):
+        """A renamed route would otherwise mark nothing, silently, on a page
+        nobody thinks to re-check."""
+        from apps import nav
+
+        real = _url_names_in_the_project()
+        for entry, urls in nav.ITEMS.items():
+            for app_name, url_name in urls:
+                assert (app_name, url_name) in real, (
+                    f'{entry} points at {app_name}:{url_name}, which no longer exists'
+                )
+
+    def test_every_nested_entry_has_a_parent(self):
+        from apps import nav
+
+        nested = {name for name in nav.ITEMS if '.' in name}
+        claimed = {child for children in nav.PARENTS.values() for child in children}
+        assert nested == claimed
+        assert not (set(nav.PARENTS) & set(nav.ITEMS)), (
+            'a parent is a heading, never a page of its own'
+        )
+
+    @pytest.mark.parametrize('url_name, expected', [
+        ('timing:dashboard', {'dashboard'}),
+        ('competitions:list', {'setup', 'setup.manage'}),
+        ('competitions:general', {'setup', 'setup.general'}),
+        ('competitions:classes', {'setup', 'setup.classes'}),
+        ('competitions:runorder', {'setup', 'setup.runorder'}),
+        ('competitions:penalties', {'setup', 'setup.penalties'}),
+        # The page this was all about: a Competition Setup page served by the
+        # results app.
+        ('results:settings', {'setup', 'setup.results'}),
+        ('participants:list', {'participants'}),
+        ('timing:manual', {'timing', 'timing.manual'}),
+        ('timing:auto', {'timing', 'timing.auto'}),
+        ('timing:settings', {'timing', 'timing.settings'}),
+        ('competitions:marshal-posts', {'marshal_posts'}),
+        ('results:index', {'results', 'results.index'}),
+        ('transfer:backup', {'backup', 'backup.backup'}),
+        ('transfer:export', {'backup', 'backup.export'}),
+        ('transfer:import', {'backup', 'backup.import'}),
+        ('transfer:review', {'backup', 'backup.import'}),
+    ])
+    def test_each_page_marks_exactly_its_own_entry(self, url_name, expected):
+        from apps import nav
+
+        assert nav.current(resolve(reverse(url_name))) == expected
+
+    def test_a_page_with_no_sidebar_entry_marks_nothing(self):
+        from apps import nav
+
+        # The simulator opens in its own tab without the app shell, and the
+        # audit log hangs off the sidebar footer rather than the nav.
+        for name in ('timing:simulator', 'accounts:audit-log'):
+            assert nav.current(resolve(reverse(name))) == frozenset()
+
+    @pytest.mark.django_db
+    def test_the_rendered_sidebar_marks_one_link(self, client):
+        """End to end, through the template: the bug was visible on screen."""
+        import datetime
+
+        from apps.competitions.models import Competition, CompetitionType
+
+        ctype = CompetitionType.objects.create(name='Slalom')
+        Competition.objects.create(competition_type=ctype, name='Test',
+                                   date=datetime.date(2026, 5, 1), is_active=True)
+
+        body = client.get(reverse('results:settings')).content.decode()
+        sidebar = body[body.index('<nav class="shell-nav">'):body.index('</nav>')]
+        marked = re.findall(r'<a class="shell-nav-[^"]*\bactive\b[^"]*" href="([^"]+)"',
+                            sidebar)
+        assert sorted(marked) == sorted([
+            reverse('competitions:list'),   # the Competition Setup parent
+            reverse('results:settings'),    # its Results sub-page
+        ]), marked
+        assert reverse('timing:settings') not in marked

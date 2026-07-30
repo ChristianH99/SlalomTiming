@@ -423,6 +423,10 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'apps.competitions.context_processors.active_competition',
                 'apps.accounts.context_processors.access',
+                # Which sidebar entry is the current page (apps/nav.py) — worked
+                # out from the resolved (app, url_name) pair rather than by
+                # comparing url_name inline, which marked two entries at once.
+                'apps.nav.context',
             ],
         },
     },

@@ -495,6 +495,23 @@ What follows is what is left.
 
 ### 7.2 Consistency
 
+* **UI-29 (Med) (✅ FIXED)** — **Two sidebar entries marked at once.** Opening
+  Competition Setup → **Results** (`results:settings`) also marked Timing →
+  **Settings** (`timing:settings`). Each entry decided whether it was current by
+  comparing `request.resolver_match.url_name` against a literal, and a `url_name` is
+  only unique within its app — these are two different pages with the same name. About
+  half the entries did name their app and half did not, so which pairs collided was an
+  accident of authorship, and the same was true of the *next* collision. (Reported by
+  the owner, not found by the audit — the sweep read the access-control registry and
+  never compared it against how the nav renders.) Fixed by moving the mapping out of
+  the template into `apps/nav.py`, keyed on the (app, url_name) pair, exposed as
+  `nav_current` by a context processor. `config/tests.py::TestTheSidebarMarksOnePage`
+  pins the two invariants that make it a class of bug rather than an instance: the
+  entries' URL sets are pairwise disjoint, and every pair still exists in the URLconf
+  (so a renamed route fails a test instead of quietly marking nothing). A second thing
+  fell out of it: `results:settings` marked the Results *sub-entry* while its
+  Competition Setup parent stayed unmarked, because the parent required
+  `app_name == 'competitions'`.
 * **UI-8 (Med)** — **The sidebar names classes bare** (`{{ cc.name }}` → "1", "2",
   "Bobbycar Mini") while the page it links to is titled "Ergebnis Klasse Bobbycar Mini".
   The documented rule is that `display_name()` is the one way a class is written where

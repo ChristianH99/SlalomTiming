@@ -22,61 +22,65 @@
       <div class="shell-brand">
         <a class="brand" href="{% url 'timing:dashboard' %}">Slalom<span class="brand-slash">/</span>Timing</a>
       </div>
+      {% comment %}Which entry is current comes from apps/nav.py, keyed on the
+      (app, url_name) pair Django resolved — not from comparing url_name here.
+      Two apps may use the same url_name, and two do: this template used to mark
+      Timing -> Settings whenever Competition Setup -> Results was open, because
+      both asked for "settings" and only one of them named its app.{% endcomment %}
       <nav class="shell-nav">
-        {% with url_name=request.resolver_match.url_name app_name=request.resolver_match.app_name %}
         {% if 'dashboard' in nav_pages %}
-        <a class="shell-nav-item{% if url_name == 'dashboard' %} active{% endif %}" href="{% url 'timing:dashboard' %}">{% trans "Dashboard" %}</a>
+        <a class="shell-nav-item{% if 'dashboard' in nav_current %} active{% endif %}" href="{% url 'timing:dashboard' %}">{% trans "Dashboard" %}</a>
         {% endif %}
         {% if 'competition_setup' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'competitions' and url_name != 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:list' %}">{% trans "Competition Setup" %}</a>
+        <a class="shell-nav-item shell-nav-parent{% if 'setup' in nav_current %} active{% endif %}" href="{% url 'competitions:list' %}">{% trans "Competition Setup" %}</a>
         <div class="shell-nav-sub">
-          {% comment %}"list"/"add" also match participants:list/add, so guard by app.{% endcomment %}
-          <a class="shell-nav-subitem{% if url_name == 'type-list' or url_name == 'type-add' or app_name == 'competitions' and url_name == 'list' or app_name == 'competitions' and url_name == 'add' %} active{% endif %}" href="{% url 'competitions:list' %}">{% trans "Manage competitions" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'general' %} active{% endif %}" href="{% url 'competitions:general' %}">{% trans "General" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'classes' %} active{% endif %}" href="{% url 'competitions:classes' %}">{% trans "Classes" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'runorder' %} active{% endif %}" href="{% url 'competitions:runorder' %}">{% trans "Run order" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'penalties' %} active{% endif %}" href="{% url 'competitions:penalties' %}">{% trans "Penalties" %}</a>
-          <a class="shell-nav-subitem{% if app_name == 'results' and url_name == 'settings' %} active{% endif %}" href="{% url 'results:settings' %}">{% trans "Results" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.manage' in nav_current %} active{% endif %}" href="{% url 'competitions:list' %}">{% trans "Manage competitions" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.general' in nav_current %} active{% endif %}" href="{% url 'competitions:general' %}">{% trans "General" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.classes' in nav_current %} active{% endif %}" href="{% url 'competitions:classes' %}">{% trans "Classes" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.runorder' in nav_current %} active{% endif %}" href="{% url 'competitions:runorder' %}">{% trans "Run order" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.penalties' in nav_current %} active{% endif %}" href="{% url 'competitions:penalties' %}">{% trans "Penalties" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.results' in nav_current %} active{% endif %}" href="{% url 'results:settings' %}">{% trans "Results" %}</a>
         </div>
         {% endif %}
         {% if 'participants' in nav_pages %}
-        <a class="shell-nav-item{% if request.resolver_match.app_name == 'participants' %} active{% endif %}" href="{% url 'participants:list' %}">{% trans "Participants" %}</a>
+        <a class="shell-nav-item{% if 'participants' in nav_current %} active{% endif %}" href="{% url 'participants:list' %}">{% trans "Participants" %}</a>
         {% endif %}
         {% comment %}Timing sub-pages will grow; Settings is kept last (future
         pages go above it).{% endcomment %}
         {% if 'timing' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'timing' and url_name != 'dashboard' %} active{% endif %}" href="{% url 'timing:manual' %}">{% trans "Timing" %}</a>
+        <a class="shell-nav-item shell-nav-parent{% if 'timing' in nav_current %} active{% endif %}" href="{% url 'timing:manual' %}">{% trans "Timing" %}</a>
         <div class="shell-nav-sub">
-          <a class="shell-nav-subitem{% if url_name == 'manual' %} active{% endif %}" href="{% url 'timing:manual' %}">{% trans "Manual timing" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'auto' %} active{% endif %}" href="{% url 'timing:auto' %}">{% trans "Auto timing" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'settings' %} active{% endif %}" href="{% url 'timing:settings' %}">{% trans "Settings" %}</a>
+          <a class="shell-nav-subitem{% if 'timing.manual' in nav_current %} active{% endif %}" href="{% url 'timing:manual' %}">{% trans "Manual timing" %}</a>
+          <a class="shell-nav-subitem{% if 'timing.auto' in nav_current %} active{% endif %}" href="{% url 'timing:auto' %}">{% trans "Auto timing" %}</a>
+          <a class="shell-nav-subitem{% if 'timing.settings' in nav_current %} active{% endif %}" href="{% url 'timing:settings' %}">{% trans "Settings" %}</a>
         </div>
         {% endif %}
         {% if 'marshal_posts' in nav_pages %}
-        <a class="shell-nav-item{% if url_name == 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">{% trans "Marshal Posts" %}</a>
+        <a class="shell-nav-item{% if 'marshal_posts' in nav_current %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">{% trans "Marshal Posts" %}</a>
         {% endif %}
         {% if 'results' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'results' and url_name != 'settings' %} active{% endif %}" href="{% url 'results:index' %}">{% trans "Results" %}</a>
+        <a class="shell-nav-item shell-nav-parent{% if 'results' in nav_current %} active{% endif %}" href="{% url 'results:index' %}">{% trans "Results" %}</a>
         <div class="shell-nav-sub">
+          {% comment %}One entry per group / class, so which of them is current
+          takes the URL's kwargs as well as its name.{% endcomment %}
           {% for g in results_overall %}
-            <a class="shell-nav-subitem{% if url_name == 'overall' and request.resolver_match.kwargs.method == g.method and request.resolver_match.kwargs.runs == g.counted_runs %} active{% endif %}" href="{% url 'results:overall' g.method g.counted_runs %}">{% blocktrans with label=g.method_label runs=g.counted_runs %}Overall · {{ label }} · {{ runs }} Runs{% endblocktrans %}</a>
+            <a class="shell-nav-subitem{% if 'results.overall' in nav_current and request.resolver_match.kwargs.method == g.method and request.resolver_match.kwargs.runs == g.counted_runs %} active{% endif %}" href="{% url 'results:overall' g.method g.counted_runs %}">{% blocktrans with label=g.method_label runs=g.counted_runs %}Overall · {{ label }} · {{ runs }} Runs{% endblocktrans %}</a>
           {% endfor %}
           {% for cc in results_classes %}
-            <a class="shell-nav-subitem{% if url_name == 'class' and request.resolver_match.kwargs.pk == cc.pk %} active{% endif %}" href="{% url 'results:class' cc.pk %}">{{ cc.name }}</a>
+            <a class="shell-nav-subitem{% if 'results.class' in nav_current and request.resolver_match.kwargs.pk == cc.pk %} active{% endif %}" href="{% url 'results:class' cc.pk %}">{{ cc.name }}</a>
           {% empty %}
             <span class="shell-nav-subitem shell-nav-subitem--muted">{% trans "No running classes" %}</span>
           {% endfor %}
         </div>
         {% endif %}
         {% if 'import_export' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'transfer' %} active{% endif %}" href="{% url 'transfer:backup' %}">{% trans "Backup" %}</a>
+        <a class="shell-nav-item shell-nav-parent{% if 'backup' in nav_current %} active{% endif %}" href="{% url 'transfer:backup' %}">{% trans "Backup" %}</a>
         <div class="shell-nav-sub">
-          <a class="shell-nav-subitem{% if url_name == 'backup' %} active{% endif %}" href="{% url 'transfer:backup' %}">{% trans "Automatic backup" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'export' %} active{% endif %}" href="{% url 'transfer:export' %}">{% trans "Export" context "transfer" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'import' or url_name == 'review' %} active{% endif %}" href="{% url 'transfer:import' %}">{% trans "Import" %}</a>
+          <a class="shell-nav-subitem{% if 'backup.backup' in nav_current %} active{% endif %}" href="{% url 'transfer:backup' %}">{% trans "Automatic backup" %}</a>
+          <a class="shell-nav-subitem{% if 'backup.export' in nav_current %} active{% endif %}" href="{% url 'transfer:export' %}">{% trans "Export" context "transfer" %}</a>
+          <a class="shell-nav-subitem{% if 'backup.import' in nav_current %} active{% endif %}" href="{% url 'transfer:import' %}">{% trans "Import" %}</a>
         </div>
         {% endif %}
-        {% endwith %}
       </nav>
       <div class="shell-sidebar-footer">
         {% if can_manage_users %}
