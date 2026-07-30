@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-30 08:46+0200\n"
+"POT-Creation-Date: 2026-07-30 09:22+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -27,7 +27,7 @@ msgstr "▼ Aktuell"
 msgid "Locked"
 msgstr "Gesperrt"
 
-#: .\static\js\auto_timing.js:170 .\static\js\auto_timing.js:627
+#: .\static\js\auto_timing.js:170 .\static\js\auto_timing.js:640
 #: .\static\js\timing_live.js:74
 msgid "Lock"
 msgstr "Sperren"
@@ -90,7 +90,7 @@ msgstr "Gesamt"
 msgid "Lock all posts"
 msgstr "Alle Posten sperren"
 
-#: .\static\js\auto_timing.js:364
+#: .\static\js\auto_timing.js:377
 msgid ""
 "This time has no competitor in the start order. Drag it onto the right "
 "starter's Start or Finish slot, or discard it."
@@ -99,61 +99,61 @@ msgstr ""
 "sie auf den Start oder das Ziel des richtigen Starters, oder verwerfen Sie "
 "sie."
 
-#: .\static\js\auto_timing.js:367
+#: .\static\js\auto_timing.js:380
 msgid "Move to Ignored"
 msgstr "Nach „Ignoriert“ verschieben"
 
-#: .\static\js\auto_timing.js:391 .\static\js\dashboard_overview.js:143
+#: .\static\js\auto_timing.js:404 .\static\js\dashboard_overview.js:143
 msgid "Run time"
 msgstr "Laufzeit"
 
-#: .\static\js\auto_timing.js:396 .\static\js\timing_live.js:179
+#: .\static\js\auto_timing.js:409 .\static\js\timing_live.js:179
 msgid "Double-click to type a run time"
 msgstr "Doppelklicken, um eine Laufzeit einzugeben"
 
-#: .\static\js\auto_timing.js:427
+#: .\static\js\auto_timing.js:440
 msgid "%(kind)s · double-click to edit"
 msgstr "%(kind)s · zum Bearbeiten doppelklicken"
 
-#: .\static\js\auto_timing.js:428 .\static\js\timing_live.js:165
+#: .\static\js\auto_timing.js:441 .\static\js\timing_live.js:165
 msgid "Typed in by hand"
 msgstr "Von Hand eingegeben"
 
-#: .\static\js\auto_timing.js:428
+#: .\static\js\auto_timing.js:441
 msgid "Drag to re-pair or to Ignored"
 msgstr "Ziehen zum erneuten Zuordnen oder auf „Ignoriert“"
 
-#: .\static\js\auto_timing.js:482
+#: .\static\js\auto_timing.js:495
 msgid "Status"
 msgstr "Status"
 
-#: .\static\js\auto_timing.js:488
+#: .\static\js\auto_timing.js:501
 msgid "Clear this run's status"
 msgstr "Status dieses Laufs entfernen"
 
-#: .\static\js\auto_timing.js:593 .\static\js\marshal_posts.js:75
+#: .\static\js\auto_timing.js:606 .\static\js\marshal_posts.js:75
 #: .\static\js\marshal_posts.js:157
 msgid "Post %(n)s"
 msgstr "Posten %(n)s"
 
-#: .\static\js\auto_timing.js:597
+#: .\static\js\auto_timing.js:610
 msgid "Task %(n)s"
 msgstr "Aufgabe %(n)s"
 
-#: .\static\js\auto_timing.js:602 .\static\js\marshal_posts.js:281
+#: .\static\js\auto_timing.js:615 .\static\js\marshal_posts.js:281
 msgid "Task"
 msgstr "Aufgabe"
 
-#: .\static\js\auto_timing.js:610 .\static\js\marshal_posts.js:220
+#: .\static\js\auto_timing.js:623 .\static\js\marshal_posts.js:220
 msgid "Stop line"
 msgstr "Stopplinie"
 
-#: .\static\js\auto_timing.js:615 .\static\js\auto_timing.js:682
+#: .\static\js\auto_timing.js:628 .\static\js\auto_timing.js:695
 #: .\static\js\marshal_posts.js:289
 msgid "Penalty"
 msgstr "Strafe"
 
-#: .\static\js\auto_timing.js:623
+#: .\static\js\auto_timing.js:636
 msgid "Unlock"
 msgstr "Entsperren"
 
@@ -318,67 +318,55 @@ msgstr "Auf der Strecke"
 msgid "Total time"
 msgstr "Gesamtzeit"
 
-#: .\static\js\dashboard_overview.js:147
+#: .\static\js\dashboard_overview.js:150
 msgid "Penalties"
 msgstr "Strafen"
 
-#: .\static\js\dashboard_overview.js:151
+#: .\static\js\dashboard_overview.js:154
 msgid "Timing in progress — result shown when the run finishes."
 msgstr "Zeitmessung läuft — das Ergebnis erscheint, wenn der Lauf beendet ist."
 
-#: .\static\js\dashboard_overview.js:152
+#: .\static\js\dashboard_overview.js:155
 msgid "Waiting for the start signal."
 msgstr "Warten auf das Startsignal."
 
-#: .\static\js\dashboard_overview.js:161
+#: .\static\js\dashboard_overview.js:164
 msgid "%(n)s × pylon"
 msgstr "%(n)s × Pylone"
 
-#: .\static\js\dashboard_overview.js:163
+#: .\static\js\dashboard_overview.js:166
 msgid "%(n)s × task"
 msgstr "%(n)s × Aufgabe"
 
-#: .\static\js\dashboard_overview.js:164
+#: .\static\js\dashboard_overview.js:167
 msgid "stop line"
 msgstr "Stopplinie"
 
-#: .\static\js\dashboard_overview.js:179
+#: .\static\js\dashboard_overview.js:182
 msgid "No running classes yet."
 msgstr "Noch keine laufenden Klassen."
 
-#: .\static\js\dashboard_overview.js:198
+#: .\static\js\dashboard_overview.js:201
 msgid "%(finished)s / %(total)s runs"
 msgstr "%(finished)s / %(total)s Läufe"
 
-#: .\static\js\dashboard_overview.js:200
+#: .\static\js\dashboard_overview.js:203
 msgid "no starters"
 msgstr "keine Starter"
 
-#: .\static\js\dashboard_overview.js:227
+#: .\static\js\dashboard_overview.js:230
 msgid "Updated %(time)s"
 msgstr "Aktualisiert %(time)s"
 
-#: .\static\js\ignored_panel.js:44
-msgid "just now"
-msgstr "gerade eben"
-
-#: .\static\js\ignored_panel.js:45
-msgid "%(n)s min"
-msgstr "%(n)s Min."
-
-#: .\static\js\ignored_panel.js:46
-msgid "%(n)s h"
-msgstr "%(n)s Std."
-
-#: .\static\js\ignored_panel.js:63
+#: .\static\js\ignored_panel.js:53
 msgid "Drag onto a run's slot · double-click to restore"
 msgstr "Auf den Platz eines Laufs ziehen · zum Wiederherstellen doppelklicken"
 
-#: .\static\js\ignored_panel.js:104
+#: .\static\js\ignored_panel.js:94
 msgid "Show fewer"
 msgstr "Weniger anzeigen"
 
-#: .\static\js\ignored_panel.js:105
+#: .\static\js\ignored_panel.js:95
 msgid "Show all (%(n)s)"
 msgstr "Alle anzeigen (%(n)s)"
 

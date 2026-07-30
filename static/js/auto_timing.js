@@ -212,7 +212,7 @@
     if (item.finished) li.classList.add("auto-order-item--done");
     else if (item.started) li.classList.add("auto-order-item--running");
     if (item.orphan) li.classList.add("auto-order-item--orphan");
-    li.append(el("span", "auto-order-bib", "#" + (item.bib == null ? "?" : item.bib)));
+    li.append(bibChip(item, "auto-order-bib"));
     li.append(el("span", "auto-order-run", item.run_label || ""));
     const name = el("span", "auto-order-name" + (item.orphan ? " auto-order-name--orphan" : ""),
       item.name || (item.orphan ? gettext("Unattributed time") : ""));
@@ -299,7 +299,7 @@
     if (item.orphan) div.classList.add("auto-tile--orphan");
 
     const head = el("div", "auto-tile-head");
-    head.append(el("span", "auto-tile-bib", "#" + (item.bib == null ? "?" : item.bib)));
+    head.append(bibChip(item, "auto-tile-bib"));
     const id = el("div", "auto-tile-id");
     id.append(el("span", "auto-tile-name" + (item.orphan ? " auto-tile-name--orphan" : ""),
       item.orphan ? gettext("Unattributed time") : (item.name || gettext("(no starter)"))));
@@ -355,6 +355,19 @@
 
   // What to do with a time that belongs to nobody: put it on the right starter,
   // or throw it away. Both were already possible; neither was said anywhere.
+  /* A bib, or the space where one would be.
+   *
+   * The only item without one is an unattributed run — a real time no slot owns —
+   * and that tile already says so in words and in flame. "#?" on it was a made-up
+   * number in the field an operator reads first. The chip is kept but emptied, so
+   * the tile's layout (.auto-tile-bib has a min-width) doesn't shift either.
+   */
+  function bibChip(item, className) {
+    return item.bib == null
+      ? el("span", className + " " + className + "--none", "")
+      : el("span", className, "#" + item.bib);
+  }
+
   function orphanHelp(item) {
     const box = el("div", "auto-orphan");
     // One string literal, not two concatenated: xgettext extracts what it can

@@ -547,12 +547,18 @@ static/js/               dashboard_overview.js (organiser Dashboard: renders the
                          they wired up). It splits Start/Finish only when the rig has two
                          channels — `autotiming.ignored_split`; with one light barrier an
                          ignored signal has no role, and asking `signal.role()` anyway put
-                         every chip under Start and left Finish permanently empty. Each chip
-                         also carries its *arrival* age, since a chip's own time is the device
-                         clock (not wall-clock, so it says nothing about when), and the list
-                         folds past a few per column with a count and a "show all". There is
-                         deliberately no clear-all: an ignored signal is still the only record
-                         the device fired, and this app does not delete recorded times.
+                         every chip under Start and left Finish permanently empty. Each
+                         column shows the **ten most recent** and folds the rest behind a
+                         "show all": a morning of practice runs reaches a couple of hundred
+                         chips, and the ones that matter are always the ones that just
+                         arrived — which is why `ignored_signals()` ordering newest-first is
+                         load-bearing rather than cosmetic. A chip shows the device's time
+                         and nothing else. It used to carry how long ago it arrived as well,
+                         which on a list already in arrival order and cut off after ten is
+                         the same fact twice — and the timestamp that needed rode along in a
+                         payload every open browser re-fetches on every incoming time. There
+                         is deliberately no clear-all: an ignored signal is still the only
+                         record the device fired, and this app does not delete recorded times.
                          live_socket.js owns the WebSocket for all four live views (no other
                          file may call `new WebSocket` — a test enforces it): reconnect with
                          backoff, a heartbeat so a link that died without a close frame is
@@ -952,8 +958,12 @@ during the outage is otherwise invisible until the next one happens to arrive. A
   Hover between the header and the top row for a **+** to pre-enter an upcoming starter (an empty
   placeholder row); incoming starts fill placeholders oldest-first, so times populate bottom-to-top.
   A **Status** column closes a run without a time — DNF / DNC / DNS / DSQ, for that run only; the
-  row goes amber, the Total cell carries the code, and it stops being a placeholder an incoming
-  time could fill.
+  row takes an amber stripe down its leading edge (a *marker*, not a fill — as a full-bleed row
+  tint, fifteen consecutive non-starters made the table a wall of amber with the rows that still
+  needed work invisible in it), the Total cell carries the code, and it stops being a placeholder
+  an incoming time could fill. The code is stated once: the Status control keeps only a border and
+  a tinted cell to say it is set, because the two cells are neighbours with penalties off and both
+  used to shout the same word.
   **Double-click** a Start, Finish or Run time (or an empty slot) to type it in by hand when the device
   didn't fire — a keyed-in time is a green "entered" chip (run time green + underlined), distinct from a
   measured one, and the run's total honours it. Ignoring is a **drag** to the Ignored-times panel on the
@@ -1124,6 +1134,18 @@ each exists because breaking it is what made the app read as several products st
   worst exactly where German puts its longest compounds. Likewise **page-level explanation lives
   behind the topbar "?"** (`topbar_actions` + `help_modal`, reusable by any page); only a hint
   attached to a specific control stays in the body.
+- **Flame means "seconds added", and nothing else.** `--flame` is the penalty colour — the
+  results table's `.rt-pen`, the penalty chips, `pdf._PEN` — so anything else wearing it
+  reads as penalised. The Dashboard's *total time* did, which made a clean run look
+  punished. A figure that needs emphasis takes it from size or weight.
+- **A state is marked, not filled.** A full-bleed row tint is only legible while the state
+  is rare: forty closed runs is an ordinary afternoon, and the Manual timing table became a
+  wall of amber with the rows that still needed work invisible in it. A stripe down the
+  leading edge reads at any density.
+- **"Nothing to operate" is a heading and a centred `.empty-state` card**, the shape Marshal
+  Posts uses — never a bare paragraph at the top of a blank page, which reads as a page
+  that failed to load. `.empty-state > p` carries its own measure, because the two timing
+  views are `content--wide`.
 
 Two more that are about *saying the same thing the same way*:
 

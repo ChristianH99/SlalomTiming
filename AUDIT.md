@@ -25,8 +25,9 @@ short**: five of its eight items were carried by §1–§3; **PRV-4 now has its 
 that has to exist first** (`Participant.last_used_at` — a record's last edit *or*
 entry, indexed and backfilled), with the bulk-delete screen still to come, and
 **PRV-5 (a privacy notice) is untouched**. **§6 (operability) is complete** — six
-fixed, one waived by the owner (OPS-4). §7 (UI/UX), §8 (docs) and §9 (test gaps)
-still open.
+fixed, one waived by the owner (OPS-4). **§7.1 (broken or misleading states) is
+complete** — six fixed, one waived (UI-5). §7.2/§7.3, §8 (docs) and §9 (test
+gaps) still open.
 
 ---
 
@@ -446,33 +447,51 @@ What follows is what is left.
 
 ### 7.1 Broken or misleading states
 
-* **UI-1 (High)** — **The Auto timing page in its most common failure mode is 100 %
-  alarm.** With no start pattern (INT-1), every tile and both competitor panes render as
-  flame-bordered "Unattributed time" cards, each repeating the same two-line instruction
-  paragraph verbatim, with an empty "Next up" card below. An alarm that fires on every
-  row is not an alarm. The page needs to detect "no slots at all" and show
-  `_empty_reason()` instead — and the instruction paragraph belongs once, above the
-  list, not in each card.
-* **UI-2 (High)** — **The Manual timing table is a wall of amber.** A status tint is
-  applied as a full-bleed row fill; with 15 consecutive DNS rows the table is unreadable
-  and ordinary rows would be invisible among them. Make the tint a left border or tint
-  only the Status cell.
-* **UI-3 (Med)** — **The Status column and the Total column both read "DNS"** on every
-  such row — the same fact twice, side by side, in a table where horizontal space is the
-  scarce resource.
-* **UI-4 (Med)** — **The Ignored-times rail is unusable once it fills.** The real
-  database has **230 ignored times**, aged "42 Std." / "43 Std.", from previous
-  sessions. The documented decision not to offer a clear-all is right (they are the only
-  record the device fired), but the rail then needs age filtering, a
-  "today only" default, or an archive fold — not a 230-item list beside a live timing
-  table.
-* **UI-5 (Med)** — The rail's **Start / Finish columns render as two independent lists
-  side by side**, so unrelated entries line up and read as pairs.
-* **UI-6 (Low)** — `#?` is still the bib placeholder on an unattributed tile, despite
-  CLAUDE.md describing it as replaced.
-* **UI-7 (Low)** — On the Dashboard, the current competitor's **total time is rendered in
-  the flame colour**, which everywhere else in this app (including `pdf._PEN`) means
-  *penalty*. A clean run's total reads as penalised.
+* **UI-1 (✅ FIXED)** — **The Auto timing page in its most common failure mode was 100 %
+  alarm**: with no start pattern, every tile and both competitor panes rendered as
+  flame-bordered "Unattributed time" cards, each repeating the same instruction verbatim.
+  An alarm that fires on every row is not an alarm. Fixed with INT-1 in §3 —
+  `AutoTimingView.needs_pattern` replaces the whole page with one sentence, the link that
+  fixes it and the offer of Manual timing (which needs no pattern), and none of the
+  timing scripts load. Finished here: both timing views said it in a bare left-aligned
+  `.notice` at the top of an otherwise blank page, which reads as a page that failed to
+  load. They now use the shape the Marshal Posts page already used for the same
+  situation — a heading and a centred `.empty-state` card — and `.empty-state > p` has a
+  measure, because on the two `content--wide` views the sentence ran the full width of an
+  operator monitor.
+* **UI-2 (✅ FIXED)** — **The Manual timing table was a wall of amber.** The state-code
+  tint was a full-bleed row fill, and the real database has 40 such runs — fifteen
+  consecutive non-starters is an ordinary morning, and the rows that still needed work
+  were invisible among them. Now an inset 4 px stripe down the row's leading edge plus a
+  tint on the Status cell only; every other cell keeps the page's background, so the
+  table is legible however many are closed.
+* **UI-3 (✅ FIXED)** — **The Status column and the Total column both read "DNS"**, in the
+  same bold amber, and with penalties off the two cells are neighbours. Not fixed by
+  deleting one: the Status column is a `<select>` and a control cannot hide its own value,
+  and the Total cell is where the row's outcome is read because it is where a time would
+  have been. So the *voices* are separated — the control keeps only its amber border (and
+  its tinted cell) to say "this is set", and the code itself is stated once, bold, in the
+  Total column.
+* **UI-4 (✅ FIXED)** — **The Ignored-times rail was unusable once it filled** — 230 chips
+  beside a live timing table. Per the owner's decision: the **ten most recent per column**
+  with a "show all" for the rest, no filtering, and **no arrival age on the chip** — the
+  list is already in arrival order and cut off after ten, so the age was the same fact
+  told twice. `received_at` came out of the payload with it, which matters because this is
+  a live endpoint every open browser re-fetches on every incoming time. Still no
+  clear-all: an ignored signal is the only record the device fired.
+* **UI-5 (⊘ WAIVED)** — The rail's **Start / Finish columns render as two independent
+  lists side by side**, so unrelated entries line up and read as pairs. Owner: "That is
+  okay."
+* **UI-6 (✅ FIXED)** — `#?` was still the bib placeholder on an unattributed tile. The
+  only item without a bib is a real time no slot owns, and that tile already says so in
+  words and in flame — so `#?` was a made-up number in the field an operator reads first.
+  The chip is now rendered empty (kept, so `.auto-tile-bib`'s min-width still holds the
+  tile's layout) by one `bibChip()` shared by the tile and the start-order row.
+* **UI-7 (✅ FIXED)** — On the Dashboard the current competitor's **total time was rendered
+  in the flame colour**, which everywhere else in this app — the results table's
+  `.rt-pen`, the penalty chips, `pdf._PEN` — means "seconds added", so a clean run read as
+  penalised. The headline figure now earns its emphasis from size (`--text-4xl`), and the
+  flame moved to the figure that *is* a penalty.
 
 ### 7.2 Consistency
 

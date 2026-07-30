@@ -709,6 +709,10 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
 }
+/* Centred text needs a measure of its own. The two timing views are
+   content--wide, so a sentence in one of their empty states ran the full width of
+   an operator monitor and broke two words onto a second line. */
+.empty-state > p { max-width: 46rem; margin-inline: auto; }
 
 /* ===== TOGGLE SWITCH ===== */
 .switch {
@@ -2036,9 +2040,21 @@ textarea:focus-visible,
 /* A run closed with a state code (DNF/DNC/DNS/DSQ) instead of a time. Amber
    rather than flame: it is a recorded outcome, not a mistake to fix — flame on
    this table already means "more runs than the class grants". */
-.status-select--set { color: var(--amber); font-weight: 700; border-color: var(--amber-soft); }
-.timing-row--status { background: var(--amber-soft-bg); }
-.run-total--status { color: var(--amber); letter-spacing: 0.04em; }
+/* A *control* showing its own value. It used to be bold amber, in the same voice
+   as the Total cell two columns over — so a closed row said "DNS · DNS", the same
+   word twice, in a table where horizontal space is the scarce resource. The cell's
+   tint and the select's border say "this is set"; the outcome itself is stated once,
+   in the Total column, which is where a time would have been. */
+.status-select--set { border-color: var(--amber-soft); }
+/* A marker, not a fill. This was a full-bleed row tint, and fifteen consecutive
+   non-starters — an ordinary morning — turned the table into a wall of amber with
+   the rows that still needed work invisible among them. The stripe reads down the
+   left edge however many there are, and every cell keeps the page's background. */
+.timing-row--status > td:first-child { box-shadow: inset 4px 0 0 var(--amber-soft); }
+.timing-row--status .tt-status { background: var(--amber-soft-bg); }
+/* Where the row's outcome is read: the cell a time would have been in. This is
+   the one loud statement of it. */
+.run-total--status { color: var(--amber); font-weight: 700; letter-spacing: 0.04em; }
 .class-static {
   display: inline-block; max-width: 100%;
   color: var(--text-dark); font-weight: 600;
@@ -2493,9 +2509,7 @@ textarea:focus-visible,
 }
 /* When it arrived. The chip's own time is the device's clock, which on a real rig
    isn't wall-clock — without this a chip carries no sense of when. */
-.ignored-chip-age { font-size: var(--text-2xs); color: var(--text-muted); }
 .ignored-chip--manual { background: var(--amber-soft-bg); color: var(--amber-soft); }
-.ignored-chip--manual .ignored-chip-age { color: var(--amber-soft); opacity: 0.75; }
 .ignored-more { font-size: var(--text-2xs); align-self: flex-start; }
 .ignored-hint { font-size: var(--text-2xs); margin: var(--space-3) 0 0; }
 
@@ -2640,6 +2654,7 @@ textarea:focus-visible,
 .auto-tile--current .auto-tile-label { color: var(--flame); }
 .auto-tile-waiting { margin: var(--space-4) 0 0; color: var(--text-light); }
 .auto-tile-head { display: flex; align-items: center; gap: var(--space-6); margin: var(--space-3) 0 var(--space-6); }
+.auto-order-bib--none, .auto-tile-bib--none { visibility: hidden; }
 .auto-tile-bib {
   font-family: 'Manrope', sans-serif; font-weight: 800; font-size: var(--text-4xl);
   line-height: 1; color: var(--ink); min-width: 2.5rem;
@@ -3166,7 +3181,12 @@ textarea:focus-visible,
   color: var(--text-dark);
   font-variant-numeric: tabular-nums;
 }
-.dash-figure--primary .dash-figure-value { color: var(--flame); }
+/* The headline figure earns its emphasis from size, not from the penalty colour.
+   Flame means "seconds added" everywhere else in this app — the results table's
+   .rt-pen, the chips below, pdf._PEN — so a clean run's total time was reading as
+   penalised. */
+.dash-figure--primary .dash-figure-value { font-size: var(--text-4xl); }
+.dash-figure--penalty .dash-figure-value { color: var(--flame); }
 .dash-current-note { color: var(--text-mid); font-size: var(--text-md); margin: var(--space-6) 0 0; }
 .dash-pen-chips { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-6); }
 .dash-pen-chip {

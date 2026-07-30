@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-30 08:46+0200\n"
+"POT-Creation-Date: 2026-07-30 09:22+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -155,17 +155,17 @@ msgstr "Nach Alter"
 msgid "Select a type…"
 msgstr "Typ auswählen…"
 
-#: .\apps\competitions\forms.py:41 .\templates\timing\live.html:58
+#: .\apps\competitions\forms.py:41 .\templates\timing\live.html:63
 msgid "Pylon"
 msgstr "Pylone"
 
 #: .\apps\competitions\forms.py:42 .\apps\timing\autotiming.py:412
-#: .\templates\timing\live.html:59
+#: .\templates\timing\live.html:64
 msgid "Task"
 msgstr "Aufgabe"
 
 #: .\apps\competitions\forms.py:43 .\apps\timing\autotiming.py:413
-#: .\templates\timing\live.html:60
+#: .\templates\timing\live.html:65
 msgid "Stop line"
 msgstr "Stopplinie"
 
@@ -315,7 +315,7 @@ msgstr ""
 #: .\apps\competitions\models.py:438 .\apps\results\pdf.py:287
 #: .\templates\participants\participant_form.html:37
 #: .\templates\participants\participant_list.html:41
-#: .\templates\results\_results_head.html:4 .\templates\timing\live.html:49
+#: .\templates\results\_results_head.html:4 .\templates\timing\live.html:54
 msgid "Class"
 msgstr "Klasse"
 
@@ -673,7 +673,7 @@ msgstr "Platz"
 
 #: .\apps\results\pdf.py:285 .\templates\participants\participant_form.html:18
 #: .\templates\participants\participant_list.html:38
-#: .\templates\results\_results_head.html:3 .\templates\timing\live.html:42
+#: .\templates\results\_results_head.html:3 .\templates\timing\live.html:47
 msgid "Bib"
 msgstr "Startnr."
 
@@ -767,7 +767,7 @@ msgstr "Bester Lauf"
 msgid "Difference"
 msgstr "Differenz"
 
-#: .\apps\results\views.py:79 .\templates\timing\live.html:63
+#: .\apps\results\views.py:79 .\templates\timing\live.html:68
 msgid "Total"
 msgstr "Gesamt"
 
@@ -861,12 +861,12 @@ msgid "TCP port of the Tag Heuer CP540."
 msgstr "TCP-Port des Tag Heuer CP540."
 
 #: .\apps\timing\models.py:87 .\apps\timing\models.py:282
-#: .\templates\timing\_ignored.html:21 .\templates\timing\live.html:39
+#: .\templates\timing\_ignored.html:21 .\templates\timing\live.html:44
 msgid "Start"
 msgstr "Start"
 
 #: .\apps\timing\models.py:88 .\apps\timing\models.py:283
-#: .\templates\timing\_ignored.html:25 .\templates\timing\live.html:40
+#: .\templates\timing\_ignored.html:25 .\templates\timing\live.html:45
 msgid "Finish"
 msgstr "Ziel"
 
@@ -1026,7 +1026,8 @@ msgstr "Dieser Rechner lässt den Server „%(path)s“ nicht lesen."
 #: .\apps\transfer\folders.py:90
 #, python-format
 msgid "“%(path)s” can’t be read — is the drive still connected?"
-msgstr "„%(path)s“ kann nicht gelesen werden – ist das Laufwerk noch angeschlossen?"
+msgstr ""
+"„%(path)s“ kann nicht gelesen werden – ist das Laufwerk noch angeschlossen?"
 
 #: .\apps\transfer\folders.py:145
 msgid "This computer"
@@ -1526,11 +1527,13 @@ msgstr "Strafen"
 
 #: .\templates\base.html:54 .\templates\timing\live.html:3
 #: .\templates\timing\live.html:4 .\templates\timing\live.html:12
+#: .\templates\timing\live.html:30
 msgid "Manual timing"
 msgstr "Manuelle Zeitmessung"
 
 #: .\templates\base.html:55 .\templates\timing\auto.html:3
 #: .\templates\timing\auto.html:4 .\templates\timing\auto.html:12
+#: .\templates\timing\auto.html:31 .\templates\timing\auto.html:41
 msgid "Auto timing"
 msgstr "Automatische Zeitmessung"
 
@@ -2917,7 +2920,7 @@ msgstr ""
 "direkt auf die Ignorierliste — eine Möglichkeit, die Erfassung zu pausieren, "
 "ohne das Gerät zu trennen."
 
-#: .\templates\timing\auto.html:26
+#: .\templates\timing\auto.html:33
 #, python-format
 msgid ""
 "No competition is selected. Timing runs against the active competition, so "
@@ -2927,7 +2930,7 @@ msgstr ""
 "Wettbewerb — <a href=\"%(list_url)s\">wählen Sie einen Wettbewerb</a>, um "
 "ihn zu messen."
 
-#: .\templates\timing\auto.html:37
+#: .\templates\timing\auto.html:45
 #, python-format
 msgid ""
 "Automatic timing runs off the start pattern — the order competitors take "
@@ -2939,7 +2942,7 @@ msgstr ""
 "keines. <a href=\"%(runorder_url)s\">Legen Sie ein Startmuster an</a>, um "
 "diese Seite zu nutzen."
 
-#: .\templates\timing\auto.html:38
+#: .\templates\timing\auto.html:46
 #, python-format
 msgid ""
 "You don’t have to. <a href=\"%(manual_url)s\">Manual timing</a> records "
@@ -2948,20 +2951,20 @@ msgstr ""
 "Sie müssen nicht. Die <a href=\"%(manual_url)s\">manuelle Zeitmessung</a> "
 "erfasst Zeiten ohne Muster, mit der Startnummer je Lauf."
 
-#: .\templates\timing\auto.html:47
+#: .\templates\timing\auto.html:55
 msgid "Start order"
 msgstr "Startreihenfolge"
 
-#: .\templates\timing\auto.html:53
+#: .\templates\timing\auto.html:61
 msgid "Discard the manual order and re-derive it from the run order"
 msgstr ""
 "Die manuelle Reihenfolge verwerfen und neu aus der Laufreihenfolge ableiten"
 
-#: .\templates\timing\auto.html:53
+#: .\templates\timing\auto.html:61
 msgid "Reset order"
 msgstr "Reihenfolge zurücksetzen"
 
-#: .\templates\timing\auto.html:66
+#: .\templates\timing\auto.html:74
 #, python-format
 msgid ""
 "No class is running yet — mark the classes that start on the <a "
@@ -2970,7 +2973,7 @@ msgstr ""
 "Noch ist keine Klasse aktiv – markieren Sie die startenden Klassen auf der "
 "Seite <a href=\"%(classes_url)s\">Klassen</a>."
 
-#: .\templates\timing\auto.html:67
+#: .\templates\timing\auto.html:75
 #, python-format
 msgid ""
 "Nobody is registered in the running classes yet — <a "
@@ -2980,7 +2983,7 @@ msgstr ""
 "href=\"%(participants_url)s\">Teilnehmer anlegen</a> und einer Klasse "
 "zuweisen."
 
-#: .\templates\timing\auto.html:68
+#: .\templates\timing\auto.html:76
 #, python-format
 msgid ""
 "The running classes grant no runs — give them practice or counted runs on "
@@ -3057,7 +3060,7 @@ msgstr ""
 "gewertet. Eine Disqualifikation von der gesamten Veranstaltung erfolgt auf "
 "der Seite Teilnehmer."
 
-#: .\templates\timing\live.html:27
+#: .\templates\timing\live.html:32
 #, python-format
 msgid ""
 "No competition is selected. Timing runs against the active competition, so "
@@ -3067,27 +3070,27 @@ msgstr ""
 "Wettbewerb — <a href=\"%(list_url)s\">wählen Sie einen Wettbewerb</a>, um "
 "mit der Messung zu beginnen."
 
-#: .\templates\timing\live.html:41
+#: .\templates\timing\live.html:46
 msgid "Run time"
 msgstr "Laufzeit"
 
-#: .\templates\timing\live.html:48
+#: .\templates\timing\live.html:53
 msgid "Competitor"
 msgstr "Starter"
 
-#: .\templates\timing\live.html:50
+#: .\templates\timing\live.html:55
 msgid "Run"
 msgstr "Lauf"
 
-#: .\templates\timing\live.html:56
+#: .\templates\timing\live.html:61
 msgid "Status"
 msgstr "Status"
 
-#: .\templates\timing\live.html:61
+#: .\templates\timing\live.html:66
 msgid "Penalty"
 msgstr "Strafe"
 
-#: .\templates\timing\live.html:74
+#: .\templates\timing\live.html:79
 msgid "Waiting for the first start signal…"
 msgstr "Warten auf das erste Startsignal…"
 
@@ -3265,7 +3268,9 @@ msgstr "Ordner auswählen"
 msgid ""
 "These are the folders on the computer running Slalom Timing — not on this "
 "device."
-msgstr "Dies sind die Ordner auf dem Rechner, auf dem Slalom Timing läuft – nicht auf diesem Gerät."
+msgstr ""
+"Dies sind die Ordner auf dem Rechner, auf dem Slalom Timing läuft – nicht "
+"auf diesem Gerät."
 
 #: .\templates\transfer\backup.html:112
 msgid "Up"

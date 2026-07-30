@@ -535,10 +535,12 @@ def ignored_signals(competition, precision, settings):
     """The ignored-times panel's contents, newest first. Shared by both timing
     views so the rail is identical on each.
 
-    ``received_at`` rides along because the chip's own time is the *device's*
-    clock, which on a real rig is not wall-clock (often 00:40:xx) — so on its own
-    it tells the operator nothing about when the signal turned up. The panel
-    renders the arrival as an age.
+    Newest first is load-bearing rather than cosmetic: the panel shows the ten most
+    recent per column and folds the rest away, and the chips that matter are always
+    the ones that just arrived. The arrival timestamp itself used to ride along so
+    each chip could show its age — dropped with the age, because this is a live
+    endpoint that every open browser re-fetches on every incoming time, and a
+    morning of practice runs puts a couple of hundred chips on this list.
     """
     return [
         {
@@ -546,7 +548,6 @@ def ignored_signals(competition, precision, settings):
             "role": signal.role(settings) or "",
             "time": format_device_time(signal.device_time, precision),
             "manual": signal.is_manual,
-            "received_at": signal.received_at.isoformat(),
         }
         for signal in competition.timing_signals.filter(ignored=True).order_by("-received_at")
     ]

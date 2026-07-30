@@ -21,8 +21,14 @@
 {% endblock %}
 {% block content_class %}content--wide{% endblock %}
 {% block content %}
+  {% comment %}Both of these are "there is nothing here to operate", so they are
+  built the same way the Marshal Posts page builds its own: a heading, then a
+  centred .empty-state card. A bare left-aligned paragraph at the top of an
+  otherwise blank page reads as a page that failed to load rather than as an
+  answer.{% endcomment %}
   {% if not competition %}
-    <div class="notice">
+    <h1 class="page-heading">{% trans "Auto timing" %}</h1>
+    <div class="empty-state">
       <p>{% url 'competitions:list' as list_url %}{% blocktrans %}No competition is selected. Timing runs against the active competition, so <a href="{{ list_url }}">pick a competition</a> to time it.{% endblocktrans %}</p>
     </div>
   {% elif needs_pattern %}
@@ -30,7 +36,8 @@
     is nothing here to operate — one sentence and the way to fix it, and none of
     the timing controls. Manual timing needs no pattern and is offered instead,
     because an event can perfectly well be timed without one.{% endcomment %}
-    <div class="notice">
+    <h1 class="page-heading">{% trans "Auto timing" %}</h1>
+    <div class="empty-state">
       {% url 'competitions:runorder' as runorder_url %}
       {% url 'timing:manual' as manual_url %}
       <p>{% blocktrans %}Automatic timing runs off the start pattern — the order competitors take their runs — and this competition hasn’t got one. <a href="{{ runorder_url }}">Build a start pattern</a> to use this page.{% endblocktrans %}</p>

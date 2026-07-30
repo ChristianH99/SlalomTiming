@@ -677,3 +677,142 @@ class TestHealthEndpoint:
         assert exempt.group(1).count(',') == 0, (
             'something was added to SECURE_REDIRECT_EXEMPT: ' + exempt.group(1)
         )
+
+
+CSS = Path(settings.BASE_DIR) / 'static' / 'css' / 'main.css'
+JS_DIR = Path(settings.BASE_DIR) / 'static' / 'js'
+
+
+class TestStatusRowsStayReadable:
+    """UI-2 / UI-3: a run closed with a state code used to fill its whole row with
+    amber. Fifteen non-starters in a row — an ordinary morning — turned the Manual
+    timing table into a wall of it, with the rows that still needed work invisible
+    among them.
+    """
+
+    def test_the_row_is_marked_not_filled(self):
+        css = CSS.read_text(encoding='utf-8')
+        assert '.timing-row--status > td:first-child' in css, (
+            'the state-code row lost its edge marker'
+        )
+        # A full-bleed `background` on the row itself is the thing that was wrong.
+        rule = re.search(r'^\.timing-row--status \{([^}]*)\}', css, re.M)
+        assert rule is None, f'the row is being filled again: {rule and rule.group(1)}'
+
+    def test_the_code_is_stated_loudly_once(self):
+        """The Status cell is a control and shows its own value; the Total cell —
+        where a time would have been — is where the outcome is read. Both used to
+        be bold amber, which said the same thing twice in the same voice."""
+        css = CSS.read_text(encoding='utf-8')
+        select = re.search(r'^\.status-select--set \{([^}]*)\}', css, re.M)
+        total = re.search(r'^\.run-total--status \{([^}]*)\}', css, re.M)
+        assert select and total
+        # The control says "set" with its border and its cell tint, and leaves the
+        # amber word itself to the Total cell.
+        assert 'font-weight' not in select.group(1), select.group(1)
+        # `border-color` is fine — a text `color` is the thing that made it shout.
+        assert not re.search(r'(^|[;\s])color:', select.group(1)), select.group(1)
+        assert 'font-weight: 700' in total.group(1), total.group(1)
+        assert 'var(--amber)' in total.group(1), total.group(1)
+
+
+class TestTheIgnoredRailIsBounded:
+    """UI-4: the real database reached 230 ignored times. Beside a live timing
+    table that is not a list anybody reads."""
+
+    def test_it_shows_the_ten_most_recent_per_column(self):
+        source = (JS_DIR / 'ignored_panel.js').read_text(encoding='utf-8')
+        assert re.search(r'VISIBLE = 10\b', source), 'the per-column cap moved'
+        assert 'moreEl' in source, 'the "show all" fold is gone'
+
+    def test_a_chip_does_not_repeat_its_arrival(self):
+        """The list is already in arrival order and cut off after ten, so an age
+        on every chip was the same fact told twice — and it rode along in a payload
+        every open browser re-fetches on every incoming time."""
+        source = (JS_DIR / 'ignored_panel.js').read_text(encoding='utf-8')
+        assert 'ignored-chip-age' not in source
+        assert 'received_at' not in source
+
+    def test_the_payload_does_not_carry_what_nothing_renders(self):
+        from apps.timing import autotiming
+
+        source = Path(autotiming.__file__).read_text(encoding='utf-8')
+        listing = re.search(r'def ignored_signals\(.*?\n(?=\n\ndef )', source, re.S)
+        assert listing, 'ignored_signals moved'
+        assert '"received_at"' not in listing.group(0)
+
+
+class TestFlameOnlyEverMeansPenalty:
+    """UI-7: the Dashboard rendered the current competitor's *total time* in the
+    flame colour, which everywhere else in this app — the results table's .rt-pen,
+    the penalty chips, pdf._PEN — means "seconds added". A clean run's time read as
+    penalised."""
+
+    def test_the_headline_figure_is_not_flame(self):
+        css = CSS.read_text(encoding='utf-8')
+        rule = re.search(r'^\.dash-figure--primary \.dash-figure-value \{([^}]*)\}',
+                         css, re.M)
+        assert rule, 'the headline figure rule is gone'
+        assert 'flame' not in rule.group(1), rule.group(1)
+
+    def test_the_penalty_figure_is(self):
+        css = CSS.read_text(encoding='utf-8')
+        rule = re.search(r'^\.dash-figure--penalty \.dash-figure-value \{([^}]*)\}',
+                         css, re.M)
+        assert rule and 'var(--flame)' in rule.group(1)
+        source = (JS_DIR / 'dashboard_overview.js').read_text(encoding='utf-8')
+        assert '"penalty"' in source, 'the penalty figure is not toned as one'
+
+
+class TestNoMadeUpBibNumbers:
+    """UI-6: an unattributed run — a real time no slot owns — rendered "#?" in the
+    field an operator reads first, on a tile that already says what it is in words
+    and in flame."""
+
+    def test_the_question_mark_bib_is_gone(self):
+        for name in ('auto_timing.js', 'timing_live.js'):
+            source = (JS_DIR / name).read_text(encoding='utf-8')
+            assert '"?" :' not in source and "'?' :" not in source, name
+
+    def test_a_missing_bib_renders_an_empty_chip(self):
+        source = (JS_DIR / 'auto_timing.js').read_text(encoding='utf-8')
+        assert 'function bibChip' in source
+        css = CSS.read_text(encoding='utf-8')
+        assert '.auto-tile-bib--none' in css and 'visibility: hidden' in css
+
+
+class TestAutoTimingWithoutAStartPattern:
+    """UI-1 (= INT-1): the page's most common failure mode used to be 100 % alarm —
+    every tile a flame-bordered "Unattributed time" card repeating the same
+    instruction paragraph. An alarm that fires on every row is not an alarm."""
+
+    @pytest.mark.django_db
+    def test_the_page_is_replaced_by_one_sentence(self, client):
+        from apps.competitions.models import Competition, CompetitionType
+
+        import datetime
+
+        ctype = CompetitionType.objects.create(name='Slalom')
+        Competition.objects.create(competition_type=ctype, name='Test',
+                                   date=datetime.date(2026, 5, 1), is_active=True)
+        response = client.get(reverse('timing:auto'))
+        assert response.context['needs_pattern'] is True
+        body = response.content.decode()
+        # None of the timing apparatus, and none of its scripts.
+        assert 'id="autotiming"' not in body
+        assert 'auto_timing.js' not in body
+        # …and it says where to go instead.
+        assert reverse('competitions:runorder') in body
+        assert reverse('timing:manual') in body
+
+    def test_it_reads_as_an_answer_not_a_failed_page(self):
+        """The same shape Marshal Posts uses — a heading and a centred card. Both
+        timing views said it in a bare left-aligned paragraph at the top of an
+        otherwise blank page, which reads as a page that didn't load."""
+        for name in ('auto.html', 'live.html'):
+            source = (Path(settings.BASE_DIR) / 'templates' / 'timing' / name
+                      ).read_text(encoding='utf-8')
+            assert 'class="empty-state"' in source, name
+            assert 'class="notice"' not in source, (
+                f'{name} still states "nothing to operate" as a notice'
+            )

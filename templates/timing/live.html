@@ -22,8 +22,12 @@
 {# The run table is wide (up to 11 columns), so this page takes the wide measure. #}
 {% block content_class %}content--wide{% endblock %}
 {% block content %}
+  {% comment %}A heading and a centred card, the same shape Marshal Posts and Auto
+  timing use for "there is nothing here to operate" — a bare paragraph at the top
+  of a blank page reads as a page that failed to load.{% endcomment %}
   {% if not competition %}
-    <div class="notice">
+    <h1 class="page-heading">{% trans "Manual timing" %}</h1>
+    <div class="empty-state">
       <p>{% url 'competitions:list' as list_url %}{% blocktrans %}No competition is selected. Timing runs against the active competition, so <a href="{{ list_url }}">pick a competition</a> to start timing it.{% endblocktrans %}</p>
     </div>
   {% else %}
