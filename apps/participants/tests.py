@@ -636,7 +636,7 @@ def test_list_columns_follow_type_settings(client):
     assert "<th class=\"col-club\">Club</th>" in body
 
 
-# --- DAT-2: a bib carries its recorded times --------------------------------
+# --- A bib carries its recorded times --------------------------------
 # TimedRun.bib_number is a loose integer, so a run belongs to whoever wears the
 # number. Swapping two bibs to fix a registration mistake used to hand one
 # competitor's times to another with nothing said anywhere.

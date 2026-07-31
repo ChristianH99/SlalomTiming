@@ -227,7 +227,7 @@ def test_cannot_delete_last_superuser():
     assert User.objects.filter(pk=su.pk).exists()
 
 
-# --- SEC-F: one host must not be able to walk a user list -------------------
+# --- One host must not be able to walk a user list -------------------
 
 class TestHostThrottle:
     """The per-(username, IP) counter alone left an address free to try ten
@@ -267,7 +267,7 @@ class TestHostThrottle:
         assert response.context["locked_out"] is True
 
 
-# --- SEC-L / SEC-M / SEC-N: managing accounts -------------------------------
+# --- Managing accounts -------------------------------
 
 class TestAccountManagement:
     def test_resetting_your_own_password_does_not_sign_you_out(self, client, django_user_model):

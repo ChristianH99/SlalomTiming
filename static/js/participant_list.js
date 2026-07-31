@@ -58,7 +58,7 @@
       }),
     }).then((r) => r.json()).catch(() => ({ ok: false, error: gettext("Could not save.") }));
     let res = await post(false);
-    // A bib carries its recorded times with it (DAT-2), so the server refuses
+    // A bib carries its recorded times with it, so the server refuses
     // a move like that until it has been said out loud and agreed to.
     if (!res.ok && res.confirm) {
       const agreed = await window.appConfirm({

@@ -1710,7 +1710,7 @@ def test_live_socket_ignores_anything_else_it_is_sent(django_user_model):
 
 
 def test_a_changed_event_reaches_the_open_views_by_name(django_user_model):
-    """DAT-5's other half: a plain refresh would have every open view quietly
+    """The other half of that: a plain refresh would have every open view quietly
     re-render as a different event, so the name travels with the nudge."""
     from channels.testing import WebsocketCommunicator
 
@@ -1905,7 +1905,7 @@ def test_a_reading_view_still_shows_the_bound_competitor(client):
     assert [r["run"]["bib_number"] for r in rows if r["run"]["bib_number"]]
 
 
-# ----- stage 7: the single-barrier phase, shown rather than guessed -----
+# ----- The single-barrier phase, shown rather than guessed -----
 
 def test_a_two_channel_rig_has_no_phase_to_show():
     comp = make_active_competition()
@@ -1942,7 +1942,7 @@ def test_channel_outside_the_devices_inputs_is_refused(client):
     assert "start_channel" in response.context["form"].errors
 
 
-# ----- stage 7: an empty start order says which piece of setup is missing -----
+# ----- An empty start order says which piece of setup is missing -----
 
 def test_an_empty_start_order_names_what_is_missing(client):
     """Why the *order* came out empty. "No pattern" is deliberately not one of
@@ -1970,7 +1970,7 @@ def test_a_start_order_with_starters_reports_no_reason():
     assert data["items"] and data["empty_reason"] == ""
 
 
-# --- SEC-B: the one open write endpoint ------------------------------------
+# --- The one open write endpoint ------------------------------------
 # timing:signal is csrf_exempt because a physical device carries no token. That
 # also made it reachable cross-site by a logged-in operator's browser, with
 # nothing but the session cookie's SameSite default in the way — a browser's
@@ -2024,7 +2024,7 @@ class TestSignalDoor:
         assert not TimingSignal.objects.exists()
 
 
-# --- SEC-G: a marshal's phone writes into a JSONField ------------------------
+# --- A marshal's phone writes into a JSONField ------------------------
 
 def test_a_marshal_detail_blob_is_bounded_and_reshaped(client):
     """`detail` arrives as free JSON from a phone, lands in a JSONField and is
@@ -2057,7 +2057,7 @@ def test_a_marshal_detail_blob_is_bounded_and_reshaped(client):
     assert all(cell["pylons"] <= 999 for cell in stored["tasks"].values())
 
 
-# --- SEC-E: the live socket carries event news, so it needs a page ----------
+# --- The live socket carries event news, so it needs a page ----------
 
 def test_a_login_alone_does_not_open_the_live_socket(django_user_model):
     """The consumers checked is_authenticated and nothing else, so any

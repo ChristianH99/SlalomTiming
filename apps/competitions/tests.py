@@ -1096,7 +1096,7 @@ def test_duplicate_competition_copies_marshal_posts(client):
     assert copy.marshal_posts.get(number=1).tasks == "1-5"
 
 
-# --- DAT-5: the active competition is everybody's ---------------------------
+# --- The active competition is everybody's ---------------------------
 # One global flag decides what every timing screen, results table and marshal
 # post is showing. Switching it used to be a single unconfirmed click that other
 # people found out about from their own data changing under them.
@@ -1178,7 +1178,7 @@ def test_switching_tells_every_open_live_view_which_event_it_now_shows(client, m
     assert sent == [{"type": "timing.competition", "name": "Spring Slalom"}]
 
 
-# ----- stage 7: a competition that can actually be timed -----
+# ----- A competition that can actually be timed -----
 
 def test_a_new_competition_has_no_start_pattern():
     """A pattern is what *Auto* timing needs, and Auto timing is a choice: plenty
@@ -1201,7 +1201,7 @@ def test_an_explicit_pattern_is_never_overwritten():
     assert competition.start_pattern == pattern
 
 
-# ----- stage 7: class configurations that can never rank -----
+# ----- Class configurations that can never rank -----
 
 def test_a_class_with_no_counted_runs_is_flagged():
     competition = make_competition()
@@ -1226,7 +1226,7 @@ def test_only_a_running_class_is_flagged():
     assert cclass.scoring_warning() == ""
 
 
-# ----- stage 7: how a class is titled -----
+# ----- How a class is titled -----
 
 def test_the_word_is_always_added():
     """The prefix used to be conditional — a name already opening with the
@@ -1263,7 +1263,7 @@ def test_a_class_named_only_the_word_keeps_its_name_as_the_suggestion():
     assert "“Klasse”" in str(cclass.name_hint())
 
 
-# ----- stage 7: the German page says the same thing the English one does -----
+# ----- The German page says the same thing the English one does -----
 
 def test_run_order_palette_and_chips_use_the_same_words(client, settings):
     # The palette is rendered by Django from RUN_TYPE_LABELS and the chips dropped

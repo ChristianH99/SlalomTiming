@@ -879,7 +879,7 @@ def test_reading_results_never_writes(client):
         assert writes == [], f"{url} wrote: {writes}"
 
 
-# ----- stage 7: a tie resolution belongs to the score it was made at -----
+# ----- A tie resolution belongs to the score it was made at -----
 
 def _resolve(client, competition, cclass, ranks=(1, 2)):
     e1 = EventEntry.objects.get(competition=competition, bib_number=1)
