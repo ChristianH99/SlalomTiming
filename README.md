@@ -23,29 +23,35 @@ wider access plus authentication.
 - Python 3.14, Django 6.0, Django Channels 4 (ASGI, served by Daphne)
 - [uv](https://docs.astral.sh/uv/) for dependency and environment management
 - SQLite (`db.sqlite3`, gitignored) for local use
-- No JS framework — vanilla JS + WebSocket for the live dashboard
+- No JS framework — vanilla JS + WebSocket for the live views (Manual timing, Auto timing,
+  Marshal Posts and the Dashboard)
 
 ## Getting started
+
+On Windows, `start.bat` (or `start.ps1`) does all of the below in one double-click,
+installing uv and Python 3.14 first if the machine has neither. By hand:
 
 ```bash
 uv sync                                   # install/sync dependencies
 uv run python manage.py migrate           # create the local database
-uv run python manage.py createsuperuser   # optional: for the Django admin
+uv run python manage.py createsuperuser   # the first login (every page needs one)
+uv run python manage.py collectstatic     # required for the test suite too — see below
 uv run python manage.py runserver         # dev server (auto-serves ASGI/WebSockets)
 ```
 
-Open http://127.0.0.1:8000/ for the live dashboard. Admin is at `/admin/`.
+Open http://127.0.0.1:8000/ for the **Dashboard**, the organiser's live overview of the
+event. Admin is at `/admin/`.
 
-To see live timing data on the dashboard, run the timing connector loop in a **second**
-terminal:
+`runserver` alone drives the whole app, timing included — there is no second process to
+start. To see times arrive without any hardware, set the device to **Simulator** on
+*Timing → Settings* and press **Start simulator**: it opens a standalone device emulator
+in a new tab whose pad posts start/finish signals into the app, which land on *Manual
+timing* and *Auto timing*. A real Tag Heuer CP540 is the same picture with the device set
+to CP540 and its IP filled in; its reader thread is started from that page.
 
-```bash
-uv run python manage.py run_timing_connector
-```
-
-Out of the box this uses `SimulatorConnector`, which emits random start/finish pulses so
-the pipeline and dashboard work without any hardware. The app itself runs fine with just
-`runserver` — it simply won't receive device events until the connector is running.
+(`manage.py run_timing_connector` belongs to the **legacy** `TimingEvent` connector-loop
+path, which is kept working but is not the timing path described above. Nothing on the
+current screens needs it.)
 
 ## Typical workflow
 
@@ -64,8 +70,9 @@ Run order, Penalties, Results) in the sidebar. The sub-pages always act on the *
      separates equal results in the class tables; the precision is how every time is shown
      and truncated.
    - **Required participant info** — which details the participant form asks for in this
-     discipline: co-driver, vehicle, address, club, e-mail, phone. A `*` marks the ones that
-     are mandatory once collected. Name, date of birth and licence number are always asked for.
+     discipline: licence number, co-driver, vehicle, address, club, e-mail, phone. A `*`
+     marks the ones that are mandatory once collected. Only **name and date of birth** are
+     always asked for; everything else, licence included, is this per-type choice.
 2. **Competition Setup → New competition** — pick a type, name and date. The new
    competition becomes the current one so you can configure it right away.
 3. **Manage competitions** — the tile list of all competitions by date. **Set as current**
@@ -105,8 +112,10 @@ Run order, Penalties, Results) in the sidebar. The sub-pages always act on the *
    which single post is **responsible for the stop line** (ticking one locks it out on the others).
    A confirmation under General combines every post's tasks into e.g. *Tasks 1-35 assigned*.
 8. **Results** — which participant details (club, address, licence, …) the class result tables show:
-   a **General** default plus optional **per-class** overrides (a class can inherit General or set its
-   own). Only the details this competition's type collects are offered; rank, bib and name are always shown.
+   a **General** default that every class shows, plus optional **per-class additions**. A class can
+   only *add* columns General doesn't already show — there is no inheriting-and-replacing and no
+   override. Only the details this competition's type collects are offered; rank, bib and name are
+   always shown. The same page holds the results-PDF layout (header/footer, logos, orientation).
 9. **Marshal Posts** (top-level) — the operator surface a marshal drives on their phone. Pick your
    post from the dropdown and press **Confirm** (it locks in as a red **Change post** button so it
    isn't nudged by accident, and claims the post so no other device can pick it — taken posts show
@@ -148,9 +157,13 @@ Run order, Penalties, Results) in the sidebar. The sub-pages always act on the *
 12. **Results** (top-level) — one sub-page per running class, each a table ranked by the class's scoring
    method (aggregate / best run / regularity; lower is better, penalties folded into every run's time). A
    participant entered into a class more than once keeps only their best result ranked; equal scores the
-   type's tie break can't separate share a rank and are flagged **⚑ inspect**. Competitors missing a run
-   (best run needs just one) or marked DNS/DNF/DSQ are listed below, unranked. The columns follow the
-   Competition-Setup → Results settings (step 8).
+   type's tie break can't separate share a rank and are flagged **⚑ inspect** (click the flag to order
+   them by hand). Competitors whose event is settled without a placing — DNS, DNC, DSQ — sit at the foot
+   of the ranked table with that code instead of a score; ones still waiting on a run (best run needs
+   just one) are in a separate block below, where a **DNS** button closes a run nobody started. Above the
+   per-class pages the sidebar lists an **Overall** page per scoring method × counted-run count, ranked
+   across the classes that share them. Every table exports to A4 PDF, one class, one Overall group or
+   everything in one file. The columns follow the Competition-Setup → Results settings (step 8).
 13. **Participants → Add participant** — register a competitor and optionally assign a bib
    for the current competition right away. The form asks only for the details the selected
    **competition type** collects (see step 1) — pick a different type and the fields follow
@@ -158,7 +171,11 @@ Run order, Penalties, Results) in the sidebar. The sub-pages always act on the *
    class picker (one or several, with repeats where allowed), Age based shows the class derived
    live from the date of birth. The form autocompletes known clubs and common email domains and
    warns about likely duplicates (name or licence) before saving.
-14. **Dashboard** — watch live timing events resolve to participant names by bib.
+14. **Dashboard** (at `/`) — the organiser's read-only overview of the event as it runs: overall
+   progress against the start order, a per-class board (done / running / not started with a
+   completion percentage), the competitor on course right now with their times and penalties, and
+   headline counts (participants, classes finished, runs remaining, non-starters, marshal posts).
+   It reads the same runs the timing views do, so its numbers cannot disagree with theirs.
 
 Leaving General, Classes, Run order, Penalties, Results settings or the participant form with unsaved edits pops a styled
 confirmation (Save / Discard / Cancel) rather than losing the changes. **Save changes** carries
@@ -168,14 +185,20 @@ switches) don't count as changes.
 ## Common commands
 
 ```bash
-uv run python manage.py runserver              # dev server
-uv run python manage.py run_timing_connector   # timing connector loop (see above)
+uv run python manage.py runserver              # dev server — the whole app, timing included
+uv run python manage.py run_timing_connector   # legacy connector loop only (see Getting started)
 uv run python manage.py makemigrations
 uv run python manage.py migrate
 uv run python manage.py createsuperuser
-uv run python manage.py collectstatic          # required before any DEBUG=False run
+uv run python manage.py collectstatic          # required before any DEBUG=False run *and* before pytest
 uv run pytest                                  # test suite (pytest-django)
 ```
+
+`collectstatic` is a prerequisite of the **test suite**, not only of a deployment: static
+files are served through WhiteNoise's manifest storage in every mode, so `{% static %}`
+resolves through the gitignored `staticfiles/staticfiles.json`. A checkout that has never
+run it fails most of the suite with "Missing staticfiles manifest entry", because every
+page render 500s. Run it once after cloning, and again after adding a static file.
 
 ## Running a real event
 
@@ -218,13 +241,19 @@ version and attaches it as an asset:
 — anonymous only while the repository is public; on a private one that download needs to
 be authenticated (`gh release download`).
 
-## Adding a real device connector
+## Adding a real device
 
-Implement `TimingDeviceConnector` (`apps/timing/connectors/base.py`) — `connect()`,
-`disconnect()`, and an async `pulses()` generator yielding `TimingPulse` objects. Point
-`TIMING_CONNECTOR` in `config/settings.py` at the new class's dotted path. Nothing else
-changes: ingestion, persistence and the dashboard are written against the abstract
-interface only.
+The timing path the current screens are built on is `TimingSignal` → arrangement →
+`TimedRun`, and it has one real driver: the Tag Heuer CP540 (`apps/timing/cp540.py`), a
+reader thread that parses the device's lines and hands each signal to
+`ingest.record_signal(running_number, port, is_manual, device_time)`. A new device is that
+same shape — read its stream, parse it, call `record_signal()` — and nothing downstream
+changes: persistence, the run arrangement, both timing views and the results all read what
+that one door writes.
+
+The `TimingDeviceConnector` ABC (`apps/timing/connectors/base.py`, selected by
+`TIMING_CONNECTOR` in `config/settings.py`) belongs to the **legacy** `TimingEvent`
+connector-loop path and is not what a new device should implement.
 
 ## Project layout
 
@@ -240,11 +269,16 @@ apps/timing/             TimingSignal -> arrangement -> TimedRun timing path, th
                          timing and Auto timing views (which share runs and sync bidirectionally),
                          MarshalPenalty, WebSocket consumers (plus the legacy TimingEvent
                          connector/dashboard path)
-apps/results/            Ranked per-class results (top-level "Results" section) computed from the
-                         runs by each class's scoring method, plus a Competition-Setup sub-page
-                         choosing which participant-info columns the tables show
+apps/results/            Ranked per-class and Overall results (top-level "Results" section) computed
+                         from the runs by each class's scoring method, their A4 PDF export, plus a
+                         Competition-Setup sub-page choosing the columns and the PDF layout
+apps/accounts/           Login, and page-level roles (a role is a Django group listing the pages it
+                         may open); the sidebar shows only what the caller holds
+apps/transfer/           The "Backup" section: the automatic database backup, .zip export/import of
+                         an event or a competition type, and the participant-CSV import
 templates/, static/      shared base template + per-app templates, plain CSS/JS, self-hosted fonts
-deploy/                  systemd unit, Windows start script and Caddyfile for a real deployment
+deploy/, build/          systemd unit, Windows start script and Caddyfile for a real deployment;
+                         build/ packages the same app as a one-click Windows installer
 ```
 
 ## Notes
@@ -252,14 +286,17 @@ deploy/                  systemd unit, Windows start script and Caddyfile for a 
 - `CHANNEL_LAYERS` uses `InMemoryChannelLayer` — fine for a single local process, which is
   why only one server process may run (`config/singleinstance.py` enforces it). Switch
   to `channels_redis` only if this ever needs to run multi-process/multi-host.
-- Every timing pulse is written to the database (`TimingEvent`) before it is broadcast,
-  so a dropped WebSocket or crashed dashboard never loses timing data.
-- `TimingEvent` bib numbers are matched against the current competition's `EventEntry`
-  bibs at ingestion time to resolve a display name; the participant link is nullable
-  since a pulse may arrive before a bib is registered.
+- Every incoming time is written to the database before anything is broadcast, and a
+  briefly locked database is waited out and retried; a time that still cannot be stored is
+  appended to `timing_unrecorded.log` rather than dropped (`apps/timing/ingest.py`). A
+  dropped WebSocket or a closed tab therefore never loses timing data — a reopened view
+  reads it all back.
+- `TimingEvent` and its connector loop are the **legacy** feed, kept working and slated to
+  be redone. Its bib-to-name matching at ingestion time is not how the current path works:
+  bibs live on `EventEntry` (per competition) and a run gets its competitor from the
+  operator typing a bib on Manual timing or from the start-order binding on Auto timing.
 - Out of the box this is a development configuration (`DEBUG = True`, checked-in dev
   `SECRET_KEY`). Every deployment setting comes from the environment — see `.env.example`
   and [DEPLOYMENT.md](DEPLOYMENT.md). With `DEBUG=False` the app refuses to start on the
   checked-in key, serves static files through WhiteNoise (so `collectstatic` must have run)
   and self-hosts its fonts, so it needs no internet at a venue.
-```

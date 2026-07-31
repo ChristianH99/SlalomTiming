@@ -99,7 +99,14 @@ would need ~80 running classes to matter, which is not a club event.
 
 ---
 
-### [ ] N-3 — README describes the app it used to be  · low · docs only
+### [x] N-3 — README describes the app it used to be  · low · docs only
+
+**Fixed 2026-07-31.** All six, plus `start.bat`/`start.ps1` in Getting started,
+the legacy caveat on the connector ABC in "Adding a real device", the two Notes
+bullets that described `TimingEvent` as the live path, `apps/accounts` and
+`apps/transfer` in the layout, the state-code and Overall/PDF drift in step 12,
+and a stray code fence at the end of the file.
+
 
 `README.md`. Six drifts, all of which mislead a newcomer, since this is the front door:
 
