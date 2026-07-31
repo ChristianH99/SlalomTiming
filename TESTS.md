@@ -4,11 +4,12 @@ A review of every test in the project, **2026-07-31**. Written because the suite
 to a number that looks alarming, and the first thing worth saying is that the number is
 misleading.
 
-**1392 test cases, from 671 test functions, in 9 files, in ~20 minutes.**
+**1401 test cases, from 680 test functions, in 9 files, in ~20 minutes.**
+(1392/671 when this was written; the four fixes of `OPEN-ITEMS.md` §1 added nine.)
 
 ---
 
-## 1. Why 1392 is not 1392 things
+## 1. Why 1401 is not 1401 things
 
 540 of those cases are one function run many times over a list. Six functions account for
 nearly a third of the whole suite:
@@ -38,9 +39,9 @@ many of those 671 functions earn their keep.
 | --- | ---: | ---: | --- |
 | `config/tests.py` | 459 | 94 | Deployment (things that only break with `DEBUG` off), plus the cross-cutting file checks: CSP, design-system scales, keyboard focus, dialogs, the sidebar registry, JS structure |
 | `config/hostility_tests.py` | 277 | 8 | What happens when a client is unkind. Discovers every JSON endpoint from the URLconf and asks each the same hostile questions. Plus the threaded concurrency tests |
-| `apps/timing/tests.py` | 201 | 168 | Signal → arrangement → run, both timing views, CP540, marshal claims, live cost ceilings |
-| `apps/competitions/tests.py` | 128 | 111 | Competition/type/class models, setup pages, start patterns, marshal-post setup |
-| `apps/transfer/tests.py` | 118 | 118 | Export/import archives, the merge wizard, CSV import, automatic backup, folder picker |
+| `apps/timing/tests.py` | 202 | 169 | Signal → arrangement → run, both timing views, CP540, marshal claims, live cost ceilings |
+| `apps/competitions/tests.py` | 135 | 118 | Competition/type/class models, setup pages, start patterns, marshal-post setup, deleting the current event |
+| `apps/transfer/tests.py` | 119 | 119 | Export/import archives, the merge wizard, CSV import, automatic backup, folder picker |
 | `apps/participants/tests.py` | 74 | 64 | Participant CRUD, bib rules, duplicate check, type-driven fields |
 | `apps/results/tests.py` | 65 | 56 | Scoring, ranking, ties, state codes, columns, the PDF |
 | `config/matrix_tests.py` | 39 | 21 | The configuration space: precision × scoring × penalty mode × assignment × barrier × language × field size |

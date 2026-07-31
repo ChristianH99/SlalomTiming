@@ -6,10 +6,11 @@ previous round's findings were closed and its paperwork removed.
 All four of §1 have since been fixed on this branch, one commit each; what each fix
 actually did is written under its heading. §2 and §3 are unchanged.
 
-**State of the tree:** all four items below are now fixed (2026-07-31); the tests they
-added are in the counts. The suite passes, `TestTwoWritersAtOnce` included — the class
-that used to be red about one clean run in two came through 20 consecutive runs of the
-class and a full-suite run after N-4. `manage.py check --deploy` with
+**State of the tree:** all four items below are now fixed (2026-07-31). **1401 tests, all
+passing** in one 19:48 run — the 1392 of this document plus the nine the fixes added, with
+nothing left failing: `TestTwoWritersAtOnce`, red about one clean run in two when this was
+written, came through that run and 20 consecutive runs of the class. `manage.py
+check --deploy` with
 `DEBUG=False` is clean. No missing migrations. Both translation catalogs are complete
 (0 untranslated, 0 fuzzy) and in sync with the code.
 
