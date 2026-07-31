@@ -1046,3 +1046,44 @@ def test_the_duplicate_check_does_not_reach_into_another_discipline(client):
 
     assert by_license.json()["matches"] == []
     assert by_name.json()["matches"] == []
+
+
+# ----- a date must survive the round trip to the screen (issue #1) -----
+# The suite pins the UI to English (conftest), and English's first
+# DATE_INPUT_FORMATS entry happens to be ISO — which is exactly the format
+# `<input type="date">` requires. So every test rendering an edit form passed
+# while the shipped default language, German, rendered "15.06.2010" into an
+# input that silently ignores anything but ISO, and the operator saw an empty
+# birthday. These two run in German on purpose.
+
+def test_an_existing_birthday_is_still_in_the_edit_form_in_german(client, settings):
+    settings.LANGUAGE_CODE = "de"
+    ctype = make_type()
+    make_competition(ctype)
+    participant = make_participant(ctype)
+
+    page = client.get(reverse("participants:edit", args=[participant.pk])).content.decode()
+
+    assert 'value="2010-06-15"' in page, (
+        "the date input needs an ISO value; anything else and the browser shows "
+        "an empty field, which is what the operator reads as a deleted birthday"
+    )
+
+
+def test_a_german_edit_screen_can_save_the_date_it_was_given(client, settings):
+    """The other half: `<input type="date">` always posts ISO, whatever the page
+    language, and German's DATE_INPUT_FORMATS does not contain it — so the form
+    used to reject the browser's own value with "Enter a valid date"."""
+    settings.LANGUAGE_CODE = "de"
+    ctype = make_type()
+    make_competition(ctype)
+    participant = make_participant(ctype)
+
+    response = client.post(
+        reverse("participants:edit", args=[participant.pk]),
+        participant_data(ctype, date_of_birth="2011-07-16", license_number="LIC-XYZ"),
+    )
+
+    assert response.status_code == 302, getattr(response, "context_data", {}).get("form")
+    participant.refresh_from_db()
+    assert participant.date_of_birth == datetime.date(2011, 7, 16)

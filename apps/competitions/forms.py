@@ -2,6 +2,8 @@ from django import forms
 from django.forms import modelformset_factory
 from django.utils.translation import gettext_lazy as _
 
+from apps.common import DateInput
+
 from .models import Competition, CompetitionClass, CompetitionType
 
 
@@ -13,7 +15,9 @@ class CompetitionForm(forms.ModelForm):
     class Meta:
         model = Competition
         fields = ["competition_type", "name", "date"]
-        widgets = {"date": forms.DateInput(attrs={"type": "date"})}
+        # apps.common.DateInput — see there; a localised value never reaches the
+        # native picker, so the event's own date read as empty on the General page.
+        widgets = {"date": DateInput()}
 
 
 class CompetitionTypeForm(forms.ModelForm):
