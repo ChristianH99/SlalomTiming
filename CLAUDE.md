@@ -1160,6 +1160,61 @@ Run it once after cloning (and after adding a static file). The manifest's stric
 keeping — it is what turns a `{% static %}` pointing at a file that doesn't exist into a failed test
 rather than a dead timing view — but it does mean CI runs `collectstatic` before `pytest`.
 
+## Tests
+
+~1400 cases from ~680 functions in nine files, in ~20 minutes. **Do not judge the suite by the case
+count**: roughly a third of it is a handful of functions parametrised over a list — the hostile
+payloads × every discovered endpoint, the file checks × every template, one per `.js` file, one per
+sidebar entry. Those are the cheapest tests here and the ones with the best failure story, because
+they catch a *class* of bug rather than an instance. The time is not concentrated anywhere either;
+it is the flat cost of ~900 database-backed tests each setting up a competition, so there is no big
+win available short of `pytest-xdist`.
+
+Where the value is concentrated, and what not to break:
+
+- **`config/hostility_tests.py` discovers its own targets from the URLconf**, so an endpoint added
+  next month is covered the day it is added. The malformed-id 500 was reachable on nine endpoints at
+  once precisely because the tests that existed named their targets one at a time.
+- **The file-parametrised checks in `config/tests.py`** — no inline script or style, no `onclick=`,
+  no multi-line `{# #}`, every dialog labelled, every `.js` structurally whole, the design-system
+  scales closed, focus rings not removed. Each is a rule that is easy to break by accident and
+  invisible when broken: the page still renders.
+- **`config/matrix_tests.py`** is the configuration space (precision × scoring × penalty mode ×
+  assignment × barrier × language). A failure there is a setup that is legal to save and does not
+  work — the bug an operator hits on race morning that nobody can reproduce. Note its *name*:
+  pytest's `python_files` is `tests.py` / `test_*.py` / `*_tests.py`, and this file spent its whole
+  life as `audit_matrix_test.py`, matching none of them, so it was never collected. Name a new test
+  file accordingly.
+- **The cost ceilings** (see Performance) — neither failure is visible until an event is big enough
+  to hurt, which is exactly when it can't be fixed.
+- **The legacy `TimingEvent` connector-loop tests** (six functions) are the only tests guarding code
+  on its way out. Keep them until that path is actually removed, then delete the code and its tests
+  in one commit — dropping the tests first leaves legacy code unguarded while it is still shipping.
+
+Two things about *running* it, beyond `collectstatic` above:
+
+- **Never run two `pytest` processes at once.** The threaded tests are timing-sensitive and two runs
+  starve each other of CPU, so they fail for reasons that have nothing to do with the code.
+- **The threaded tests (`django_db(transaction=True)`) run against a database that is not the
+  deployment's.** It is in-memory with a **shared cache**, not a WAL file, and three things follow —
+  each of which made `TestTwoWritersAtOnce` intermittently red until 2026-07-31:
+  1. A read landing on a table another connection is writing is refused outright with
+     `SQLITE_LOCKED` ("database table is locked"), which `busy_timeout` does **not** cover.
+     `PRAGMA read_uncommitted=1` on the reading connection is shared cache's own way off it, and the
+     only setting under which the harness answers a read during a write the way WAL does.
+  2. A losing writer can be turned away by that lock rather than by the constraint, so catch
+     `DatabaseError`, not `IntegrityError`.
+  3. Any *write* hidden in a test's own scaffolding joins the race. `Client.force_login` writes a
+     session row and `last_login` — called inside a thread meant to be a reader, it killed that
+     thread before it issued a single request. Log in before the threads start.
+
+  Anything driving `ingest.record_signal` (directly or through a reader thread) should also
+  monkeypatch `ingest.UNRECORDED_LOG`, or a lost lock race appends to the checkout's own
+  `timing_unrecorded.log`.
+- Six login-throttle and CP540-backoff tests loop to their real configured limits and cost ~25 s
+  between them. Override the limit or monkeypatch the delays when you are next in those files; the
+  logic under test is identical and that is 2 % of the run.
+
 ## Deployment
 
 `runserver` is for development only. A real event runs **one** Daphne process, optionally behind
@@ -1318,6 +1373,37 @@ also caps attempts per address, not just per (username, IP). Known and deliberat
 done yet: the WebSocket consumers check a page role, but there is no per-competition
 scoping on them — a signed-in user holding a live page sees the nudges for whichever
 event is active, which is the only event there is.
+
+## Standing decisions
+
+Things that look like gaps, have been raised, and have an answer. They are listed so the next
+pass recognises them as decided rather than missed — not so they can never be revisited. Where a
+decision has a longer write-up it lives beside the code and is named here.
+
+- **A finished result still depends on a live row.** `CompetitionType`'s precision, penalty
+  amounts and tie-break are read live by `resultscalc`, and the type is shared by every
+  competition of that discipline — so editing a penalty amount in November re-ranks July's event.
+  **Deferred**, because the proper answer is an *archive*: a competition snapshotted when it is
+  signed off. Written up in `apps/competitions/models.py`.
+- **No per-competition scoping on the WebSocket consumers** — see the paragraph above. Deliberate;
+  there is only ever one active event.
+- **No self-service password change.** **Waived** — accounts are assigned and a reset is a
+  superuser's job by design (`apps/accounts/`, the User Access page).
+- **No retention sweep, no bulk delete, no privacy notice.** **Waived 2026-07-31.**
+  `Participant.last_used_at` is recorded and indexed precisely so the sweep is one query away
+  whenever it is wanted — that field exists for a question nobody has asked yet, which is why it
+  must not be deleted as unused.
+- **The database is not encrypted at rest.** **Waived**, mitigated by the data-directory permission
+  hardening in `config/datasecurity.py`, which says the same thing at more length: a passphrase kept
+  beside the database it unlocks protects nothing.
+- **`timing_unrecorded.log` has no replay path.** A time that could not be written is captured
+  durably (`apps/timing/ingest.py`) but has to be entered by hand. **Waived** — rare enough to leave
+  alone; the guarantee that matters is that it is never *lost*.
+- **Exports are plaintext `.zip`.** They carry personal data and nothing encrypts them. Accepted for
+  now: they are written to a stick by the operator, at the venue, for their own club.
+- **A time fired with no competition selected is unrecoverable.** With no active event `ingest`
+  stores the signal but nothing owns it. **Waived** — with no event selected, times are allowed to
+  be lost.
 
 ## Performance
 
