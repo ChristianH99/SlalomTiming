@@ -261,12 +261,23 @@ class TestTwoWritersAtOnce:
 
     def test_two_writers_on_one_bib_leave_one_entry(self):
         """A bib is unique per competition. Two operators assigning the same
-        number at the same moment must not produce two rows — the constraint is
-        what decides it, not who got there first."""
+        number at the same moment must not produce two rows — and the losers
+        must be *told*, rather than believing they got it.
+
+        Losing that race is legitimately two different exceptions, which is what
+        made this test intermittently red. The constraint is only one of the two
+        things that can turn a writer away: under contention SQLite can refuse
+        the loser at the *lock* first, which arrives as an ``OperationalError``
+        ("database table is locked") and never reaches the constraint at all.
+        Catching only ``IntegrityError`` let that thread die uncounted, so the
+        test failed on a run where nothing was wrong. Both mean the same thing
+        to the operator — that desk did not get bib 7 — so both are caught here,
+        via their common parent.
+        """
         import datetime
         import threading
 
-        from django.db import IntegrityError
+        from django.db import DatabaseError
 
         from apps.competitions.models import Competition, CompetitionType
         from apps.participants.models import EventEntry, Participant
@@ -291,7 +302,7 @@ class TestTwoWritersAtOnce:
                 start.wait(timeout=10)
                 EventEntry.objects.create(competition=competition,
                                           participant=person, bib_number=7)
-            except IntegrityError:
+            except DatabaseError:       # IntegrityError *or* the lock, see above
                 refused.append(person)
             finally:
                 connection.close()
@@ -306,17 +317,38 @@ class TestTwoWritersAtOnce:
                                          bib_number=7).count() == 1
         assert len(refused) == len(people) - 1
 
-    def test_a_live_read_does_not_block_behind_a_writer(self):
+    def test_a_live_read_does_not_block_behind_a_writer(self, tmp_path, monkeypatch):
         """WAL mode's whole point here: a browser refreshing the arrangement
-        must not be waiting on the reader thread's insert. Both finish."""
+        must not be waiting on the reader thread's insert. Both finish.
+
+        Two things about the setup are load-bearing, and getting either wrong is
+        what made this test intermittently red:
+
+        * **The browser signs in before the writer starts.** ``force_login``
+          *writes* — a session row and ``last_login`` — so doing it inside the
+          reading thread put a second writer in the race, and when it lost, the
+          "reader" died at the login without ever issuing a request. The test
+          then reported a hung reader, which is the one thing it is meant to
+          detect, on a run where the read path was never exercised at all.
+        * **A signal is counted wherever it lands.** The promise is that a time
+          is never lost, not that it is always in the table: under contention
+          ``record_signal`` may legitimately divert one to the recovery file.
+          Asserting on the table alone made the *documented* behaviour a
+          failure — and, because ``UNRECORDED_LOG`` was not redirected, wrote
+          into the checkout's own data directory while doing it.
+        """
         import datetime
         import threading
 
         from django.test import Client
 
         from apps.competitions.models import Competition, CompetitionType
+        from apps.timing import ingest
         from apps.timing.ingest import record_signal
         from apps.timing.models import TimingSignal
+
+        recovery = tmp_path / 'timing_unrecorded.log'
+        monkeypatch.setattr(ingest, 'UNRECORDED_LOG', recovery)
 
         ctype = CompetitionType.objects.create(name='Slalom')
         Competition.objects.create(competition_type=ctype, name='Race',
@@ -324,6 +356,8 @@ class TestTwoWritersAtOnce:
         from django.contrib.auth.models import User
         user = User.objects.create_superuser(username='race-desk', email='',
                                              password='pw')
+        browser = Client()
+        browser.force_login(user)       # a write: done here, not in the thread
 
         done = []
 
@@ -340,8 +374,19 @@ class TestTwoWritersAtOnce:
         def read():
             from django.db import connection
             try:
-                browser = Client()
-                browser.force_login(user)
+                # The deployment reads a *file* in WAL mode, where a reader gets
+                # the last committed snapshot and never waits for, or is refused
+                # by, the writer. The test database is in-memory with a shared
+                # cache, which has no WAL: there a reader that lands on a table
+                # another connection is writing is turned away at once with
+                # SQLITE_LOCKED ("database table is locked: timing_timingsignal")
+                # — and busy_timeout does not cover that error, so it cannot be
+                # waited out. That is the harness's locking model, not the app's.
+                # read_uncommitted is shared cache's own way off it, and it is
+                # the only setting under which this database answers a read
+                # during a write the way the real one does.
+                with connection.cursor() as cursor:
+                    cursor.execute('PRAGMA read_uncommitted=1;')
                 for _ in range(10):
                     assert browser.get('/timing/arrangement/').status_code == 200
                 done.append('reader')
@@ -355,4 +400,10 @@ class TestTwoWritersAtOnce:
             t.join(timeout=60)
 
         assert sorted(done) == ['reader', 'writer'], f'a thread hung: {done}'
-        assert TimingSignal.objects.count() == 20
+        stored = TimingSignal.objects.count()
+        captured = (len(recovery.read_text(encoding='utf-8').splitlines())
+                    if recovery.exists() else 0)
+        assert stored + captured == 20, (
+            f'{20 - stored - captured} signal(s) went nowhere: '
+            f'{stored} stored, {captured} in the recovery file'
+        )

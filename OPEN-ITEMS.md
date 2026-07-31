@@ -3,11 +3,13 @@
 A fresh pass over the whole project on the `audit` branch, **2026-07-31**, after the
 previous round's findings were closed and its paperwork removed.
 
-Tick the ones you want fixed. Nothing here has been changed yet.
+All four of §1 have since been fixed on this branch, one commit each; what each fix
+actually did is written under its heading. §2 and §3 are unchanged.
 
-**State of the tree:** 1392 tests, all of which pass — except that the three threaded
-tests in `TestTwoWritersAtOnce` are **intermittently red** (N-4 below), so a given run is
-either 1392 passed or 1391 passed / 1 failed. `manage.py check --deploy` with
+**State of the tree:** all four items below are now fixed (2026-07-31); the tests they
+added are in the counts. The suite passes, `TestTwoWritersAtOnce` included — the class
+that used to be red about one clean run in two came through 20 consecutive runs of the
+class and a full-suite run after N-4. `manage.py check --deploy` with
 `DEBUG=False` is clean. No missing migrations. Both translation catalogs are complete
 (0 untranslated, 0 fuzzy) and in sync with the code.
 
@@ -133,7 +135,32 @@ started.
 
 ---
 
-### [ ] N-4 — The concurrency tests are intermittently red  · moderate · small fix
+### [x] N-4 — The concurrency tests are intermittently red  · moderate · small fix
+
+**Fixed 2026-07-31.** Both tests were wrong about the harness, not about the app.
+
+* `test_two_writers_on_one_bib_leave_one_entry`: as diagnosed — it now catches
+  `DatabaseError`, so a thread turned away by the *lock* counts as refused
+  alongside one turned away by the constraint, and the docstring says both are
+  legitimate ways to lose the race.
+* `test_a_live_read_does_not_block_behind_a_writer`: the guess above was wrong.
+  Captured: the reader thread died in `Client.force_login`, which **writes**
+  (a session row and `last_login`) and so was a second writer in the race — the
+  "reader" never issued a single request, and the test then reported a hung
+  reader on a run where the read path was never exercised. The login now happens
+  before the threads start. Two more, found while confirming it: the assertion
+  was on the table alone, when a diverted signal is legitimate and
+  `UNRECORDED_LOG` was not redirected (it had been writing into the checkout's
+  own `timing_unrecorded.log`); and a plain `SELECT` still hit
+  `SQLITE_LOCKED: timing_timingsignal`, because the test database is in-memory
+  with a shared cache, which has no WAL and refuses such a read outright rather
+  than waiting — `busy_timeout` does not cover that error. The reading
+  connection sets `PRAGMA read_uncommitted=1`, shared cache's own way off it,
+  which is the only setting under which the harness answers a read during a
+  write the way the deployment's WAL file does.
+
+Measured after: 25/25 green for the read test, 20/20 for the whole class.
+
 
 `config/hostility_tests.py::TestTwoWritersAtOnce` (3 threaded tests)
 

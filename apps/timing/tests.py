@@ -307,11 +307,18 @@ def test_cp540_time_normalises_minutes_over_an_hour():
 
 # ----- CP540 reconnect + the device-link alarm -----
 
-def test_cp540_reader_reconnects_after_the_link_drops():
+def test_cp540_reader_reconnects_after_the_link_drops(tmp_path, monkeypatch):
     """A knocked cable used to end the reader thread for good — every later time
     lost with nothing said. It has to keep trying while it is the live device."""
     import socket
-    from . import cp540
+    from . import cp540, ingest
+
+    # The line below is fed to a real reader thread, which records it through
+    # record_signal — from a thread that cannot see this test's transaction, so
+    # the write loses the lock and the signal goes to the recovery file. That
+    # file defaults to the *checkout's* DATA_DIR, so this test was quietly
+    # appending to the developer's own timing_unrecorded.log, once per run.
+    monkeypatch.setattr(ingest, "UNRECORDED_LOG", tmp_path / "unrecorded.log")
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(("127.0.0.1", 0))

@@ -129,24 +129,30 @@ ones with no equivalent already in the suite.
 
 ---
 
-## 6. Three tests need fixing, not keeping or dropping
+## 6. Three tests needed fixing, not keeping or dropping — done
 
-`config/hostility_tests.py::TestTwoWritersAtOnce` — the three threaded tests — are the only
-non-deterministic ones in the project, and a clean full suite run is green only about half
-the time. Two of the three have been seen failing; the failure moves between them.
+`config/hostility_tests.py::TestTwoWritersAtOnce` — the three threaded tests — were the
+only non-deterministic ones in the project: a clean full suite run was green only about
+half the time, and the failure moved between two of the three. **Fixed 2026-07-31**
+(`OPEN-ITEMS.md` N-4; 25/25 then 20/20 green after).
 
-The confirmed one catches `IntegrityError` where SQLite can also refuse the losing writer
-with `OperationalError: database table is locked`. Both mean "this desk did not get the
-bib", only one is counted.
+Both causes were in the tests, and both are traps for the next threaded test written here:
 
-Full measurements, the captured failure, and the fix are in `OPEN-ITEMS.md` (N-4). Worth
-doing before this branch goes anywhere: a test that fails one run in two teaches people to
-re-run the suite rather than read it, and the next real failure gets the same shrug.
+- A losing writer can be turned away by the **lock** rather than the constraint, arriving
+  as `OperationalError: database table is locked`. Both mean "this desk did not get the
+  bib"; only `IntegrityError` was counted. Catch `DatabaseError`.
+- The test database is **in-memory with a shared cache**, which is not the deployment's
+  WAL file and does not behave like it. Two consequences: a read landing on a table
+  another connection is writing is refused outright with `SQLITE_LOCKED`, which
+  `busy_timeout` does not cover (`PRAGMA read_uncommitted=1` on the reading connection is
+  the way off it), and any *write* hidden in a test's own scaffolding joins the race —
+  `Client.force_login` writes a session row and `last_login`, which is what killed the
+  "reader" thread before it issued a single request.
 
-Note that these tests are **worth keeping** — they are the only ones that exercise the
-app's actual threading model (`transaction=True`, so other threads can see the data), and
-writing them is what found a real gap in `record_signal`. The problem is their assertions,
-not their existence.
+These tests are **worth keeping**: they are the only ones that exercise the app's actual
+threading model (`transaction=True`, so other threads can see the data), and writing them
+is what found a real gap in `record_signal`. The problem was their assertions and their
+setup, not their existence.
 
 ---
 
@@ -155,8 +161,10 @@ not their existence.
 - **`collectstatic` is a prerequisite, not just a release step.** `STORAGES` uses
   WhiteNoise's *manifest* storage in every mode, so a checkout that has never run it fails
   most of the suite with "Missing staticfiles manifest entry" — every page render 500s.
-  This is in CLAUDE.md but not in README.
-- **Do not run two pytest processes at once.** The `transaction=True` concurrency tests use
-  a real file-backed database rather than the in-memory one, so a parallel run makes them
-  fail on lock contention that has nothing to do with the code. (This is how N-4 was
-  found, so it was not wasted.)
+  In CLAUDE.md, and now in the README too (it was missing there; N-3).
+- **Do not run two pytest processes at once.** It is what first made the `transaction=True`
+  concurrency tests fail, and it is not a real failure. (Not, as this said before, because
+  they share a file-backed database — `DATABASES['default']['TEST']['NAME']` is unset, so
+  each run gets its own in-memory database with a shared cache, which is exactly why a
+  contended read there fails with `SQLITE_LOCKED` instead of waiting. Two runs starve each
+  other of CPU, which sharpens every race *inside* a run.)
