@@ -6,6 +6,10 @@
   <title>{% trans "Simulator" %} – Slalom Timing</title>
   <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
+  {% comment %}A standalone page (no base.html), so it loads the two things the
+  shell would otherwise give it: the browser translation catalog, and
+  window.csrfToken() from shell.js.{% endcomment %}
+  <script src="{% url 'javascript-catalog' %}"></script>
 </head>
 <body class="sim-body">
   <header class="sim-topbar">
@@ -58,80 +62,8 @@
     </section>
   </main>
 
-  <script>
-    (function () {
-      const SIGNAL_URL = "{% url 'timing:signal' %}";
-      const CSRF = "{{ csrf_token }}";
-
-      const pad = (n, len = 2) => String(n).padStart(len, "0");
-      const clockStr = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-      const fullStr = (d) => `${clockStr(d)}.${pad(d.getMilliseconds(), 3)}`;
-
-      // Running clock (hh:mm:ss). Ticks a few times a second so the second flips
-      // promptly; the sub-second precision is captured per signal, not displayed.
-      const clockEl = document.getElementById("sim-clock");
-      const tick = () => { clockEl.textContent = clockStr(new Date()); };
-      tick();
-      setInterval(tick, 200);
-
-      // Running number: auto-increments with each signal actually sent, resettable.
-      const runnumEl = document.getElementById("sim-runnum");
-      let nextNumber = 1;
-      const renderRunnum = () => { runnumEl.textContent = nextNumber; };
-      document.getElementById("sim-reset").addEventListener("click", () => {
-        nextNumber = 1;
-        renderRunnum();
-      });
-
-      const logEl = document.getElementById("sim-log");
-      const logEmptyEl = document.getElementById("sim-log-empty");
-      function addLog(text, kind) {
-        logEmptyEl.hidden = true;
-        const li = document.createElement("li");
-        li.className = "sim-log-item" + (kind ? ` sim-log-item--${kind}` : "");
-        li.textContent = text;
-        logEl.prepend(li);
-      }
-      document.getElementById("sim-clear").addEventListener("click", () => {
-        logEl.replaceChildren();
-        logEmptyEl.hidden = false;
-      });
-
-      async function sendSignal(button) {
-        const now = new Date();
-        const time = fullStr(now);
-        const port = Number(button.dataset.port);
-        const isManual = button.dataset.manual === "1";
-        const running = nextNumber;
-        const label = button.dataset.label;
-
-        button.classList.add("sim-btn--fired");
-        setTimeout(() => button.classList.remove("sim-btn--fired"), 180);
-
-        try {
-          const res = await fetch(SIGNAL_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-            body: JSON.stringify({ running_number: running, port, is_manual: isManual, time }),
-          });
-          const data = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data.error || "{% trans 'Signal rejected.'|escapejs %}");
-          addLog(`#${running} · ${label} · ${time}`, isManual ? "manual" : "barrier");
-          nextNumber = running + 1;
-          renderRunnum();
-        } catch (err) {
-          addLog("{% trans '#{n} · {label} · {time} — failed: {err}'|escapejs %}"
-            .replace("{n}", running).replace("{label}", label)
-            .replace("{time}", time).replace("{err}", err.message), "error");
-        }
-      }
-
-      document.querySelectorAll(".sim-btn").forEach((button) => {
-        button.addEventListener("click", () => sendSignal(button));
-      });
-
-      renderRunnum();
-    })();
-  </script>
+  {{ page_urls|json_script:"page-urls" }}
+  <script src="{% static 'js/shell.js' %}"></script>
+  <script src="{% static 'js/simulator.js' %}"></script>
 </body>
 </html>

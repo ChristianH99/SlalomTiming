@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load static i18n %}
 {% block title %}{% trans "Timing settings" %} – Slalom Timing{% endblock %}
 {% block topbar_title %}{% trans "Timing settings" %}{% endblock %}
 {% block content %}
@@ -76,90 +76,9 @@
     <p class="device-log-empty" id="cp540-log-empty">{% trans "No lines received yet." %}</p>
   </section>
 
-  <script>
-    (function () {
-      const select = document.getElementById("{{ form.device.id_for_label }}");
-      if (!select) return;
-      const groups = [...document.querySelectorAll("[data-device-group]")];
-      const starts = [...document.querySelectorAll("[data-start]")];
+{% endblock %}
 
-      function apply() {
-        const device = select.value;
-        groups.forEach((el) => { el.hidden = el.dataset.deviceGroup !== device; });
-        starts.forEach((el) => { el.hidden = el.dataset.start !== device; });
-        pollIfCp540();
-      }
-      select.addEventListener("change", apply);
-
-      // ----- CP540 live status/log poll -----
-      const STATUS_URL = "{% url 'timing:cp540-status' %}";
-      const statusEl = document.getElementById("cp540-status");
-      const logEl = document.getElementById("cp540-log");
-      const logEmptyEl = document.getElementById("cp540-log-empty");
-      const connectBtn = document.getElementById("cp540-connect");
-      const disconnectBtn = document.getElementById("cp540-disconnect");
-      const ipInput = document.getElementById("{{ form.ip_address.id_for_label }}");
-      const portInput = document.getElementById("{{ form.port.id_for_label }}");
-      const lockedHint = document.getElementById("cp540-locked-hint");
-      const STATUS_TEXT = {
-        idle: "{% trans 'Idle'|escapejs %}", connecting: "{% trans 'Connecting…'|escapejs %}",
-        connected: "{% trans 'Connected'|escapejs %}",
-        reconnecting: "{% trans 'Reconnecting…'|escapejs %}",
-        error: "{% trans 'Connection error'|escapejs %}", stopped: "{% trans 'Disconnected'|escapejs %}",
-      };
-      let timer = null;
-
-      function applyLink(running) {
-        // Connect makes no sense while connected; Disconnect none while idle.
-        if (connectBtn) connectBtn.disabled = running;
-        if (disconnectBtn) disconnectBtn.disabled = !running;
-        // The address/port can't change on a live connection.
-        [ipInput, portInput].forEach((el) => {
-          if (el) el.readOnly = running;
-        });
-        if (lockedHint) lockedHint.hidden = !running;
-      }
-
-      async function refresh() {
-        try {
-          const res = await fetch(STATUS_URL, { headers: { "Accept": "application/json" } });
-          const data = await res.json();
-          const state = data.status || "idle";
-          statusEl.dataset.state = data.error ? "error" : state;
-          statusEl.textContent = (STATUS_TEXT[state] || state)
-            + (data.error ? ` — ${data.error}` : "")
-            + (data.running && data.signals
-                ? " · " + (data.signals === 1
-                    ? "{% trans '{n} signal'|escapejs %}".replace("{n}", data.signals)
-                    : "{% trans '{n} signals'|escapejs %}".replace("{n}", data.signals))
-                : "");
-          applyLink(!!data.running);
-          renderLog(data.log || []);
-        } catch (err) { /* transient; try again next tick */ }
-      }
-
-      function renderLog(lines) {
-        logEmptyEl.hidden = lines.length > 0;
-        logEl.replaceChildren(...lines.map((line) => {
-          const li = document.createElement("li");
-          li.className = "device-log-line device-log-line--" + (line.kind || "other");
-          li.textContent = line.text || "";
-          return li;
-        }));
-      }
-
-      function pollIfCp540() {
-        const on = select.value === "cp540";
-        if (on && timer === null) {
-          refresh();
-          timer = setInterval(refresh, 1000);
-        } else if (!on && timer !== null) {
-          clearInterval(timer);
-          timer = null;
-        }
-      }
-
-      apply();
-    })();
-  </script>
+{% block scripts %}
+  {{ page_urls|json_script:"page-urls" }}
+  <script src="{% static 'js/timing_settings.js' %}"></script>
 {% endblock %}

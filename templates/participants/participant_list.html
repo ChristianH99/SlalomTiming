@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load competitions_tags i18n %}
+{% load competitions_tags static i18n %}
 {% block title %}{% trans "Participants" %} – Slalom Timing{% endblock %}
 {% block topbar_title %}{% trans "Participants" %}{% endblock %}
 {% block content %}
@@ -49,8 +49,12 @@
         <tr class="participant-row" data-participant="{{ participant.pk }}"
             data-search-base="{{ participant.first_name|lower }} {{ participant.last_name|lower }} {{ participant.club|lower }}"
             data-search="{{ participant.first_name|lower }} {{ participant.last_name|lower }} {{ participant.club|lower }} {{ participant.current_bib|default:'' }}"
-            data-last="{{ participant.last_name|lower }}" data-first="{{ participant.first_name|lower }}"
-            tabindex="0" role="button" aria-expanded="false" aria-controls="detail-{{ participant.pk }}">
+            data-last="{{ participant.last_name|lower }}" data-first="{{ participant.first_name|lower }}">
+          {% comment %}The row was `role="button" tabindex="0"`, which tells a
+          screen reader it is not a row at all — no column headers, no position
+          in the table. The row stays a row; the control that opens it is the
+          real <button> in the last cell, which is what carries aria-expanded.
+          Clicking anywhere on the row still works, for the mouse.{% endcomment %}
           <td class="col-bib"><span data-bib-display>{{ participant.current_bib|default:"–" }}</span></td>
           <td class="col-name" title="{{ participant.first_name }} {{ participant.last_name }}">{{ participant.first_name }} {{ participant.last_name }}{% comment %}Out of the whole event: worth seeing without opening the row.{% endcomment %}<span class="status-pill status-pill--dsq" data-dsq-pill {% if participant.current_status != "dsq" %}hidden{% endif %}>{% trans "DSQ" %}</span></td>
           <td class="col-dob">{{ participant.date_of_birth|date:"d.m.Y"|default:"–" }}</td>
@@ -71,7 +75,11 @@
           {% if "requires_club" in collected_info %}<td class="col-club" title="{{ participant.club }}">{{ participant.club }}</td>{% endif %}
           {% if "requires_license" in collected_info %}<td class="col-licence" title="{{ participant.license_number }}">{{ participant.license_number }}</td>{% endif %}
           <td class="col-actions">
-            <span class="pr-chevron" aria-hidden="true"></span>
+            <button type="button" class="pr-toggle" data-row-toggle
+                    aria-expanded="false" aria-controls="detail-{{ participant.pk }}"
+                    aria-label="{% blocktrans with first=participant.first_name last=participant.last_name %}Details for {{ first }} {{ last }}{% endblocktrans %}">
+              <span class="pr-chevron" aria-hidden="true"></span>
+            </button>
           </td>
         </tr>
         <tr class="participant-detail-row" id="detail-{{ participant.pk }}" data-detail-for="{{ participant.pk }}" hidden>
@@ -123,219 +131,10 @@
   </table>
   </div>
 
-  <script>
-    window.PARTICIPANT_URLS = { setBib: "{{ set_bib_url }}", setDsq: "{{ set_dsq_url }}" };
-    window.PARTICIPANT_CSRF = "{{ csrf_token }}";
-  </script>
-  <script>
-    (function () {
-      const input = document.getElementById("participant-search-input");
-      const body = document.getElementById("participants-body");
-      if (!input || !body) return;
-
-      const noResults = body.querySelector(".no-results-row");
-      const rows = Array.from(body.querySelectorAll("tr.participant-row"));
-      const detailFor = (pk) => body.querySelector('tr[data-detail-for="' + pk + '"]');
-
-      // ---- expand / collapse (accordion: at most one open) ------------------
-      const URLS = window.PARTICIPANT_URLS || {};
-      const CSRF = window.PARTICIPANT_CSRF || "";
-      let openRow = null;
-
-      // Order rows the way the server does: by bib ascending (unassigned last),
-      // then last name, then first name. Called after a bib changes so the row
-      // jumps to its correct place without a page reload.
-      function bibKey(row) {
-        const n = parseInt(row.querySelector("[data-bib-display]").textContent.trim(), 10);
-        return Number.isNaN(n) ? Infinity : n;
-      }
-      function resort() {
-        const ordered = rows.slice().sort((a, b) => {
-          const ka = bibKey(a), kb = bibKey(b);
-          if (ka !== kb) return ka - kb;
-          const la = a.dataset.last || "", lb = b.dataset.last || "";
-          if (la !== lb) return la < lb ? -1 : 1;
-          const fa = a.dataset.first || "", fb = b.dataset.first || "";
-          return fa < fb ? -1 : fa > fb ? 1 : 0;
-        });
-        for (const row of ordered) {
-          body.appendChild(row);                     // appendChild moves the node
-          const detail = detailFor(row.dataset.participant);
-          if (detail) body.appendChild(detail);
-        }
-        if (noResults) body.appendChild(noResults);  // keep the sentinel last
-      }
-
-      // Persist the detail's bib field. Called on blur and before collapsing.
-      // Returns true when there was nothing to save or the save succeeded, false
-      // when the server rejected it (so callers can keep the panel open).
-      async function saveBib(row) {
-        const detail = detailFor(row.dataset.participant);
-        if (!detail) return true;
-        const field = detail.querySelector("[data-bib-input], .pd-bib-input");
-        const msg = detail.querySelector("[data-bib-msg]");
-        if (!field || !field.dataset.dirty) return true;
-        const post = (confirm) => fetch(URLS.setBib, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-          body: JSON.stringify({
-            participant: row.dataset.participant, bib: field.value.trim(), confirm: confirm,
-          }),
-        }).then((r) => r.json()).catch(() => ({ ok: false, error: "{% trans 'Could not save.'|escapejs %}" }));
-        let res = await post(false);
-        // A bib carries its recorded times with it (DAT-2), so the server refuses
-        // a move like that until it has been said out loud and agreed to.
-        if (!res.ok && res.confirm) {
-          if (!window.confirm(res.confirm + "\n\n{% trans 'Change the bib anyway?'|escapejs %}")) {
-            return false;
-          }
-          res = await post(true);
-        }
-        if (res.ok) {
-          delete field.dataset.dirty;
-          field.classList.remove("pd-bib-input--error");
-          if (msg) { msg.textContent = "{% trans 'Saved'|escapejs %}"; msg.className = "pd-bib-msg pd-bib-msg--ok"; }
-          const bib = res.bib == null ? "" : String(res.bib);
-          field.value = bib;
-          const display = row.querySelector("[data-bib-display]");
-          if (display) display.textContent = bib || "–";
-          row.dataset.search = row.dataset.searchBase + " " + bib;
-          resort();
-          return true;
-        }
-        if (msg) {
-          field.classList.add("pd-bib-input--error");
-          msg.textContent = res.error || "{% trans 'Could not save.'|escapejs %}";
-          msg.className = "pd-bib-msg pd-bib-msg--error";
-        }
-        return false;
-      }
-
-      function collapse(row) {
-        if (!row) return;
-        const detail = detailFor(row.dataset.participant);
-        saveBib(row);
-        row.setAttribute("aria-expanded", "false");
-        row.classList.remove("participant-row--open");
-        if (detail) detail.hidden = true;
-        if (openRow === row) openRow = null;
-      }
-
-      function expand(row) {
-        if (openRow && openRow !== row) collapse(openRow);
-        const detail = detailFor(row.dataset.participant);
-        row.setAttribute("aria-expanded", "true");
-        row.classList.add("participant-row--open");
-        if (detail) detail.hidden = false;
-        openRow = row;
-        const field = detail && detail.querySelector(".pd-bib-input");
-        if (field) { field.focus(); field.select(); }
-      }
-
-      function toggle(row) {
-        if (openRow === row) collapse(row);
-        else expand(row);
-      }
-
-      for (const row of rows) {
-        row.addEventListener("click", (e) => {
-          if (e.target.closest("a")) return;  // links do their own thing
-          toggle(row);
-        });
-        row.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(row); }
-        });
-        const detail = detailFor(row.dataset.participant);
-        const field = detail && detail.querySelector(".pd-bib-input");
-        if (field) {
-          field.addEventListener("input", () => {
-            field.dataset.dirty = "1";
-            field.classList.remove("pd-bib-input--error");
-            const msg = detail.querySelector("[data-bib-msg]");
-            if (msg) msg.textContent = "";
-          });
-          field.addEventListener("blur", () => saveBib(row));
-          // Enter saves; it only collapses once the save succeeds, so a rejected
-          // bib (e.g. already in use) keeps the panel open with its error visible.
-          field.addEventListener("keydown", async (e) => {
-            if (e.key !== "Enter") return;
-            e.preventDefault();
-            if (await saveBib(row)) { collapse(row); row.focus(); }
-          });
-          // Clicks inside the detail shouldn't bubble to a row toggle.
-          detail.addEventListener("click", (e) => e.stopPropagation());
-        }
-        wireDsq(row);
-      }
-
-      // The whole-event disqualification switch. It saves on the spot rather than
-      // on collapse like the bib field: it is a single, consequential flag, and
-      // the pill in the row is what confirms it landed.
-      function wireDsq(row) {
-        const detail = detailFor(row.dataset.participant);
-        const box = detail && detail.querySelector("[data-dsq-input]");
-        if (!box) return;
-        const msg = detail.querySelector("[data-dsq-msg]");
-        const pill = row.querySelector("[data-dsq-pill]");
-        box.addEventListener("change", async () => {
-          const wanted = box.checked;
-          if (msg) { msg.textContent = ""; msg.className = "pd-dsq-msg"; }
-          const res = await fetch(URLS.setDsq, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-            body: JSON.stringify({ participant: row.dataset.participant, dsq: wanted }),
-          }).then((r) => r.json()).catch(() => ({ ok: false }));
-          if (res.ok) {
-            if (pill) pill.hidden = !wanted;
-            if (msg) { msg.textContent = "{% trans 'Saved'|escapejs %}"; msg.className = "pd-dsq-msg pd-dsq-msg--ok"; }
-          } else {
-            box.checked = !wanted;   // the server refused — don't show it as done
-            if (msg) {
-              msg.textContent = res.error || "{% trans 'Could not save.'|escapejs %}";
-              msg.className = "pd-dsq-msg pd-dsq-msg--error";
-            }
-          }
-        });
-      }
-
-      // ---- live search filtering --------------------------------------------
-      function apply() {
-        const term = input.value.trim().toLowerCase();
-        let visible = 0;
-        for (const row of rows) {
-          const match = term === "" || row.dataset.search.includes(term);
-          row.hidden = !match;
-          const detail = detailFor(row.dataset.participant);
-          // A row filtered out collapses; a matching row keeps its open state.
-          if (!match) {
-            if (openRow === row) collapse(row);
-            else if (detail) detail.hidden = true;
-          }
-          if (match) visible += 1;
-        }
-        if (noResults) noResults.hidden = !(rows.length > 0 && visible === 0);
-      }
-
-      // Clear (×) button: visible only when the field has text.
-      const clearBtn = document.getElementById("participant-search-clear");
-      function syncClear() { if (clearBtn) clearBtn.hidden = input.value === ""; }
-      if (clearBtn) {
-        clearBtn.addEventListener("click", () => {
-          input.value = "";
-          input.focus();
-          apply();
-          syncClear();
-        });
-      }
-
-      input.addEventListener("input", () => { apply(); syncClear(); });
-      document.getElementById("participant-search").addEventListener("submit", (e) => {
-        e.preventDefault();
-        apply();
-      });
-      apply();
-      syncClear();
-    })();
-  </script>
   {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  {{ page_config|json_script:"page-config" }}
+  <script src="{% static 'js/participant_list.js' %}"></script>
 {% endblock %}

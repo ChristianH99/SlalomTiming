@@ -6,11 +6,11 @@
 (function () {
   const root = document.querySelector("[data-marshal]");
   if (!root) return;
-  const config = JSON.parse(document.getElementById("marshal-config").textContent);
+  const config = window.pageData("marshal-config");
+  if (!config) return;
   // The link to the timing side; absent (e.g. in isolation) leaves the page
   // usable via the window.marshalSetStarter hook without any network calls.
-  const URLS = window.MARSHAL_URLS || null;
-  const CSRF = window.MARSHAL_CSRF || "";
+  const URLS = config.urls;
 
   const select = root.querySelector("[data-post-select]");
   const confirmBtn = root.querySelector("[data-confirm]");
@@ -63,7 +63,7 @@
     if (!URLS) return Promise.resolve({ ok: true });
     return fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      headers: { "Content-Type": "application/json", "X-CSRFToken": window.csrfToken() },
       body: JSON.stringify(body || {}),
     }).then((r) => r.json()).catch(() => ({ ok: false }));
   }
@@ -136,7 +136,7 @@
     // keepalive so the release still goes out as the page unloads.
     fetch(URLS.release, {
       method: "POST", keepalive: true,
-      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      headers: { "Content-Type": "application/json", "X-CSRFToken": window.csrfToken() },
       body: JSON.stringify({ post: Number(number), token: deviceToken }),
     }).catch(() => {});
   }
@@ -433,7 +433,7 @@
     try {
       const response = await fetch(URLS.submit, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+        headers: { "Content-Type": "application/json", "X-CSRFToken": window.csrfToken() },
         // The claim token proves this device holds the post; the server refuses a
         // write without it. Added here rather than in the stored body so an entry
         // queued before a token existed still goes out with the current one.

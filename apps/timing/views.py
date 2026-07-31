@@ -8,6 +8,7 @@ from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
+from django.middleware.csrf import CsrfViewMiddleware
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -17,6 +18,7 @@ from django.views.generic import TemplateView, UpdateView
 
 from apps.accounts import pages
 from apps.competitions.models import Competition, CompetitionClass
+from apps.common import json_body as _shared_json_body
 from apps.participants.models import EventEntry
 
 from . import arrangement, autotiming, calc, cp540, dashboard, runstatus
@@ -45,6 +47,14 @@ _DURATION_CHARS = re.compile(r"^[0-9:.]+$")
 # IntegerField. They are driven by steppers, so anything outside this range is a
 # broken client rather than an operator — clamped, so the run stays readable.
 MAX_PENALTY_COUNT = 999
+# A device's running number counts starts, so the column's own range is already far
+# past anything real. Bounded at the door for the same reason as the counts above.
+MAX_RUNNING_NUMBER = 2_147_483_647
+# A marshal post's per-task breakdown, as its phone sends it. A post watches a
+# handful of tasks, so this is orders of magnitude more than any real board — but
+# it is a JSONField written straight from a request, and every open Auto timing
+# page re-downloads whatever is in it on every nudge.
+MAX_DETAIL_TASKS = 200
 # The fields of a run-update that say *who this run belongs to*. Editing one of
 # these is what makes the run operator-owned (manual_entry); the penalty counts in
 # the same payload deliberately do not — see timing_run_update.
@@ -69,6 +79,32 @@ def _rebind_and_broadcast(competition):
     broadcast_live()
 
 
+# The endpoint maps the live pages' scripts drive. They used to be written into an
+# inline <script> in each template; with a Content-Security-Policy in place nothing
+# on a page may be inline, so the view hands them over as data and the template
+# renders them through `json_script` (which escapes them for us).
+def _urls(*names):
+    from django.urls import reverse
+
+    return {
+        _CAMEL.get(name, name.replace("-", "_")): reverse(f"timing:{name}")
+        for name in names
+    }
+
+
+# url name -> the key its script already uses.
+_CAMEL = {
+    "arrangement": "arrangement", "run-update": "run", "run-add": "runAdd",
+    "run-delete": "runDelete", "run-status": "runStatus", "ignore": "ignore",
+    "pair": "pair", "set-time": "setTime", "set-runtime": "setRuntime",
+    "input-lock": "inputLock", "auto-state": "state", "auto-reorder": "reorder",
+    "auto-reset-order": "resetOrder", "auto-adjust": "adjust",
+    "marshal-unlock": "unlock", "marshal-lock": "lock",
+    "marshal-lock-all": "lockAll", "marshal-task-edit": "taskEdit",
+    "dashboard-state": "state", "signal": "signal", "cp540-status": "status",
+}
+
+
 class DashboardView(TemplateView):
     """The organiser overview: a live, read-only status view of the whole event
     (overall run progress, per-class state, the competitor on course, headline
@@ -80,6 +116,7 @@ class DashboardView(TemplateView):
         context = super().get_context_data(**kwargs)
         competition = Competition.get_current()
         context["competition"] = competition
+        context["page_urls"] = _urls("dashboard-state")
         if competition is not None:
             context["overview"] = dashboard.serialize(competition)
         return context
@@ -107,6 +144,11 @@ class TimingSettingsView(UpdateView):
 
     def get_object(self, queryset=None):
         return TimingSettings.load()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_urls"] = _urls("cp540-status")
+        return context
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -166,6 +208,11 @@ class SimulatorView(TemplateView):
 
     template_name = "timing/simulator.html"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_urls"] = _urls("signal")
+        return context
+
 
 class TimingLiveView(TemplateView):
     """The operator's live timing view for the active competition: incoming start
@@ -177,6 +224,10 @@ class TimingLiveView(TemplateView):
         context = super().get_context_data(**kwargs)
         competition = Competition.get_current()
         context["competition"] = competition
+        context["page_urls"] = _urls(
+            "arrangement", "run-update", "run-add", "run-delete", "run-status",
+            "ignore", "pair", "set-time", "set-runtime", "input-lock",
+        )
         if competition is not None:
             context["arrangement"] = serialize_arrangement(competition)
         return context
@@ -185,7 +236,16 @@ class TimingLiveView(TemplateView):
 class AutoTimingView(TemplateView):
     """The order-driven live view: the start order down the left, and the
     previous/current/next competitors with their times and each marshal post's
-    running penalty on the right."""
+    running penalty on the right.
+
+    Auto timing *is* the start order, so with no start pattern there is nothing
+    for this page to be. It then shows one sentence and a link to build one, and
+    no timing controls at all — rather than a page of empty furniture, or (what it
+    used to do with times already recorded) a screen of flame-bordered
+    "unattributed time" alarms, one per run, with nothing saying why. The rest of
+    the app does not need a pattern: Manual timing, the dashboard and the results
+    all work from the entries and their classes.
+    """
 
     template_name = "timing/auto.html"
 
@@ -193,7 +253,16 @@ class AutoTimingView(TemplateView):
         context = super().get_context_data(**kwargs)
         competition = Competition.get_current()
         context["competition"] = competition
-        if competition is not None:
+        context["needs_pattern"] = (
+            competition is not None and not competition.start_pattern_blocks()
+        )
+        context["page_urls"] = _urls(
+            "auto-state", "auto-reorder", "auto-reset-order", "ignore", "pair",
+            "set-time", "set-runtime", "run-status", "auto-adjust",
+            "marshal-unlock", "marshal-lock", "marshal-lock-all",
+            "marshal-task-edit", "input-lock",
+        )
+        if competition is not None and not context["needs_pattern"]:
             context["auto"] = autotiming.serialize(competition)
         return context
 
@@ -203,8 +272,14 @@ def auto_arrangement(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"competition": False})
+    if not competition.start_pattern_blocks():
+        # The page answers this itself and doesn't load its script (see
+        # AutoTimingView), so nothing normally asks — but the endpoint says the
+        # same thing rather than serialising an order that cannot exist.
+        return JsonResponse({"competition": True, "needs_pattern": True})
     data = autotiming.serialize(competition)
     data["competition"] = True
+    data["needs_pattern"] = False
     return JsonResponse(data)
 
 
@@ -219,8 +294,22 @@ def auto_reorder(request):
     posted = payload.get("order")
     if not isinstance(posted, list):
         return JsonResponse({"ok": False, "error": "order must be a list."}, status=400)
+    # Filtered to slots that exist *and* deduplicated: a key twice over would put
+    # one competitor in two places in the order, and `ordered_slots` resolves that
+    # by silently dropping the second — an order that doesn't match what was sent
+    # and never says so. Bounded too, since this is a list from a client.
     known = {slot["key"] for slot in autotiming.computed_slots(competition)}
-    competition.auto_timing_order = [key for key in posted if key in known]
+    seen, order = set(), []
+    for key in posted:
+        if key in known and key not in seen:
+            seen.add(key)
+            order.append(key)
+            # Bounded by the *result*, not by the input: capping the input first
+            # threw away real keys whenever the client sent an unknown one before
+            # them, which is exactly what it does when a slot has just gone.
+            if len(order) == len(known):
+                break
+    competition.auto_timing_order = order
     competition.save(update_fields=["auto_timing_order"])
     # A different order binds runs to different competitors — persist it here, on
     # the write, because the readers no longer do (see autotiming.sync_bindings).
@@ -308,8 +397,8 @@ def marshal_submit(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
-    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
+    post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
     if run is None or post is None:
         return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
     # A marshal writes with the claim their device holds; the timekeeper may write
@@ -323,7 +412,7 @@ def marshal_submit(request):
     existing = MarshalPenalty.objects.filter(timed_run=run, marshal_post=post).first()
     if existing is not None and existing.submitted:
         return JsonResponse({"ok": False, "locked": True}, status=409)
-    detail = payload.get("detail")
+    detail = _clean_detail(payload.get("detail"))
     MarshalPenalty.objects.update_or_create(
         timed_run=run,
         marshal_post=post,
@@ -331,7 +420,7 @@ def marshal_submit(request):
             "pylon_count": _as_count(payload.get("pylon_count")),
             "task_count": _as_count(payload.get("task_count")),
             "stopline_count": _as_count(payload.get("stopline_count")),
-            "detail": detail if isinstance(detail, dict) else {},
+            "detail": detail,
             "submitted": bool(payload.get("submitted")),
         },
     )
@@ -350,8 +439,8 @@ def marshal_unlock(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
-    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
+    post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
     if run is None or post is None:
         return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
     mp = MarshalPenalty.objects.filter(timed_run=run, marshal_post=post).first()
@@ -373,7 +462,7 @@ def marshal_lock_all(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
     for post in competition.marshal_posts.all():
@@ -385,8 +474,8 @@ def marshal_lock_all(request):
 
 
 def _resolve_run_and_post(competition, payload):
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
-    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
+    post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
     return run, post
 
 
@@ -467,7 +556,7 @@ def marshal_claim(request):
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
     token = str(payload.get("token") or "")[:64]
-    post = competition.marshal_posts.filter(number=payload.get("post")).first()
+    post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
     if post is None or not token:
         return JsonResponse({"ok": False, "error": "Unknown post."}, status=404)
     now = timezone.now()
@@ -487,8 +576,12 @@ def marshal_release(request):
         return JsonResponse({"ok": True})
     payload = _json_body(request)
     token = str(payload.get("token") or "")
-    post = competition.marshal_posts.filter(number=payload.get("post")).first()
-    if post is not None and post.claim_token and post.claim_token == token:
+    post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
+    # compare_digest, like _marshal_may_write: this is the secret that says which
+    # device owns the post, and the two comparisons should not differ.
+    if post is not None and post.claim_token and token and secrets.compare_digest(
+        post.claim_token, token
+    ):
         post.claim_token = ""
         post.claim_seen = None
         post.save(update_fields=["claim_token", "claim_seen"])
@@ -520,7 +613,7 @@ def auto_penalty_adjust(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
     fields = []
@@ -563,9 +656,8 @@ def timing_signal(request):
             status=409,
         )
 
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
+    payload = _json_body(request)
+    if not payload:
         return JsonResponse({"ok": False, "error": "Malformed request."}, status=400)
 
     try:
@@ -574,7 +666,11 @@ def timing_signal(request):
     except (KeyError, TypeError, ValueError):
         return JsonResponse({"ok": False, "error": "running_number and port are required integers."}, status=400)
 
-    if running_number < 1 or not (1 <= port <= 4):
+    # Bounded like every other number an outside caller sends: running_number is a
+    # PositiveIntegerField, and SQLite takes whatever it is handed rather than
+    # refusing it (see the note at the top of this file). A device counts starts,
+    # so anything past a signed 32-bit column is a broken client.
+    if not (1 <= running_number <= MAX_RUNNING_NUMBER) or not (1 <= port <= 4):
         return JsonResponse({"ok": False, "error": "running_number ≥ 1 and port 1–4 required."}, status=400)
 
     device_time = _parse_device_time(payload.get("time"))
@@ -590,26 +686,51 @@ def timing_signal(request):
     return JsonResponse({"ok": True, "id": signal.id if signal else None, "captured": signal is None})
 
 
-def _signal_authorized(request):
-    """Who may POST a raw timing signal. The endpoint is CSRF-exempt and outside
-    the login gate (a device can't log in), so it enforces its own rule here:
+class _CsrfCheck(CsrfViewMiddleware):
+    """CsrfViewMiddleware that reports rather than responds, so this view can ask
+    it a question. ``process_view`` returns None when the token is good."""
 
-    - a logged-in user *who holds the Timing page* (the Simulator page runs in
-      the operator's session) — OK. A login on its own is not enough: writing a
-      time into the live event is the Timing page's business, and every other
-      Timing URL is gated on it, so a registration-desk account that can't open
-      the timing views can't inject signals into them either;
-    - otherwise, if TIMING_DEVICE_TOKEN is configured, a matching X-Device-Token
-      (constant-time compared) — OK;
-    - otherwise the door is open only while DEBUG is on (local dev). In a
-      deployment (DEBUG off) an anonymous, tokenless post is refused, so the one
-      unauthenticated write endpoint isn't world-writable."""
-    if request.user.is_authenticated:
-        return "timing" in pages.user_pages(request.user)
+    def _reject(self, request, reason):
+        return reason
+
+
+def _device_token_ok(request):
+    """A device presenting the configured shared secret (constant-time compared)."""
     token = getattr(settings, "TIMING_DEVICE_TOKEN", "")
-    if token:
-        provided = request.headers.get("X-Device-Token", "")
-        return bool(provided) and secrets.compare_digest(provided, token)
+    if not token:
+        return False
+    provided = request.headers.get("X-Device-Token", "")
+    return bool(provided) and secrets.compare_digest(provided, token)
+
+
+def _signal_authorized(request):
+    """Who may POST a raw timing signal.
+
+    This is the app's one endpoint outside the login gate, because a physical
+    timing device cannot log in — so it decides for itself, and there are exactly
+    two callers:
+
+    * **a device**, identified by a matching ``X-Device-Token``. It carries no
+      cookies, so CSRF does not apply to it and the view stays ``csrf_exempt``
+      for its sake;
+    * **the browser Simulator**, which runs in the operator's session. A login
+      alone is not enough — writing a time into the live event is the Timing
+      page's business, and every other Timing URL is gated on it — and because
+      this caller *does* carry cookies, its request is CSRF-checked here. Without
+      that, ``csrf_exempt`` plus session auth meant any page an operator visited
+      could post times into a running event, with nothing but the session
+      cookie's SameSite=Lax default standing in the way. That default is a
+      browser's choice, not ours.
+
+    With neither, the door is open only while DEBUG is on (local dev); a
+    deployment refuses an anonymous, tokenless post.
+    """
+    if _device_token_ok(request):
+        return True
+    if request.user.is_authenticated:
+        if "timing" not in pages.user_pages(request.user):
+            return False
+        return _CsrfCheck(lambda r: None).process_view(request, None, (), {}) is None
     return settings.DEBUG
 
 
@@ -645,7 +766,7 @@ def timing_run_update(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         return JsonResponse({"ok": False, "error": "Unknown run."}, status=404)
 
@@ -706,7 +827,7 @@ def timing_run_status(request):
     status = runstatus.parse(payload.get("status"))
     if status is None:
         return JsonResponse({"ok": False, "error": "Unknown status."}, status=400)
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         if not status:
             return JsonResponse({"ok": True})  # nothing recorded, nothing to clear
@@ -731,7 +852,7 @@ def timing_ignore(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    signal = TimingSignal.objects.filter(id=payload.get("signal_id"), competition=competition).first()
+    signal = TimingSignal.objects.filter(id=_as_pk(payload.get("signal_id")), competition=competition).first()
     if signal is None:
         return JsonResponse({"ok": False, "error": "Unknown signal."}, status=404)
     signal.ignored = bool(payload.get("ignored"))
@@ -754,9 +875,9 @@ def timing_pair(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     payload = _json_body(request)
-    signal = TimingSignal.objects.filter(id=payload.get("signal_id"), competition=competition).first()
+    signal = TimingSignal.objects.filter(id=_as_pk(payload.get("signal_id")), competition=competition).first()
     slot = payload.get("slot")
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None and payload.get("slot_key"):
         run = _run_from_slot(competition, payload.get("slot_key"))
     if signal is None or run is None or slot not in ("start", "finish"):
@@ -793,7 +914,7 @@ def timing_delete_run(request):
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     run = TimedRun.objects.filter(
-        id=_json_body(request).get("run_id"), competition=competition,
+        id=_as_pk(_json_body(request).get("run_id")), competition=competition,
         start_signal__isnull=True, finish_signal__isnull=True,
     ).first()
     if run is not None:
@@ -819,7 +940,7 @@ def timing_set_time(request):
         return JsonResponse({"ok": False, "error": "Bad request."}, status=400)
     raw = payload.get("time")
     clearing = raw is None or str(raw).strip() == ""
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         # An upcoming competitor in the Auto order has no run yet — make one from
         # their start-order slot so a time can be keyed onto them. Nothing to clear
@@ -897,7 +1018,7 @@ def timing_set_runtime(request):
     payload = _json_body(request)
     raw = payload.get("run_time")
     clearing = raw is None or str(raw).strip() == ""
-    run = TimedRun.objects.filter(id=payload.get("run_id"), competition=competition).first()
+    run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
         if clearing:
             return JsonResponse({"ok": True})
@@ -1181,11 +1302,10 @@ def _class_key(run):
 def _parse_class_key(value, competition):
     """'pk:occurrence' -> (CompetitionClass or None, occurrence int)."""
     pk, _, occ = str(value or "").partition(":")
-    cclass = CompetitionClass.objects.filter(id=pk, competition=competition).first()
-    try:
-        occurrence = int(occ)
-    except (TypeError, ValueError):
-        occurrence = 0
+    cclass = CompetitionClass.objects.filter(
+        id=_as_pk(pk), competition=competition
+    ).first()
+    occurrence = _digits(occ) or 0
     return cclass, occurrence
 
 
@@ -1259,21 +1379,69 @@ def _over_max(ctx, run):
 # ----- small parsing helpers -----
 
 def _json_body(request):
-    try:
-        return json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return {}
+    """The request's JSON body as a dict. See apps/common.json_body for the three
+    ways a body that is not our JSON used to reach a view as a 500."""
+    return _shared_json_body(request)
+
+
+def _digits(value):
+    """``value`` as an int when it is written in plain ASCII digits, else None.
+
+    ``str.isdigit()`` alone is not that test: it is True for "²" and "٣" while
+    ``int()`` accepts only the second, so an isdigit-then-int pair raises ValueError
+    on the first. Every number a client sends comes through here.
+    """
+    text = str(value).strip()
+    return int(text) if text.isascii() and text.isdigit() else None
+
+
+def _as_pk(value):
+    """A primary key from a client payload, or None.
+
+    Handing a non-numeric string straight to ``filter(id=…)`` makes Django raise
+    ValueError while it prepares the query — an unhandled 500 on every mutate
+    endpoint from one malformed request. A pk that isn't a number simply matches
+    nothing, which is what None does at every call site.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    return _digits(value)
 
 
 def _as_positive_int(value):
-    text = str(value).strip()
-    return int(text) if text.isdigit() and int(text) > 0 else None
+    number = _digits(value)
+    return number if number is not None and number > 0 else None
 
 
 def _as_count(value):
     """A penalty count from the client -> 0..MAX_PENALTY_COUNT (garbage -> 0)."""
-    text = str(value).strip()
-    return min(int(text), MAX_PENALTY_COUNT) if text.isdigit() else 0
+    number = _digits(value)
+    return min(number, MAX_PENALTY_COUNT) if number is not None else 0
+
+
+def _clean_detail(value):
+    """A marshal board's per-task breakdown, reduced to the shape we render.
+
+    It arrives as free JSON from a phone and lands in a JSONField that every open
+    Auto timing page then re-downloads on every nudge, so it is rebuilt here
+    rather than stored as sent: known keys only, counts bounded, and a cap on how
+    many tasks a post may report."""
+    if not isinstance(value, dict):
+        return {}
+    tasks_in = value.get("tasks")
+    tasks = {}
+    if isinstance(tasks_in, dict):
+        for key, cell in list(tasks_in.items())[:MAX_DETAIL_TASKS]:
+            number = _digits(key)
+            if number is None or not isinstance(cell, dict):
+                continue
+            pylons = _as_count(cell.get("pylons"))
+            failed = bool(cell.get("task"))
+            if pylons or failed:
+                tasks[str(number)] = {"pylons": pylons, "task": failed}
+    return {"tasks": tasks, "stop_line": bool(value.get("stop_line"))}
 
 
 def _as_signed(value):

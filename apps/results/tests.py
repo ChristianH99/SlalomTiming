@@ -9,7 +9,7 @@ from apps.competitions.models import Competition, CompetitionClass, CompetitionT
 from apps.participants.models import ClassAssignment, EventEntry, Participant
 from apps.timing.models import TimedRun, TimingSignal
 
-from . import resultscalc, views
+from . import logos, resultscalc, views
 from .models import ManualTieResolution, ResultColumnSettings, ResultsPdfLayout
 
 pytestmark = pytest.mark.django_db
@@ -281,6 +281,47 @@ def test_state_code_on_a_practice_run_does_not_affect_the_result():
     assert not results.status_rows
 
 
+def test_a_practice_code_beside_a_zero_tally_is_explained(client):
+    """The tally counts a *competitor's* outcome, and a code on a
+    practice run is not one — so the table legitimately showed "DNS" in a cell
+    above a tally reading "DNS: 0", and the two together read as a bug. In
+    exactly that case the table now says which of the two it is counting."""
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    cclass.practice_runs = 1
+    cclass.save(update_fields=["practice_runs"])
+    make_competitor(competition, cclass, 1)
+    mark_run(competition, cclass, 1, 1, "dns", run_type=TimedRun.RunType.PRACTICE)
+    add_run(competition, cclass, 1, 1, 30)
+    add_run(competition, cclass, 1, 2, 30)
+
+    response = client.get(reverse("results:class", args=[cclass.pk]))
+    summary = response.context["layout"]["summary"]
+    # The competitor is ranked: the practice code settled nothing.
+    assert summary["statuses"] == [
+        {"label": "DNS", "count": 0},
+        {"label": "DNC", "count": 0},
+        {"label": "DSQ", "count": 0},
+    ]
+    assert summary["practice_only_code"] is True
+    assert b"does not end anybody" in response.content
+
+
+def test_the_note_stays_off_when_a_competitor_really_is_settled(client):
+    """Only the confusing case earns a sentence. A DNS that *did* end somebody's
+    event needs no explaining — the tally shows it."""
+    _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
+    cclass.practice_runs = 1
+    cclass.save(update_fields=["practice_runs"])
+    make_competitor(competition, cclass, 1)
+    mark_run(competition, cclass, 1, 1, "dns", run_type=TimedRun.RunType.PRACTICE)
+    mark_run(competition, cclass, 1, 1, "dns")
+    mark_run(competition, cclass, 1, 2, "dns")
+
+    response = client.get(reverse("results:class", args=[cclass.pk]))
+    assert response.context["layout"]["summary"]["practice_only_code"] is False
+    assert b"does not end anybody" not in response.content
+
+
 @pytest.mark.parametrize("status", ["dnf", "dnc", "dns", "dsq"])
 def test_aggregate_over_several_runs_is_dnc_when_one_is_marked(status):
     _, competition, cclass = make_setup(CompetitionClass.Scoring.AGGREGATE)
@@ -401,14 +442,16 @@ def test_summary_counts_each_state_code(client):
     add_run(competition, cclass, 3, 1, 30)      # still waiting on run 2
 
     section = views.class_section(competition, cclass)
-    assert section["layout"]["summary"] == {
-        "starters": 3,
-        "statuses": [
-            {"label": "DNS", "count": 1},
-            {"label": "DNC", "count": 1},
-            {"label": "DSQ", "count": 0},
-        ],
-    }
+    summary = section["layout"]["summary"]
+    assert summary["starters"] == 3
+    assert summary["statuses"] == [
+        {"label": "DNS", "count": 1},
+        {"label": "DNC", "count": 1},
+        {"label": "DSQ", "count": 0},
+    ]
+    # Nothing here is settled on a *practice* code, so the note that explains
+    # the difference stays off. See test_a_practice_code_is_explained_...
+    assert summary["practice_only_code"] is False
 
 
 def test_unranked_run_cells_offer_a_dns_key_and_the_table_renders(client):
@@ -500,8 +543,13 @@ def test_columns_for_defaults_to_available_then_adds_class_columns():
     # Type collects club/licence/address/email by default; name + dob always.
     available = ResultColumnSettings.available_keys(competition)
     assert "club" in available and "driver_name" in available and "birthday" in available
-    # No rows yet -> general defaults to all available.
-    assert set(ResultColumnSettings.columns_for(competition, cclass)) == set(available)
+    # No rows yet -> the safe default set, NOT everything available: a results
+    # table (and the PDF that goes on the notice board) must not carry every
+    # competitor's e-mail, phone and home address unless somebody asked for it.
+    default = ResultColumnSettings.columns_for(competition, cclass)
+    assert set(default) == {"driver_name", "club", "birth_year"} & set(available)
+    for private in ("email", "phone", "street", "city", "license", "birthday"):
+        assert private not in default
     # A General set of just club; the class *adds* city on top (additive, no override).
     ResultColumnSettings.objects.create(
         competition=competition, competition_class=None, columns=["club"],
@@ -529,7 +577,7 @@ def test_results_settings_page_saves(client):
     assert ResultColumnSettings.class_additions(competition, cclass) == ["city"]
 
 
-# ----- SEC-1 / SEC-5: the PDF layout's own inputs -----
+# ----- the PDF layout's own inputs -----
 
 # A 1x1 GIF: small, and a real image, so ImageField and Pillow both accept it.
 PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04"
@@ -537,7 +585,7 @@ PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04"
 
 
 def test_settings_page_renders_stored_markup_sanitised(client):
-    """SEC-1's other half. The editor sanitises on save, but a row can also be
+    """The other half of the stored-XSS fix. The editor sanitises on save, but a row can also be
     written by an *import*, so the page sanitises again on the way out instead of
     trusting the column with a bare |safe."""
     _, competition, _ = make_setup()
@@ -555,7 +603,7 @@ def test_settings_page_renders_stored_markup_sanitised(client):
 def test_an_over_sized_logo_is_refused(client, settings, tmp_path):
     settings.MEDIA_ROOT = tmp_path
     _, competition, _ = make_setup()
-    big = SimpleUploadedFile("logo.gif", PIXEL + b"\0" * views.MAX_LOGO_BYTES,
+    big = SimpleUploadedFile("logo.gif", PIXEL + b"\0" * logos.MAX_LOGO_BYTES,
                              content_type="image/gif")
     response = client.post(reverse("results:settings"),
                            {"general-club": "on", "image_left": big}, follow=True)
@@ -674,14 +722,13 @@ def test_results_summary_counts(client):
     # "Classified / not classified" told the operator nothing about which outcome
     # they were looking at; the summary names the outcomes themselves.
     assert b"DNS:" in body and b"DNC:" in body and b"DSQ:" in body
-    assert response.context["layout"]["summary"] == {
-        "starters": 4,
-        "statuses": [
-            {"label": "DNS", "count": 1},
-            {"label": "DNC", "count": 0},
-            {"label": "DSQ", "count": 1},
-        ],
-    }
+    summary = response.context["layout"]["summary"]
+    assert summary["starters"] == 4
+    assert summary["statuses"] == [
+        {"label": "DNS", "count": 1},
+        {"label": "DNC", "count": 0},
+        {"label": "DSQ", "count": 1},
+    ]
 
 
 def test_best_run_column_heading(client):
@@ -832,7 +879,7 @@ def test_reading_results_never_writes(client):
         assert writes == [], f"{url} wrote: {writes}"
 
 
-# ----- stage 7: a tie resolution belongs to the score it was made at -----
+# ----- A tie resolution belongs to the score it was made at -----
 
 def _resolve(client, competition, cclass, ranks=(1, 2)):
     e1 = EventEntry.objects.get(competition=competition, bib_number=1)
@@ -929,3 +976,69 @@ def test_saving_a_resolution_sweeps_ones_whose_tie_is_gone(client):
     _resolve(client, competition, cclass, ranks=(1, 1))
     assert not ManualTieResolution.objects.filter(pk=stale.pk).exists()
     assert ManualTieResolution.objects.filter(competition=competition).count() == 1
+
+
+# --- what a class name can do to a download header ---------------------------
+#
+# A class name is typed by an organiser and ends up in Content-Disposition. Three
+# separate things went wrong when that header was an f-string, and each needs its
+# own test because each fails differently: a quote splits the header into two
+# parameters, a name outside latin-1 cannot be encoded into a header at all, and
+# a newline raises BadHeaderError. Django's own content_disposition_header()
+# handles all three; these pin that it is still the thing being used.
+
+def test_a_quote_in_a_class_name_cannot_split_the_download_header(client):
+    _, competition, cclass = make_setup()
+    cclass.name = 'A"; attachment; filename="evil.pdf'
+    cclass.save()
+    make_competitor(competition, cclass, 1)
+
+    response = client.get(reverse("results:export-class", args=[cclass.pk]))
+
+    assert response.status_code == 200
+    header = response["Content-Disposition"]
+    # The quote has to arrive backslash-escaped, so the name stays one parameter
+    # instead of closing it and opening another of the attacker's choosing.
+    inner = header.split('filename="', 1)[1]
+    assert '\\"' in inner, f"quote not escaped, header split apart: {header!r}"
+
+
+def test_a_class_name_outside_latin_1_still_exports(client):
+    """A header is latin-1 encoded, so a Cyrillic class name has to reach for
+    RFC 5987 `filename*=` rather than raising on the way out."""
+    _, competition, cclass = make_setup()
+    cclass.name = "Кла"
+    cclass.save()
+    make_competitor(competition, cclass, 1)
+
+    response = client.get(reverse("results:export-class", args=[cclass.pk]))
+
+    assert response.status_code == 200
+    assert "filename*=" in response["Content-Disposition"]
+
+
+def test_a_newline_in_a_class_name_does_not_500_the_export(client):
+    _, competition, cclass = make_setup()
+    cclass.name = "Two\nLines"
+    cclass.save()
+    make_competitor(competition, cclass, 1)
+
+    assert client.get(reverse("results:export-class", args=[cclass.pk])).status_code == 200
+
+
+def test_contact_details_are_not_published_by_default():
+    """With no saved ResultColumnSettings the general columns used to be
+    *every* available column, so a sheet pinned to the notice board carried the
+    e-mail, phone number and home address of every competitor before anyone had
+    chosen anything. A default that publishes is the wrong default."""
+    ctype, competition, _ = make_setup()
+    ctype.requires_email = True
+    ctype.requires_phone = True
+    ctype.requires_address = True
+    ctype.save()
+
+    columns = ResultColumnSettings.general_columns(competition)
+
+    assert "email" not in columns
+    assert "phone" not in columns
+    assert "street" not in columns

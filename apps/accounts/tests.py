@@ -92,7 +92,7 @@ def test_signal_endpoint_requires_matching_token_in_production():
 
 
 def test_signal_endpoint_requires_the_timing_page():
-    """SEC-2: the device door is outside the login gate, so it used to accept any
+    """The device door is outside the login gate, so it used to accept any
     authenticated session — a registration desk could write times into the live
     event. A login is not authorisation; the Timing page is."""
     desk = Client()
@@ -111,7 +111,7 @@ def test_signal_endpoint_requires_the_timing_page():
     assert TimingSignal.objects.count() == 1
 
 
-# ----- SEC-4: failed-login throttling -----
+# ----- failed-login throttling -----
 
 @pytest.fixture
 def clean_throttle():
@@ -225,3 +225,235 @@ def test_cannot_delete_last_superuser():
     c.force_login(su)
     c.post(reverse("accounts:user-delete"), {"user": su.pk})
     assert User.objects.filter(pk=su.pk).exists()
+
+
+# --- One host must not be able to walk a user list -------------------
+
+class TestHostThrottle:
+    """The per-(username, IP) counter alone left an address free to try ten
+    passwords against each of a hundred accounts. An address has its own budget."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        from django.core.cache import cache
+        cache.clear()
+        yield
+        cache.clear()
+
+    def test_many_usernames_from_one_address_are_eventually_refused(self, settings):
+        settings.LOGIN_MAX_ATTEMPTS = 10
+        settings.LOGIN_MAX_ATTEMPTS_PER_HOST = 6
+        client = Client()
+        # Six different accounts, one wrong guess each: under the per-pair limit
+        # every time, so nothing here would have tripped before.
+        for i in range(6):
+            client.post(reverse("accounts:login"),
+                        {"username": f"victim{i}", "password": "wrong"})
+        response = client.post(reverse("accounts:login"),
+                               {"username": "victim99", "password": "wrong"})
+        assert response.context["locked_out"] is True
+
+    def test_a_good_password_does_not_clear_the_address_budget(self, settings, django_user_model):
+        settings.LOGIN_MAX_ATTEMPTS_PER_HOST = 3
+        django_user_model.objects.create_user(username="operator", password="Zx9!qwerty-long")
+        client = Client()
+        for i in range(3):
+            client.post(reverse("accounts:login"),
+                        {"username": f"other{i}", "password": "wrong"})
+        client.post(reverse("accounts:login"),
+                    {"username": "operator", "password": "Zx9!qwerty-long"})
+        response = client.post(reverse("accounts:login"),
+                               {"username": "someone", "password": "wrong"})
+        assert response.context["locked_out"] is True
+
+
+# --- Managing accounts -------------------------------
+
+class TestAccountManagement:
+    def test_resetting_your_own_password_does_not_sign_you_out(self, client, django_user_model):
+        admin = django_user_model.objects.create_superuser(
+            username="boss", email="", password="Zx9!qwerty-long")
+        client.force_login(admin)
+        client.post(reverse("accounts:user-update"),
+                    {"user": admin.pk, "password": "Nw7!qwerty-longer"})
+        # Still signed in: set_password rotates the hash the session is signed
+        # against, so without update_session_auth_hash the very next request is
+        # anonymous.
+        assert client.get(reverse("accounts:users")).status_code == 200
+
+    def test_a_deactivated_account_cannot_sign_in(self, client, django_user_model):
+        user = django_user_model.objects.create_user(
+            username="marshal", password="Zx9!qwerty-long")
+        admin = django_user_model.objects.create_superuser(
+            username="boss", email="", password="x")
+        client.force_login(admin)
+        client.post(reverse("accounts:user-set-active"), {"user": user.pk, "active": "0"})
+        user.refresh_from_db()
+        assert user.is_active is False
+        assert django_user_model.objects.filter(pk=user.pk).exists()  # not deleted
+        fresh = Client()
+        fresh.post(reverse("accounts:login"),
+                   {"username": "marshal", "password": "Zx9!qwerty-long"})
+        assert fresh.get("/").status_code == 302  # still anonymous
+
+    def test_the_last_active_superuser_cannot_deactivate_themselves(self, client, django_user_model):
+        admin = django_user_model.objects.create_superuser(
+            username="boss", email="", password="x")
+        client.force_login(admin)
+        client.post(reverse("accounts:user-set-active"), {"user": admin.pk, "active": "0"})
+        admin.refresh_from_db()
+        assert admin.is_active is True
+
+    def test_a_signed_in_non_superuser_is_refused_not_redirected(self, django_user_model):
+        """A redirect to the login page asks "who are you?" of somebody who is
+        already signed in; the answer is "not you"."""
+        django_user_model.objects.create_user(username="plain", password="Zx9!qwerty-long")
+        client = Client()
+        client.login(username="plain", password="Zx9!qwerty-long")
+        response = client.post(reverse("accounts:user-create"),
+                               {"username": "x", "password": "Zx9!qwerty-long"})
+        assert response.status_code == 403
+
+
+# --- who changed what ------------------------------------------------
+
+class TestAuditTrail:
+    """A timekeeper, a marshal and an organiser write to the same rows. Until now
+    nothing recorded which of them did, so a protested result could not be
+    attributed to anybody."""
+
+    @pytest.fixture
+    def audit_file(self, settings, tmp_path):
+        """Point the audit handler at a file this test owns."""
+        import logging
+        from logging.handlers import RotatingFileHandler
+
+        path = tmp_path / "audit.log"
+        settings.AUDIT_LOG_FILE = path
+        settings.AUDIT_LOG_BACKUPS = 5
+        logger = logging.getLogger("apps.audit")
+        handler = RotatingFileHandler(path, encoding="utf-8")
+        handler.setFormatter(logging.Formatter("{asctime} {message}", style="{"))
+        previous, previous_level = logger.handlers, logger.level
+        logger.handlers = [handler]
+        logger.setLevel(logging.INFO)
+        yield path
+        handler.close()
+        logger.handlers, logger.level = previous, previous_level
+
+    def test_a_change_records_who_made_it(self, client, django_user_model, audit_file):
+        from apps.competitions.models import Competition, CompetitionType
+        from apps.timing.models import TimedRun
+        import datetime
+        import json as _json
+
+        user = django_user_model.objects.create_superuser(
+            username="timekeeper", email="", password="x")
+        client.force_login(user)
+        ctype = CompetitionType.objects.create(name="Audited")
+        comp = Competition.objects.create(
+            competition_type=ctype, name="R", date=datetime.date(2026, 5, 1),
+            is_active=True)
+        run = TimedRun.objects.create(competition=comp)
+
+        client.post(reverse("timing:run-status"),
+                    data=_json.dumps({"run_id": run.id, "status": "dsq"}),
+                    content_type="application/json")
+
+        line = audit_file.read_text(encoding="utf-8")
+        assert "user=timekeeper" in line
+        assert "timing:run-status" in line
+        assert f"run_id={run.id}" in line
+        assert "status=dsq" in line
+        # The response code must not read as another `status=`, or a line with a
+        # run status on it has two of them and means neither.
+        assert "[200]" in line
+        assert line.count("status=") == 1
+
+    def test_reading_a_page_is_not_recorded(self, client, django_user_model, audit_file):
+        """Every open browser re-fetches the live views several times a second.
+        Recording that would bury the event and say nothing about it."""
+        user = django_user_model.objects.create_superuser(
+            username="watcher", email="", password="x")
+        client.force_login(user)
+        client.get(reverse("accounts:users"))
+        assert audit_file.read_text(encoding="utf-8") == ""
+
+    def test_a_password_is_never_written_to_the_log(self, client, django_user_model, audit_file):
+        user = django_user_model.objects.create_superuser(
+            username="boss", email="", password="x")
+        client.force_login(user)
+        client.post(reverse("accounts:user-create"),
+                    {"username": "newbie", "password": "Sup3r!secret-value"})
+        written = audit_file.read_text(encoding="utf-8")
+        assert "accounts:user-create" in written
+        assert "username=newbie" in written
+        assert "Sup3r!secret-value" not in written
+        assert "password=***" in written
+
+    def test_the_audit_log_is_superuser_only(self, django_user_model, audit_file):
+        audit_file.write_text("something happened\n", encoding="utf-8")
+        django_user_model.objects.create_user(username="plain", password="Zx9!qwerty-long")
+        plain = Client()
+        plain.login(username="plain", password="Zx9!qwerty-long")
+        assert plain.get(reverse("accounts:audit-log")).status_code == 403
+        assert Client().get(reverse("accounts:audit-log")).status_code == 302  # anonymous
+
+    def test_a_superuser_can_download_the_whole_trail(self, client, django_user_model, audit_file):
+        """Rotated files first, so what comes out is one continuous record rather
+        than the last few megabytes."""
+        audit_file.write_text("newest\n", encoding="utf-8")
+        audit_file.with_name(audit_file.name + ".1").write_text("middle\n", encoding="utf-8")
+        audit_file.with_name(audit_file.name + ".2").write_text("oldest\n", encoding="utf-8")
+        user = django_user_model.objects.create_superuser(
+            username="boss2", email="", password="x")
+        client.force_login(user)
+        response = client.get(reverse("accounts:audit-log"))
+        assert response.status_code == 200
+        body = b"".join(response.streaming_content).decode()
+        assert body.splitlines() == ["oldest", "middle", "newest"]
+        assert "attachment" in response["Content-Disposition"]
+
+    def test_the_device_door_is_recorded_even_though_nobody_is_signed_in(
+            self, settings, audit_file):
+        """timing:signal is the one endpoint outside the login gate. A time
+        arriving from a device is still a change to the event."""
+        import datetime
+        import json as _json
+
+        from apps.competitions.models import Competition, CompetitionType
+        from apps.timing.models import TimingSettings
+
+        settings.TIMING_DEVICE_TOKEN = "device-secret"
+        ctype = CompetitionType.objects.create(name="Doorway")
+        Competition.objects.create(competition_type=ctype, name="R",
+                                   date=datetime.date(2026, 5, 1), is_active=True)
+        TimingSettings.load()
+        Client().post(
+            reverse("timing:signal"),
+            data=_json.dumps({"running_number": 7, "port": 1, "time": "10:00:00.000"}),
+            content_type="application/json",
+            headers={"x-device-token": "device-secret"},
+        )
+        written = audit_file.read_text(encoding="utf-8")
+        assert "timing:signal" in written
+        assert "running_number=7" in written
+        assert "device-secret" not in written   # the header is not a payload field
+
+    def test_an_unreadable_body_does_not_break_the_request(self, client, django_user_model,
+                                                           audit_file, settings):
+        """Reading the request is itself fallible (an over-large body raises
+        RequestDataTooBig). The trail only *observes* — it must never be the
+        reason a request fails."""
+        settings.DATA_UPLOAD_MAX_MEMORY_SIZE = 50
+        user = django_user_model.objects.create_superuser(
+            username="bulk", email="", password="x")
+        client.force_login(user)
+        response = client.post(
+            reverse("timing:input-lock"),
+            data='{"locked": true, "padding": "' + "x" * 5000 + '"}',
+            content_type="application/json",
+        )
+        # Django's own limit answers; the audit line records that it happened.
+        assert response.status_code in (200, 400, 413)
+        assert "timing:input-lock" in audit_file.read_text(encoding="utf-8")

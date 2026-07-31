@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 from asgiref.sync import async_to_sync, sync_to_async
-from django.urls import reverse
+from django.urls import resolve, reverse
 
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
 from apps.participants.models import ClassAssignment, EventEntry, Participant
@@ -307,11 +307,18 @@ def test_cp540_time_normalises_minutes_over_an_hour():
 
 # ----- CP540 reconnect + the device-link alarm -----
 
-def test_cp540_reader_reconnects_after_the_link_drops():
+def test_cp540_reader_reconnects_after_the_link_drops(tmp_path, monkeypatch):
     """A knocked cable used to end the reader thread for good — every later time
     lost with nothing said. It has to keep trying while it is the live device."""
     import socket
-    from . import cp540
+    from . import cp540, ingest
+
+    # The line below is fed to a real reader thread, which records it through
+    # record_signal — from a thread that cannot see this test's transaction, so
+    # the write loses the lock and the signal goes to the recovery file. That
+    # file defaults to the *checkout's* DATA_DIR, so this test was quietly
+    # appending to the developer's own timing_unrecorded.log, once per run.
+    monkeypatch.setattr(ingest, "UNRECORDED_LOG", tmp_path / "unrecorded.log")
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(("127.0.0.1", 0))
@@ -992,7 +999,7 @@ def test_every_view_writes_a_run_time_the_same_way(client):
     """One quantity, one notation. The Manual view, the Auto view and the
     Dashboard used to render plain seconds while results rendered mm:ss.xxx, so
     the same run read three ways depending on which screen you were looking at
-    (UI-5). They all go through calc.format_clock now; this is the pin."""
+. They all go through calc.format_clock now; this is the pin."""
     comp, _ = auto_scenario()
     comp.penalties_by_marshal_posts = True
     comp.save(update_fields=["penalties_by_marshal_posts"])
@@ -1089,7 +1096,7 @@ def test_post_claim_is_exclusive(client):
     assert post_json(client, "timing:marshal-claim", post=1, token="B").json()["ok"] is True
 
 
-# ----- SEC-3: a claim is what authorises a marshal's write -----
+# ----- a claim is what authorises a marshal's write -----
 
 def marshal_client(*page_keys):
     """A signed-in client holding only the given pages — a marshal's phone, which is
@@ -1111,7 +1118,7 @@ def marshal_client(*page_keys):
 
 
 def test_marshal_submit_needs_the_claim_for_that_post(client):
-    """The reproduction from the audit: a device that claimed post 1 could write
+    """A device that claimed post 1 could write
     post 2's penalties, because no write path looked at claim_token."""
     comp, _ = auto_scenario()
     MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
@@ -1615,7 +1622,7 @@ def test_rejected_pairing_leaves_the_dragged_time_on_the_rail(client):
 
 
 # --- Live connection: the socket the operator is trusting -------------------
-# OPS-3/OPS-4. Every live view used to open its own socket that neither showed
+# Every live view used to open its own socket that neither showed
 # its state nor re-fetched after an outage, so a drop left a frozen screen and
 # the signals that arrived meanwhile stayed invisible. The lifecycle now lives in
 # static/js/live_socket.js; these pin the parts the server owns.
@@ -1656,6 +1663,18 @@ def test_every_live_view_shares_one_socket_implementation():
         assert "window.liveSocket(" in source, f"{name} doesn't use the shared socket"
 
 
+def _live_listener(django_user_model, username):
+    """A user allowed to open a live socket.
+
+    The socket is gated on holding a page a live view is rendered on —
+    a login on its own no longer gets you the event's nudges — so a test user
+    needs a role, or to be a superuser.
+    """
+    return django_user_model.objects.create_superuser(
+        username=username, email="", password="x"
+    )
+
+
 def _live_socket_scenario(user, messages):
     """Drive TimingLiveConsumer through a list of client messages, returning what
     it sent back."""
@@ -1685,27 +1704,27 @@ def test_live_socket_answers_a_heartbeat(django_user_model):
     """A socket can die without a close frame (a phone leaving Wi-Fi gets no TCP
     FIN), so the client pings and treats silence as a dead link. Without a reply
     it would tear down a perfectly good connection every 30 s."""
-    user = django_user_model.objects.create_user(username="pinger", password="x")
+    user = _live_listener(django_user_model, "pinger")
     assert _live_socket_scenario(user, [{"action": "ping"}]) == [{"event": "pong"}]
 
 
 def test_live_socket_ignores_anything_else_it_is_sent(django_user_model):
     """The base consumer's receive_json raises, which would drop the socket — and
     the operator's screen with it."""
-    user = django_user_model.objects.create_user(username="babbler", password="x")
+    user = _live_listener(django_user_model, "babbler")
     assert _live_socket_scenario(user, [{"action": "nonsense"}, {"action": "ping"}]) == \
         [None, {"event": "pong"}]
 
 
 def test_a_changed_event_reaches_the_open_views_by_name(django_user_model):
-    """DAT-5's other half: a plain refresh would have every open view quietly
+    """The other half of that: a plain refresh would have every open view quietly
     re-render as a different event, so the name travels with the nudge."""
     from channels.testing import WebsocketCommunicator
 
     from .consumers import TimingLiveConsumer
     from .services import notify_competition_changed
 
-    user = django_user_model.objects.create_user(username="watcher", password="x")
+    user = _live_listener(django_user_model, "watcher")
 
     async def run():
         comm = WebsocketCommunicator(TimingLiveConsumer.as_asgi(), "/ws/timing/live/")
@@ -1717,10 +1736,36 @@ def test_a_changed_event_reaches_the_open_views_by_name(django_user_model):
         await comm.disconnect()
         return message
 
-    assert async_to_sync(run)() == {"event": "competition", "name": "Autumn Slalom"}
+    assert async_to_sync(run)() == {"event": "competition", "name": "Autumn Slalom",
+                                    "deleted": False}
 
 
-# --- OPS-5: the device connection survives a restart ------------------------
+def test_a_deleted_event_reaches_the_open_views_as_a_deletion(django_user_model):
+    """Deleting the current event leaves no current event, so the page has
+    nothing left to render. A page told only that the event "changed" would say
+    it now shows another one, which is the one thing that isn't true."""
+    from channels.testing import WebsocketCommunicator
+
+    from .consumers import TimingLiveConsumer
+    from .services import notify_competition_deleted
+
+    user = _live_listener(django_user_model, "mourner")
+
+    async def run():
+        comm = WebsocketCommunicator(TimingLiveConsumer.as_asgi(), "/ws/timing/live/")
+        comm.scope["user"] = user
+        connected, _ = await comm.connect()
+        assert connected
+        await sync_to_async(notify_competition_deleted)("Autumn Slalom")
+        message = await comm.receive_json_from()
+        await comm.disconnect()
+        return message
+
+    assert async_to_sync(run)() == {"event": "competition", "name": "Autumn Slalom",
+                                    "deleted": True}
+
+
+# --- the device connection survives a restart ------------------------
 # The reader thread dies with the process, so a restart used to leave the CP540
 # still selected on the settings page with nothing reading it and nobody told.
 # TimingSettings.reader_enabled is the bit that outlives the process; asgi.py
@@ -1828,6 +1873,17 @@ def _query_count(client, name):
     return ctx.captured_queries
 
 
+def _query_count_url(client, url):
+    """_query_count for a URL that needs arguments."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as ctx:
+        response = client.get(url)
+    assert response.status_code == 200
+    return ctx.captured_queries
+
+
 def _writes(queries):
     return [
         q["sql"] for q in queries
@@ -1882,7 +1938,7 @@ def test_a_reading_view_still_shows_the_bound_competitor(client):
     assert [r["run"]["bib_number"] for r in rows if r["run"]["bib_number"]]
 
 
-# ----- stage 7: the single-barrier phase, shown rather than guessed -----
+# ----- The single-barrier phase, shown rather than guessed -----
 
 def test_a_two_channel_rig_has_no_phase_to_show():
     comp = make_active_competition()
@@ -1919,21 +1975,768 @@ def test_channel_outside_the_devices_inputs_is_refused(client):
     assert "start_channel" in response.context["form"].errors
 
 
-# ----- stage 7: an empty start order says which piece of setup is missing -----
+# ----- An empty start order says which piece of setup is missing -----
 
 def test_an_empty_start_order_names_what_is_missing(client):
+    """Why the *order* came out empty. "No pattern" is deliberately not one of
+    these — that is the page not applying at all, and it is answered before any
+    of this runs (see test_auto_timing_without_a_pattern_asks_for_one)."""
     comp = make_active_competition()          # classes seeded, none running
+    comp.start_pattern = [{"window": None, "chips": ["counted"]}]
+    comp.save(update_fields=["start_pattern"])
     assert autotiming.serialize(comp)["empty_reason"] == "classes"
 
     comp.classes.filter(name="1").update(is_running=True, run_position=0)
     assert autotiming.serialize(comp)["empty_reason"] == "starters"
 
-    comp.start_pattern = []
-    comp.save(update_fields=["start_pattern"])
-    assert autotiming.serialize(comp)["empty_reason"] == "pattern"
+    comp.classes.filter(name="1").update(practice_runs=0, counted_runs=0)
+    make_participant(comp.competition_type, 1, comp)
+    ClassAssignment.objects.create(
+        participant=Participant.objects.get(first_name="Bib"),
+        competition_class=comp.classes.get(name="1"))
+    assert autotiming.serialize(comp)["empty_reason"] == "runs"
 
 
 def test_a_start_order_with_starters_reports_no_reason():
     comp, _ = auto_scenario()
     data = autotiming.serialize(comp)
     assert data["items"] and data["empty_reason"] == ""
+
+
+# --- The one open write endpoint ------------------------------------
+# timing:signal is csrf_exempt because a physical device carries no token. That
+# also made it reachable cross-site by a logged-in operator's browser, with
+# nothing but the session cookie's SameSite default in the way — a browser's
+# choice, not ours. A device is identified by its token; a session is CSRF-checked.
+
+class TestSignalDoor:
+    def test_a_session_post_without_a_csrf_token_is_refused(self, django_user_model):
+        from django.test import Client
+
+        TimingSettings.load()
+        admin = django_user_model.objects.create_superuser(
+            username="op-nocsrf", email="", password="x")
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(admin)
+        response = client.post(
+            reverse("timing:signal"),
+            data=json.dumps({"running_number": 1, "port": 1, "time": "10:00:00.000"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 403
+        assert not TimingSignal.objects.exists()
+
+    def test_a_device_token_needs_no_csrf_token(self, settings, django_user_model):
+        from django.test import Client
+
+        settings.TIMING_DEVICE_TOKEN = "s3cret-device-token"
+        TimingSettings.load()
+        client = Client(enforce_csrf_checks=True)
+        response = client.post(
+            reverse("timing:signal"),
+            data=json.dumps({"running_number": 1, "port": 1, "time": "10:00:00.000"}),
+            content_type="application/json",
+            headers={"x-device-token": "s3cret-device-token"},
+        )
+        assert response.status_code == 200
+        assert TimingSignal.objects.count() == 1
+
+    def test_a_wrong_device_token_is_refused(self, settings):
+        from django.test import Client
+
+        settings.TIMING_DEVICE_TOKEN = "s3cret-device-token"
+        settings.DEBUG = False
+        TimingSettings.load()
+        response = Client().post(
+            reverse("timing:signal"),
+            data=json.dumps({"running_number": 1, "port": 1, "time": "10:00:00.000"}),
+            content_type="application/json",
+            headers={"x-device-token": "wrong"},
+        )
+        assert response.status_code == 401
+        assert not TimingSignal.objects.exists()
+
+
+# --- A marshal's phone writes into a JSONField ------------------------
+
+def test_a_marshal_detail_blob_is_bounded_and_reshaped(client):
+    """`detail` arrives as free JSON from a phone, lands in a JSONField and is
+    then re-downloaded by every open Auto timing page on every nudge."""
+    from apps.competitions.models import MarshalPost
+
+    ctype = CompetitionType.objects.create(
+        name="Marshalled", penalties_enabled=True, pylon_penalty=5,
+        task_penalty=10, stop_line_penalty=20,
+    )
+    competition = Competition.objects.create(
+        competition_type=ctype, name="Race", date=datetime.date(2026, 5, 1),
+        is_active=True, penalties_by_marshal_posts=True,
+    )
+    MarshalPost.objects.create(competition=competition, number=1, tasks="1")
+    run = TimedRun.objects.create(competition=competition)
+
+    huge = {
+        "tasks": {str(i): {"pylons": 99999} for i in range(5000)},
+        "stop_line": True,
+        "junk": "x" * 100000,
+    }
+    client.post(reverse("timing:marshal-submit"),
+                data=json.dumps({"run_id": run.id, "post": 1, "detail": huge}),
+                content_type="application/json")
+
+    stored = MarshalPenalty.objects.get(timed_run=run).detail
+    assert set(stored) == {"tasks", "stop_line"}          # unknown keys dropped
+    assert len(stored["tasks"]) <= 200                     # bounded
+    assert all(cell["pylons"] <= 999 for cell in stored["tasks"].values())
+
+
+# --- The live socket carries event news, so it needs a page ----------
+
+def test_a_login_alone_does_not_open_the_live_socket(django_user_model):
+    """The consumers checked is_authenticated and nothing else, so any
+    account at all could listen in on a running event."""
+    from channels.testing import WebsocketCommunicator
+
+    from .consumers import TimingLiveConsumer
+
+    user = django_user_model.objects.create_user(username="outsider", password="x")
+
+    async def run():
+        comm = WebsocketCommunicator(TimingLiveConsumer.as_asgi(), "/ws/timing/live/")
+        comm.scope["user"] = user
+        connected, _ = await comm.connect()
+        if connected:
+            await comm.disconnect()
+        return connected
+
+    assert async_to_sync(run)() is False
+
+
+# --- Auto timing is the start order, so it needs one ------------------
+# With no start pattern the page used to render its whole apparatus around an
+# empty order — and once times existed, one flame-bordered "unattributed time"
+# alarm per run, because every recorded run is an orphan when there are no slots
+# to bind it to. Seventy alarms and nothing saying why. It now says why.
+
+def _competition_without_a_pattern():
+    ctype = CompetitionType.objects.create(name="Patternless")
+    competition = Competition.objects.create(
+        competition_type=ctype, name="R", date=datetime.date(2026, 5, 1),
+        is_active=True,
+    )
+    cclass = competition.classes.first()
+    cclass.is_running, cclass.run_position = True, 0
+    cclass.save()
+    return competition, cclass
+
+
+def test_auto_timing_without_a_pattern_asks_for_one(client):
+    competition, _ = _competition_without_a_pattern()
+    assert competition.start_pattern_blocks() == []
+    response = client.get(reverse("timing:auto"))
+    assert response.status_code == 200
+    assert response.context["needs_pattern"] is True
+    body = response.content.decode()
+    assert reverse("competitions:runorder") in body
+    # …and none of the timing apparatus is on the page.
+    for marker in ('id="auto-tiles"', 'id="auto-order-list"', 'id="ignored-box"',
+                   'js/auto_timing.js'):
+        assert marker not in body, f"{marker} is still rendered without a pattern"
+
+
+def test_auto_timing_without_a_pattern_shows_no_alarms_for_recorded_runs(client):
+    """The state the real database was found in: runs recorded, no pattern. Every
+    one of them is an orphan, and the page used to render each as an alarm."""
+    competition, _ = _competition_without_a_pattern()
+    TimingSettings.load()
+    for i in range(3):
+        TimedRun.objects.create(
+            competition=competition,
+            start_signal=TimingSignal.objects.create(
+                competition=competition, running_number=i + 1, port=1,
+                device_time=datetime.time(10, i, 0)),
+        )
+    body = client.get(reverse("timing:auto")).content.decode()
+    assert "auto-orphan" not in body
+    assert reverse("competitions:runorder") in body
+
+
+def test_a_pattern_brings_the_timing_page_back(client):
+    competition, _ = _competition_without_a_pattern()
+    competition.start_pattern = [{"window": None, "chips": ["counted"]}]
+    competition.save(update_fields=["start_pattern"])
+    response = client.get(reverse("timing:auto"))
+    assert response.context["needs_pattern"] is False
+    assert 'id="auto-tiles"' in response.content.decode()
+
+
+def test_the_other_screens_do_not_need_a_pattern(client):
+    """Manual timing, the dashboard and the results read the entries and their
+    classes, never the pattern. Losing the default must not touch them."""
+    competition, cclass = _competition_without_a_pattern()
+    participant = make_participant(competition.competition_type, 1, competition)
+    ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+    for name in ("timing:manual", "timing:dashboard", "timing:arrangement",
+                 "timing:dashboard-state", "results:index"):
+        assert client.get(reverse(name)).status_code == 200, name
+    state = client.get(reverse("timing:dashboard-state")).json()
+    # The runs this competitor owes are known from their class alone.
+    assert state["progress"]["expected"] == (cclass.practice_runs + cclass.counted_runs)
+
+
+# --- a run that crosses midnight -------------------------------------
+
+class TestMidnight:
+    """Both device times are clock *times*, not instants, so 23:59:59 → 00:00:02
+    subtracts to −86 397 s. The run simply had no time, and nobody was told which
+    of the two nights it happened on. The same wrap happens on a CP540 whose
+    internal clock rolls at 24 h."""
+
+    def test_a_run_across_midnight_is_measured(self):
+        assert calc.run_time(datetime.time(23, 59, 59),
+                             datetime.time(0, 0, 2), 3) == Decimal("3.000")
+
+    def test_a_run_across_midnight_keeps_its_fractions(self):
+        assert calc.run_time(datetime.time(23, 59, 58, 500000),
+                             datetime.time(0, 0, 1, 250000), 3) == Decimal("2.750")
+
+    def test_a_pairing_too_far_apart_is_still_refused(self):
+        """A finish from this morning on an afternoon start is a wrong pairing,
+        not a wrap — it must not come back as twenty-three hours."""
+        assert calc.run_time(datetime.time(15, 0, 0), datetime.time(9, 0, 0), 3) is None
+
+    def test_an_ordinary_run_is_unaffected(self):
+        assert calc.run_time(datetime.time(10, 0, 0),
+                             datetime.time(10, 0, 42, 270000), 3) == Decimal("42.270")
+
+
+# --- format_clock truncates, like everything else --------------------
+
+class TestClockTruncates:
+    """The app's rule is "as fast as the device fully resolved, never faster".
+    format_clock used `f"{x:.3f}"`, which rounds — invisible on an already-
+    truncated value, which is why it survived, but it is also handed sums and
+    differences (run + penalty, gap to the winner)."""
+
+    @pytest.mark.parametrize("value,precision,expected", [
+        ("12.9996", 3, "00:12.999"),
+        ("12.3456", 3, "00:12.345"),
+        ("0.9999", 3, "00:00.999"),
+        ("59.9999", 2, "00:59.99"),
+        ("75.5", 2, "01:15.50"),
+        ("0", 3, "00:00.000"),
+        ("-3.4567", 3, "-00:03.456"),
+    ])
+    def test_it_never_rounds_up(self, value, precision, expected):
+        assert calc.format_clock(Decimal(value), precision) == expected
+
+
+# --- a recorded time may not vanish from under its run ---------------
+
+def test_deleting_a_signal_a_run_uses_is_refused():
+    """SET_NULL silently blanked the run's time: the row stayed, the measurement
+    went, and nothing said so."""
+    from django.db.models import RestrictedError
+
+    ctype = CompetitionType.objects.create(name="Protected")
+    competition = Competition.objects.create(
+        competition_type=ctype, name="R", date=datetime.date(2026, 5, 1), is_active=True)
+    signal = TimingSignal.objects.create(
+        competition=competition, running_number=1, port=1,
+        device_time=datetime.time(10, 0, 0))
+    run = TimedRun.objects.create(competition=competition, start_signal=signal)
+    with pytest.raises(RestrictedError):
+        signal.delete()
+    run.refresh_from_db()
+    assert run.start_signal_id == signal.id
+
+
+def test_deleting_the_whole_competition_still_works():
+    """RESTRICT rather than PROTECT precisely so this case survives: both tables
+    cascade from the competition, and that has to keep working."""
+    ctype = CompetitionType.objects.create(name="Cascade")
+    competition = Competition.objects.create(
+        competition_type=ctype, name="R", date=datetime.date(2026, 5, 1))
+    signal = TimingSignal.objects.create(
+        competition=competition, running_number=1, port=1,
+        device_time=datetime.time(10, 0, 0))
+    TimedRun.objects.create(competition=competition, start_signal=signal)
+    competition.delete()
+    assert not TimingSignal.objects.filter(pk=signal.pk).exists()
+
+
+# --- a reorder may not repeat a slot --------------------------------
+
+def test_a_reorder_drops_repeats(client):
+    """A key twice over puts one competitor in two places; ordered_slots resolves
+    that by silently dropping the second, so the saved order isn't what was sent."""
+    competition, _cclass = _competition_with_field(3)
+    keys = [slot["key"] for slot in autotiming.computed_slots(competition)]
+    assert len(keys) >= 2
+    client.post(reverse("timing:auto-reorder"),
+                data=json.dumps({"order": [keys[1], keys[0], keys[1], "not-a-key"]}),
+                content_type="application/json")
+    competition.refresh_from_db()
+    assert competition.auto_timing_order == [keys[1], keys[0]]
+
+
+# --- the rule held for *manual* assignment only ----------------------
+# AgeAssignment resolves a participant's class by walking the running classes, and
+# it asked for them inside the loop over the field: 34 / 64 / 114 queries at 20 /
+# 50 / 100 starters, against a flat 15 for manual. Re-paid by every open browser
+# on every incoming time. The test above only ever exercised manual assignment,
+# which is why nothing noticed.
+
+def _age_based_field(size):
+    comp = make_active_competition()
+    comp.assignment_method = "age"
+    comp.start_pattern = [{"window": None, "chips": ["practice", "counted"]}]
+    comp.save(update_fields=["assignment_method", "start_pattern"])
+    cclass = comp.classes.get(name="1")
+    cclass.is_running, cclass.run_position = True, 1
+    cclass.practice_runs, cclass.counted_runs = 1, 2
+    cclass.age_from, cclass.age_to = 0, 99
+    cclass.save()
+    for bib in range(1, size + 1):
+        make_participant(comp.competition_type, bib, comp)
+    return comp
+
+
+@pytest.mark.parametrize("name", LIVE_ENDPOINTS)
+def test_live_endpoint_cost_is_flat_under_age_assignment(client, name):
+    _age_based_field(5)
+    small = len(_query_count(client, name))
+    comp = Competition.get_current()
+    for bib in range(6, 46):
+        make_participant(comp.competition_type, bib, comp)
+    large = len(_query_count(client, name))
+    # Must not *grow*. Not "must be equal": a five-starter event takes a couple of
+    # conditional branches a full one doesn't, so the small case can legitimately
+    # cost slightly more. What matters is that nine times the field is not nine
+    # times the queries — it used to be 34 / 64 / 114 at 20 / 50 / 100.
+    assert large <= small, (
+        f"{name} costs {small} queries for 5 age-assigned starters and {large} "
+        f"for 45 — the class lookup is back inside the loop over the field"
+    )
+
+
+def test_resolving_a_whole_field_reads_the_classes_once(django_assert_num_queries):
+    """Where the cost actually was: starters_by_class walks the field and asked
+    the assignment method for each participant's classes, and the age method
+    answered by re-reading the running classes every time."""
+    comp = _age_based_field(30)
+    comp = Competition.objects.get(pk=comp.pk)
+    with django_assert_num_queries(3):     # classes, entries, assignments prefetch
+        comp.starters_by_class()
+
+
+# --- "export everything" re-read the event once per class ------------
+
+def test_export_all_does_not_re_read_the_event_per_class(client):
+    """RunIndex exists precisely so an event's runs are read once. export-all
+    built one per section, along with the entries, the starters and the column
+    vocabulary: 42 queries for one class and 137 for six."""
+    comp = make_active_competition()
+    comp.start_pattern = [{"window": None, "chips": ["practice", "counted"]}]
+    comp.save(update_fields=["start_pattern"])
+    for i, name in enumerate(["1", "2", "3", "4", "5", "6"]):
+        cc = comp.classes.get(name=name)
+        cc.is_running, cc.run_position = True, i
+        cc.practice_runs, cc.counted_runs = 1, 2
+        cc.save()
+    first = comp.classes.get(name="1")
+    for bib in range(1, 11):
+        participant = make_participant(comp.competition_type, bib, comp)
+        ClassAssignment.objects.create(participant=participant, competition_class=first)
+
+    one = len(_query_count_url(
+        client, reverse("results:export-class", args=[first.pk])))
+    everything = len(_query_count_url(client, reverse("results:export-all")))
+    # Six classes plus the Overall tables, for well under twice one class.
+    assert everything < one * 2, (
+        f"one class costs {one} queries and all six cost {everything} — the "
+        f"event is being re-read per table"
+    )
+
+
+# --- the live path does not want the device log ----------------------
+
+def test_the_device_link_check_does_not_copy_the_log():
+    """link_state is asked on every live refresh of both timing pages, by every
+    open browser. It used to call snapshot(), which copies the whole 400-entry
+    ring buffer to read two fields out of it."""
+    from apps.timing import cp540
+
+    for i in range(50):
+        cp540.reader._add_log(f"line {i}")
+    state = cp540.reader.state()
+    assert "log" not in state
+    assert "status" in state and "error" in state
+    assert len(cp540.reader.snapshot()["log"]) == 50   # still there for the settings page
+
+
+def test_the_device_log_survives_being_read_while_written():
+    """`list(deque)` raises RuntimeError if the deque is mutated while it
+    iterates, and the reader thread appends whenever the rig fires."""
+    import threading
+
+    from apps.timing import cp540
+
+    stop = threading.Event()
+
+    def writer():
+        while not stop.is_set():
+            cp540.reader._add_log("from the rig")
+
+    thread = threading.Thread(target=writer, daemon=True)
+    thread.start()
+    try:
+        for _ in range(200):
+            cp540.reader.snapshot()          # would raise without the lock
+    finally:
+        stop.set()
+        thread.join(timeout=2)
+
+
+# --- reconcile scaled its own SQL with the event ---------------------
+
+def test_reconcile_does_not_send_every_placed_signal_back(client):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    """It pulled every placed signal id into Python and sent them all again as an
+    IN-list — two ids per run, so 1200 parameters at 600 runs — on the timing
+    rig's own thread, for every incoming signal."""
+    comp, _cclass = _competition_with_field(20)
+    settings_row = TimingSettings.load()
+    with CaptureQueriesContext(connection) as ctx:
+        arrangement.reconcile(comp, settings_row)
+    for query in ctx.captured_queries:
+        assert query["sql"].count("%s") < 50 and query["sql"].count("?") < 50, (
+            "reconcile is building an IN-list that grows with the event"
+        )
+
+
+# --- the marshal boxes are sent once, not once per slot --------------
+# Every field of a post's box is derived from the *post* until somebody records
+# something against the run: the number, the tasks it watches, whether it judges
+# the stop line. So for a field of 200 it was the same object written out 600
+# times — at four posts watching six tasks each, 958 KiB of a 1.34 MiB payload,
+# re-downloaded by every open browser on every incoming time.
+#
+# The wire changed; the screen must not have. These tests are about that: what the
+# page reconstructs (`item.marshals || state.posts`, see auto_timing.js) has to
+# equal what the old payload put in `item.marshals`, item for item, in every
+# configuration.
+
+def _marshal_competition(posts_spec, starters=4):
+    """A marshal-mode competition. `posts_spec` is [(number, tasks, stop_line)]."""
+    comp = make_active_competition()
+    comp.penalties_by_marshal_posts = True
+    comp.start_pattern = [{"window": None, "chips": ["practice", "counted"]}]
+    comp.save(update_fields=["penalties_by_marshal_posts", "start_pattern"])
+    cclass = comp.classes.get(name="1")
+    cclass.is_running, cclass.run_position = True, 1
+    cclass.practice_runs, cclass.counted_runs = 1, 1
+    cclass.save()
+    for bib in range(1, starters + 1):
+        participant = make_participant(comp.competition_type, bib, comp)
+        ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+    for number, tasks, stop_line in posts_spec:
+        MarshalPost.objects.create(competition=comp, number=number, tasks=tasks,
+                                   handles_stop_line=stop_line)
+    return comp, cclass
+
+
+def _as_the_page_sees_it(state):
+    """What auto_timing.js renders per item: its own boxes, or the shared blank."""
+    return [item["marshals"] or state["posts"] for item in state["items"]]
+
+
+def _boxes_the_old_way(competition, state):
+    """What `marshals` held before the trim: _marshals() for every item."""
+    posts = list(competition.marshal_posts.all())
+    runs = {r.id: r for r in autotiming.all_runs(competition)}
+    out = []
+    for item in state["items"]:
+        run = runs.get(item["run_id"])
+        stored = ({mp.marshal_post_id: mp for mp in run.marshal_penalties.all()}
+                  if run else {})
+        out.append(autotiming._marshals(run, posts, stored))
+    return out
+
+
+@pytest.mark.parametrize("posts_spec", [
+    [],                                              # no posts at all
+    [(1, "1-3", True)],                              # one post, stop line
+    [(1, "1-3", True), (2, "4-6", False)],           # two, different tasks
+    [(1, "", True), (2, "1", False), (3, "2-9", False)],   # one watching nothing
+])
+def test_the_page_reconstructs_exactly_the_boxes_it_used_to_be_sent(client, posts_spec):
+    comp, _cclass = _marshal_competition(posts_spec)
+    signal_in(comp, 1, "10:00:00.000", running=1)
+    signal_in(comp, 2, "10:00:42.000", running=2)
+    signal_in(comp, 1, "10:01:00.000", running=3)
+
+    state = autotiming.serialize(comp)
+    assert _as_the_page_sees_it(state) == _boxes_the_old_way(comp, state)
+
+
+def test_the_reconstruction_holds_once_marshals_have_recorded_things(client):
+    """The interesting half: some runs have penalties, some don't, one post has
+    submitted and another hasn't, and there is per-task detail to resume from."""
+    comp, _cclass = _marshal_competition([(1, "1-3", True), (2, "4-6", False)])
+    for pair in range(3):
+        signal_in(comp, 1, f"10:0{pair}:00.000", running=pair * 2 + 1)
+        signal_in(comp, 2, f"10:0{pair}:42.000", running=pair * 2 + 2)
+
+    runs = list(TimedRun.objects.filter(competition=comp).order_by("id"))
+    assert len(runs) >= 3
+    posts = list(comp.marshal_posts.all())
+    # One run judged by both posts, one by a single post, the rest untouched.
+    MarshalPenalty.objects.create(
+        timed_run=runs[0], marshal_post=posts[0], pylon_count=2, task_count=1,
+        stopline_count=1, submitted=True,
+        detail={"tasks": {"1": {"pylons": 2}, "2": {"task": True}}, "stop_line": True})
+    MarshalPenalty.objects.create(
+        timed_run=runs[0], marshal_post=posts[1], pylon_count=0, submitted=False,
+        detail={"tasks": {}, "stop_line": False})
+    MarshalPenalty.objects.create(
+        timed_run=runs[1], marshal_post=posts[1], pylon_count=3, submitted=True,
+        detail={"tasks": {"5": {"pylons": 3}}, "stop_line": False})
+
+    state = autotiming.serialize(comp)
+    assert _as_the_page_sees_it(state) == _boxes_the_old_way(comp, state)
+
+    # …and the runs that were judged carry their own boxes rather than the blank.
+    by_run = {item["run_id"]: item for item in state["items"] if item["run_id"]}
+    assert by_run[runs[0].id]["marshals"] is not None
+    assert by_run[runs[0].id]["marshals"][0]["pylons"] == 2
+    assert by_run[runs[0].id]["marshals"][0]["submitted"] is True
+    assert by_run[runs[1].id]["marshals"][1]["pylons"] == 3
+    # Whatever else got a run, nothing was recorded against it, so it sends null.
+    judged = {runs[0].id, runs[1].id}
+    untouched = [i for rid, i in by_run.items() if rid not in judged]
+    assert untouched, "the scenario needs a run nobody judged"
+    assert all(item["marshals"] is None for item in untouched)
+
+
+def test_a_partly_judged_run_still_ships_every_post(client):
+    """Post 1 recorded something, post 2 didn't: the run must still carry a box
+    for *both*, or the second post's box would silently disappear from the tile."""
+    comp, _cclass = _marshal_competition([(1, "1-3", True), (2, "4-6", False)])
+    signal_in(comp, 1, "10:00:00.000", running=1)
+    run = TimedRun.objects.filter(competition=comp).first()
+    MarshalPenalty.objects.create(
+        timed_run=run, marshal_post=comp.marshal_posts.first(), pylon_count=1)
+
+    state = autotiming.serialize(comp)
+    boxes = next(i["marshals"] for i in state["items"] if i["run_id"] == run.id)
+    assert [b["number"] for b in boxes] == [1, 2]
+    assert boxes[0]["entered"] is True and boxes[1]["entered"] is False
+
+
+def test_the_blank_template_is_a_real_box_not_a_stub(client):
+    """`posts` used to be [{number}] and is now the whole blank box, because the
+    page renders it. It must carry the tasks each post watches and its stop-line
+    flag, or an upcoming competitor's tile would come out empty."""
+    comp, _cclass = _marshal_competition([(1, "1-3", True), (2, "4-6", False)])
+    state = autotiming.serialize(comp)
+    first, second = state["posts"]
+    assert first["number"] == 1 and second["number"] == 2
+    assert [row["task"] for row in first["detail"]["tasks"]] == [1, 2, 3]
+    assert [row["task"] for row in second["detail"]["tasks"]] == [4, 5, 6]
+    assert first["detail"]["handles_stop_line"] is True
+    assert second["detail"]["handles_stop_line"] is False
+    assert first["pylons"] == 0 and first["entered"] is False
+
+
+def test_with_no_posts_there_is_nothing_to_render(client):
+    """The page guards on `state.posts.length`, so the empty case has to stay
+    empty rather than becoming a list of nothing."""
+    comp, _cclass = _marshal_competition([])
+    signal_in(comp, 1, "10:00:00.000", running=1)
+    state = autotiming.serialize(comp)
+    assert state["posts"] == []
+    assert all(item["marshals"] is None for item in state["items"])
+
+
+def test_the_payload_no_longer_grows_with_the_number_of_posts(client):
+    """What the trim was for: `marshals` was 94% of a 1.34 MiB payload at four
+    posts, and every open browser re-downloaded it on every incoming time."""
+    import json as _json
+
+    from django.core.serializers.json import DjangoJSONEncoder
+
+    sizes = {}
+    for count in (0, 4):
+        # The type is PROTECTed by its competitions *and* its participants, and
+        # its name is unique — so the second pass needs all three gone.
+        Competition.objects.all().delete()
+        Participant.objects.all().delete()
+        CompetitionType.objects.all().delete()
+        spec = [(n, "1-6", n == 1) for n in range(1, count + 1)]
+        comp, _cclass = _marshal_competition(spec, starters=25)
+        for bib in range(1, 11):
+            signal_in(comp, 1, f"10:{bib:02d}:00.000", running=bib * 2 - 1)
+            signal_in(comp, 2, f"10:{bib:02d}:42.000", running=bib * 2)
+        # The penalty labels are lazy translation proxies, as they are on the wire.
+        sizes[count] = len(_json.dumps(autotiming.serialize(comp),
+                                       cls=DjangoJSONEncoder))
+    assert sizes[4] < sizes[0] * 1.1, (
+        f"four posts cost {sizes[4]} bytes against {sizes[0]} with none — the "
+        f"boxes are being written out per item again"
+    )
+
+
+# --- a login is not authorisation ------------------------------------
+#
+# The reason this reads as a sweep rather than a case:
+# the shared `client` fixture is a **superuser**, so almost every view test in
+# this suite proves nothing whatever about access control. Four endpoints are
+# reachable from two pages at once (the marshal endpoints), and one is reachable
+# from outside the gate entirely (timing:signal), which means each has to decide
+# for itself who is calling. Each of those decisions needs a test that a
+# *scoped* role is refused — and it needs to be a sweep, because the failure
+# mode is the fifth endpoint somebody adds next to the four.
+
+# Endpoint -> a payload that would otherwise do something. Every one of these is
+# a timekeeper's action offered on a page a marshal can also open.
+TIMEKEEPER_ONLY = {
+    "timing:marshal-unlock": {"post": 1, "run_id": None},
+    "timing:marshal-lock": {"post": 1, "run_id": None},
+    "timing:marshal-lock-all": {"run_id": None},
+    "timing:marshal-task-edit": {"post": 1, "run_id": None, "task": 1, "pylons": 2},
+}
+
+
+@pytest.mark.parametrize("endpoint", sorted(TIMEKEEPER_ONLY))
+def test_a_marshal_cannot_do_a_timekeepers_job(endpoint):
+    """Marshal Posts and Timing grant the same URLs, so the access gate cannot
+    tell the two roles apart — these views draw the line themselves."""
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+
+    body = dict(TIMEKEEPER_ONLY[endpoint], run_id=run.id)
+    phone = marshal_client("marshal_posts")
+    assert post_json(phone, endpoint, **body).status_code == 403, endpoint
+
+    # …and the timekeeper, holding the Timing page, is not refused.
+    desk = marshal_client("timing")
+    assert post_json(desk, endpoint, **body).status_code != 403, endpoint
+
+
+def test_every_timekeeper_endpoint_is_covered_by_the_sweep():
+    """The list above is only worth having if it is the whole list. Every view
+    that calls _timekeeper_required has to appear in it, so adding a fifth
+    without a test fails here rather than in a year."""
+    import inspect
+
+    from apps.timing import views
+
+    guarded = {
+        name for name, fn in vars(views).items()
+        if inspect.isfunction(fn) and fn.__module__ == views.__name__
+        and name != "_timekeeper_required"          # the guard itself
+        and "_timekeeper_required" in inspect.getsource(fn)
+    }
+    # url name -> view function name, for the ones the sweep covers.
+    covered = {resolve(reverse(name)).func.__name__ for name in TIMEKEEPER_ONLY}
+    assert guarded <= covered, f"not swept: {sorted(guarded - covered)}"
+
+
+def test_the_open_signal_endpoint_still_asks_who_is_calling():
+    """timing:signal is the one ungated URL (a device cannot log in), so it
+    authorises itself: a *session*-authenticated caller must hold the Timing
+    page. A signed-in user without it is refused, not served."""
+    comp, _ = auto_scenario()
+    settings_row = TimingSettings.load()
+    settings_row.device = TimingSettings.Device.SIMULATOR
+    settings_row.save(update_fields=["device"])
+
+    body = {"running_number": 1, "port": 1, "time": "10:00:00.000"}
+    phone = marshal_client("marshal_posts")
+    assert post_json(phone, "timing:signal", **body).status_code == 403
+    assert not TimingSignal.objects.exists()
+
+    desk = marshal_client("timing")
+    assert post_json(desk, "timing:signal", **body).status_code == 200
+    assert TimingSignal.objects.count() == 1
+
+
+# --- no start pattern, but runs already recorded ----------------------
+
+def test_recorded_runs_survive_a_competition_with_no_start_pattern(client):
+    """The state the real database is in, and the one nobody had a test for.
+
+    A pattern is optional: an event can be timed entirely on the Manual
+    view, and Auto timing then replaces itself with a sentence. What must not
+    happen is that the *runs* become unreachable — they are the event. So with
+    times recorded and no pattern at all, the Manual view, the results and the
+    Dashboard all still have to answer.
+    """
+    comp, cls = auto_scenario()
+    comp.start_pattern = []
+    comp.save(update_fields=["start_pattern"])
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    signal_in(comp, 1, "10:00:42.500", running=2)
+
+    # Auto timing says what is missing and renders none of its apparatus…
+    auto = client.get(reverse("timing:auto"))
+    assert auto.context["needs_pattern"] is True
+    assert b'id="autotiming"' not in auto.content
+
+    # …while everything that reads the runs is unaffected.
+    assert client.get(reverse("timing:manual")).status_code == 200
+    arrangement = client.get(reverse("timing:arrangement")).json()
+    assert any(row.get("run", {}).get("id") == run.id for row in arrangement["rows"])
+    assert client.get(reverse("timing:dashboard")).status_code == 200
+    assert client.get(reverse("results:class", args=[cls.pk])).status_code == 200
+
+
+def test_a_pattern_can_be_added_after_times_are_recorded(client):
+    """The other half: an operator who starts on Manual and switches to Auto
+    mid-event. The runs already recorded must bind to the new order, not be
+    stranded beside it."""
+    comp, _ = auto_scenario()
+    comp.start_pattern = []
+    comp.save(update_fields=["start_pattern"])
+    signal_in(comp, 1, "10:00:00.000", running=1)
+
+    comp.start_pattern = [{"window": None, "chips": ["counted"]}]
+    comp.save(update_fields=["start_pattern"])
+
+    state = client.get(reverse("timing:auto-state")).json()
+    assert state["items"], "the start order came back empty"
+    assert any(item.get("run_id") for item in state["items"]), (
+        "a run recorded before the pattern existed did not bind to it"
+    )
+
+
+# --- the gate itself, from a role that should not get through ----------------
+#
+# The sweep above covers the endpoints two pages share. These two cover the other
+# shape: a page key that grants nothing here at all, and the one URL that sits
+# outside the gate entirely.
+
+def test_a_results_only_role_cannot_read_the_live_arrangement():
+    comp, _ = auto_scenario()
+    reader = marshal_client("results")
+    assert reader.get(reverse("timing:arrangement")).status_code == 403
+    assert reader.get(reverse("timing:auto-state")).status_code == 403
+
+
+def test_a_participants_only_role_cannot_inject_a_timing_signal():
+    """timing:signal is pages.OPEN — a device cannot log in, so the gate lets the
+    URL through and the view authorises the caller itself. A session that holds
+    only the Participants page is a person, not a device, and must be refused."""
+    comp, _ = auto_scenario()
+    TimingSettings.load()
+    desk = marshal_client("participants")
+
+    response = post_json(desk, "timing:signal",
+                         running_number=1, port=1, time="10:00:00.000")
+
+    assert response.status_code == 403
+    assert not TimingSignal.objects.filter(running_number=1, port=1).exists()

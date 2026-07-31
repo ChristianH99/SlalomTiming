@@ -40,15 +40,6 @@ RUN_TYPE_SHORT = {PRACTICE: "P", COUNTED: "C"}
 # the preview expand into something enormous.
 MAX_WINDOW = 99
 
-# What a brand-new competition starts with: one block, the whole field at once,
-# a practice run and then two counted ones — an ordinary club slalom, and exactly
-# the runs CompetitionClass's own defaults grant (practice_runs=1, counted_runs=2).
-# A competition used to be created with *no* pattern, and a pattern that schedules
-# nothing means start_lists() returns nothing: an empty Auto timing start order,
-# zero expected runs on the dashboard, and no page saying why. The default is a
-# starting point, not a constraint — the Run order page rewrites it.
-DEFAULT_BLOCKS = ({"window": None, "chips": [PRACTICE, COUNTED, COUNTED]},)
-
 # Upper bound on the preview's made-up starters. Preview-only — never stored.
 MAX_DUMMY_STARTERS = 200
 
@@ -91,12 +82,6 @@ class Slot:
 
     def label(self):
         return f"#{self.starter.bib} {RUN_TYPE_SHORT[self.run_type]}{self.run_number}"
-
-
-def default_pattern():
-    """A fresh copy of DEFAULT_BLOCKS, safe to store on a model instance."""
-    return [{"window": block["window"], "chips": list(block["chips"])}
-            for block in DEFAULT_BLOCKS]
 
 
 def parse(data):

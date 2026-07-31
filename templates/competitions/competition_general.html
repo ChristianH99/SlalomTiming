@@ -1,13 +1,17 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load static i18n %}
 {% block title %}{% trans "General" %} – Slalom Timing{% endblock %}
 {% block topbar_title %}{% trans "General" %}{% endblock %}
 {% block content %}
   <h1 class="page-heading">{% trans "General" %}</h1>
   <p class="hint">{% blocktrans with name=object.name %}Basic details for <strong>{{ name }}</strong>.{% endblocktrans %}</p>
-  <form method="post" data-unsaved-guard>
+  <form method="post" data-unsaved-guard id="general-form">
     {% csrf_token %}
     <input type="hidden" name="next" value="">
+    {% comment %}Set by the dialog below. The view refuses a type change that would
+    drop registrations until this arrives, so a stale page cannot skip the
+    question.{% endcomment %}
+    <input type="hidden" name="confirm_type_change" id="confirm-type-change" value="">
     {{ form.non_field_errors }}
     <p>
       {{ form.competition_type.label_tag }}
@@ -29,4 +33,30 @@
       <button class="button" type="submit">{% trans "Save" %}</button>
     </div>
   </form>
+
+  {% comment %}A registration belongs to one discipline, so changing the type
+  deletes every entry that doesn't fit — with it goes each of those competitors'
+  bibs, and the identity of any time recorded under them. The view counts what
+  would go and refuses without confirm_type_change; this dialog is what it opens
+  with.{% endcomment %}
+  <div class="modal-overlay" id="type-change-modal" {% if not confirm_type_change %}hidden{% endif %}>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="type-change-title">
+      <h2 class="modal-title" id="type-change-title">{% trans "Remove registrations?" %}</h2>
+      <div class="modal-body">
+        <p>
+          {% blocktrans count n=confirm_type_change with type=new_type %}<strong>{{ n }}</strong> registered participant does not belong to “{{ type }}” and would be removed from this competition.{% plural %}<strong>{{ n }}</strong> registered participants do not belong to “{{ type }}” and would be removed from this competition.{% endblocktrans %}
+        </p>
+        <p>{% trans "They keep their bibs’ recorded times, but those times stop being anybody’s. The participants themselves are not deleted." %}</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="button button--danger" data-type-change-confirm>{% trans "Remove them and save" %}</button>
+        <button type="button" class="button button--secondary" data-type-change-cancel>{% trans "Cancel" %}</button>
+      </div>
+    </div>
+  </div>
+
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/competition_general.js' %}"></script>
 {% endblock %}

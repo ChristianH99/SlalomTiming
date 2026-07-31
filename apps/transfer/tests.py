@@ -1,6 +1,7 @@
 import datetime
 import io
 import zipfile
+from pathlib import Path
 from decimal import Decimal
 
 import pytest
@@ -52,6 +53,9 @@ def make_event(ctype=None, with_timing=True):
     """A competition exercising every section of the document: classes, marshal
     posts, entries, assignments, timing, penalties and results config."""
     ctype = ctype or make_type()
+    # Exactly one competition may be active (enforced by the database), and
+    # creating one in the app makes it current — so the helper does the same.
+    Competition.objects.filter(is_active=True).update(is_active=False)
     competition = Competition.objects.create(
         competition_type=ctype, name="Spring Race", date=datetime.date(2026, 5, 1),
         is_active=True, penalties_by_marshal_posts=True,
@@ -154,7 +158,7 @@ def test_a_newer_document_version_is_refused():
     assert "newer version" in str(error.value)
 
 
-# --- SEC-5: an archive is a hand-picked file, so its size is not a promise ----
+# --- an archive is a hand-picked file, so its size is not a promise ----
 
 
 def _zip_of(name, content):
@@ -216,7 +220,7 @@ def test_an_over_sized_participant_csv_is_refused(client, monkeypatch):
     assert "too large" in response.content.decode()
 
 
-# --- SEC-1: markup arriving in a file ----------------------------------------
+# --- markup arriving in a file ----------------------------------------
 
 
 def test_imported_pdf_header_is_sanitised(settings, tmp_path):
@@ -838,6 +842,55 @@ def test_committing_discards_the_staged_upload(client):
     assert staging.read(token) is None
 
 
+# --- the review form is bigger than Django's default form ---------------------
+
+
+def test_a_realistic_review_page_stays_under_the_field_limit(client, settings):
+    """The review form is urlencoded, so DATA_UPLOAD_MAX_NUMBER_FIELDS applies to
+    it — and Django's default of 1000 is fewer fields than the wizard's own main
+    use case renders. Re-importing a club's roster into a system that already
+    knows those people is the *normal* case: 200 participants differing in six
+    fields each is 1400 radio groups, all of which submit. It came back as a bare
+    browser 400 — no message, no partial save, and the staged upload gone.
+
+    So this asks the two questions that keep it fixed: does a realistic page fit
+    inside the configured limit, and does it still not fit inside Django's
+    default — because a test that only checks the first would pass just as
+    happily on a page that had quietly shrunk.
+    """
+    import re
+
+    ctype = make_type()
+    for n in range(200):
+        make_participant(ctype, first=f"P{n}", last=f"Racer{n}")
+    payload = exporters.export(competition_type=ctype)
+    # Every one of them now disagrees with the file on six fields, which is what
+    # turns each into a CONFLICT with a row per field to decide.
+    Participant.objects.update(
+        club="Old Club", email="old@example.org", phone_number="0700",
+        vehicle="Old Kart", address_street="Old Street 1", address_city="Oldtown",
+    )
+
+    upload(client, payload)
+    page = client.get(reverse("transfer:review")).content.decode()
+
+    posted = set(re.findall(r'name="((?:choice|field)-[^"]+)"', page))
+    assert len(posted) > 1000, (
+        f"only {len(posted)} fields — this page no longer reproduces the case, "
+        "so it no longer guards it"
+    )
+    assert len(posted) < settings.DATA_UPLOAD_MAX_NUMBER_FIELDS
+
+    # And end to end: the same page's POST is accepted rather than refused
+    # before any view sees it.
+    response = client.post(reverse("transfer:review"), {
+        name: "create" if name.startswith("choice-") else "imported"
+        for name in posted
+    })
+    assert response.status_code == 200
+    assert Participant.objects.count() == 400        # each kept separate
+
+
 # --- staging -----------------------------------------------------------------
 
 
@@ -1266,3 +1319,552 @@ def test_every_fault_in_a_file_is_reported_in_one_pass():
     assert not report.ok
     assert [line for line, _message in report.errors] == [2, 3]
     assert "77" in messages_of(report)
+
+
+# --- Automatic backup ---------------------------------------
+# The event *is* the database, and the only backup used to be a line in the
+# run-book asking the operator to run VACUUM INTO between runs and copy the
+# result to a USB stick — a thing to remember while timing a race.
+
+import sqlite3
+import threading
+
+from apps.transfer import backup
+from apps.transfer.models import BackupSettings
+
+
+def _write_source(path, rows=200):
+    """A database that looks like one of ours: WAL, and something to lose."""
+    conn = sqlite3.connect(path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE timing (id INTEGER PRIMARY KEY, t TEXT)")
+    conn.executemany("INSERT INTO timing (t) VALUES (?)",
+                     [(f"10:00:{i:02d}",) for i in range(rows)])
+    conn.commit()
+    conn.close()
+    return path
+
+
+def _rows(path):
+    conn = sqlite3.connect(path)
+    try:
+        return conn.execute("SELECT COUNT(*) FROM timing").fetchone()[0]
+    finally:
+        conn.close()
+
+
+class TestCopyingTheDatabase:
+    def test_the_copy_holds_every_row(self, tmp_path):
+        source = _write_source(tmp_path / "db.sqlite3")
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        written = backup.copy_database(source, destination, keep=5)
+        assert written.exists()
+        assert _rows(written) == 200
+
+    def test_the_copy_is_readable_on_its_own(self, tmp_path):
+        """A file copy of a WAL database leaves the recent writes in the -wal
+        file beside it; carried off on a stick alone it is missing them. SQLite's
+        backup API writes a self-contained database."""
+        source = _write_source(tmp_path / "db.sqlite3")
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        written = backup.copy_database(source, destination, keep=5)
+        carried = tmp_path / "elsewhere.sqlite3"
+        carried.write_bytes(written.read_bytes())   # the file, and nothing else
+        assert _rows(carried) == 200
+
+    def test_a_copy_taken_while_the_database_is_written_finishes_and_is_consistent(
+            self, tmp_path):
+        """The rig records times through this database while the copy runs, so a
+        torn copy is worse than none — it looks like a backup.
+
+        This also pins the reason the copy is taken in *one* step: a batched
+        backup gives up its read lock between batches and SQLite restarts it
+        whenever another connection has written, so against a writer like the one
+        below it restarts for ever and never produces a file. The first version of
+        this code did exactly that, and this test is what found it — it hung."""
+        source = _write_source(tmp_path / "db.sqlite3")
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        stop = threading.Event()
+
+        def writer():
+            conn = sqlite3.connect(source, timeout=30)
+            conn.execute("PRAGMA journal_mode=WAL")
+            n = 0
+            while not stop.is_set():
+                conn.execute("INSERT INTO timing (t) VALUES (?)", (f"x{n}",))
+                conn.commit()
+                n += 1
+            conn.close()
+
+        thread = threading.Thread(target=writer, daemon=True)
+        thread.start()
+        try:
+            written = backup.copy_database(source, destination, keep=5)
+        finally:
+            stop.set()
+            thread.join(timeout=5)
+        # Readable, integral, and holding at least what was there when it started.
+        conn = sqlite3.connect(written)
+        try:
+            assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            assert conn.execute("SELECT COUNT(*) FROM timing").fetchone()[0] >= 200
+        finally:
+            conn.close()
+
+    def test_an_interrupted_copy_leaves_no_plausible_looking_file(self, tmp_path, monkeypatch):
+        """Half a database sitting there under a backup's name is the worst
+        outcome: it is the one you would reach for."""
+        source = _write_source(tmp_path / "db.sqlite3")
+        destination = tmp_path / "stick"
+        destination.mkdir()
+
+        # sqlite3.Connection is immutable, so the interruption goes in through
+        # the one seam this module has: the rename that publishes the file.
+        def explode(self, target):
+            raise OSError("the stick was pulled out")
+
+        monkeypatch.setattr(Path, "replace", explode)
+        with pytest.raises(OSError):
+            backup.copy_database(source, destination, keep=5)
+        assert list(destination.glob("*.sqlite3")) == [], (
+            "a half-written copy is sitting there under a backup's name"
+        )
+        assert list(destination.glob("*.partial")), "the partial should still be there"
+
+        # …and the next good copy sweeps the leftover away.
+        monkeypatch.undo()
+        backup.copy_database(source, destination, keep=5)
+        assert list(destination.glob("*.partial")) == []
+        assert len(list(destination.glob("*.sqlite3"))) == 1
+
+    def test_it_keeps_only_the_newest_copies(self, tmp_path):
+        """One a minute over an eight-hour event is 480 copies of a growing
+        database. A full stick means the newest copy is the one that failed."""
+        source = _write_source(tmp_path / "db.sqlite3")
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        for minute in range(8):
+            backup.copy_database(source, destination, keep=3,
+                                 now=datetime.datetime(2026, 7, 1, 10, minute, 0))
+        kept = sorted(p.name for p in destination.glob("*.sqlite3"))
+        assert len(kept) == 3
+        assert kept[-1].endswith("100700.sqlite3")     # the newest survived
+
+
+class TestTheDestination:
+    def test_a_missing_folder_is_named_as_such(self, tmp_path):
+        settings = BackupSettings(destination=str(tmp_path / "not-plugged-in"))
+        assert "does not exist" in settings.destination_problem()
+
+    def test_a_file_is_not_a_folder(self, tmp_path):
+        target = tmp_path / "afile"
+        target.write_text("x")
+        assert "not a folder" in BackupSettings(destination=str(target)).destination_problem()
+
+    def test_no_destination_at_all(self):
+        assert BackupSettings(destination="").destination_problem()
+
+    def test_a_usable_folder_has_no_problem(self, tmp_path):
+        assert BackupSettings(destination=str(tmp_path)).destination_problem() == ""
+
+
+class TestTheBackupPage:
+    def test_saving_a_destination_turns_it_on(self, client, tmp_path, monkeypatch):
+        # The runner would otherwise start a thread that reads the suite's own
+        # in-memory database — see TestTheTimer for why that hangs.
+        monkeypatch.setattr(backup.runner, "start", lambda: None)
+        monkeypatch.setattr(backup.runner, "run_soon", lambda: None)
+        response = client.post(reverse("transfer:backup"), {
+            "enabled": "on", "destination": str(tmp_path),
+            "interval_minutes": "5", "keep": "12",
+        })
+        assert response.status_code == 302
+        settings = BackupSettings.load()
+        assert settings.enabled and settings.destination == str(tmp_path)
+
+    def test_a_destination_that_cannot_be_written_is_refused_on_save(self, client, tmp_path):
+        """Finding out at the next tick, from a page they have navigated away
+        from, is not telling the operator."""
+        response = client.post(reverse("transfer:backup"), {
+            "enabled": "on", "destination": str(tmp_path / "nowhere"),
+            "interval_minutes": "5", "keep": "12",
+        })
+        assert response.status_code == 200
+        assert "does not exist" in response.content.decode()
+        assert BackupSettings.load().enabled is False
+
+    def test_turning_it_off_needs_no_destination(self, client):
+        response = client.post(reverse("transfer:backup"), {
+            "destination": "", "interval_minutes": "5", "keep": "12",
+        })
+        assert response.status_code == 302
+        assert BackupSettings.load().enabled is False
+
+    def test_the_interval_is_bounded(self, client, tmp_path):
+        for minutes in ("0", "11", "600"):
+            response = client.post(reverse("transfer:backup"), {
+                "enabled": "on", "destination": str(tmp_path),
+                "interval_minutes": minutes, "keep": "12",
+            })
+            assert response.status_code == 200, f"{minutes} min was accepted"
+
+    def test_the_status_endpoint_reports_the_last_attempt(self, client, tmp_path):
+        settings = BackupSettings.load()
+        settings.enabled = True
+        settings.destination = str(tmp_path)
+        settings.last_error = "the stick was pulled out"
+        settings.save()
+        data = client.get(reverse("transfer:backup-status")).json()
+        assert data["enabled"] is True
+        assert data["last_error"] == "the stick was pulled out"
+
+    def test_there_is_no_back_up_now_button(self, client, tmp_path):
+        """On purpose: the point is that the operator does not have to remember,
+        and a button invites them to think they should. (The page *says* so in
+        words, so this looks for a control rather than for the phrase.)"""
+        import re as _re
+
+        body = client.get(reverse("transfer:backup")).content.decode()
+        # data-unsaved-guard, not just method="post": the app shell's own logout
+        # form comes first in the document.
+        form = _re.search(r"<form[^>]*data-unsaved-guard[^>]*>(.*?)</form>",
+                          body, _re.S | _re.I)
+        assert form, "the settings form is missing"
+        controls = [c.strip() for c in
+                    _re.findall(r"<button[^>]*>(.*?)</button>", form.group(1),
+                                _re.S | _re.I)]
+        # Submits, specifically. "Browse…" is a control on the form and is not one
+        # of these; asserting on *every* button made adding it look like this
+        # regression, which it wasn't.
+        submits = [c.strip() for c in
+                   _re.findall(r"<button[^>]*type=\"submit\"[^>]*>(.*?)</button>",
+                               form.group(1), _re.S | _re.I)]
+        assert submits == ["Save"], submits
+        assert not any("now" in c.lower() for c in controls), controls
+
+
+class TestTheTimer:
+    """The timer reads the *live* database file.
+
+    These point it at a real file rather than at the suite's own database: the
+    test database is SQLite in shared-cache memory and pytest-django holds an
+    uncommitted transaction on it for the length of each test, so a second
+    connection reading it blocks for ever. That is an artefact of how the tests
+    are run — a deployment's database is a file in WAL mode, where a reader never
+    waits on the writer — but it would hang the suite, so it is avoided here and
+    said out loud rather than left to be rediscovered.
+    """
+
+    @pytest.fixture
+    def live_db(self, settings, tmp_path):
+        path = tmp_path / "live.sqlite3"
+        conn = sqlite3.connect(path)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("CREATE TABLE timing (id INTEGER PRIMARY KEY)")
+        conn.commit()
+        conn.close()
+        # Only what backup.copy_database reads; the ORM keeps its own connection.
+        settings.DATABASES = {**settings.DATABASES,
+                              "default": {**settings.DATABASES["default"],
+                                          "NAME": str(path)}}
+        return path
+
+    def test_a_broken_destination_is_recorded_rather_than_thrown(self, live_db, tmp_path):
+        """A backup that has quietly been failing since lunchtime is worse than
+        none, because nobody is looking for the fault."""
+        settings = BackupSettings.load()
+        settings.enabled = True
+        settings.destination = str(tmp_path / "gone")
+        settings.save()
+        backup.runner._tick()
+        settings.refresh_from_db()
+        assert settings.last_error
+        assert settings.last_ok_at is None
+
+    def test_a_good_destination_records_the_file_it_wrote(self, live_db, tmp_path):
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        settings = BackupSettings.load()
+        settings.enabled = True
+        settings.destination = str(destination)
+        settings.save()
+        backup.runner._tick()
+        settings.refresh_from_db()
+        assert settings.last_error == ""
+        assert settings.last_ok_at is not None
+        assert settings.last_bytes and settings.last_bytes > 0
+        assert Path(settings.last_file).exists()
+
+    def test_it_does_nothing_until_the_interval_has_passed(self, live_db, tmp_path):
+        destination = tmp_path / "stick"
+        destination.mkdir()
+        settings = BackupSettings.load()
+        settings.enabled = True
+        settings.destination = str(destination)
+        settings.interval_minutes = 10
+        settings.save()
+        backup.runner._tick()
+        first = list(destination.glob("*.sqlite3"))
+        assert first, "the first tick should have written one"
+        backup.runner._tick()
+        assert list(destination.glob("*.sqlite3")) == first
+
+    def test_it_does_nothing_at_all_when_switched_off(self, live_db, tmp_path):
+        destination = tmp_path / "stick"
+        destination.mkdir()          # a directory of its own: live_db is in tmp_path
+        settings = BackupSettings.load()
+        settings.enabled = False
+        settings.destination = str(destination)
+        settings.save()
+        backup.runner._tick()
+        assert list(destination.glob("*.sqlite3")) == []
+
+
+# --- The destination picker --------------------------------------------------
+# A file input is no use here: the browser would offer the folders of whichever
+# machine is displaying the page, and over the venue network that is usually
+# somebody else's phone. So the listing comes from the server.
+
+class TestBrowsingTheHostsFolders:
+    def test_no_path_lists_the_drives(self, client):
+        data = client.get(reverse("transfer:backup-folders")).json()
+        assert data["entries"], "no roots at all"
+        assert data["at_root"] is True
+        assert data["path"] == ""
+
+    def test_it_lists_the_folders_in_a_folder(self, client, tmp_path):
+        (tmp_path / "keep").mkdir()
+        (tmp_path / "toss").mkdir()
+        (tmp_path / "a-file.txt").write_text("x")
+        data = client.get(reverse("transfer:backup-folders"),
+                          {"path": str(tmp_path)}).json()
+        assert [e["name"] for e in data["entries"]] == ["keep", "toss"]
+        assert data["path"] == str(tmp_path)
+
+    def test_it_never_lists_files(self, client, tmp_path):
+        """Folders only. Somebody who can reach this may learn that a folder
+        exists, and nothing about what is in it."""
+        (tmp_path / "secret.sqlite3").write_text("x")
+        (tmp_path / "addresses.csv").write_text("x")
+        data = client.get(reverse("transfer:backup-folders"),
+                          {"path": str(tmp_path)}).json()
+        assert data["entries"] == []
+
+    def test_a_path_that_is_not_a_folder_comes_back_as_a_sentence(self, client, tmp_path):
+        target = tmp_path / "a-file.txt"
+        target.write_text("x")
+        for bad in (str(target), str(tmp_path / "nowhere"), "\x00nonsense"):
+            data = client.get(reverse("transfer:backup-folders"), {"path": bad}).json()
+            assert data["problem"], f"{bad!r} produced no message"
+            # …and it lands somewhere usable rather than on an error page.
+            assert data["entries"] or data["at_root"]
+
+    def test_it_is_gated_like_the_rest_of_the_section(self):
+        """The endpoint lists a filesystem. It must be exactly as reachable as
+        the page it serves, and no more."""
+        from django.test import Client
+        from django.urls import resolve
+
+        from apps.accounts import pages
+
+        match = resolve(reverse("transfer:backup-folders"))
+        assert (match.app_name, match.url_name) in pages.PAGE_URLS["import_export"]
+        assert (match.app_name, match.url_name) not in pages.OPEN
+        response = Client().get(reverse("transfer:backup-folders"))
+        assert response.status_code == 302        # anonymous → login
+
+    def test_a_long_folder_is_cut_off_and_says_so(self, client, tmp_path):
+        """Thousands of entries is a list nobody can use and a payload nobody
+        asked for."""
+        from apps.transfer import folders
+
+        for i in range(folders.MAX_ENTRIES + 5):
+            (tmp_path / f"d{i:04d}").mkdir()
+        data = client.get(reverse("transfer:backup-folders"),
+                          {"path": str(tmp_path)}).json()
+        assert len(data["entries"]) == folders.MAX_ENTRIES
+        assert data["truncated"] == 5
+
+    def test_browsing_writes_nothing(self, client, tmp_path):
+        """destination_problem() probes by writing a file. Browsing must not
+        leave a trail of those through every folder the operator clicks past."""
+        (tmp_path / "sub").mkdir()
+        before = sorted(p.name for p in tmp_path.iterdir())
+        client.get(reverse("transfer:backup-folders"), {"path": str(tmp_path)})
+        assert sorted(p.name for p in tmp_path.iterdir()) == before
+
+    def test_the_parent_of_a_folder_is_offered(self, client, tmp_path):
+        (tmp_path / "sub").mkdir()
+        data = client.get(reverse("transfer:backup-folders"),
+                          {"path": str(tmp_path / "sub")}).json()
+        assert data["parent"] == str(tmp_path)
+        assert data["at_root"] is False
+
+
+class TestTheBackupTimestampsReadAsLocalTime:
+    """The operator reads "last copy at 08:37" against the clock on the wall
+    beside the laptop. TIME_ZONE used to be UTC, so all summer it was an hour or
+    two out in a way that is easy to misread as right."""
+
+    def test_the_setting_follows_the_machine(self):
+        from config.settings import _local_time_zone
+
+        assert _local_time_zone()      # never empty; UTC is the last resort
+
+    def test_an_explicit_zone_wins(self, monkeypatch):
+        from config.settings import _local_time_zone
+
+        monkeypatch.setenv("DJANGO_TIME_ZONE", "Pacific/Auckland")
+        assert _local_time_zone() == "Pacific/Auckland"
+
+    def test_the_page_renders_the_zone_it_is_configured_for(self, client, settings):
+        import datetime
+
+        settings.TIME_ZONE = "Europe/Berlin"       # UTC+2 in July
+        row = BackupSettings.load()
+        row.enabled = True
+        row.destination = str(Path(__file__).parent)
+        row.last_run_at = row.last_ok_at = datetime.datetime(
+            2026, 7, 30, 6, 37, tzinfo=datetime.UTC)
+        row.save()
+        body = client.get(reverse("transfer:backup")).content.decode()
+        assert "08:37" in body, "the timestamp is still being rendered in UTC"
+
+
+# --- an archive is a file a person picked, so it is hostile -----------
+#
+# The existing tests here cover the archive *budgets* (over-sized entries, a
+# lying header) and the happy path. What they did not cover is the thing that
+# actually went wrong: the import wrote whatever bytes the document
+# carried under whatever name it asked for, so a crafted .zip could put an
+# executable file on the app's own origin. That fix lives in apps/results/logos,
+# and this is the test that it is still in the door.
+
+def _crafted_archive(competition, name, content):
+    """A real export with its logo replaced by something the archive chose.
+
+    Both halves are what an attacker controls: the *bytes* under media/ and the
+    *name* the document asks for them to be saved under.
+    """
+    document, _media = exporters._event_document(competition)
+    document["results"]["pdf_layout"]["image_left"] = name
+    return archive.write(document, {name: content})
+
+
+def test_an_imported_logo_that_is_not_an_image_is_refused(settings, tmp_path):
+    """Media is served from this app's own origin, so a file that is not an
+    image is not a cosmetic problem: `evil.html` under /media/ is script running
+    in the operator's session, from a file they merely *imported*."""
+    settings.MEDIA_ROOT = tmp_path
+    competition = make_event()
+    ResultsPdfLayout.objects.create(competition=competition, header_html="<b>Hi</b>")
+    payload = _crafted_archive(competition, "evil.html",
+                               b"<script>alert(document.cookie)</script>")
+    wipe()
+
+    _plan, result = import_archive(payload)
+
+    layout = ResultsPdfLayout.objects.get(competition=result.competition)
+    assert not layout.image_left, "a non-image was accepted as a logo"
+    assert not list(Path(tmp_path).rglob("*.html")), "an HTML file was written under MEDIA_ROOT"
+
+
+def test_an_imported_logo_cannot_choose_its_own_path(settings, tmp_path):
+    """The archive names the file. A name is not a thing to be trusted: `../`
+    in one is a write outside MEDIA_ROOT, and Django answers that with a
+    SuspiciousFileOperation — a 500 on the import page at best."""
+    settings.MEDIA_ROOT = tmp_path / "media"
+    (tmp_path / "media").mkdir()
+    competition = make_event()
+    ResultsPdfLayout.objects.create(competition=competition)
+    pixel = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04"
+             b"\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
+    payload = _crafted_archive(competition, "../../escaped.gif", pixel)
+    wipe()
+
+    _plan, result = import_archive(payload)
+
+    layout = ResultsPdfLayout.objects.get(competition=result.competition)
+    # Either refused outright or saved under a name of *our* choosing — never
+    # one that climbs out of MEDIA_ROOT.
+    if layout.image_left:
+        assert ".." not in layout.image_left.name
+        assert Path(layout.image_left.path).resolve().is_relative_to(
+            Path(settings.MEDIA_ROOT).resolve())
+    assert not (tmp_path / "escaped.gif").exists()
+
+
+def test_a_document_with_a_damaged_value_is_refused_as_a_sentence():
+    """apps/transfer/schema runs each field's own validators on the way in, so a
+    value SQLite would accept and every later read would choke on is refused
+    here — as a TransferError the operator can read, not a traceback."""
+    competition = make_event()
+    document, media = exporters._event_document(competition)
+    for row in document["participants"]:
+        row["date_of_birth"] = "not-a-date"
+    payload = archive.write(document, media)
+    wipe()
+
+    with pytest.raises(TransferError):
+        import_archive(payload)
+
+
+def test_a_document_missing_a_section_the_importer_needs_is_refused():
+    """A hand-edited or truncated document, rather than a crafted one — the
+    ordinary way a file arrives damaged."""
+    competition = make_event()
+    document, media = exporters._event_document(competition)
+    del document["competition"]
+    payload = archive.write(document, media)
+    wipe()
+
+    with pytest.raises((TransferError, KeyError)):
+        import_archive(payload)
+
+
+def test_a_competition_name_outside_latin_1_still_downloads(client):
+    """The download header is latin-1 encoded, so a Cyrillic event name has to be
+    RFC 5987 encoded rather than raising on the way out. Same lesson as the
+    results PDF's Content-Disposition — one door per header, not one per page."""
+    competition = make_event()
+    competition.name = "Слалом"
+    competition.save()
+
+    response = client.post(
+        reverse("transfer:export"), {"target": "competition", "pk": competition.pk},
+    )
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/zip"
+
+
+def test_a_document_with_two_general_column_rows_is_refused_cleanly(settings, tmp_path):
+    """Only one ResultColumnSettings row may have competition_class=None. A
+    document carrying two is damaged, and has to come back as a TransferError
+    sentence rather than whatever the database raises three sections later."""
+    settings.MEDIA_ROOT = tmp_path
+    document = {
+        "format": "slalomtiming-export", "version": 1, "scope": SCOPE_EVENT,
+        "competition_type": {"ref": 1, "name": "Motorcycle"},
+        "competition": {"ref": 1, "name": "Imported", "date": "2026-07-01",
+                        "assignment_method": "manual", "start_pattern": [],
+                        "auto_timing_order": []},
+        "classes": [], "participants": [], "entries": [], "class_assignments": [],
+        "marshal_posts": [], "timing": {},
+        "results": {"columns": [
+            {"ref": 1, "columns": [], "show_overall": True},
+            {"ref": 2, "columns": [], "show_overall": False},
+        ]},
+    }
+    read, _media = archive.read(archive.write(document, {}))
+    plan = importers.plan(read)
+
+    try:
+        importers.commit(plan, resolutions={}, media={})
+    except TransferError:
+        pass  # a sentence the operator can read is the wanted outcome
+    except Exception as exc:  # noqa: BLE001
+        pytest.fail(f"a duplicate General row raised {type(exc).__name__}: {exc}")

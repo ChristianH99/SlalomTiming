@@ -21,9 +21,27 @@
 {% endblock %}
 {% block content_class %}content--wide{% endblock %}
 {% block content %}
+  {% comment %}Both of these are "there is nothing here to operate", so they are
+  built the same way the Marshal Posts page builds its own: a heading, then a
+  centred .empty-state card. A bare left-aligned paragraph at the top of an
+  otherwise blank page reads as a page that failed to load rather than as an
+  answer.{% endcomment %}
   {% if not competition %}
-    <div class="notice">
+    <h1 class="page-heading">{% trans "Auto timing" %}</h1>
+    <div class="empty-state">
       <p>{% url 'competitions:list' as list_url %}{% blocktrans %}No competition is selected. Timing runs against the active competition, so <a href="{{ list_url }}">pick a competition</a> to time it.{% endblocktrans %}</p>
+    </div>
+  {% elif needs_pattern %}
+    {% comment %}Auto timing *is* the start order, so with no start pattern there
+    is nothing here to operate — one sentence and the way to fix it, and none of
+    the timing controls. Manual timing needs no pattern and is offered instead,
+    because an event can perfectly well be timed without one.{% endcomment %}
+    <h1 class="page-heading">{% trans "Auto timing" %}</h1>
+    <div class="empty-state">
+      {% url 'competitions:runorder' as runorder_url %}
+      {% url 'timing:manual' as manual_url %}
+      <p>{% blocktrans %}Automatic timing runs off the start pattern — the order competitors take their runs — and this competition hasn’t got one. <a href="{{ runorder_url }}">Build a start pattern</a> to use this page.{% endblocktrans %}</p>
+      <p class="hint">{% blocktrans %}You don’t have to. <a href="{{ manual_url }}">Manual timing</a> records times without a pattern, with the bib typed in per run.{% endblocktrans %}</p>
     </div>
   {% else %}
     <div class="autotiming" id="autotiming">
@@ -50,7 +68,6 @@
             {% url 'competitions:classes' as classes_url %}
             {% url 'participants:list' as participants_url %}
             <p data-empty-reason="classes" hidden>{% blocktrans %}No class is running yet — mark the classes that start on the <a href="{{ classes_url }}">Classes</a> page.{% endblocktrans %}</p>
-            <p data-empty-reason="pattern" hidden>{% blocktrans %}No start pattern yet — build one on the <a href="{{ runorder_url }}">Run order</a> page to say which runs are taken in what order.{% endblocktrans %}</p>
             <p data-empty-reason="starters" hidden>{% blocktrans %}Nobody is registered in the running classes yet — <a href="{{ participants_url }}">add participants</a> and assign them a class.{% endblocktrans %}</p>
             <p data-empty-reason="runs" hidden>{% blocktrans %}The running classes grant no runs — give them practice or counted runs on the <a href="{{ classes_url }}">Classes</a> page.{% endblocktrans %}</p>
           </div>
@@ -69,25 +86,19 @@
     </div>
 
     {{ auto|json_script:"auto-data" }}
-    <script>
-      window.AUTO_URLS = {
-        state: "{% url 'timing:auto-state' %}",
-        reorder: "{% url 'timing:auto-reorder' %}",
-        resetOrder: "{% url 'timing:auto-reset-order' %}",
-        ignore: "{% url 'timing:ignore' %}",
-        pair: "{% url 'timing:pair' %}",
-        setTime: "{% url 'timing:set-time' %}",
-        setRuntime: "{% url 'timing:set-runtime' %}",
-        runStatus: "{% url 'timing:run-status' %}",
-        adjust: "{% url 'timing:auto-adjust' %}",
-        unlock: "{% url 'timing:marshal-unlock' %}",
-        lock: "{% url 'timing:marshal-lock' %}",
-        lockAll: "{% url 'timing:marshal-lock-all' %}",
-        taskEdit: "{% url 'timing:marshal-task-edit' %}",
-        inputLock: "{% url 'timing:input-lock' %}",
-      };
-      window.AUTO_CSRF = "{{ csrf_token }}";
-    </script>
+    {% comment %}The page's endpoint map, handed over as data rather than written
+    into an inline <script>: the app ships a Content-Security-Policy, and
+    json_script escapes it for us.{% endcomment %}
+    {{ page_urls|json_script:"page-urls" }}
+  {% endif %}
+{% endblock %}
+
+{% comment %}Guarded on there being a competition, as these scripts were when
+they sat beside the page: with no event selected there is no state element for
+them to read. They live in this block rather than in the content so they run
+*after* base.html's shell.js, which defines window.csrfToken().{% endcomment %}
+{% block scripts %}
+  {% if competition and not needs_pattern %}
     <script src="{% static 'js/device_alarm.js' %}"></script>
     <script src="{% static 'js/barrier_phase.js' %}"></script>
     <script src="{% static 'js/live_socket.js' %}"></script>

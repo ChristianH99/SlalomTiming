@@ -1,4 +1,8 @@
-"""The Import / Export pages.
+"""The Backup section: automatic backup, export, import.
+
+Automatic backup is the whole database on a timer, for getting the event back;
+export is one event as a portable ``.zip``, for moving or archiving it. They read
+as one section and are deliberately not one feature.
 
 Export is one screen: pick an event or a competition type, get a ``.zip``.
 
@@ -9,15 +13,20 @@ archive waits in ``staging`` between the steps; the session holds only its token
 """
 
 from django.contrib import messages
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import content_disposition_header
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.decorators.http import require_POST
 
+from apps.common import other_signed_in_users
 from apps.competitions.models import Competition, CompetitionType
 
-from . import archive, csvimport, exporters, importers, merge, staging
+from . import (archive, backup, csvimport, exporters, folders, importers,
+               merge, staging)
+from .forms import BackupSettingsForm
+from .models import BackupSettings
 from .schema import TransferError
 
 # A participant list is text a human typed; a few thousand starters is well under a
@@ -25,6 +34,86 @@ from .schema import TransferError
 # (`archive.MAX_UPLOAD_BYTES` does the same job for the export file), and because
 # read() takes the whole file into memory.
 MAX_CSV_BYTES = 8 * 1024 * 1024
+
+
+class BackupView(View):
+    """Backup → Automatic backup: where the database is copied, and how often.
+
+    Deliberately not a "back up now" button. The point of this page is that the
+    operator does *not* have to remember; a button invites them to think they
+    should, and the one they forget is the one that mattered. Saving a
+    destination checks it can be written to and makes the next copy due at once,
+    so pressing Save is the confirmation that it works.
+    """
+
+    template_name = "transfer/backup.html"
+
+    def get(self, request):
+        settings = BackupSettings.load()
+        return render(request, self.template_name,
+                      self._context(BackupSettingsForm(instance=settings), settings))
+
+    def post(self, request):
+        settings = BackupSettings.load()
+        form = BackupSettingsForm(request.POST, instance=settings)
+        if not form.is_valid():
+            return render(request, self.template_name,
+                          self._context(form, settings))
+        settings = form.save()
+        if settings.enabled:
+            backup.runner.start()
+            # Due now, so the operator learns from this page whether it worked
+            # rather than from a page they have navigated away from.
+            backup.runner.run_soon()
+            messages.success(request, _(
+                "Backups are on. The first copy is being written now."))
+        else:
+            backup.runner.stop()
+            messages.info(request, _("Backups are off."))
+        return redirect("transfer:backup")
+
+    @staticmethod
+    def _context(form, settings):
+        from django.urls import reverse
+
+        return {
+            "form": form,
+            "settings": settings,
+            "page_urls": {
+                "status": reverse("transfer:backup-status"),
+                "folders": reverse("transfer:backup-folders"),
+            },
+            "running": backup.runner.is_running,
+            # Named here rather than in the template so the page can say what is
+            # wrong with a destination that has stopped working — an unplugged
+            # stick is the ordinary case, not an exotic one.
+            "problem": settings.destination_problem() if settings.enabled else "",
+        }
+
+
+def backup_status(request):
+    """The last result, polled by the page so a copy that has just been written
+    (or just failed) shows up without a reload."""
+    settings = BackupSettings.load()
+    return JsonResponse({
+        "enabled": settings.enabled,
+        "running": backup.runner.is_running,
+        "last_run_at": settings.last_run_at.isoformat() if settings.last_run_at else None,
+        "last_ok_at": settings.last_ok_at.isoformat() if settings.last_ok_at else None,
+        "last_error": settings.last_error,
+        "last_file": settings.last_file,
+        "last_bytes": settings.last_bytes,
+    })
+
+
+def backup_folders(request):
+    """The folders on *this* machine, for the destination picker.
+
+    A file input would offer the folders of whichever machine is displaying the
+    page, and over the venue network that is usually somebody else's phone — see
+    apps/transfer/folders.py for what this does and does not hand out.
+    """
+    return JsonResponse(folders.listing(request.GET.get("path") or ""))
 
 
 class ExportView(View):
@@ -65,7 +154,9 @@ class ExportView(View):
             return redirect("transfer:export")
 
         response = HttpResponse(payload, content_type="application/zip")
-        response["Content-Disposition"] = f'attachment; filename="{name}"'
+        # Built by Django rather than interpolated: the name carries a competition
+        # name (see apps/results/views.py::_pdf_response for what that cost).
+        response["Content-Disposition"] = content_disposition_header(True, name)
         return response
 
 
@@ -175,6 +266,10 @@ class ImportReviewView(View):
     def _context(self, request, plan):
         return {
             "plan": plan,
+            # "Make this the current event" moves every open screen, exactly as
+            # creating a competition does. Named, not refused.
+            "others": other_signed_in_users(request),
+            "current": Competition.get_current(),
             "filename": request.session.get("transfer_import_name", ""),
             "summary": plan.participant_summary,
             "conflicts": plan.conflicts,
@@ -218,7 +313,8 @@ def csv_sample(request):
     response = HttpResponse(
         csvimport.sample_csv(competition), content_type="text/csv; charset=utf-8"
     )
-    response["Content-Disposition"] = 'attachment; filename="participants-sample.csv"'
+    response["Content-Disposition"] = content_disposition_header(
+        True, "participants-sample.csv")
     return response
 
 

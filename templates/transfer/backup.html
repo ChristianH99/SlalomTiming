@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% load static i18n %}
+{% block title %}{% trans "Automatic backup" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Automatic backup" %}{% endblock %}
+{% block content %}
+  <h1 class="page-heading">{% trans "Automatic backup" %}</h1>
+  <p class="hint">
+    {% blocktrans %}The event is the database. This copies it somewhere else while you time — so a copy survives a laptop that dies, a disk that fills or a folder somebody deletes.{% endblocktrans %}
+  </p>
+
+  {% comment %}An unplugged stick is the ordinary way this stops working, and the
+  copies stop silently — so the state of the last attempt is the first thing on the
+  page, not a line at the bottom.{% endcomment %}
+  {% if settings.enabled %}
+    {% if problem or settings.last_error %}
+      <div class="notice notice--danger" data-backup-alert data-last-run="{{ settings.last_run_at|date:"c" }}">
+        <p class="notice-title">{% trans "Backups are not being written" %}</p>
+        <p data-backup-error>{{ problem|default:settings.last_error }}</p>
+        {% if settings.last_ok_at %}
+          <p class="hint">{% blocktrans with when=settings.last_ok_at %}The last good copy was at {{ when }}.{% endblocktrans %}</p>
+        {% else %}
+          <p class="hint">{% trans "No copy has ever been written." %}</p>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="notice notice--ok" data-backup-alert data-last-run="{{ settings.last_run_at|date:"c" }}">
+        <p class="notice-title">{% trans "Backups are running" %}</p>
+        <p>
+          {% if settings.last_ok_at %}
+            {% blocktrans with when=settings.last_ok_at every=settings.interval_minutes count minutes=settings.interval_minutes %}Last copy at {{ when }}, then every minute.{% plural %}Last copy at {{ when }}, then every {{ every }} minutes.{% endblocktrans %}
+          {% else %}
+            {% trans "Waiting for the first copy…" %}
+          {% endif %}
+        </p>
+        {% if settings.last_file %}<p class="hint" data-backup-file>{{ settings.last_file }}</p>{% endif %}
+      </div>
+    {% endif %}
+  {% endif %}
+
+  <form method="post" data-unsaved-guard>
+    {% csrf_token %}
+    <div class="settings-section">
+      <label class="switch">
+        {{ form.enabled }}
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+        <span class="switch-text">{% trans "Copy the database automatically" %}</span>
+      </label>
+      {{ form.enabled.errors }}
+
+      <label class="settings-field settings-field--wide" for="{{ form.destination.id_for_label }}">
+        <span class="settings-label">{{ form.destination.label }}</span>
+        {% comment %}The path is on the *server*, so a file input is no use: the
+        browser would offer the folders of whichever machine is displaying the
+        page, which over the venue network is usually somebody else's phone. The
+        Browse button asks the server instead (transfer:backup-folders).{% endcomment %}
+        <span class="settings-control folder-pick">
+          {{ form.destination }}
+          <button type="button" class="button button--secondary" data-folder-open
+                  data-no-dirty>{% trans "Browse…" %}</button>
+        </span>
+        <span class="hint">{{ form.destination.help_text }}</span>
+        <span class="field-error">{{ form.destination.errors|join:" " }}</span>
+      </label>
+
+      <div class="settings-row">
+        <label class="settings-field" for="{{ form.interval_minutes.id_for_label }}">
+          <span class="settings-label">{{ form.interval_minutes.label }}</span>
+          <span class="settings-control">
+            {{ form.interval_minutes }}<span class="settings-unit">{% trans "min" %}</span>
+          </span>
+          <span class="field-error">{{ form.interval_minutes.errors|join:" " }}</span>
+        </label>
+        <label class="settings-field" for="{{ form.keep.id_for_label }}">
+          <span class="settings-label">{{ form.keep.label }}</span>
+          <span class="settings-control">
+            {{ form.keep }}<span class="settings-unit">{% trans "copies" %}</span>
+          </span>
+          <span class="field-error">{{ form.keep.errors|join:" " }}</span>
+        </label>
+      </div>
+      {% comment %}Below the row, not inside the field: a field is as wide as its
+      number box, and the German runs to three ragged lines in it.{% endcomment %}
+      <p class="hint">{{ form.keep.help_text }}</p>
+    </div>
+
+    <div class="actions">
+      <button class="button" type="submit">{% trans "Save" %}</button>
+    </div>
+  </form>
+
+  <p class="hint">
+    {% blocktrans %}There is no “back up now” button on purpose: the point is that you don’t have to remember. Saving a destination checks it can be written to and starts a copy straight away.{% endblocktrans %}
+  </p>
+
+  {% comment %}The folder picker. Browsing happens on the machine running the
+  server, which is the only machine whose paths mean anything here.{% endcomment %}
+  <div class="modal-overlay" id="folder-modal" hidden data-folder-modal>
+    <div class="modal folder-panel" role="dialog" aria-modal="true"
+         aria-labelledby="folder-title">
+      <button type="button" class="modal-close" data-folder-close
+              aria-label="{% trans 'Close' %}">×</button>
+      <h2 class="modal-title" id="folder-title">{% trans "Choose a folder" %}</h2>
+      <p class="hint">
+        {% blocktrans %}These are the folders on the computer running Slalom Timing — not on this device.{% endblocktrans %}
+      </p>
+      <div class="folder-crumb">
+        <button type="button" class="button button--secondary button--small" data-folder-up
+                hidden>{% trans "Up" %}</button>
+        <span class="folder-here" data-folder-here></span>
+      </div>
+      <p class="notice notice--warning" data-folder-problem hidden></p>
+      <ul class="folder-list" data-folder-list></ul>
+      <p class="hint" data-folder-truncated hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="button button--secondary" data-folder-close>
+          {% trans "Cancel" %}</button>
+        <button type="button" class="button" data-folder-use disabled>
+          {% trans "Use this folder" %}</button>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ page_urls|json_script:"page-urls" }}
+  <script src="{% static 'js/backup_page.js' %}"></script>
+{% endblock %}

@@ -829,8 +829,20 @@ def test_changing_competition_type_clears_foreign_registrations(client):
     )
     EventEntry.objects.create(participant=p, competition=comp, bib_number=1)
 
+    # Dropping registrations is destructive, so it is refused until confirmed:
+    # the first post re-renders the page with the dialog and changes nothing.
     resp = client.post(reverse("competitions:general"), {
         "competition_type": type_b.pk, "name": comp.name, "date": "2026-05-01",
+    })
+    assert resp.status_code == 200
+    assert resp.context["confirm_type_change"] == 1
+    comp.refresh_from_db()
+    assert comp.competition_type == type_a
+    assert EventEntry.objects.filter(competition=comp).exists()
+
+    resp = client.post(reverse("competitions:general"), {
+        "competition_type": type_b.pk, "name": comp.name, "date": "2026-05-01",
+        "confirm_type_change": "1",
     })
     assert resp.status_code == 302
     comp.refresh_from_db()
@@ -1084,7 +1096,7 @@ def test_duplicate_competition_copies_marshal_posts(client):
     assert copy.marshal_posts.get(number=1).tasks == "1-5"
 
 
-# --- DAT-5: the active competition is everybody's ---------------------------
+# --- The active competition is everybody's ---------------------------
 # One global flag decides what every timing screen, results table and marshal
 # post is showing. Switching it used to be a single unconfirmed click that other
 # people found out about from their own data changing under them.
@@ -1166,25 +1178,110 @@ def test_switching_tells_every_open_live_view_which_event_it_now_shows(client, m
     assert sent == [{"type": "timing.competition", "name": "Spring Slalom"}]
 
 
-# ----- stage 7: a competition that can actually be timed -----
+# --- ...and deleting it is the same act, plus the data --------------
+# Deleting the running event is strictly more destructive than switching away
+# from it and used to be the quieter of the two: no other-people warning, no
+# confirmation beyond the page itself, and no word to the screens that were
+# following it — which simply emptied, mid-event, saying nothing.
 
-def test_a_new_competition_starts_with_a_usable_start_pattern():
-    # No pattern at all meant start_lists() scheduled nothing: an empty Auto timing
-    # start order and zero expected runs on the dashboard, on a competition that
-    # looked fully set up. The default matches the seeded classes' run counts.
+def test_deleting_the_current_event_names_who_else_is_signed_in(client, django_user_model):
+    other = _sign_in_someone_else(django_user_model)
+    competition = make_active_competition()
+
+    page = client.get(reverse("competitions:delete", kwargs={"pk": competition.pk}))
+
+    body = page.content.decode()
+    assert other.get_username() in body
+    assert "current event" in body
+
+
+def test_deleting_an_event_nobody_is_on_says_nothing_about_screens(client,
+                                                                   django_user_model):
+    """A competition that isn't the current one moves no screen at all, so the
+    warning would be false — and a warning that is sometimes false is read past."""
+    _sign_in_someone_else(django_user_model)
+    other_event = make_competition(name="Next month", type_name="A")
+
+    body = client.get(
+        reverse("competitions:delete", kwargs={"pk": other_event.pk})).content.decode()
+
+    assert "current event" not in body
+
+
+def test_the_current_event_is_not_deleted_by_an_unconfirmed_post(client):
+    """The confirmation page carries the flag; a POST without it never saw the
+    page — a stale tab, a re-submitted form — and the running event is not
+    something to take down on one of those."""
+    competition = make_active_competition()
+
+    response = client.post(reverse("competitions:delete", kwargs={"pk": competition.pk}))
+
+    assert response.status_code == 200          # the confirmation page, not a redirect
+    assert Competition.objects.filter(pk=competition.pk).exists()
+
+
+def test_deleting_the_current_event_goes_through_once_confirmed(client):
+    competition = make_active_competition()
+
+    response = client.post(reverse("competitions:delete", kwargs={"pk": competition.pk}),
+                           {"confirm_active": "1"})
+
+    assert response.status_code == 302
+    assert not Competition.objects.filter(pk=competition.pk).exists()
+
+
+def test_deleting_a_competition_that_is_not_current_needs_no_extra_flag(client):
+    """Only the running event is everybody's; deleting next month's is one click."""
+    make_active_competition()
+    other_event = make_competition(name="Next month", type_name="A")
+
+    response = client.post(reverse("competitions:delete", kwargs={"pk": other_event.pk}))
+
+    assert response.status_code == 302
+    assert not Competition.objects.filter(pk=other_event.pk).exists()
+
+
+def test_deleting_the_current_event_tells_every_open_live_view_it_is_gone(client,
+                                                                         monkeypatch):
+    """Not the switch nudge: nobody is being shown another event, they are being
+    shown none, and a page cannot word that as a change of event."""
+    from apps.timing import services
+
+    sent = []
+    monkeypatch.setattr(services, "_send", sent.append)
+    competition = make_active_competition(name="Spring Slalom")
+
+    client.post(reverse("competitions:delete", kwargs={"pk": competition.pk}),
+                {"confirm_active": "1"})
+
+    assert sent == [{"type": "timing.competition", "name": "Spring Slalom",
+                     "deleted": True}]
+
+
+def test_deleting_a_competition_that_is_not_current_nudges_nobody(client, monkeypatch):
+    from apps.timing import services
+
+    sent = []
+    monkeypatch.setattr(services, "_send", sent.append)
+    make_active_competition()
+    other_event = make_competition(name="Next month", type_name="A")
+
+    client.post(reverse("competitions:delete", kwargs={"pk": other_event.pk}))
+
+    assert sent == []
+
+
+# ----- A competition that can actually be timed -----
+
+def test_a_new_competition_has_no_start_pattern():
+    """A pattern is what *Auto* timing needs, and Auto timing is a choice: plenty
+    of events are run on the Manual view with competitors turning up at the line
+    in any order. Nothing else reads the pattern — the dashboard and the results
+    derive from the entries and their classes — so a competition starts without
+    one and the Auto page asks for it."""
     competition = make_competition()
-    assert competition.start_pattern == startpattern.default_pattern()
-    cclass = competition.classes.first()
-    starter = startpattern.Starter(
-        key=(1, cclass.pk, 0), bib=1, name="A", class_name=cclass.name,
-        practice_runs=cclass.practice_runs, counted_runs=cclass.counted_runs,
-    )
-    slots = startpattern.expand(competition.start_pattern_blocks(), [starter])
-    assert [(s.run_type, s.run_number) for s in slots] == [
-        ("practice", 1), ("counted", 1), ("counted", 2),
-    ]
-    # …and it schedules every run those classes grant, with nothing left owed.
-    assert startpattern.shortfalls(competition.start_pattern_blocks(), [starter]) == []
+    assert competition.start_pattern == []
+    assert competition.start_pattern_blocks() == []
 
 
 def test_an_explicit_pattern_is_never_overwritten():
@@ -1197,7 +1294,7 @@ def test_an_explicit_pattern_is_never_overwritten():
     assert competition.start_pattern == pattern
 
 
-# ----- stage 7: class configurations that can never rank -----
+# ----- Class configurations that can never rank -----
 
 def test_a_class_with_no_counted_runs_is_flagged():
     competition = make_competition()
@@ -1222,19 +1319,44 @@ def test_only_a_running_class_is_flagged():
     assert cclass.scoring_warning() == ""
 
 
-# ----- stage 7: how a class is titled -----
+# ----- How a class is titled -----
 
-def test_a_class_named_after_the_word_is_not_titled_twice():
+def test_the_word_is_always_added():
+    """The prefix used to be conditional — a name already opening with the
+    word (in any shipped language) was shown alone — so the heading depended on
+    how somebody had typed a name. The organiser owns the name, the app owns the
+    word; a name that repeats it is answered by name_hint(), on the page where
+    it can be changed."""
     competition = make_competition()
     plain = competition.classes.create(name="7", is_running=True)
     already = competition.classes.create(name="Klasse 7", is_running=True)
-    english = competition.classes.create(name="Class 8", is_running=True)
     assert plain.display_name() == "Class 7"
-    assert already.display_name() == "Klasse 7"    # not "Class Klasse 7"
-    assert english.display_name() == "Class 8"
+    assert already.display_name() == "Class Klasse 7"
 
 
-# ----- stage 7: the German page says the same thing the English one does -----
+def test_a_name_that_repeats_the_word_is_pointed_out_where_it_can_be_fixed():
+    competition = make_competition()
+    plain = competition.classes.create(name="7", is_running=True)
+    assert plain.name_hint() == ""
+    for name, suggested in (("Klasse 7", "7"), ("Class 8", "8"),
+                            ("klasse-9", "9"), ("Klasse: Bobbycar", "Bobbycar")):
+        cclass = competition.classes.create(name=name, is_running=True)
+        hint = str(cclass.name_hint())
+        assert f"“{suggested}”" in hint, (name, hint)
+        # It shows what the class will actually read as, so the advice is
+        # checkable rather than abstract.
+        assert cclass.display_name() in hint
+
+
+def test_a_class_named_only_the_word_keeps_its_name_as_the_suggestion():
+    """Stripping the word off "Klasse" leaves nothing to suggest, and a hint
+    telling somebody to name a class "" is worse than none."""
+    competition = make_competition()
+    cclass = competition.classes.create(name="Klasse", is_running=True)
+    assert "“Klasse”" in str(cclass.name_hint())
+
+
+# ----- The German page says the same thing the English one does -----
 
 def test_run_order_palette_and_chips_use_the_same_words(client, settings):
     # The palette is rendered by Django from RUN_TYPE_LABELS and the chips dropped
@@ -1251,10 +1373,143 @@ def test_run_order_palette_and_chips_use_the_same_words(client, settings):
     assert "Practice" not in palette and "Counted" not in palette
 
 
-def test_a_german_class_heading_is_not_klasse_klasse(settings):
+def test_the_german_heading_uses_the_german_word(settings):
     settings.LANGUAGE_CODE = "de"
     competition = make_competition()
     plain = competition.classes.create(name="7", is_running=True)
-    already = competition.classes.create(name="Klasse 7", is_running=True)
     assert plain.display_name() == "Klasse 7"
-    assert already.display_name() == "Klasse 7"
+
+
+def test_the_sidebar_names_a_class_as_a_class(client, settings):
+    """The Results sub-list read "1", "2", "Bobbycar Mini" while every one
+    of those links opens a page titled "Result Class 7"."""
+    settings.LANGUAGE_CODE = "en"
+    competition = make_competition()
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+    competition.classes.filter(name="1").update(is_running=True, run_position=0)
+    body = client.get(reverse("results:index")).content.decode()
+    sidebar = body[body.index('<nav class="shell-nav">'):body.index("</nav>")]
+    assert ">Class 1</a>" in sidebar
+
+
+# --- exactly one active competition ----------------------------------
+
+def test_two_active_competitions_are_refused_by_the_database():
+    """`get_current()` is `filter(is_active=True).first()`, so with two active
+    rows the app silently serves whichever sorts first and nobody can see the
+    conflict. Every code path clears the others first — but that is a claim about
+    code, and this is a claim about the data."""
+    from django.db import IntegrityError, transaction
+
+    ctype = CompetitionType.objects.create(name="OnlyOne")
+    Competition.objects.create(competition_type=ctype, name="A",
+                               date=datetime.date(2026, 5, 1), is_active=True)
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Competition.objects.create(competition_type=ctype, name="B",
+                                       date=datetime.date(2026, 6, 1), is_active=True)
+
+
+def test_any_number_of_inactive_competitions_is_fine():
+    ctype = CompetitionType.objects.create(name="Archive")
+    for i in range(4):
+        Competition.objects.create(competition_type=ctype, name=f"Past {i}",
+                                   date=datetime.date(2025, i + 1, 1))
+    assert Competition.objects.filter(is_active=False).count() == 4
+
+
+def test_switching_the_active_competition_still_works(client):
+    """The constraint must not get in the way of the normal switch, which clears
+    the old flag and sets the new one."""
+    ctype = CompetitionType.objects.create(name="Switcher")
+    first = Competition.objects.create(competition_type=ctype, name="A",
+                                       date=datetime.date(2026, 5, 1), is_active=True)
+    second = Competition.objects.create(competition_type=ctype, name="B",
+                                        date=datetime.date(2026, 6, 1))
+    client.post(reverse("competitions:select", args=[second.pk]), {"confirm_switch": "1"})
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert (first.is_active, second.is_active) == (False, True)
+
+
+# --- what an age range covers, and what "age" means --------
+
+class TestAgeRanges:
+    """Under age-based assignment these decide which class a competitor lands in,
+    and both failure modes are silent: an overlap picks whichever class sorts
+    first, a gap leaves them in no class and absent from every start list."""
+
+    def _competition(self):
+        ctype = CompetitionType.objects.create(name="Aged")
+        competition = Competition.objects.create(
+            competition_type=ctype, name="R", date=datetime.date(2026, 5, 1),
+            assignment_method="age",
+        )
+        competition.classes.all().delete()
+        return competition
+
+    def _cls(self, competition, name, age_from, age_to, position):
+        return CompetitionClass.objects.create(
+            competition=competition, name=name, is_running=True,
+            age_from=age_from, age_to=age_to, position=position)
+
+    def test_an_overlap_is_named_with_what_it_costs(self):
+        competition = self._competition()
+        self._cls(competition, "Mini", 6, 10, 0)
+        self._cls(competition, "Maxi", 9, 14, 1)
+        problems = competition.age_range_problems()
+        assert any("9" in p and "Mini" in p and "Maxi" in p for p in problems), problems
+
+    def test_a_gap_is_named(self):
+        competition = self._competition()
+        self._cls(competition, "Mini", 6, 10, 0)
+        self._cls(competition, "Maxi", 14, 18, 1)
+        assert any("11" in p for p in competition.age_range_problems())
+
+    def test_a_backwards_range_is_named(self):
+        competition = self._competition()
+        self._cls(competition, "Odd", 14, 6, 0)
+        assert any("backwards" in p for p in competition.age_range_problems())
+
+    def test_ranges_that_meet_exactly_are_not_a_problem(self):
+        competition = self._competition()
+        self._cls(competition, "Mini", 6, 10, 0)
+        self._cls(competition, "Maxi", 11, 14, 1)
+        assert competition.age_range_problems() == []
+
+    def test_manual_assignment_is_never_asked(self):
+        """The ranges are display-only under manual assignment."""
+        competition = self._competition()
+        competition.assignment_method = "manual"
+        competition.save(update_fields=["assignment_method"])
+        self._cls(competition, "Mini", 6, 10, 0)
+        self._cls(competition, "Maxi", 9, 14, 1)
+        assert competition.age_range_problems() == []
+
+    def test_age_is_the_competition_year_minus_the_birth_year(self):
+        """Not age on the day: slalom classes are written by Jahrgang, so a
+        December birthday is in the same class all year as a January one."""
+        competition = self._competition()
+        mini = self._cls(competition, "Mini", 6, 10, 0)
+        assert competition.class_for_birth_year(2026 - 6) == mini
+        assert competition.class_for_birth_year(2026 - 10) == mini
+        assert competition.class_for_birth_year(2026 - 11) is None
+
+
+def test_the_database_refuses_a_second_active_competition():
+    """`get_current()` is `filter(is_active=True).first()`, so two active
+    rows — from the admin, a bad import, an interrupted transaction — meant the
+    app silently served one of them and the operator had no way to see the
+    conflict. The invariant belongs in the database, not in whichever code path
+    happened to set the flag; this asserts it is still there."""
+    ctype = CompetitionType.objects.create(name="Motorcycle")
+    Competition.objects.create(
+        competition_type=ctype, name="A", date=datetime.date(2026, 5, 1), is_active=True,
+    )
+
+    with pytest.raises(IntegrityError):
+        Competition.objects.create(
+            competition_type=ctype, name="B", date=datetime.date(2026, 6, 1),
+            is_active=True,
+        )

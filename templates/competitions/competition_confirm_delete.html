@@ -24,8 +24,32 @@
     </div>
   {% endif %}
 
+  {% comment %}The live half of the cost, when the target is the running event.
+  There is one current competition for the whole installation, so deleting it
+  does not merely remove data: every timing screen, marshal phone and dashboard
+  follows it and is left with no event at all. Same treatment as
+  competition_confirm_switch.html, which is the same act without the data loss.
+  The server refuses this delete without `confirm_active`.{% endcomment %}
+  {% if is_current %}
+    <div class="delete-warning">
+      <p>
+        {% trans "This is the <strong>current event</strong>." %}
+        {% trans "Timing, results and the marshal posts all follow it, so deleting it leaves every open screen with no event to show — including anyone in the middle of timing a run. There will be no current event until somebody picks one." %}
+      </p>
+      {% if others %}
+        <p>{% blocktrans count count=others|length %}<strong>{{ count }}</strong> other person is signed in right now:{% plural %}<strong>{{ count }}</strong> other people are signed in right now:{% endblocktrans %}</p>
+        <ul>
+          {% for user in others %}
+            <li>{{ user.get_full_name|default:user.get_username }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  {% endif %}
+
   <form method="post">
     {% csrf_token %}
+    {% if is_current %}<input type="hidden" name="confirm_active" value="1">{% endif %}
     <button class="button" type="submit">{% trans "Confirm delete" %}</button>
     <a href="{% url 'competitions:list' %}">{% trans "Cancel" %}</a>
   </form>

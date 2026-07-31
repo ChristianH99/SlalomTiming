@@ -48,28 +48,71 @@ def _env_int(name, default):
 
 
 # --- Core security settings (see config/.env.example for deployment) ---
-# In production every one of these MUST come from the environment. The literal
-# fallbacks below only exist so a fresh local checkout runs with no setup — they
-# are NOT safe to expose on a network.
-
-# SECURITY WARNING: keep the secret key used in production secret!
-INSECURE_DEV_SECRET_KEY = 'django-insecure-qvzii-zuntaf-+wv0yuv32g2vz%1)@mo4d7_a8n(bycgw&_@4o'
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', INSECURE_DEV_SECRET_KEY)
+# In production every one of these MUST come from the environment.
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Defaults to True for local use; set DJANGO_DEBUG=False in any deployment.
 DEBUG = _env_bool('DJANGO_DEBUG', default=True)
 
-# The checked-in development key is public — every copy of this repository has it,
-# so sessions and password-reset tokens signed with it are forgeable. A deployment
-# that forgot DJANGO_SECRET_KEY must fail loudly here rather than run unsafely
-# (`check --deploy` only warns, and a warning is easy to miss on race morning).
-if not DEBUG and SECRET_KEY == INSECURE_DEV_SECRET_KEY:
+# Where a development checkout keeps its generated signing key. Under DATA_DIR
+# (gitignored) so it is never committed and never shipped.
+DEV_SECRET_KEY_FILE = DATA_DIR / '.secret_key'
+
+
+def _development_secret_key():
+    """A signing key for *this checkout*, generated once and kept in DATA_DIR.
+
+    There used to be a literal key in this file. This repository is public, so
+    that key is public: anyone who has read it can forge anything signed with it —
+    a session cookie for any account, a password-reset token. A development server
+    on a shared network was one `git clone` away from a forged superuser session,
+    and no amount of history rewriting takes a published key back.
+
+    So each checkout now mints its own on first use. It is still a *development*
+    key and is never consulted with DEBUG off: a deployment must set
+    DJANGO_SECRET_KEY in its environment (enforced below).
+    """
+    try:
+        existing = DEV_SECRET_KEY_FILE.read_text(encoding='utf-8').strip()
+        if existing:
+            return existing
+    except OSError:
+        pass
+    # stdlib only: this runs while the settings module is still being executed,
+    # so nothing here may reach back into django.conf.
+    import secrets as _secrets
+
+    key = ''.join(
+        _secrets.choice('abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)')
+        for _ in range(50)
+    )
+    try:
+        DEV_SECRET_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        DEV_SECRET_KEY_FILE.write_text(key, encoding='utf-8')
+        os.chmod(DEV_SECRET_KEY_FILE, 0o600)  # best effort; a no-op on Windows
+    except OSError:
+        # A read-only checkout: a key that lasts one process still beats a shared
+        # one. Sessions won't survive a restart, which is a development problem.
+        pass
+    return key
+
+
+_ENV_SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '').strip()
+
+if _ENV_SECRET_KEY:
+    SECRET_KEY = _ENV_SECRET_KEY
+elif DEBUG:
+    SECRET_KEY = _development_secret_key()
+else:
+    # A deployment that forgot the key must fail loudly here rather than run
+    # unsafely (`check --deploy` only warns, and a warning is easy to miss on race
+    # morning). The generated development key is deliberately not offered as a
+    # fallback: it lives beside the database, which gets copied about.
     from django.core.exceptions import ImproperlyConfigured
 
     raise ImproperlyConfigured(
-        'DJANGO_SECRET_KEY is not set, so the insecure development key from the '
-        'repository would be used with DEBUG=False. Generate one with:\n'
+        'DJANGO_SECRET_KEY is not set and DEBUG is False. A deployment must be '
+        'given its own key; generate one with:\n'
         '  uv run python -c "from django.core.management.utils import '
         'get_random_secret_key as g; print(g())"'
     )
@@ -78,6 +121,12 @@ if not DEBUG and SECRET_KEY == INSECURE_DEV_SECRET_KEY:
 ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS')
 if DEBUG and not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+# Left empty with DEBUG off, the app *starts* and then refuses every request with
+# DisallowedHost — which on race morning reads as "the server is broken" from every
+# phone at the venue at once. It is refused at startup instead, but in config/asgi.py
+# rather than here: this setting only means anything to something that serves
+# requests, and `collectstatic` (a required release step, and the packaged build's
+# own) legitimately runs with DEBUG off and no hosts at all.
 
 # Origins allowed to send authenticated POSTs over HTTPS (the live domain(s)),
 # e.g. "https://timing.example.org". Needed for form posts from the real host.
@@ -107,6 +156,11 @@ INSTALLED_APPS = [
     'apps.transfer',
 ]
 
+# Whether the CSP is sent as Report-Only (nothing blocked, violations logged to
+# the browser console). For finding out what a new page broke without breaking it
+# in front of an operator — not a setting to deploy with. See config/csp.py.
+CSP_REPORT_ONLY = _env_bool('DJANGO_CSP_REPORT_ONLY', default=False)
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     # Serves everything under STATIC_ROOT (compressed + far-future cached) from the
@@ -114,6 +168,10 @@ MIDDLEWARE = [
     # without this a real deployment renders with no CSS and no JS at all. Must sit
     # directly below SecurityMiddleware and above everything else.
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Content-Security-Policy. Below WhiteNoise — a static file needs no
+    # policy and WhiteNoise answers those without going further — but above
+    # everything that renders a page, so an error page carries it too.
+    'config.csp.ContentSecurityPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     # Resolves the active language (session -> cookie -> Accept-Language ->
     # LANGUAGE_CODE) so {% trans %} and gettext render in the chosen language.
@@ -128,6 +186,9 @@ MIDDLEWARE = [
     # Login required everywhere + role-based page gating (see apps/accounts).
     # Must sit after AuthenticationMiddleware (needs request.user).
     'apps.accounts.middleware.AccessControlMiddleware',
+    # Who changed what. Innermost, so it sees request.user and the
+    # resolved view, and only records requests the gate above let through.
+    'apps.audit.AuditMiddleware',
 ]
 
 # Authentication redirects (apps.accounts provides the login/logout views).
@@ -176,6 +237,13 @@ if not DEBUG:
     # Trust the X-Forwarded-Proto header from a TLS-terminating reverse proxy.
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = not ALLOW_PLAIN_HTTP
+    # …except the health check. A local check does `curl http://127.0.0.1:8000/healthz`
+    # — the run-book, the unit file and any uptime probe on the box itself — and a 301
+    # to a hostname it isn't asking for makes every one of them report a healthy
+    # server as broken. It is safe to exempt precisely because of what it isn't: no
+    # cookie, no credential, no personal data, one word of output (config/health.py).
+    # Nothing else may be added to this list without the same argument.
+    SECURE_REDIRECT_EXEMPT = [r'^healthz$']
     SESSION_COOKIE_SECURE = not ALLOW_PLAIN_HTTP
     CSRF_COOKIE_SECURE = not ALLOW_PLAIN_HTTP
     # HSTS pins the hostname to HTTPS in every browser that saw the header, and it
@@ -221,12 +289,137 @@ if not DEBUG:
 # this system's scarce resource is the SQLite write lock the timing device needs.
 SESSION_COOKIE_AGE = _env_int('DJANGO_SESSION_HOURS', 12) * 3600
 
+# --- How many fields one form may post ---
+# Django's default is 1000, which is a guess about forms nobody in particular
+# designed. The import review (templates/transfer/import_review.html) is a form
+# somebody did design, and it is the largest in the app: it posts one
+# `choice-<ref>` radio group per participant this system recognises but cannot
+# match exactly, plus one `field-<ref>-<pk>-<name>` group per differing field per
+# candidate. Radio groups always submit, so the count is the count of *rendered*
+# inputs, not of what the operator touched. With the 13 comparable participant
+# fields (transfer/schema.PARTICIPANT_FIELDS) that is up to 27 fields per
+# conflict against two candidates — so the default ran out at ~37 conflicts, and
+# a plain re-import of a club's own roster (200 people differing in six fields
+# each renders 1400 inputs) came back as a bare browser 400: no message, no
+# partial save, and the staged upload gone.
+#
+# 20 000 covers a 700-strong roster in which every single person conflicts on
+# every field against two candidates, which is well past any club event. The
+# body itself stays small — roughly 40 bytes per field, so ~800 KB at the
+# ceiling, under DATA_UPLOAD_MAX_MEMORY_SIZE's 2.5 MB, which is the limit that
+# actually bounds the memory. apps/transfer/tests.py keeps a realistic review
+# page's field count under this number, so the form can't drift back past it
+# unnoticed.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = _env_int('DJANGO_DATA_UPLOAD_MAX_NUMBER_FIELDS', 20000)
+
 # --- Login throttling (apps/accounts/throttle.py) ---
 # Attempts per (username, IP) before that pair is refused, and for how long. The
 # counters live in the cache below; both are env-settable so a locked-out timekeeper
 # can be let back in mid-event without touching code.
 LOGIN_MAX_ATTEMPTS = _env_int('DJANGO_LOGIN_MAX_ATTEMPTS', 10)
+# ...and per IP across every username, which is what stops one host working
+# through a list of accounts. Higher, because a venue laptop may be several
+# people's browser.
+LOGIN_MAX_ATTEMPTS_PER_HOST = _env_int('DJANGO_LOGIN_MAX_ATTEMPTS_PER_HOST', 50)
 LOGIN_LOCKOUT_SECONDS = _env_int('DJANGO_LOGIN_LOCKOUT_SECONDS', 300)
+
+# --- Logging ---
+# There was no LOGGING at all, which had two consequences nobody could see. Python's
+# last-resort handler emits WARNING and above, so `throttle.note_success` ("who
+# signed in") was written at INFO and silently dropped — the login audit trail the
+# throttle module exists to provide did not reach anywhere. And nothing went to a
+# *file*: the packaged Windows build runs Daphne in a console window that is closed
+# at the end of the day, so failed logins and "this time could not be stored"
+# vanished with it.
+#
+# So: a rotating file under DATA_DIR (the directory that survives an upgrade),
+# alongside the console. Deliberately small — three files of 2 MB is months of a
+# club's events, and nothing here is chatty.
+LOG_DIR = Path(os.environ.get('DJANGO_LOG_DIR') or DATA_DIR / 'logs')
+LOG_LEVEL = os.environ.get('DJANGO_LOG_LEVEL', 'INFO').upper()
+# The audit trail keeps its own file. It answers a different question from the
+# application log ("who changed this result?" rather than "what went wrong?"),
+# it is the one a protest is settled from, and mixing it into the general log
+# would bury it — so it rotates on its own budget and is downloaded on its own.
+AUDIT_LOG_FILE = LOG_DIR / 'audit.log'
+AUDIT_LOG_MAX_BYTES = _env_int('DJANGO_AUDIT_LOG_MAX_BYTES', 5 * 1024 * 1024)
+AUDIT_LOG_BACKUPS = _env_int('DJANGO_AUDIT_LOG_BACKUPS', 5)
+
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    _log_file_ok = True
+except OSError:
+    # A read-only or unwritable data directory must not stop the server coming up;
+    # the console handler still works.
+    _log_file_ok = False
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'app': {
+            'format': '{asctime} {levelname} {name}: {message}',
+            'style': '{',
+        },
+        # No level and no logger name: every line is the same kind of thing, and
+        # what matters is that a person can read a column of them.
+        'audit': {
+            'format': '{asctime} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'app',
+        },
+        **({'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOG_DIR / 'slalomtiming.log'),
+            'maxBytes': 2 * 1024 * 1024,
+            'backupCount': 3,
+            'encoding': 'utf-8',
+            'formatter': 'app',
+        }} if _log_file_ok else {}),
+        **({'audit': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(AUDIT_LOG_FILE),
+            'maxBytes': AUDIT_LOG_MAX_BYTES,
+            'backupCount': AUDIT_LOG_BACKUPS,
+            'encoding': 'utf-8',
+            'formatter': 'audit',
+        }} if _log_file_ok else {}),
+    },
+    'root': {
+        'handlers': ['console', *(['file'] if _log_file_ok else [])],
+        'level': LOG_LEVEL,
+    },
+    'loggers': {
+        # Django's request logger is noisy about 404s and says nothing this app
+        # needs; its own errors still reach the root handlers.
+        'django': {'level': 'WARNING'},
+        # Who signed in and who was refused, and every time the database would
+        # not take a time. Both belong in the application log.
+        'apps.accounts.login': {'level': 'INFO'},
+        'apps.timing': {'level': 'INFO'},
+        # The audit trail goes to its own file *and nowhere else*: propagate off,
+        # so a page of "user=x changed run 412" lines doesn't drown the log an
+        # operator reads when something is wrong.
+        'apps.audit': {
+            'handlers': ['audit'] if _log_file_ok else [],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# --- Data directory permissions ---
+# DATA_DIR holds every competitor's personal data, the audit trail and (in a
+# development checkout) the signing key. Restricting it to the account that runs
+# the server costs nothing and is done at startup — see config/datasecurity.py for
+# why this rather than encryption at rest. Off only if a deployment manages its
+# own ACLs and would rather this didn't touch them.
+HARDEN_DATA_DIR = _env_bool('DJANGO_HARDEN_DATA_DIR', default=True)
 
 # Local-memory cache, stated explicitly rather than left to the default: the login
 # throttle keeps its counters here, and this app already runs as exactly one process
@@ -253,6 +446,10 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'apps.competitions.context_processors.active_competition',
                 'apps.accounts.context_processors.access',
+                # Which sidebar entry is the current page (apps/nav.py) — worked
+                # out from the resolved (app, url_name) pair rather than by
+                # comparing url_name inline, which marked two entries at once.
+                'apps.nav.context',
             ],
         },
     },
@@ -326,7 +523,31 @@ LANGUAGES = [
 # translation catalogs.
 LOCALE_PATHS = [BASE_DIR / 'locale']
 
-TIME_ZONE = 'UTC'
+def _local_time_zone():
+    """The zone this machine keeps, because that is the clock the operator reads.
+
+    This app runs on a laptop at a venue. Every timestamp it shows — when the last
+    backup was written, when somebody signed in, the audit trail — is read against
+    the clock on the wall next to it, so a default of UTC is simply wrong by an hour
+    or two all summer, in a way that is easy to misread as right.
+
+    Django needs an IANA key, and Windows does not have one: it reports a localised
+    display name ("Mitteleuropäische Sommerzeit"), which is neither a key nor stable
+    across languages. tzlocal does the CLDR mapping, which is the whole reason it is
+    a dependency. Failing that, UTC — a wrong clock is better than a server that
+    won't start, and DJANGO_TIME_ZONE is the way to say it outright.
+    """
+    if (explicit := os.environ.get('DJANGO_TIME_ZONE')):
+        return explicit
+    try:
+        import tzlocal
+
+        return tzlocal.get_localzone_name() or 'UTC'
+    except Exception:  # noqa: BLE001 - no zone is worth failing a boot over
+        return 'UTC'
+
+
+TIME_ZONE = _local_time_zone()
 
 USE_I18N = True
 

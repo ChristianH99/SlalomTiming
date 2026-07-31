@@ -1,5 +1,4 @@
-import json
-
+from django.db import IntegrityError
 from django.db.models import F, OuterRef, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import redirect
@@ -8,12 +7,27 @@ from django.utils.translation import gettext, ngettext, gettext_lazy as _
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
-from apps.common import safe_next
+from apps.common import json_body, safe_next
 from apps.competitions.models import Competition, CompetitionType
 
 from .bibs import bib_change_effect
 from .forms import ParticipantCreateForm, ParticipantUpdateForm
 from .models import ClassAssignment, EventEntry, Participant
+
+
+def _as_pk(value):
+    """A pk from a JSON payload, or None.
+
+    Handing a non-numeric string to ``filter(pk=…)`` makes Django raise ValueError
+    while it prepares the query — a 500 rather than a 404. A pk that isn't a number
+    matches nothing, which is what None does here.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    text = str(value).strip()
+    return int(text) if text.isascii() and text.isdigit() else None
 
 
 def save_class_assignments(participant, competition, form):
@@ -68,7 +82,9 @@ class ParticipantFormContextMixin:
         # Passed to the template via {{ ...|json_script }}, which handles the
         # JSON serialization — so these stay as plain Python objects here.
         context["class_ranges"] = ranges
-        context["competition_year"] = competition.date.year if competition else None
+        context["page_config"] = {
+            "competitionYear": competition.date.year if competition else None,
+        }
         context["club_options"] = known_clubs()
         context["email_domains"] = COMMON_EMAIL_DOMAINS
         context["check_url"] = reverse("participants:check")
@@ -186,8 +202,14 @@ class ParticipantListView(ListView):
         # Attach each participant's detail-panel rows for the expandable view.
         for participant in context["participants"]:
             participant.detail_rows = participant_detail_rows(participant, collected)
-        context["set_bib_url"] = reverse("participants:set-bib")
-        context["set_dsq_url"] = reverse("participants:set-dsq")
+        # Handed over as data, not written into an inline <script>: nothing on a
+        # page may be inline now that the app ships a CSP (see static/js/shell.js).
+        context["page_config"] = {
+            "urls": {
+                "setBib": reverse("participants:set-bib"),
+                "setDsq": reverse("participants:set-dsq"),
+            },
+        }
         return context
 
 
@@ -205,15 +227,32 @@ class ParticipantCreateView(ParticipantFormContextMixin, CreateView):
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
-        response = super().form_valid(form)
         competition = Competition.get_current()
         bib_number = form.cleaned_data.get("bib_number")
         if bib_number is not None:
-            EventEntry.objects.create(
-                participant=self.object,
-                competition=competition,
-                bib_number=bib_number,
-            )
+            # The form checked this bib was free; between then and here another
+            # desk may have taken it. Ask the form to say so rather than letting
+            # the constraint 500 — and do it before the participant is saved, so
+            # a refused registration doesn't leave half of itself behind.
+            if EventEntry.objects.filter(
+                competition=competition, bib_number=bib_number
+            ).exists():
+                form.add_error("bib_number", _(
+                    "This bib number was just taken by somebody else."))
+                return self.form_invalid(form)
+        response = super().form_valid(form)
+        try:
+            if bib_number is not None:
+                EventEntry.objects.create(
+                    participant=self.object,
+                    competition=competition,
+                    bib_number=bib_number,
+                )
+        except IntegrityError:
+            self.object.delete()
+            form.add_error("bib_number", _(
+                "This bib number was just taken by somebody else."))
+            return self.form_invalid(form)
         save_class_assignments(self.object, competition, form)
         return response
 
@@ -303,13 +342,13 @@ def participant_set_bib(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
+    payload = json_body(request)
+    if not payload:
         return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
 
     participant = Participant.objects.filter(
-        pk=payload.get("participant"), competition_type=competition.competition_type
+        pk=_as_pk(payload.get("participant")),
+        competition_type=competition.competition_type,
     ).first()
     if participant is None:
         return JsonResponse({"ok": False, "error": gettext("Unknown participant.")}, status=404)
@@ -330,7 +369,7 @@ def participant_set_bib(request):
             entry.delete()
         return JsonResponse({"ok": True, "bib": None})
 
-    if not raw.isdigit() or int(raw) < 1:
+    if not (raw.isascii() and raw.isdigit()) or int(raw) < 1:
         return JsonResponse({"ok": False, "error": gettext("Bib must be a positive number.")})
     bib = int(raw)
 
@@ -344,11 +383,22 @@ def participant_set_bib(request):
     if warning:
         return warning
 
-    if entry is None:
-        EventEntry.objects.create(participant=participant, competition=competition, bib_number=bib)
-    elif entry.bib_number != bib:
-        entry.bib_number = bib
-        entry.save(update_fields=["bib_number"])
+    # The check above is a read and this is a write, so two registration desks
+    # can pass it at the same moment and the database decides. It refuses the
+    # loser with an IntegrityError, which without this is a 500 rather than the
+    # same "already taken" the other path gives.
+    try:
+        if entry is None:
+            EventEntry.objects.create(
+                participant=participant, competition=competition, bib_number=bib)
+        elif entry.bib_number != bib:
+            entry.bib_number = bib
+            entry.save(update_fields=["bib_number"])
+    except IntegrityError:
+        return JsonResponse(
+            {"ok": False, "error": gettext("Bib %(bib)s was just taken by somebody else.")
+             % {"bib": bib}}
+        )
     return JsonResponse({"ok": True, "bib": bib})
 
 
@@ -367,13 +417,12 @@ def participant_set_dsq(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
+    payload = json_body(request)
+    if not payload:
         return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
 
     entry = EventEntry.objects.filter(
-        participant__pk=payload.get("participant"),
+        participant__pk=_as_pk(payload.get("participant")),
         participant__competition_type=competition.competition_type,
         competition=competition,
     ).first()
@@ -421,14 +470,27 @@ def _bib_change_warning(competition, old_bib, new_bib, confirmed):
 def participant_check(request):
     """Return participants that look like duplicates of what's being entered:
     an exact (case-insensitive) licence-number match, or the same first and
-    last name. Used by the add/edit form to warn before a duplicate is saved."""
+    last name. Used by the add/edit form to warn before a duplicate is saved.
+
+    Scoped to the **active competition's type**. A participant belongs to
+    exactly one discipline and the form can only ever register them under the
+    active one, so a match from another discipline could not be acted on anyway —
+    but the answer carried that person's name, club and licence number, which made
+    this an unthrottled lookup oracle for anyone holding the Participants page:
+    type a licence number, learn who holds it. It now answers only about people
+    the caller can already see on the participant list.
+    """
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"matches": []})
+
     first_name = request.GET.get("first_name", "").strip()
     last_name = request.GET.get("last_name", "").strip()
     license_number = request.GET.get("license_number", "").strip()
     exclude = request.GET.get("exclude", "")
 
-    base = Participant.objects.all()
-    if exclude.isdigit():
+    base = Participant.objects.filter(competition_type=competition.competition_type)
+    if exclude.isascii() and exclude.isdigit():
         base = base.exclude(pk=int(exclude))
 
     results = {}

@@ -22,60 +22,68 @@
       <div class="shell-brand">
         <a class="brand" href="{% url 'timing:dashboard' %}">Slalom<span class="brand-slash">/</span>Timing</a>
       </div>
+      {% comment %}Which entry is current comes from apps/nav.py, keyed on the
+      (app, url_name) pair Django resolved — not from comparing url_name here.
+      Two apps may use the same url_name, and two do: this template used to mark
+      Timing -> Settings whenever Competition Setup -> Results was open, because
+      both asked for "settings" and only one of them named its app.{% endcomment %}
       <nav class="shell-nav">
-        {% with url_name=request.resolver_match.url_name app_name=request.resolver_match.app_name %}
         {% if 'dashboard' in nav_pages %}
-        <a class="shell-nav-item{% if url_name == 'dashboard' %} active{% endif %}" href="{% url 'timing:dashboard' %}">{% trans "Dashboard" %}</a>
+        <a class="shell-nav-item{% if 'dashboard' in nav_current %} active{% endif %}" href="{% url 'timing:dashboard' %}">{% trans "Dashboard" %}</a>
         {% endif %}
         {% if 'competition_setup' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'competitions' and url_name != 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:list' %}">{% trans "Competition Setup" %}</a>
+        <a class="shell-nav-item shell-nav-parent{% if 'setup' in nav_current %} active{% endif %}" href="{% url 'competitions:list' %}">{% trans "Competition Setup" %}</a>
         <div class="shell-nav-sub">
-          {% comment %}"list"/"add" also match participants:list/add, so guard by app.{% endcomment %}
-          <a class="shell-nav-subitem{% if url_name == 'type-list' or url_name == 'type-add' or app_name == 'competitions' and url_name == 'list' or app_name == 'competitions' and url_name == 'add' %} active{% endif %}" href="{% url 'competitions:list' %}">{% trans "Manage competitions" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'general' %} active{% endif %}" href="{% url 'competitions:general' %}">{% trans "General" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'classes' %} active{% endif %}" href="{% url 'competitions:classes' %}">{% trans "Classes" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'runorder' %} active{% endif %}" href="{% url 'competitions:runorder' %}">{% trans "Run order" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'penalties' %} active{% endif %}" href="{% url 'competitions:penalties' %}">{% trans "Penalties" %}</a>
-          <a class="shell-nav-subitem{% if app_name == 'results' and url_name == 'settings' %} active{% endif %}" href="{% url 'results:settings' %}">{% trans "Results" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.manage' in nav_current %} active{% endif %}" href="{% url 'competitions:list' %}">{% trans "Manage competitions" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.general' in nav_current %} active{% endif %}" href="{% url 'competitions:general' %}">{% trans "General" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.classes' in nav_current %} active{% endif %}" href="{% url 'competitions:classes' %}">{% trans "Classes" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.runorder' in nav_current %} active{% endif %}" href="{% url 'competitions:runorder' %}">{% trans "Run order" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.penalties' in nav_current %} active{% endif %}" href="{% url 'competitions:penalties' %}">{% trans "Penalties" %}</a>
+          <a class="shell-nav-subitem{% if 'setup.results' in nav_current %} active{% endif %}" href="{% url 'results:settings' %}">{% trans "Results" %}</a>
         </div>
         {% endif %}
         {% if 'participants' in nav_pages %}
-        <a class="shell-nav-item{% if request.resolver_match.app_name == 'participants' %} active{% endif %}" href="{% url 'participants:list' %}">{% trans "Participants" %}</a>
+        <a class="shell-nav-item{% if 'participants' in nav_current %} active{% endif %}" href="{% url 'participants:list' %}">{% trans "Participants" %}</a>
         {% endif %}
         {% comment %}Timing sub-pages will grow; Settings is kept last (future
         pages go above it).{% endcomment %}
         {% if 'timing' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'timing' and url_name != 'dashboard' %} active{% endif %}" href="{% url 'timing:manual' %}">{% trans "Timing" %}</a>
+        <a class="shell-nav-item shell-nav-parent{% if 'timing' in nav_current %} active{% endif %}" href="{% url 'timing:manual' %}">{% trans "Timing" %}</a>
         <div class="shell-nav-sub">
-          <a class="shell-nav-subitem{% if url_name == 'manual' %} active{% endif %}" href="{% url 'timing:manual' %}">{% trans "Manual timing" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'auto' %} active{% endif %}" href="{% url 'timing:auto' %}">{% trans "Auto timing" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'settings' %} active{% endif %}" href="{% url 'timing:settings' %}">{% trans "Settings" %}</a>
+          <a class="shell-nav-subitem{% if 'timing.manual' in nav_current %} active{% endif %}" href="{% url 'timing:manual' %}">{% trans "Manual timing" %}</a>
+          <a class="shell-nav-subitem{% if 'timing.auto' in nav_current %} active{% endif %}" href="{% url 'timing:auto' %}">{% trans "Auto timing" %}</a>
+          <a class="shell-nav-subitem{% if 'timing.settings' in nav_current %} active{% endif %}" href="{% url 'timing:settings' %}">{% trans "Settings" %}</a>
         </div>
         {% endif %}
         {% if 'marshal_posts' in nav_pages %}
-        <a class="shell-nav-item{% if url_name == 'marshal-posts' %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">{% trans "Marshal Posts" %}</a>
+        <a class="shell-nav-item{% if 'marshal_posts' in nav_current %} active{% endif %}" href="{% url 'competitions:marshal-posts' %}">{% trans "Marshal Posts" %}</a>
         {% endif %}
         {% if 'results' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'results' and url_name != 'settings' %} active{% endif %}" href="{% url 'results:index' %}">{% trans "Results" %}</a>
+        <a class="shell-nav-item shell-nav-parent{% if 'results' in nav_current %} active{% endif %}" href="{% url 'results:index' %}">{% trans "Results" %}</a>
         <div class="shell-nav-sub">
+          {% comment %}One entry per group / class, so which of them is current
+          takes the URL's kwargs as well as its name.{% endcomment %}
           {% for g in results_overall %}
-            <a class="shell-nav-subitem{% if url_name == 'overall' and request.resolver_match.kwargs.method == g.method and request.resolver_match.kwargs.runs == g.counted_runs %} active{% endif %}" href="{% url 'results:overall' g.method g.counted_runs %}">{% blocktrans with label=g.method_label runs=g.counted_runs %}Overall · {{ label }} · {{ runs }} Runs{% endblocktrans %}</a>
+            <a class="shell-nav-subitem{% if 'results.overall' in nav_current and request.resolver_match.kwargs.method == g.method and request.resolver_match.kwargs.runs == g.counted_runs %} active{% endif %}" href="{% url 'results:overall' g.method g.counted_runs %}">{% blocktrans with label=g.method_label runs=g.counted_runs %}Overall · {{ label }} · {{ runs }} Runs{% endblocktrans %}</a>
           {% endfor %}
+          {% comment %}display_name, not the bare name: these entries used to
+          read "1", "2", "Bobbycar Mini" while the page each one opens is
+          titled "Result Class 7". A class is named as a class here.{% endcomment %}
           {% for cc in results_classes %}
-            <a class="shell-nav-subitem{% if url_name == 'class' and request.resolver_match.kwargs.pk == cc.pk %} active{% endif %}" href="{% url 'results:class' cc.pk %}">{{ cc.name }}</a>
+            <a class="shell-nav-subitem{% if 'results.class' in nav_current and request.resolver_match.kwargs.pk == cc.pk %} active{% endif %}" href="{% url 'results:class' cc.pk %}">{{ cc.display_name }}</a>
           {% empty %}
             <span class="shell-nav-subitem shell-nav-subitem--muted">{% trans "No running classes" %}</span>
           {% endfor %}
         </div>
         {% endif %}
         {% if 'import_export' in nav_pages %}
-        <a class="shell-nav-item shell-nav-parent{% if app_name == 'transfer' %} active{% endif %}" href="{% url 'transfer:export' %}">{% trans "Import / Export" %}</a>
+        <a class="shell-nav-item shell-nav-parent{% if 'backup' in nav_current %} active{% endif %}" href="{% url 'transfer:backup' %}">{% trans "Backup" %}</a>
         <div class="shell-nav-sub">
-          <a class="shell-nav-subitem{% if url_name == 'export' %} active{% endif %}" href="{% url 'transfer:export' %}">{% trans "Export" context "transfer" %}</a>
-          <a class="shell-nav-subitem{% if url_name == 'import' or url_name == 'review' %} active{% endif %}" href="{% url 'transfer:import' %}">{% trans "Import" %}</a>
+          <a class="shell-nav-subitem{% if 'backup.backup' in nav_current %} active{% endif %}" href="{% url 'transfer:backup' %}">{% trans "Automatic backup" %}</a>
+          <a class="shell-nav-subitem{% if 'backup.export' in nav_current %} active{% endif %}" href="{% url 'transfer:export' %}">{% trans "Export" context "transfer" %}</a>
+          <a class="shell-nav-subitem{% if 'backup.import' in nav_current %} active{% endif %}" href="{% url 'transfer:import' %}">{% trans "Import" %}</a>
         </div>
         {% endif %}
-        {% endwith %}
       </nav>
       <div class="shell-sidebar-footer">
         {% if can_manage_users %}
@@ -95,7 +103,11 @@
     <div class="shell-overlay" id="shell-overlay"></div>
     <div class="shell-main">
       <header class="shell-topbar">
-        <button class="shell-hamburger" id="shell-hamburger" aria-expanded="true" aria-controls="shell-sidebar" aria-label="{% trans 'Toggle navigation' %}">
+        {% comment %}No aria-expanded here: the server cannot know the viewport,
+        and the sidebar is shown by default on desktop but off-canvas on mobile,
+        so a rendered "true" was simply wrong on a phone until shell.js ran.
+        shell.js sets it from the actual state on load.{% endcomment %}
+        <button class="shell-hamburger" id="shell-hamburger" aria-controls="shell-sidebar" aria-label="{% trans 'Toggle navigation' %}">
           <span class="shell-hamburger-icon"><span></span><span></span><span></span></span>
         </button>
         <div class="topbar-titles">
@@ -114,8 +126,12 @@
         </div>
       </header>
       <main class="content {% block content_class %}{% endblock %}" id="main-content">
+        {% comment %}role="status" (an aria-live="polite" region), so a message
+        is announced rather than silently added to the page — it is the app's
+        answer to something the operator just did. shell.js adds each one a
+        dismiss button.{% endcomment %}
         {% if messages %}
-          <ul class="messages">
+          <ul class="messages" role="status">
             {% for message in messages %}
               <li class="notice notice--{{ message.tags|default:'info' }}">{{ message }}</li>
             {% endfor %}
@@ -123,6 +139,26 @@
         {% endif %}
         {% block content %}{% endblock %}
       </main>
+    </div>
+  </div>
+
+  {% comment %}The app's own confirm/alert dialog, on every page. Nothing calls
+  window.confirm() or window.alert(): a browser dialog is chrome, not this app —
+  it wears the OS's styling, cannot be translated by us, states its question in a
+  single unformatted string and puts the operator's answer behind a control that
+  looks nothing like the rest of the page. The one exception is the browser's own
+  "leave this page?" on tab close, which no page is allowed to draw.
+
+  Filled by window.appConfirm()/appAlert() in shell.js, which also give it the
+  focus management every dialog here gets.{% endcomment %}
+  <div class="modal-overlay" id="app-dialog" hidden data-app-dialog>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
+      <h2 class="modal-title" id="app-dialog-title" data-dialog-title></h2>
+      <div class="modal-body" data-dialog-body></div>
+      <div class="modal-actions">
+        <button type="button" class="button" data-dialog-accept></button>
+        <button type="button" class="button button--secondary" data-dialog-cancel>{% trans "Cancel" %}</button>
+      </div>
     </div>
   </div>
 
@@ -141,140 +177,16 @@
   {# Page help: the "?" in the topbar (block topbar_actions) opens this modal. #}
   {% block help_modal %}{% endblock %}
 
-  <script>
-    // Guard against leaving a page with unsaved form changes. Opt in by putting
-    // data-unsaved-guard on the form; pages fire an "unsaved-change" event for
-    // mutations that aren't plain input/change (drag, add/remove rows, set-all).
-    (function () {
-      const form = document.querySelector("form[data-unsaved-guard]");
-      const modal = document.getElementById("unsaved-modal");
-      if (!form || !modal) return;
+  {% comment %}The shell's own behaviour — unsaved-changes guard, data-confirm
+  forms, the help pop-up, the language menu, the sidebar toggle. A file rather
+  than inline blocks because the app ships a Content-Security-Policy, which
+  cannot tell our inline script from injected inline script.{% endcomment %}
+  <script src="{% static 'js/shell.js' %}"></script>
+  {% block scripts %}{% endblock %}
 
-      let dirty = false;
-      let bypass = false;      // set once we intend to navigate (save/discard/submit)
-      let pendingUrl = null;
 
-      // Controls inside a data-no-dirty region don't edit what gets saved (preview
-      // and other view-only switches), so they must not count as a change.
-      const markDirty = (event) => {
-        const target = event && event.target;
-        if (target && target.closest && target.closest("[data-no-dirty]")) return;
-        dirty = true;
-      };
-      form.addEventListener("input", markDirty);
-      form.addEventListener("change", markDirty);
-      document.addEventListener("unsaved-change", markDirty);
-      form.addEventListener("submit", () => { bypass = true; });
 
-      function openModal() { modal.hidden = false; document.body.classList.add("modal-open"); }
-      function closeModal() { modal.hidden = true; document.body.classList.remove("modal-open"); pendingUrl = null; }
 
-      document.addEventListener("click", (event) => {
-        const link = event.target.closest("a[href]");
-        if (!link || bypass || !dirty) return;
-        if (link.target === "_blank" || link.hasAttribute("download")) return;
-        const href = link.getAttribute("href");
-        if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
-        const dest = new URL(link.href, window.location.href);
-        if (dest.origin !== window.location.origin) return;  // only guard in-app nav
-        event.preventDefault();
-        pendingUrl = link.href;
-        openModal();
-      });
 
-      modal.querySelector("[data-unsaved-cancel]").addEventListener("click", closeModal);
-      modal.addEventListener("click", (event) => { if (event.target === modal) closeModal(); });
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && !modal.hidden) closeModal();
-      });
-      modal.querySelector("[data-unsaved-discard]").addEventListener("click", () => {
-        const url = pendingUrl;
-        bypass = true; closeModal();
-        if (url) window.location.href = url;
-      });
-      modal.querySelector("[data-unsaved-save]").addEventListener("click", () => {
-        bypass = true;
-        const next = form.querySelector('input[name="next"]');
-        if (next && pendingUrl) next.value = pendingUrl;  // return here after saving
-        form.submit();
-      });
-    })();
-  </script>
-
-  <script>
-    // Page help: any [data-help-open] button opens the page's [data-help-modal];
-    // click the ×/backdrop or press Escape to close. A page-internal pop-up.
-    (function () {
-      const openers = document.querySelectorAll("[data-help-open]");
-      const modal = document.querySelector("[data-help-modal]");
-      if (!openers.length || !modal) return;
-      const open = () => { modal.hidden = false; document.body.classList.add("modal-open"); };
-      const close = () => { modal.hidden = true; document.body.classList.remove("modal-open"); };
-      openers.forEach((btn) => btn.addEventListener("click", open));
-      modal.addEventListener("click", (event) => {
-        if (event.target === modal || event.target.closest("[data-help-close]")) close();
-      });
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && !modal.hidden) close();
-      });
-    })();
-  </script>
-
-  <script>
-    // Topbar language selector: toggle the menu; close on outside click or Escape.
-    (function () {
-      const root = document.querySelector("[data-lang-switcher]");
-      if (!root) return;
-      const toggle = root.querySelector("[data-lang-toggle]");
-      const menu = root.querySelector("[data-lang-menu]");
-      if (!toggle || !menu) return;
-
-      const open = () => { menu.hidden = false; toggle.setAttribute("aria-expanded", "true"); };
-      const close = () => { menu.hidden = true; toggle.setAttribute("aria-expanded", "false"); };
-
-      toggle.addEventListener("click", (event) => {
-        event.stopPropagation();
-        menu.hidden ? open() : close();
-      });
-      document.addEventListener("click", (event) => {
-        if (!menu.hidden && !root.contains(event.target)) close();
-      });
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && !menu.hidden) close();
-      });
-    })();
-  </script>
-
-  <script>
-    (function () {
-      const shell = document.querySelector(".shell");
-      const overlay = document.getElementById("shell-overlay");
-      const toggle = document.getElementById("shell-hamburger");
-      if (!shell || !overlay || !toggle) return;
-
-      const isMobile = () => window.matchMedia("(max-width: 900px)").matches;
-
-      // The sidebar is shown by default on desktop and hidden (off-canvas) on
-      // mobile, so "expanded" is derived differently per viewport.
-      function syncAria() {
-        const shown = isMobile()
-          ? shell.classList.contains("sidebar-open")
-          : !shell.classList.contains("sidebar-collapsed");
-        toggle.setAttribute("aria-expanded", String(shown));
-      }
-
-      toggle.addEventListener("click", () => {
-        // Mobile slides the sidebar in; desktop collapses it out of the way.
-        shell.classList.toggle(isMobile() ? "sidebar-open" : "sidebar-collapsed");
-        syncAria();
-      });
-      overlay.addEventListener("click", () => {
-        shell.classList.remove("sidebar-open");
-        syncAria();
-      });
-      window.addEventListener("resize", syncAria);
-      syncAria();
-    })();
-  </script>
 </body>
 </html>

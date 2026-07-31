@@ -518,17 +518,42 @@ class ClassResults:
     unranked: list = field(default_factory=list)    # still missing a counted run
 
 
-def compute_class_results(competition, cclass):
-    """The full result of one class: ranked complete competitors (repeat entries and
-    ties handled), the ones whose event ended in a state code, then whoever is
-    still to finish."""
-    precision = competition.competition_type.timing_precision
+def event_data(competition):
+    """The three whole-event reads every results table starts from, done once.
+
+    ``compute_class_results`` used to do all three for itself, so "export
+    everything" paid for them once per class: 42 queries for one class, 137 for
+    six, on an event whose runs are a single query. A caller rendering more than
+    one table reads this once and hands it to each.
+    """
     entries = {
         entry.pk: entry
         for entry in competition.entries.select_related("participant").all()
     }
-    starters = competition.starters_by_class().get(cclass.pk, [])
-    index = RunIndex(competition)
+    return {
+        "entries": entries,
+        # participant pk -> Participant, for the row builder (apps/results/views.py).
+        "participants": {e.participant_id: e.participant for e in entries.values()},
+        "by_class": competition.starters_by_class(),
+        "index": RunIndex(competition),
+        # The running classes, asked for by the column vocabulary, the Overall
+        # grouping and the export loop — a query each, times the class count.
+        "running": competition._running_classes_ordered(),
+    }
+
+
+def compute_class_results(competition, cclass, data=None):
+    """The full result of one class: ranked complete competitors (repeat entries and
+    ties handled), the ones whose event ended in a state code, then whoever is
+    still to finish.
+
+    ``data`` is ``event_data(competition)`` when the caller is rendering several
+    tables; without it this reads the event for itself."""
+    precision = competition.competition_type.timing_precision
+    data = data or event_data(competition)
+    entries = data["entries"]
+    starters = data["by_class"].get(cclass.pk, [])
+    index = data["index"]
     competitors = []
     for starter in starters:
         entry_pk, _, occurrence = starter.key
@@ -564,13 +589,13 @@ _METHOD_ORDER = {
 }
 
 
-def overall_groups(competition):
+def overall_groups(competition, running=None):
     """The distinct ``(scoring_method, counted_runs)`` groups among the running
     classes — one Overall page each. Returns ordered descriptors so the sidebar and
     the index can list them (method order, then run count)."""
     labels = dict(CompetitionClass.Scoring.choices)
     groups = {}
-    for cc in competition._running_classes_ordered():
+    for cc in (competition._running_classes_ordered() if running is None else running):
         key = (cc.scoring_method, cc.counted_runs or 0)
         groups.setdefault(key, []).append(cc)
     descriptors = []
@@ -600,21 +625,22 @@ class OverallResults:
     unranked: list = field(default_factory=list)
 
 
-def compute_overall_results(competition, method, counted_runs):
+def compute_overall_results(competition, method, counted_runs, data=None):
     """Rank competitors across every running class that shares ``method`` and
     ``counted_runs`` into one table. A participant entered in two such classes shows
-    once per class (dedup keys by participant *and* class), each with its own row."""
+    once per class (dedup keys by participant *and* class), each with its own row.
+
+    ``data`` is ``event_data(competition)`` when the caller is rendering several
+    tables — see there."""
     precision = competition.competition_type.timing_precision
-    entries = {
-        entry.pk: entry
-        for entry in competition.entries.select_related("participant").all()
-    }
+    data = data or event_data(competition)
+    entries = data["entries"]
     classes = [
-        cc for cc in competition._running_classes_ordered()
+        cc for cc in data["running"]
         if cc.scoring_method == method and (cc.counted_runs or 0) == counted_runs
     ]
-    by_class = competition.starters_by_class()
-    index = RunIndex(competition)
+    by_class = data["by_class"]
+    index = data["index"]
     competitors = []
     for cclass in classes:
         for starter in by_class.get(cclass.pk, []):

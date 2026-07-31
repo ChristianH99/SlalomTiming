@@ -21,7 +21,7 @@ PAGES = [
     ("timing", _("Timing")),
     ("marshal_posts", _("Marshal Posts")),
     ("results", _("Results")),
-    ("import_export", _("Import / Export")),
+    ("import_export", _("Backup")),
 ]
 
 PAGE_KEYS = [key for key, _ in PAGES]
@@ -83,12 +83,20 @@ PAGE_URLS = {
     # Setup, so it can be granted (or withheld) on its own.
     "import_export": {
         ("transfer", name)
-        for name in ("export", "import", "review", "cancel", "csv-sample")
+        for name in ("backup", "backup-status", "backup-folders",
+                     "export", "import", "review",
+                     "cancel", "csv-sample")
     },
 }
 
-# URLs that must never be gated: the timing device posts here and can't log in.
-OPEN = {("timing", "signal")}
+# URLs that must never be gated, and the whole of the reason each one is:
+#   * the timing device posts its signals and cannot log in (the view authorises
+#     itself instead — see apps/timing/views.py _signal_authorized);
+#   * /healthz is what a monitor or the reverse proxy asks, and a check that needs
+#     a session is not a check. It answers "ok" or "error" and nothing else, so
+#     being open costs nothing (config/health.py).
+# An app_name of "" is a route in the root URLconf, outside any include().
+OPEN = {("timing", "signal"), ("", "health")}
 
 
 def pages_for_url(app_name, url_name):

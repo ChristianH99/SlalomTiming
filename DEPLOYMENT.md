@@ -115,6 +115,35 @@ Do **not** add `--workers`, do not run it under a process manager that spawns
 several copies, and do not use `runserver`: it is a development server, and Django
 says plainly that it is not for production use.
 
+### 3.3 Is it up?
+
+```bash
+curl -fsS http://127.0.0.1:8000/healthz     # {"status": "ok"}
+```
+
+`/healthz` is the one URL that needs no login, and it answers in one word on
+purpose. It is not a status page: it says nothing about which device is attached,
+whether this venue is timing or whether the backup is working, because nothing
+that needs a session can be a health check and anything more would be venue state
+handed to anyone who asks. What it does prove is the part a check cannot see from
+outside — that the process is serving *and* its database answers. A server whose
+disk has filled or whose migration never finished still accepts the connection;
+this returns **503** instead, and writes the reason to the log.
+
+Point systemd, Caddy or an uptime check at it. There is deliberately no
+`systemctl` health hook in the unit file: a restart loop on a failing database is
+how you lose an event rather than a request.
+
+Three other things happen at every start, so that none of them is a step anybody
+has to remember (all in `config/asgi.py`): expired **sessions** are swept — Django
+never prunes them for the database backend, so the table otherwise grows for the
+life of the install and every "who else is signed in?" scans it, which means
+**there is no `clearsessions` cron job to add**; the **CP540 link** is
+re-established if the operator left the device connected; and the **automatic
+backup** resumes. The backup's destination and interval are settings *in the app*
+(Backup → Automatic backup), not environment variables — there is nothing to put
+in `.env` for it.
+
 ### 3.4 TLS — pick one of these before the first event
 
 The app defaults to HTTPS and **there is one switch that turns that off**
@@ -161,6 +190,7 @@ uv sync
 uv run python manage.py migrate --noinput
 uv run python manage.py collectstatic --noinput
 sudo systemctl restart slalomtiming      # or restart start-server.ps1
+curl -fsS http://127.0.0.1:8000/healthz  # it came back up, and its database answers
 ```
 
 Never mid-event. Static file names are content-hashed, so browsers pick up new CSS
@@ -170,8 +200,9 @@ and JS on the next load without a forced refresh.
 
 **Before the event**
 
-- [ ] Server started; open `/` and confirm the Dashboard renders **styled** (an
-      unstyled page means `collectstatic` didn't run).
+- [ ] Server started; `curl -fsS http://127.0.0.1:8000/healthz` says `ok`, then open
+      `/` and confirm the Dashboard renders **styled** (an unstyled page means
+      `collectstatic` didn't run).
 - [ ] Log in from one of the marshals' phones over the venue network — this catches
       a wrong `ALLOWED_HOSTS`, a missing certificate and a firewall in one go.
 - [ ] The event is selected as the current competition, classes and run order are
@@ -180,7 +211,12 @@ and JS on the next load without a forced refresh.
       the live line log ticking.
 - [ ] Fire one test start/finish through the Simulator or the real rig and see it
       land on the Manual timing view.
-- [ ] Copy `db.sqlite3` somewhere else *now*, so there is a known-good starting point.
+- [ ] **Backup → Automatic backup**: plug a USB stick in, then **Browse…** and pick the
+      folder — the list is the folders on *this* machine, whichever device you happen to
+      be looking at the page from. Switch the copies on and save: that checks the folder
+      can be written to and takes the first copy straight away, and the green panel names
+      the file it wrote. That is the whole backup procedure; there is nothing to do again
+      during the day.
 
 **Starting the server**
 
@@ -189,19 +225,32 @@ Then start Caddy if it isn't already running as a service.
 
 **During the event**
 
-- The log is the first place to look: `journalctl -u slalomtiming -f`, or the
-  Daphne window on Windows.
-- `timing_unrecorded.log` in the project root should stay empty. Anything in it is a
-  timing signal the database refused — the time is in that file, not lost, and needs
-  entering by hand.
-- Take a snapshot between runs:
-  `uv run python -c "import sqlite3; sqlite3.connect('db.sqlite3').execute('VACUUM INTO ?', ('backup-YYYYMMDD-HHMM.sqlite3',))"`
-  and copy it to a USB stick or a second machine. There is no automatic backup yet.
+- The log is the first place to look: `<data dir>/logs/slalomtiming.log` (who signed
+  in, who was refused, anything the database would not take), plus
+  `journalctl -u slalomtiming -f` or the Daphne window on Windows.
+- `<data dir>/logs/audit.log` is the other one: every change anybody made, with the
+  account, the device address and what was sent. Download it from **User Access →
+  Audit log** (superuser only). It answers "who put a DSQ on run 412" — keep it with
+  the results, and keep it until the placings are final.
+- `timing_unrecorded.log` **in the data directory** (`SLALOM_DATA_DIR`, which is the
+  project directory for a checkout and `%LOCALAPPDATA%\SlalomTiming\data` for the
+  packaged install) should stay empty. Anything in it is a timing signal the database
+  refused — the time is in that file, not lost, and needs entering by hand.
+- **Backup → Automatic backup** is the one page worth a glance between runs. Green
+  means copies are being written and names the last one; red means they are not, and
+  says why — almost always the stick has been unplugged. The copies stop *silently*
+  otherwise, so a look at this page is the only thing that catches it.
+  A copy is a complete, self-contained database (SQLite's own online-backup API, not
+  a file copy, so it is consistent even though the rig is recording through it). To
+  use one, stop the server and put it in place of `db.sqlite3` — nothing else.
 
 **After the event**
 
-- Export the event from **Import / Export → Export** (a self-contained `.zip`) and
-  keep it with the results PDFs.
+- Export the event from **Backup → Export** (a self-contained `.zip`) and keep it
+  with the results PDFs. The automatic copies are a whole database, for getting the
+  event *back*; the export is one event, for moving or archiving it.
+- Download the audit log (**User Access → Audit log**) and keep it with them. It is
+  the only record of who changed what, and it rotates.
 - Stop the server; keep `db.sqlite3` until the results are final and published.
 
 ## 6. When something is wrong
@@ -211,14 +260,19 @@ Then start Caddy if it isn't already running as a service.
 | Every page is unstyled, no live updates | `collectstatic` hasn't run, or `STATIC_ROOT` is empty | `uv run python manage.py collectstatic --noinput`, restart |
 | `Slalom Timing is already running against this directory` | A server process is still up (section 1, rule 1) | Stop it — check Task Manager / `systemctl status slalomtiming`. The lock is `run/server.lock`. |
 | Results-PDF logo previews 404 | `DJANGO_SERVE_MEDIA=False` without the proxy serving `/media/` | Unset it, or add the `handle_path /media/*` block in the Caddyfile |
-| `ImproperlyConfigured: DJANGO_SECRET_KEY is not set` | `.env` missing or not loaded into the process | Section 2; systemd needs `EnvironmentFile=`, PowerShell uses `start-server.ps1` |
 | `ImproperlyConfigured: DJANGO_SECURE_COOKIES=False is no longer honoured` | An old `.env` from before the TLS decision | Section 3.4 — set up TLS, or set `DJANGO_ALLOW_PLAIN_HTTP=True` deliberately |
 | Login says "Too many failed attempts" | The failed-attempt lockout (username + IP) | Wait it out, restart the server, or raise `DJANGO_LOGIN_MAX_ATTEMPTS` |
+| `ImproperlyConfigured: DJANGO_ALLOWED_HOSTS is empty and DEBUG is False` | The `.env` never named the hosts this server answers on. Refused at startup rather than at every request: empty, the app starts and then rejects every phone at the venue with `DisallowedHost` | Set `DJANGO_ALLOWED_HOSTS` to the names and addresses in use (section 2). `collectstatic` does not need it and does not check |
+| `/healthz` returns 503 but pages load | The database refused the health check's own query — a full disk, a locked file, an unapplied migration | `<data dir>/logs/slalomtiming.log` has the exception; `manage.py migrate`, check free space |
+| `ImproperlyConfigured: DJANGO_SECRET_KEY is not set and DEBUG is False` | `.env` missing, or not loaded into the process. A deployment must bring its own signing key — there is deliberately no fallback | Section 2; systemd needs `EnvironmentFile=`, PowerShell uses `start-server.ps1` |
+| Backup page is red: "does not exist — is the drive plugged in?" | The destination is gone (stick unplugged, drive letter changed) | Plug it back in; the next tick writes again by itself. Nothing was deleted — pruning only runs after a copy succeeds |
+| The destination filled up | One copy a minute of a growing database | Lower **Keep**, or lengthen the interval. The newest copy is the one that fails when a disk is full, which is the one you wanted |
+| A logo or an imported emblem doesn't appear | It was refused as not-an-image (uploads say so; an import drops it silently and imports everything else) | Upload the emblem again from Results settings |
 | A browser insists on HTTPS after you moved to plain HTTP | An HSTS pin from an earlier HTTPS run | Nothing server-side can revoke it; clear the site's HSTS entry in the browser and see section 3.4 |
 | `DisallowedHost` in the log | The hostname isn't in `DJANGO_ALLOWED_HOSTS` | Add it (including the bare IP if people type that), restart |
 | Browser refuses to submit a form, CSRF error | Origin missing from `DJANGO_CSRF_TRUSTED_ORIGINS` | Add `https://<host>`, restart |
 | Live views stop updating for *some* browsers | Two server processes | See rule 1 — one process only |
 | `database is locked` in the log | Heavy write contention on SQLite | Reduce open dashboards; WAL + a 30 s busy timeout are already configured |
 | Setup says Slalom Timing is running | The launcher holds a mutex while the server is up | Close the black server window, then run Setup again |
-| The installed app opens an empty event | Its database is `%LOCALAPPDATA%\SlalomTiming\data`, not the checkout's | Import the event's `.zip` (Import / Export), or copy `db.sqlite3` in with the app closed |
+| The installed app opens an empty event | Its database is `%LOCALAPPDATA%\SlalomTiming\data`, not the checkout's | Import the event's `.zip` (Backup → Import), or copy `db.sqlite3` in with the app closed |
 | Setup warns "unknown publisher" | The installer isn't code-signed | "More info" → "Run anyway"; see build/README.md |

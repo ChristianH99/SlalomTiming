@@ -24,12 +24,38 @@ participants / entering penalties) — no rewrite planned, just wider access + a
 ## Layout
 
 ```
-config/                  Django project (settings, urls, asgi/wsgi). singleinstance.py takes an
+config/                  Django project (settings, urls, asgi/wsgi). health.py is /healthz —
+                         the one ungated URL outside the timing device's, answering "ok" or
+                         a 503 and deliberately nothing else: it is unauthenticated, so
+                         which device is attached or whether this venue is timing would be
+                         venue state handed to anyone who asks. It runs one SELECT 1,
+                         because a process listening while its database has gone is the
+                         failure a check exists to catch. It is also the only path exempt
+                         from the HTTPS redirect (settings SECURE_REDIRECT_EXEMPT) — every
+                         local probe asks for it over plain http — and a test refuses any
+                         second entry on that list. csp.py is the
+                         Content-Security-Policy middleware (see Security); media.py puts
+                         /media/ behind the login; datasecurity.py restricts DATA_DIR to the
+                         account running the server at startup (a 0o077 umask + chmod on POSIX,
+                         an icacls grant naming SYSTEM and Administrators *by SID* on Windows,
+                         because those names are localised). singleinstance.py takes an
                          exclusive lock on run/server.lock from asgi.py, so only one server process
                          ever serves an event (the channel layer, the CP540 reader thread and its
                          event loop are all per-process — a second worker splits the live updates
                          silently). Refused in a deployment, warned about while DEBUG is on.
-                         tests.py holds the deployment tests (the DEBUG=False-only failures).
+                         tests.py holds the deployment tests (the DEBUG=False-only failures)
+                         plus the cross-cutting file checks (CSP, the design-system
+                         scales, the sidebar registry, the JS structural check).
+                         hostility_tests.py is its sibling for what happens when a client
+                         is *unkind*: it **discovers** every JSON endpoint from the
+                         URLconf and asks each the same hostile questions, so the
+                         endpoint added next month is covered the day it is added. The
+                         malformed-id 500 was reachable on nine endpoints at once precisely because the
+                         tests that existed named their targets one at a time. It also
+                         holds the concurrency tests, which need
+                         `django_db(transaction=True)`: the ordinary fixture wraps a test
+                         in a transaction other threads cannot see, so a threaded test
+                         written on it is a test of nothing.
                          settings.py: HTTPS is the default once DEBUG is off and there is exactly
                          ONE way off it — DJANGO_ALLOW_PLAIN_HTTP (the older per-setting hatches
                          DJANGO_SECURE_SSL_REDIRECT/DJANGO_SECURE_COOKIES now *refuse to start*,
@@ -41,6 +67,14 @@ config/                  Django project (settings, urls, asgi/wsgi). singleinsta
                          Django's fortnight) and the login-throttle limits. DATA_DIR (env
                          SLALOM_DATA_DIR, default BASE_DIR) is where everything the app *writes*
                          goes — db.sqlite3, media/, run/server.lock, timing_unrecorded.log. A
+                         asgi.py is where a *server's* startup rules live, as opposed to
+                         settings': the single-instance lock, the CP540 and backup
+                         autostarts, the data-dir hardening, the expired-session sweep (so
+                         there is no clearsessions schedule to add) and the refusal to
+                         start with DEBUG off and an empty ALLOWED_HOSTS. That last one is
+                         not in settings.py on purpose — collectstatic is a required
+                         release step and the packaged build's own, and runs with DEBUG off
+                         and no hosts quite legitimately.
                          checkout keeps them beside the code; the packaged Windows build points it
                          at %LOCALAPPDATA% because the next installer overwrites the code and the
                          database is the event. Anything written at runtime belongs under DATA_DIR,
@@ -103,19 +137,52 @@ Cross-cutting bits       Each app also carries the ordinary Django plumbing: adm
                          app's own screens don't edit), apps.py, urls.py and migrations/.
                          apps/timing/routing.py is the WebSocket URL map (ws/timing/ → the legacy
                          TimingConsumer, ws/timing/live/ → TimingLiveConsumer), reached from
-                         config/asgi.py. Two **context processors** run on every render (settings
+                         config/asgi.py. Three **context processors** run on every render (settings
                          TEMPLATES): apps/competitions/context_processors.active_competition (the
                          active competition plus its running classes and Overall groups, which is
-                         how the sidebar lists a Results sub-page each) and the accounts one above.
+                         how the sidebar lists a Results sub-page each), the accounts one above,
+                         and apps/nav.context (which sidebar entry is the current page).
                          **templatetags/**: apps/competitions/templatetags/competitions_tags.py
                          (participant_classes — a participant's classes under the competition's
                          assignment method) and apps/results/templatetags/pdf_markup.py.
+apps/audit.py            Who changed what. AuditMiddleware writes one line per
+                         *mutating* request to `<DATA_DIR>/logs/audit.log` — user, IP,
+                         view name, response code and the redacted payload. A middleware
+                         rather than a call per view (forty endpoints is forty chances to
+                         forget one, and the forgotten one is the one somebody asks
+                         about), and a file rather than a table (a table means a DB write
+                         on every edit, competing for the one SQLite write lock the CP540
+                         reader needs). GETs are never recorded — the live views re-fetch
+                         several times a second per open browser. Downloaded whole
+                         (rotated files first, so it reads chronologically) from
+                         accounts:audit-log, superuser-only.
 apps/common.py           Helpers shared across apps: safe_next() resolves the POSTed ?next to
                          an in-app URL (rejecting off-site ones), so the unsaved-changes
                          modal's "Save changes" lands where the user was navigating.
                          other_signed_in_users() reads the live session table — how a page
                          owning an installation-wide setting knows whether changing it
                          would move somebody else's screen (see select_competition).
+                         json_body() is the one door a posted JSON body comes through.
+                         Three endpoints parsed their own and all three were 500s:
+                         `json.loads` on *bytes* sniffs the encoding from the leading
+                         octets, so a body starting with a null byte is read as UTF-16
+                         and raises UnicodeDecodeError — a ValueError but **not** a
+                         JSONDecodeError, which is what they caught; and valid JSON need
+                         not be an object, so `"a string"` parses and every
+                         `payload.get(...)` after it is an AttributeError. Anything that
+                         is not an object comes back as {}.
+apps/nav.py              Which sidebar entry base.html marks as current: entry id ->
+                         the (app_name, url_name) pairs that are that page, plus
+                         PARENTS (a parent is marked when any child is). A context
+                         processor exposes it as `nav_current`. It is a registry rather
+                         than a comparison in the template because a url_name is only
+                         unique *within* an app: both entries asking whether url_name ==
+                         "settings" is what made Competition Setup -> Results
+                         (`results:settings`) light up Timing -> Settings as well. The
+                         sets being pairwise disjoint, and every pair in them still
+                         existing in the URLconf, are what config/tests.py
+                         ::TestTheSidebarMarksOnePage checks — so the *class* of bug
+                         fails a test rather than being noticed on a screen.
 apps/competitions/       Competition, CompetitionType, CompetitionClass; active-competition
                          selection — which is one global flag for the whole installation, so
                          select_competition() names the other people signed in and refuses
@@ -141,15 +208,22 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          apps/results/resultscalc.py),
                          plus position (list order) and run_position (which run it starts in;
                          classes sharing a run_position start together). Competition.run_groups()
-                         returns the ordered runs. Two class methods are about how a class *reads*
+                         returns the ordered runs. Three class methods are about how a class *reads*
                          and whether it works at all: display_name() writes it the one way every
-                         results heading and PDF does ("Class 7", but "Klasse 7" alone for a class
-                         already named that — the prefix used to double), and scoring_warning()
+                         results heading, the sidebar's Results sub-list and every PDF does —
+                         "Class 7", the word **always** prefixed, never conditionally. It used to
+                         be skipped for a name already opening with the word in any shipped
+                         language, which made the heading depend on how somebody had typed a name;
+                         the division is now that the organiser owns the name and the app owns the
+                         word. name_hint() is the other half: a name that repeats the word ("Klasse
+                         3" → "Klasse Klasse 3") is pointed out on the Classes page, where it can
+                         be changed, rather than papered over at every render. And
+                         scoring_warning()
                          names a setup that can never rank anybody (no counted runs; a regularity
                          test over a single run, which scores the whole field 0 and is then
-                         silently ranked by fastest run). Both combinations are legal to save, so
-                         the warning is shown on the Classes tile and above the empty results
-                         table rather than refused. Setup UI is a section: a tile list
+                         silently ranked by fastest run). All of these are legal to save, so they
+                         are shown on the Classes tile (and, for scoring, above the empty results
+                         table) rather than refused. Setup UI is a section: a tile list
                          ("Manage competitions") + General / Classes / Run order / Penalties /
                          Results sub-pages that all edit the *active* competition (no pk in the
                          URL; the Results sub-page lives in apps/results).
@@ -189,12 +263,13 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          order, so one pattern serves classes with different run counts (a
                          participant out of that type sits the chip out). Competition.start_lists()
                          is the resulting per-run start order; shortfalls() flags runs a class
-                         grants that the pattern never plays. A new competition is seeded with
-                         DEFAULT_BLOCKS (one block, the whole field at once, practice + counted +
-                         counted — the runs the default classes grant): with no pattern at all
-                         start_lists() schedules nothing, so Auto timing's start order and the
-                         dashboard's expected-run count were empty on a competition that looked
-                         fully set up. Edited on the Run order page below
+                         grants that the pattern never plays. A new competition has **no
+                         pattern**: a pattern is what *Auto* timing needs, and Auto timing is a
+                         choice — plenty of events run on the Manual view with competitors turning
+                         up at the line in any order. Nothing else reads it (the dashboard and the
+                         results derive from the entries and their classes), and Auto timing says
+                         it needs one and links to where to build it rather than rendering its
+                         apparatus around an empty order. Edited on the Run order page below
                          the run grouping; the live preview re-implements the expansion in JS.
                          The preview can run on real starters or on made-up ones (one run of N,
                          bibs 1..N, taking the first run's first class's run counts) so a pattern
@@ -205,6 +280,16 @@ apps/participants/
                          run status, unique per competition) + ClassAssignment (participant↔class
                          join for Manual assignment; explicit model, not a M2M, so duplicate
                          rows allow entering the same class multiple times).
+                         Participant.last_used_at is when the record was last *used* —
+                         edited (every save, so an import or a merge counts) or entered
+                         into a competition (a bib assigned or changed, via the post_save
+                         on EventEntry, which is a different row and would not otherwise
+                         touch this one). It exists because updated_at cannot answer the
+                         retention question: somebody who has raced every year since 2019
+                         and never changed their address has an updated_at of 2019 and is
+                         not stale. Indexed — the sweep that will use it asks the whole
+                         table. Not carried by apps/transfer: an import *is* a use, so the
+                         importer's own save stamps it fresh.
                          Only name and date-of-birth are required at the DB level — licence,
                          co-driver, vehicle, address, club, e-mail and phone are all blank=True
                          because whether they're collected (and mandatory) is a per-discipline
@@ -311,8 +396,10 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          the *next* pulse will count as, computed from the runs already read, since
                          the phase is otherwise invisible and one stray pulse inverts it for the
                          rest of the event) and _empty_reason() (with no start order, which piece of
-                         setup is missing — no running class, no pattern, nobody registered, or
-                         classes granting no runs — instead of one sentence blaming the run order).
+                         setup is missing — no running class, nobody registered, or classes
+                         granting no runs — instead of one sentence blaming the run order. "No
+                         pattern" is not one of these: it is answered before any of this, by
+                         AutoTimingView.needs_pattern, which replaces the whole page).
   arrangement.py         Causal pairing of signals into runs: a finish joins the oldest open
                          start that began before it; a start never adopts an earlier orphan
                          finish. Ordering (which run is newest, which open start is oldest) is by
@@ -370,9 +457,16 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          arrangement, syncs bindings, broadcasts. A time is never lost: a locked DB
                          is waited out (WAL + busy timeout, apps.py) and the insert retried; if it
                          still fails the signal is appended to a durable recovery file
-                         (timing_unrecorded.log) and record_signal returns None. Placement is a
-                         second retried step — if it loses a lock race the signal is already saved
-                         and gets re-placed by arrangement.reconcile() on the next signal. When the
+                         (timing_unrecorded.log) and record_signal returns None. The two *reads*
+                         it needs first — the active competition and the operator lock — are
+                         inside that same guard, which they were not: they sat above it,
+                         unretried, so a lock while reading either raised straight out of
+                         record_signal and the time reached neither the table nor the recovery
+                         file. Placement is a second retried step — if it loses a lock race the
+                         signal is already saved and gets re-placed by arrangement.reconcile() on
+                         the next signal; it catches DatabaseError, not just OperationalError,
+                         because two signals placed at once can both try to pair with the same
+                         start and TimedRun.start_signal is a OneToOne. When the
                          operator Lock (TimingSettings.ignore_incoming) is on, the signal is still
                          captured but stored ignored and *not* placed — it lands on the ignore list.
   cp540.py               Tag Heuer CP540 driver: a daemon reader thread (module-level `reader`)
@@ -501,12 +595,18 @@ static/js/               dashboard_overview.js (organiser Dashboard: renders the
                          they wired up). It splits Start/Finish only when the rig has two
                          channels — `autotiming.ignored_split`; with one light barrier an
                          ignored signal has no role, and asking `signal.role()` anyway put
-                         every chip under Start and left Finish permanently empty. Each chip
-                         also carries its *arrival* age, since a chip's own time is the device
-                         clock (not wall-clock, so it says nothing about when), and the list
-                         folds past a few per column with a count and a "show all". There is
-                         deliberately no clear-all: an ignored signal is still the only record
-                         the device fired, and this app does not delete recorded times.
+                         every chip under Start and left Finish permanently empty. Each
+                         column shows the **ten most recent** and folds the rest behind a
+                         "show all": a morning of practice runs reaches a couple of hundred
+                         chips, and the ones that matter are always the ones that just
+                         arrived — which is why `ignored_signals()` ordering newest-first is
+                         load-bearing rather than cosmetic. A chip shows the device's time
+                         and nothing else. It used to carry how long ago it arrived as well,
+                         which on a list already in arrival order and cut off after ten is
+                         the same fact twice — and the timestamp that needed rode along in a
+                         payload every open browser re-fetches on every incoming time. There
+                         is deliberately no clear-all: an ignored signal is still the only
+                         record the device fired, and this app does not delete recorded times.
                          live_socket.js owns the WebSocket for all four live views (no other
                          file may call `new WebSocket` — a test enforces it): reconnect with
                          backoff, a heartbeat so a link that died without a close frame is
@@ -607,17 +707,30 @@ apps/results/           A "Results" landing page (index) listing every running c
                          (every running class + every Overall table in one file), export-sample
                          (the made-up rows sample_section() builds, so the settings page can
                          preview the layout before an event has any results) and pdf-logo-remove.
-                         A filename carries a class name, so it goes out as
-                         `filename*=UTF-8''<percent-encoded>` — interpolating it raw let a class
-                         named `A"; x` break Content-Disposition apart (SEC-6).
+                         A filename carries a class name, which an organiser types, so the
+                         Content-Disposition header is built by Django's own
+                         `content_disposition_header()` rather than interpolated. Three
+                         separate things went wrong when it was an f-string: a class named
+                         `A"; x` closed the quoted string and appended a second `filename=`
+                         of its choosing; a name in a script the header's latin-1
+                         encoding can't hold came out RFC-2047-encoded and unreadable to
+                         every browser; and a name with a newline in it raised
+                         BadHeaderError, i.e. a 500. Django's builder handles all three,
+                         reaching for RFC 5987 `filename*=` only when it is needed.
                          class_section()/overall_section() are the shared payload: title,
                          scoring_label, class_label (what `#class` resolves to), layout and rows.
                          A class heading is cclass.display_name(), never "Class " + name.
                          All reuse competitions.ActiveCompetitionMixin. The two PDF logos are
                          assigned straight from request.FILES (there is no ModelForm here), so
-                         _clean_logo() is what checks them at all: MAX_LOGO_BYTES, then Pillow's own
-                         verification via forms.ImageField. A refused logo is a message and the rest
-                         of the settings still save.
+                         nothing checks them unless this page does — `_clean_logo` is an alias
+                         for apps/results/logos.clean_upload, and the *import* path
+                         (apps/transfer/importers) goes through logos.clean_bytes. One module
+                         for both doors is the point: the import used to write whatever bytes
+                         the archive carried under whatever name it asked for, which is how a
+                         crafted `.zip` could plant an HTML file under /media/ and have the app
+                         serve it from its own origin. Size, then Pillow's own
+                         verification, then a name we generate rather than one we were given.
+                         A refused logo is a message and the rest of the settings still save.
   pdf.py                 The **results-PDF export**: the same tables, on A4, for the notice board.
                          render_results_pdf() takes the *sections* views.class_section /
                          overall_section already built (layout + row dicts — the screen and the
@@ -633,6 +746,17 @@ apps/results/           A "Results" landing page (index) listing every running c
                          page/total bottom-right). Orientation is the layout's, or auto-fit from
                          the column count. Wildcards are resolved per section, because `#class`
                          means the table on *that* page.
+  logos.py               The one door a results-PDF logo comes through, for both the
+                         settings page (clean_upload, from request.FILES) and the import
+                         (clean_bytes, from the archive). Size, then Pillow's own
+                         verification, then a filename **we** generate — the archive's own
+                         name is never used. It exists because the two doors were guarded
+                         differently: the import wrote whatever bytes it was given under
+                         whatever name it asked for, so a crafted `.zip` could plant
+                         `evil.html` under /media/ and have the app serve it as text/html
+                         from its own origin — with `SuspiciousFileOperation` one
+                         `../` away. Same shape as the pdfmarkup sanitiser below, and the
+                         same lesson: one check per *column*, not one per page.
   pdfmarkup.py           The header/footer's two halves. **Wildcards**: WILDCARDS is the token
                          vocabulary (#name, #date, #event_date_long, #year, #increment,
                          #discipline, #class) with the description the editor lists;
@@ -644,7 +768,7 @@ apps/results/           A "Results" landing page (index) listing every running c
                          mini-markup. Three callers share it: the settings form's save, the
                          *import* path (apps/transfer/importers._import_results) and the template
                          filter below. Sanitising in one of those only is what made an imported
-                         file able to run script in the importer's session (SEC-1).
+                         file able to run script in the importer's session.
   templatetags/
     pdf_markup.py        pdf_header / pdf_footer: re-sanitise the stored PDF header/footer as the
                          settings page loads it back into its contenteditable. Replaces a bare
@@ -686,10 +810,14 @@ templates/results/       index.html (class + Overall cards), results_class.html,
                          static/js/results_pdf_editor.js, which only ever produces the restricted
                          markup pdfmarkup.sanitize_* accepts (the server re-checks; the editor is
                          convenience, not the guard).
-apps/transfer/          Moving data between Slalom Timing systems: an Export page and a
-                        three-step Import wizard (top-level sidebar item "Import / Export",
-                        its own access-control page key `import_export`). No models — the
-                        wizard's state is a staged file plus the session. Two export scopes:
+apps/transfer/          Getting the data out: the **automatic backup** (the section's landing
+                        page), an Export page and a three-step Import wizard — sidebar section
+                        "Backup", one access-control page key `import_export` for all three.
+                        The two halves answer different questions and are deliberately not the
+                        same feature: a *backup* is the whole database on a timer, for getting
+                        the event back after a laptop dies; an *export* is one event as a
+                        portable `.zip`, for moving or archiving it.
+                        The wizard's state is a staged file plus the session. Two export scopes:
                         a whole **event** (competition + type + classes + marshal posts +
                         participants/entries/assignments + timing + results config) and a whole
                         **competition type** (the type + every participant registered under it,
@@ -718,8 +846,13 @@ apps/transfer/          Moving data between Slalom Timing systems: an Export pag
                          resolutions) and type_document() takes a competition type with every
                          participant registered under it. Each returns `(document, media)` —
                          media being the PDF logo files the archive carries alongside data.json —
-                         and filename() builds the download name (percent-encoded, the pattern
-                         results/views.py copies for its PDFs).
+                         and filename() builds the download name. It is a *substitution*
+                         sanitiser — anything not alphanumeric, `-` or `_` becomes a dash —
+                         not an encoding: the name is only ever a suggestion here, so
+                         reducing it is fine and losing a character costs nothing. That is a
+                         different problem from results/views.py's, which has to put a
+                         class name a person typed into a *header* and so hands it to
+                         Django's builder intact.
   archive.py             The .zip read/write, and the one place a hand-picked file meets the app:
                          every way it can be wrong (not a zip, not ours, newer version, damaged,
                          too big) comes back as a TransferError sentence. Its JSON encoder
@@ -780,10 +913,59 @@ apps/transfer/          Moving data between Slalom Timing systems: an Export pag
                          Not handled: class assignment. Imported starters get a bib but no
                          ClassAssignment, so a Manual-assignment competition still needs them
                          assigned afterwards.
+  models.py              BackupSettings — the *only* model in this app: one row (pk forced to
+                         1) holding the destination folder, the interval (1–10 minutes), how
+                         many copies to keep, and what happened last time. The last-attempt
+                         fields are persisted rather than held in the thread because "when was
+                         the last good copy" is the question the page exists to answer and has
+                         to survive a restart. destination_problem() is checked when the
+                         setting is saved *and* before every copy — a stick is unplugged far
+                         more often than a setting is changed, and a backup that has quietly
+                         been failing since lunchtime is worse than none.
+  backup.py              The copy and the timer. Three things about the copy, each of which
+                         was a wrong first attempt: it uses **SQLite's own online-backup API**,
+                         not a file copy (the rig is writing through the database, and in WAL
+                         mode the recent writes are in the `-wal` file beside it, so a copied
+                         file is torn *and* short); **in one step** (`pages=-1`), because a
+                         batched backup gives up its read lock between batches and SQLite
+                         *restarts* it whenever another connection writes — under sustained
+                         writes it never finishes, and one step costs nothing since WAL readers
+                         don't block the writer; and **written to a `.partial` and renamed**,
+                         so an interrupted copy is never sitting there under a plausible name.
+                         prune() keeps the newest N (480 copies of a growing database is a full
+                         stick, and then the copy that fails is the newest one). BackupRunner is
+                         the thread — ticks every 2 s so switching it off takes effect now, never
+                         lets an exception end itself, and records the failure on the row instead
+                         of raising at nobody. autostart() from config/asgi.py, like cp540's.
+                         There is deliberately **no "back up now" button**: the point is that the
+                         operator doesn't have to remember, and a button invites them to think
+                         they should. Saving a destination runs a copy immediately instead.
   staging.py             Where an uploaded archive waits between the wizard's steps: a temp file
                          under a random token that only the session knows. Archives carry personal
                          data, so a staged file is deleted on commit/cancel and stale ones swept.
-  views.py               ExportView (page + the .zip download), ImportView — the one Import page,
+  folders.py             Browsing the *host's* folders, so the destination can be picked
+                         instead of typed. A file input can't do this job: the browser
+                         would offer the folders of whichever machine is displaying the
+                         page, and the point of this app is that other people open it over
+                         the venue network — a Desktop path from a marshal's phone means
+                         nothing to the laptop doing the writing. Being a directory-listing
+                         endpoint, it is deliberate about three things: **folders only**
+                         (never a file name, never contents), **no path is trusted**
+                         (resolved and checked to be a directory, so a `..` walk and junk
+                         both come back as one sentence), and it is **gated** by the same
+                         page key as the rest of the section. It does *not* report whether a
+                         folder is writable — that means writing a probe file, and browsing
+                         must not leave a trail of them; the one folder that matters is
+                         checked by the form on Save.
+  views.py               BackupView (the settings form; a save validates the destination, so a
+                         bad one is refused while the operator is still looking at it, then
+                         starts/stops the runner) + backup_status (JSON, polled by
+                         static/js/backup_page.js — which reloads only when the last attempt
+                         actually changed and the operator is not in the middle of something:
+                         typing, *or* holding a dialog open, since a copy a minute meant a
+                         reload a minute and the folder picker closed under whoever was three
+                         folders deep in it) + backup_folders (the folder listing above).
+                         ExportView (page + the .zip download), ImportView — the one Import page,
                          offering both kinds of file and dispatching on which file field was
                          submitted: an *archive* is step 1 of the wizard (parsed on upload so a
                          wrong one is rejected while the file picker is still in front of the
@@ -853,8 +1035,12 @@ during the outage is otherwise invisible until the next one happens to arrive. A
   Hover between the header and the top row for a **+** to pre-enter an upcoming starter (an empty
   placeholder row); incoming starts fill placeholders oldest-first, so times populate bottom-to-top.
   A **Status** column closes a run without a time — DNF / DNC / DNS / DSQ, for that run only; the
-  row goes amber, the Total cell carries the code, and it stops being a placeholder an incoming
-  time could fill.
+  row takes an amber stripe down its leading edge (a *marker*, not a fill — as a full-bleed row
+  tint, fifteen consecutive non-starters made the table a wall of amber with the rows that still
+  needed work invisible in it), the Total cell carries the code, and it stops being a placeholder
+  an incoming time could fill. The code is stated once: the Status control keeps only a border and
+  a tinted cell to say it is set, because the two cells are neighbours with penalties off and both
+  used to shout the same word.
   **Double-click** a Start, Finish or Run time (or an empty slot) to type it in by hand when the device
   didn't fire — a keyed-in time is a green "entered" chip (run time green + underlined), distinct from a
   measured one, and the run's total honours it. Ignoring is a **drag** to the Ignored-times panel on the
@@ -974,6 +1160,61 @@ Run it once after cloning (and after adding a static file). The manifest's stric
 keeping — it is what turns a `{% static %}` pointing at a file that doesn't exist into a failed test
 rather than a dead timing view — but it does mean CI runs `collectstatic` before `pytest`.
 
+## Tests
+
+~1400 cases from ~680 functions in nine files, in ~20 minutes. **Do not judge the suite by the case
+count**: roughly a third of it is a handful of functions parametrised over a list — the hostile
+payloads × every discovered endpoint, the file checks × every template, one per `.js` file, one per
+sidebar entry. Those are the cheapest tests here and the ones with the best failure story, because
+they catch a *class* of bug rather than an instance. The time is not concentrated anywhere either;
+it is the flat cost of ~900 database-backed tests each setting up a competition, so there is no big
+win available short of `pytest-xdist`.
+
+Where the value is concentrated, and what not to break:
+
+- **`config/hostility_tests.py` discovers its own targets from the URLconf**, so an endpoint added
+  next month is covered the day it is added. The malformed-id 500 was reachable on nine endpoints at
+  once precisely because the tests that existed named their targets one at a time.
+- **The file-parametrised checks in `config/tests.py`** — no inline script or style, no `onclick=`,
+  no multi-line `{# #}`, every dialog labelled, every `.js` structurally whole, the design-system
+  scales closed, focus rings not removed. Each is a rule that is easy to break by accident and
+  invisible when broken: the page still renders.
+- **`config/matrix_tests.py`** is the configuration space (precision × scoring × penalty mode ×
+  assignment × barrier × language). A failure there is a setup that is legal to save and does not
+  work — the bug an operator hits on race morning that nobody can reproduce. Note its *name*:
+  pytest's `python_files` is `tests.py` / `test_*.py` / `*_tests.py`, and this file spent its whole
+  life as `audit_matrix_test.py`, matching none of them, so it was never collected. Name a new test
+  file accordingly.
+- **The cost ceilings** (see Performance) — neither failure is visible until an event is big enough
+  to hurt, which is exactly when it can't be fixed.
+- **The legacy `TimingEvent` connector-loop tests** (six functions) are the only tests guarding code
+  on its way out. Keep them until that path is actually removed, then delete the code and its tests
+  in one commit — dropping the tests first leaves legacy code unguarded while it is still shipping.
+
+Two things about *running* it, beyond `collectstatic` above:
+
+- **Never run two `pytest` processes at once.** The threaded tests are timing-sensitive and two runs
+  starve each other of CPU, so they fail for reasons that have nothing to do with the code.
+- **The threaded tests (`django_db(transaction=True)`) run against a database that is not the
+  deployment's.** It is in-memory with a **shared cache**, not a WAL file, and three things follow —
+  each of which made `TestTwoWritersAtOnce` intermittently red until 2026-07-31:
+  1. A read landing on a table another connection is writing is refused outright with
+     `SQLITE_LOCKED` ("database table is locked"), which `busy_timeout` does **not** cover.
+     `PRAGMA read_uncommitted=1` on the reading connection is shared cache's own way off it, and the
+     only setting under which the harness answers a read during a write the way WAL does.
+  2. A losing writer can be turned away by that lock rather than by the constraint, so catch
+     `DatabaseError`, not `IntegrityError`.
+  3. Any *write* hidden in a test's own scaffolding joins the race. `Client.force_login` writes a
+     session row and `last_login` — called inside a thread meant to be a reader, it killed that
+     thread before it issued a single request. Log in before the threads start.
+
+  Anything driving `ingest.record_signal` (directly or through a reader thread) should also
+  monkeypatch `ingest.UNRECORDED_LOG`, or a lost lock race appends to the checkout's own
+  `timing_unrecorded.log`.
+- Six login-throttle and CP540-backoff tests loop to their real configured limits and cost ~25 s
+  between them. Override the limit or monkeypatch the delays when you are next in those files; the
+  logic under test is identical and that is 2 % of the run.
+
 ## Deployment
 
 `runserver` is for development only. A real event runs **one** Daphne process, optionally behind
@@ -997,15 +1238,46 @@ troubleshooting) is in **DEPLOYMENT.md**, with the artefacts in `deploy/`. What 
 
 ## Design system
 
-Everything visual comes from the token block at the top of `static/css/main.css`. Four rules, and
-each exists because breaking it is what made the app read as several products stitched together:
+Everything visual comes from the token block at the top of `static/css/main.css`. The rules below
+each exist because breaking one is what made the app read as several products stitched together:
 
-- **No raw colour, spacing or font-size outside the token block.** `--space-1…10` (a 4px grid) for
-  padding, gap and margin; `--text-2xs…4xl` for type; `--radius-*`; the palette plus the `--success`
-  and `--amber` families. A value that appears twice is a token. The scales are closed sets: a
-  component that needs a step which isn't there means the *scale* is missing a step. This replaced
-  33 distinct font sizes, 25 gaps and 25+ paddings, which is why the same relationship used to be
-  expressed slightly differently on every page.
+- **No raw colour, spacing, font-size, duration or z-index outside the token block.**
+  `--space-1…10` (a 4px grid) for padding, gap and margin; `--text-2xs…4xl` for type; `--radius-*`;
+  `--font-mono`; `--dur-1…5` for transitions; `--z-*` for stacking; `--sidebar-w`; the palette plus
+  the `--success` and `--amber` families. A value that appears twice is a token. The scales are
+  closed sets: a component that needs a step which isn't there means the *scale* is missing a step.
+  This replaced 33 distinct font sizes, 25 gaps and 25+ paddings, which is why the same relationship
+  used to be expressed slightly differently on every page — and later seven transition durations
+  (several a rounding apart, so the same interaction felt different per component) and an
+  eleven-rung z-index ladder in which **200 was used twice**, by the sidebar and by the
+  event-changed bar, so which of two overlapping *fixed* elements won was settled by document
+  order. Pinned by `config/tests.py::TestTheScalesAreClosed`. Two things are deliberately not on a
+  scale, because they are a component's own dimension rather than a step: a scroll cap and the
+  simulator clock's fluid `clamp()`. **Breakpoints can't be tokens** — `@media` cannot read a
+  custom property — so the five are listed in the token block instead, to keep the set closed.
+- **Every dialog is the app's own, and goes through `modalController`.** Nothing calls
+  `window.confirm`/`alert`/`prompt`: a browser dialog wears the OS's styling, can't be
+  translated by us, states its question as one unformatted string (which is why callers were
+  gluing `"\n\n"` into it) and puts the answer behind a control that looks nothing like the
+  page. `window.appConfirm({title, body, accept, danger})` and `window.appAlert(…)` in
+  `shell.js` return a promise and fill the shared dialog in `base.html`. The **one exception**
+  is `beforeunload` on tab close — the browser's is the only thing that can stop a tab
+  closing, and the string is ignored by every browser anyway. `shell.js::modalController` is
+  the other half: focus in, Tab wrapped, focus restored to whatever opened it, Escape and
+  backdrop handled once — including for a dialog the *server* rendered already open (the
+  type-change, penalty-loss and bib-change confirmations), which is the case that had a
+  question on screen with the keyboard behind it. Pinned by `TestEveryDialogIsTheAppsOwn`
+  and `TestModalsManageFocus`; a page toggling a modal's `.hidden` itself fails.
+- **`form.submit()` is never what you want.** It skips HTML5 constraint validation *and*
+  every `submit` listener, so an invalid form posts and the page's own submit handlers never
+  run — including, in one case, the destructive-save guard that was itself a submit listener.
+  Use `requestSubmit()`.
+- **A focus ring is never taken away, only quietened.** The global `:focus-visible` outline is
+  outranked on specificity by any component rule (`form input:focus` beats `input:focus-visible`),
+  so a component's own `outline: none` silently removed the keyboard indicator from every input in
+  the app — and on the PDF header editor it sat on the *element*, so no state brought it back. A
+  component that wants its own soft ring for the pointer scopes the suppression with
+  `:focus:not(:focus-visible)`. `TestKeyboardFocusIsVisible` fails on a bare one.
 - **The app is light-only, and says so by staying silent.** `color-scheme` is deliberately *not*
   declared. Naming a dark scheme without shipping dark rules is what made browsers paint inputs,
   selects, date pickers and scrollbars dark against a permanently light page. A real dark theme
@@ -1025,9 +1297,28 @@ each exists because breaking it is what made the app read as several products st
   worst exactly where German puts its longest compounds. Likewise **page-level explanation lives
   behind the topbar "?"** (`topbar_actions` + `help_modal`, reusable by any page); only a hint
   attached to a specific control stays in the body.
+- **Flame means "seconds added", and nothing else.** `--flame` is the penalty colour — the
+  results table's `.rt-pen`, the penalty chips, `pdf._PEN` — so anything else wearing it
+  reads as penalised. The Dashboard's *total time* did, which made a clean run look
+  punished. A figure that needs emphasis takes it from size or weight.
+- **A state is marked, not filled.** A full-bleed row tint is only legible while the state
+  is rare: forty closed runs is an ordinary afternoon, and the Manual timing table became a
+  wall of amber with the rows that still needed work invisible in it. A stripe down the
+  leading edge reads at any density.
+- **"Nothing to operate" is a heading and a centred `.empty-state` card**, the shape Marshal
+  Posts uses — never a bare paragraph at the top of a blank page, which reads as a page
+  that failed to load. `.empty-state > p` carries its own measure, because the two timing
+  views are `content--wide`.
 
 Two more that are about *saying the same thing the same way*:
 
+- **A time is truncated, never rounded** — `calc.run_time`, `resolved_run_time` *and*
+  `format_clock`. The last of those used `f"{x:.3f}"`, which rounds; invisible on an
+  already-truncated value, which is why it survived, but it is also handed sums and
+  differences (run + penalty, gap to the winner). A run that crosses midnight is measured
+  rather than dropped: both device times are clock *times*, so 23:59:59 → 00:00:02 is a
+  wrap, not a negative run (`calc.MAX_WRAP_GAP_US` is what keeps a genuinely mis-paired
+  time from coming back as twenty-three hours).
 - **`calc.format_clock` is the one way an elapsed time is written** — `mm:ss.xxx`, everywhere: both
   timing views, the Dashboard, the results tables, the PDFs. `format_precision` is for callers that
   need the bare number, not for display. A penalty is a different quantity (whole seconds added,
@@ -1048,7 +1339,7 @@ Two more that are about *saying the same thing the same way*:
 
 ## Security
 
-Two rules to keep in mind when adding anything to this app:
+Four rules to keep in mind when adding anything to this app:
 
 - **A login is not authorisation.** `AccessControlMiddleware` gates URLs by page key, so any view
   reachable from two pages (the marshal endpoints), or from outside the gate at all
@@ -1062,11 +1353,57 @@ Two rules to keep in mind when adding anything to this app:
   view and, for a zip, per entry against the declared *and* actual expanded size
   (`apps/transfer/archive.py`). Numbers keyed in by an operator are bounded in
   `apps/timing/views.py` because SQLite stores out-of-range values rather than refusing them.
+  Every id a client sends goes through `_as_pk()` first: handing a non-numeric one to
+  `filter(id=…)` makes Django raise while it prepares the query, which is a 500 rather than
+  a 404.
+- **Nothing on a page may be inline.** The app ships a strict Content-Security-Policy
+  (`config/csp.py`): `script-src 'self'`, no `'unsafe-inline'`, no nonce. A CSP cannot tell
+  our inline `<script>` from an injected one, so allowing ours allows the attack it exists
+  to stop. Every script therefore lives in `static/js/`, page data crosses over through
+  `json_script` (`window.pageData(id)` reads it defensively), strings through `gettext()`
+  and the djangojs catalog, and form controls are found by `data-` marker rather than by
+  the id Django rendered. `config/tests.py` fails on an inline `<script>`, a `style="…"`
+  attribute, an `onclick=`, template syntax left in a `.js` file, or an escaped quote
+  opening an argument — the last two being ways a script dies silently while the page
+  still renders.
+- **Every change is recorded.** `apps/audit.py` — see the layout section.
 
-Failed logins are throttled and logged (`apps/accounts/throttle.py`). Still open from the audit
-and deliberately not done yet: no CSP (`SEC-11`), no audit trail of who changed a result
-(`SEC-9`), the duplicate-check endpoint isn't scoped to the competition type (`SEC-7`), and the
-WebSocket consumers check login but not role (`SEC-12`).
+Failed logins are throttled and logged (`apps/accounts/throttle.py`), and the login throttle
+also caps attempts per address, not just per (username, IP). Known and deliberately not
+done yet: the WebSocket consumers check a page role, but there is no per-competition
+scoping on them — a signed-in user holding a live page sees the nudges for whichever
+event is active, which is the only event there is.
+
+## Standing decisions
+
+Things that look like gaps, have been raised, and have an answer. They are listed so the next
+pass recognises them as decided rather than missed — not so they can never be revisited. Where a
+decision has a longer write-up it lives beside the code and is named here.
+
+- **A finished result still depends on a live row.** `CompetitionType`'s precision, penalty
+  amounts and tie-break are read live by `resultscalc`, and the type is shared by every
+  competition of that discipline — so editing a penalty amount in November re-ranks July's event.
+  **Deferred**, because the proper answer is an *archive*: a competition snapshotted when it is
+  signed off. Written up in `apps/competitions/models.py`.
+- **No per-competition scoping on the WebSocket consumers** — see the paragraph above. Deliberate;
+  there is only ever one active event.
+- **No self-service password change.** **Waived** — accounts are assigned and a reset is a
+  superuser's job by design (`apps/accounts/`, the User Access page).
+- **No retention sweep, no bulk delete, no privacy notice.** **Waived 2026-07-31.**
+  `Participant.last_used_at` is recorded and indexed precisely so the sweep is one query away
+  whenever it is wanted — that field exists for a question nobody has asked yet, which is why it
+  must not be deleted as unused.
+- **The database is not encrypted at rest.** **Waived**, mitigated by the data-directory permission
+  hardening in `config/datasecurity.py`, which says the same thing at more length: a passphrase kept
+  beside the database it unlocks protects nothing.
+- **`timing_unrecorded.log` has no replay path.** A time that could not be written is captured
+  durably (`apps/timing/ingest.py`) but has to be entered by hand. **Waived** — rare enough to leave
+  alone; the guarantee that matters is that it is never *lost*.
+- **Exports are plaintext `.zip`.** They carry personal data and nothing encrypts them. Accepted for
+  now: they are written to a stick by the operator, at the venue, for their own club.
+- **A time fired with no competition selected is unrecoverable.** With no active event `ingest`
+  stores the signal but nothing owns it. **Waived** — with no event selected, times are allowed to
+  be lost.
 
 ## Performance
 
@@ -1078,7 +1415,15 @@ until an event is big enough to hurt:
 
 - **The cost must not grow with the field.** Anything per row, per competitor or per dropdown
   option belongs in a batch read: `views._RowContext` (Manual timing), `resultscalc.RunIndex`
-  (results), `autotiming.all_runs` + one `apply_bindings` pass (Auto timing, Dashboard).
+  and `resultscalc.event_data` (results — the second is what a *multi-table* export reads
+  once instead of per class), `autotiming.all_runs` + one `apply_bindings` pass (Auto
+  timing, Dashboard). The running classes are the other thing a loop must not ask for:
+  `starters_by_class`, `run_groups`, `starters_by_run`, `start_lists`,
+  `classes_for_participant`, `class_for_birth_year` and the results column vocabulary all
+  take an optional `running=`, because age-based assignment resolves a competitor's class
+  by walking them and asking inside the loop cost one query per starter — 114 at 100,
+  against a flat 15 for manual. The rule was only ever *tested* for manual assignment,
+  which is why nothing noticed; both are pinned now.
 - **A read must not write.** See `autotiming.sync_bindings` — a GET that writes takes the lock the
   CP540 reader thread needs to record a time, and several browsers refreshing on one nudge raced
   each other on the same rows.
@@ -1088,15 +1433,30 @@ event reaches by mid-afternoon), before → after the stage-5 work:
 
 | | before | after |
 |---|---|---|
-| `timing:arrangement`, one client | 1415 ms (1413 queries) | **95 ms** (16 queries) |
+| `timing:arrangement`, one client | 1415 ms (1413 queries) | **95 ms** (15 queries) |
 | `results:class`, 200 competitors | 629 queries | **29 queries** |
 | six clients refreshing flat out, worst recorded signal | 1851 ms | **796 ms** |
 
-No signal was lost and no refresh failed in either run, so `REL-8` (SQLite vs a live multi-user
-event) is **survivable at 200 starters** and does not force Postgres. The remaining headroom is
-payload, not queries: `timing:auto-state` ships ~1.1 MiB per refresh because a nudge carries no
-payload and each client re-downloads everything (`PRF-6`) — that is the next lever if a bigger
-field ever needs one. The harness that produced these numbers is a scratchpad script, not part of
+And from the later round on the same harness shape (query counts only):
+
+| | before | after |
+|---|---|---|
+| `timing:auto-state`, age-based assignment, 20 / 50 / 100 starters | 34 / 64 / 114 | **14 flat** |
+| `results:export-all`, 1 / 3 / 6 classes | 42 / 80 / 137 | **24 / 32 / 44** |
+| `timing:auto-state` payload, 200 starters | 389 KiB | **259 KiB** |
+| …the same with 4 marshal posts watching 6 tasks each | 1341 KiB | **260 KiB** |
+
+No signal was lost and no refresh failed in either run, so SQLite against a live
+multi-user event is **survivable at 200 starters** and does not force Postgres.
+The payload headroom is now taken too: a nudge still
+carries nothing and each client re-downloads the state, but what it downloads no longer
+repeats itself. A marshal post's box is derived entirely from the *post* until somebody
+records against the run, so it is sent **once** as `posts` and an item with nothing
+recorded sends `marshals: null`; the page substitutes it (`auto_timing.js`). At four posts
+watching six tasks that was 958 KiB of a 1341 KiB payload. The penalty steppers likewise go
+only to items that have a run. A delta protocol is what is left, and it buys ~10 KiB a
+refresh against a gzip that already exists in `deploy/Caddyfile` — not worth its failure
+mode (a screen quietly wrong mid-event). The harness that produced these numbers is a scratchpad script, not part of
 the repo; re-create it from this table's shape if you need to re-measure.
 
 ## Notes

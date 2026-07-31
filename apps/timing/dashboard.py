@@ -139,8 +139,11 @@ def _classes(competition, started_ids, finished_ids, retired):
     """Per running class: its expected-run tally and a done / running / not-started
     state. Classes are listed in run order; a running class with no registered
     starters still appears (as not-started with no runs)."""
-    starters_by_class = competition.starters_by_class()
-    ordered = [cc for group in competition.run_groups() for cc in group]
+    # One read for both: starters_by_class walks the running classes and so does
+    # run_groups, and this is on an endpoint every open browser re-fetches.
+    running = competition._running_classes_ordered()
+    starters_by_class = competition.starters_by_class(running=running)
+    ordered = [cc for group in competition.run_groups(running=running) for cc in group]
     classes = []
     for cc in ordered:
         expected = _expected_ids(cc, starters_by_class.get(cc.pk, []), retired, finished_ids)

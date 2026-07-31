@@ -14,6 +14,19 @@ def _english_ui(settings):
 
 
 @pytest.fixture(autouse=True)
+def _fixed_time_zone(settings):
+    """Pin the test suite's zone, for the same reason as the language above.
+
+    TIME_ZONE is now read from the machine (config.settings._local_time_zone), so
+    without this a test asserting on a rendered timestamp would pass on a laptop in
+    Europe/Berlin and fail on a CI runner in UTC — or the other way round, which is
+    worse, because it looks like the code broke. A test about the real zone sets it
+    itself.
+    """
+    settings.TIME_ZONE = "UTC"
+
+
+@pytest.fixture(autouse=True)
 def _login_superuser(request, django_user_model):
     """Access control now requires a login on every page, so the existing view
     tests (which drive the `client` fixture) need an authenticated session. Log

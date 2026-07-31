@@ -5,7 +5,7 @@
 {% block content %}
   <div class="results-header">
     <h1 class="page-heading">{% trans "Results" %}</h1>
-    <a class="button button--small results-export" href="{% url 'results:export-all' %}" target="_blank" rel="noopener">{% trans "Export all to PDF" %}</a>
+    <a class="button button--secondary button--small results-export" href="{% url 'results:export-all' %}" target="_blank" rel="noopener">{% trans "Export all to PDF" %}</a>
   </div>
   <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }}</p>
 

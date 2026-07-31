@@ -9,8 +9,7 @@
 (function () {
   "use strict";
 
-  const URLS = window.AUTO_URLS;
-  const CSRF = window.AUTO_CSRF;
+  const URLS = window.pageData("page-urls");
   const dataEl = document.getElementById("auto-data");
   if (!URLS || !dataEl) return;
 
@@ -104,7 +103,7 @@
   async function postJSON(url, body) {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      headers: { "Content-Type": "application/json", "X-CSRFToken": window.csrfToken() },
       body: JSON.stringify(body || {}),
     });
     return res.json().catch(() => ({ ok: false }));
@@ -213,7 +212,7 @@
     if (item.finished) li.classList.add("auto-order-item--done");
     else if (item.started) li.classList.add("auto-order-item--running");
     if (item.orphan) li.classList.add("auto-order-item--orphan");
-    li.append(el("span", "auto-order-bib", "#" + (item.bib == null ? "?" : item.bib)));
+    li.append(bibChip(item, "auto-order-bib"));
     li.append(el("span", "auto-order-run", item.run_label || ""));
     const name = el("span", "auto-order-name" + (item.orphan ? " auto-order-name--orphan" : ""),
       item.name || (item.orphan ? gettext("Unattributed time") : ""));
@@ -300,7 +299,7 @@
     if (item.orphan) div.classList.add("auto-tile--orphan");
 
     const head = el("div", "auto-tile-head");
-    head.append(el("span", "auto-tile-bib", "#" + (item.bib == null ? "?" : item.bib)));
+    head.append(bibChip(item, "auto-tile-bib"));
     const id = el("div", "auto-tile-id");
     id.append(el("span", "auto-tile-name" + (item.orphan ? " auto-tile-name--orphan" : ""),
       item.orphan ? gettext("Unattributed time") : (item.name || gettext("(no starter)"))));
@@ -339,10 +338,14 @@
         all.addEventListener("click", () => lockAll(item.run_id).then(refresh));
         boxes.append(all);
       }
-      item.marshals.forEach((m) => boxes.append(marshalBox(m, item)));
+      // `marshals` is null when nothing has been recorded against this run — every
+      // box would be the blank template `posts` already carries, so the payload
+      // sends it once instead of per item (see autotiming.serialize).
+      const marshals = item.marshals || state.posts;
+      marshals.forEach((m) => boxes.append(marshalBox(m, item)));
       div.append(boxes);
       if (openPopup && openPopup.runId === item.run_id) {
-        const box = item.marshals.find((m) => m.number === openPopup.post);
+        const box = marshals.find((m) => m.number === openPopup.post);
         if (box) div.append(popup(box, item));
         else openPopup = null;
       }
@@ -352,11 +355,26 @@
 
   // What to do with a time that belongs to nobody: put it on the right starter,
   // or throw it away. Both were already possible; neither was said anywhere.
+  /* A bib, or the space where one would be.
+   *
+   * The only item without one is an unattributed run — a real time no slot owns —
+   * and that tile already says so in words and in flame. "#?" on it was a made-up
+   * number in the field an operator reads first. The chip is kept but emptied, so
+   * the tile's layout (.auto-tile-bib has a min-width) doesn't shift either.
+   */
+  function bibChip(item, className) {
+    return item.bib == null
+      ? el("span", className + " " + className + "--none", "")
+      : el("span", className, "#" + item.bib);
+  }
+
   function orphanHelp(item) {
     const box = el("div", "auto-orphan");
-    box.append(el("p", "auto-orphan-text", gettext(
-      "This time has no competitor in the start order. Drag it onto the right "
-      + "starter's Start or Finish slot, or discard it.")));
+    // One string literal, not two concatenated: xgettext extracts what it can
+    // *see*, so `gettext("a" + "b")` puts "a" in the catalog while the browser
+    // looks up "ab" — a miss, and the sentence renders in English for ever. Same
+    // trap as `_("…")` inside a Python f-string (see CLAUDE.md).
+    box.append(el("p", "auto-orphan-text", gettext("This time has no competitor in the start order. Drag it onto the right starter's Start or Finish slot, or discard it.")));
     const ids = [item.start && item.start.id, item.finish && item.finish.id].filter(Boolean);
     if (ids.length) {
       const drop = el("button", "button button--secondary button--small", gettext("Move to Ignored"));

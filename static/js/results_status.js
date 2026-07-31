@@ -19,7 +19,13 @@
   document.addEventListener("click", async (event) => {
     const button = event.target.closest(".rt-dns");
     if (!button || button.disabled) return;
-    if (confirmText && !window.confirm(confirmText)) return;
+    if (confirmText) {
+      const agreed = await window.appConfirm({
+        body: confirmText,
+        accept: gettext("Mark as DNS"),
+      });
+      if (!agreed) return;
+    }
     button.disabled = true;
     let res;
     try {

@@ -13,15 +13,35 @@ def _micros(t):
     return ((t.hour * 3600 + t.minute * 60 + t.second) * 1_000_000) + t.microsecond
 
 
+# The longest a run may take before a finish "earlier" than its start is read as
+# a clock wrap rather than as a mis-paired time. A slalom run is under two
+# minutes; an hour is far past anything real and far short of a full day, so a
+# genuinely wrong pairing (a finish from this morning on an afternoon start)
+# still comes back as no time rather than as twenty-three hours.
+MAX_WRAP_GAP_US = 3600 * 1_000_000
+
+
 def run_time(start_time, finish_time, precision):
     """Elapsed seconds between two device times as a Decimal truncated to
-    `precision` places, or None when either time is missing or the finish is not
-    after the start. Works in integer microseconds so truncation never rounds."""
+    `precision` places, or None when either time is missing or the pair makes no
+    sense. Works in integer microseconds so truncation never rounds.
+
+    Both values are clock *times*, not instants, so a run that begins at 23:59:59
+    and ends at 00:00:02 subtracts to −86 397 s. That is not an error, it is
+    midnight — and a device whose internal clock wraps at 24 h (the CP540's does;
+    see cp540.parse_time) does the same thing at whatever hour it was switched
+    on. It used to return None, so the run simply had no time and nobody was told
+    which of the two nights it happened on. A negative delta within
+    MAX_WRAP_GAP_US is now read as one wrap.
+    """
     if start_time is None or finish_time is None:
         return None
     delta_us = _micros(finish_time) - _micros(start_time)
     if delta_us < 0:
-        return None
+        wrapped = delta_us + 86_400 * 1_000_000
+        if wrapped > MAX_WRAP_GAP_US:
+            return None       # too far apart to be a wrap: a wrong pairing
+        delta_us = wrapped
     return truncate_seconds(delta_us, precision)
 
 
@@ -84,10 +104,18 @@ def format_clock(value, precision):
     v = Decimal(value)
     sign = "-" if v < 0 else ""
     v = abs(v)
+    if precision > 0:
+        # Truncated, not formatted. `f"{x:.3f}"` rounds — on an already-truncated
+        # value that is invisible, which is why it survived, but this is also
+        # handed sums and differences (a run + its penalty, a gap to the winner)
+        # and one of those rounding up prints a time a competitor did not drive.
+        # The whole app's rule is "as fast as the device fully resolved, never
+        # faster", and it has to hold here too.
+        v = v.quantize(Decimal(1).scaleb(-precision), rounding=ROUND_DOWN)
     whole = int(v)
     minutes, seconds = divmod(whole, 60)
     if precision > 0:
-        frac = f"{(v - whole):.{precision}f}"[2:]  # drop the leading "0."
+        frac = str(int((v - whole).scaleb(precision))).zfill(precision)
         return f"{sign}{minutes:02d}:{seconds:02d}.{frac}"
     return f"{sign}{minutes:02d}:{seconds:02d}"
 

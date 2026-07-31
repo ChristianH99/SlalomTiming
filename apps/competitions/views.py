@@ -33,9 +33,26 @@ class CompetitionListView(ListView):
 
 
 class CompetitionCreateView(CreateView):
+    """Create a competition — which also makes it the current one.
+
+    That is a change to *everybody's* screen, not a private one: there is a single
+    active competition per installation, and every timing view, results table and
+    marshal post follows it. `select_competition` goes to some trouble to say so
+    before switching; creating one used to do the same thing silently, so setting
+    up next month's event during this one moved the timekeeper's page out from
+    under them. The page now names who else is signed in. It does not refuse —
+    creating a competition is normal, and the operator can see the cost.
+    """
+
     model = Competition
     form_class = CompetitionForm
     template_name = "competitions/competition_add.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["others"] = other_signed_in_users(self.request)
+        context["current"] = Competition.get_current()
+        return context
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -67,12 +84,24 @@ class ActiveCompetitionMixin:
 class GeneralView(ActiveCompetitionMixin, View):
     template_name = "competitions/competition_general.html"
 
+    @staticmethod
+    def _context(competition, form, confirm_type_change=0, new_type=None):
+        # confirm_type_change is always present and always a number: the template
+        # counts on it in a {% blocktrans count %}, which raises on an empty
+        # string — so an ordinary GET must not leave it out.
+        return {
+            "object": competition,
+            "form": form,
+            "confirm_type_change": confirm_type_change,
+            "new_type": new_type,
+        }
+
     def get(self, request):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
         form = CompetitionForm(instance=competition)
-        return render(request, self.template_name, {"object": competition, "form": form})
+        return render(request, self.template_name, self._context(competition, form))
 
     def post(self, request):
         competition = self.get_active()
@@ -81,11 +110,25 @@ class GeneralView(ActiveCompetitionMixin, View):
         old_type_id = competition.competition_type_id
         form = CompetitionForm(request.POST, instance=competition)
         if form.is_valid():
+            new_type_id = form.cleaned_data["competition_type"].pk
+            if new_type_id != old_type_id:
+                # A registration belongs to one discipline, so changing the type
+                # drops every entry that no longer fits — and takes those
+                # competitors' bibs (and the identity of any time recorded under
+                # them) with it. Every other destructive action in this app says
+                # what it costs first; this one used to say it afterwards, on a
+                # dropdown sitting on the most-visited setup page. So: count, ask,
+                # and only then save. The check is server-side because the page it
+                # asks from may be stale.
+                doomed = _foreign_registration_count(competition, new_type_id)
+                if doomed and not request.POST.get("confirm_type_change"):
+                    return render(request, self.template_name, self._context(
+                        competition, form,
+                        confirm_type_change=doomed,
+                        new_type=form.cleaned_data["competition_type"],
+                    ))
             form.save()
             if competition.competition_type_id != old_type_id:
-                # A registration belongs to one discipline; changing the
-                # competition's type drops the ones that no longer fit (their
-                # bibs were silently blocking the new discipline otherwise).
                 removed = _clear_foreign_registrations(competition)
                 if removed:
                     messages.info(
@@ -95,7 +138,18 @@ class GeneralView(ActiveCompetitionMixin, View):
                     )
             messages.success(request, _("General settings saved."))
             return redirect(safe_next(request, reverse("competitions:general")))
-        return render(request, self.template_name, {"object": competition, "form": form})
+        return render(request, self.template_name, self._context(competition, form))
+
+
+def _foreign_registration_count(competition, new_type_id):
+    """How many registrations changing the type to ``new_type_id`` would delete."""
+    from apps.participants.models import EventEntry
+
+    return (
+        EventEntry.objects.filter(competition=competition)
+        .exclude(participant__competition_type_id=new_type_id)
+        .count()
+    )
 
 
 def _clear_foreign_registrations(competition):
@@ -125,6 +179,12 @@ class ClassesView(ActiveCompetitionMixin, View):
             "assignment_form": assignment_form,
             "formset": formset,
             "assignment_methods_meta": assignment_methods_meta(),
+            # Overlaps and gaps between the age ranges. Only under age-based
+            # assignment, where they silently decide who lands where.
+            "age_problems": competition.age_range_problems(),
+            # What the page's script needs, handed over as data: nothing on a page
+            # may be inline now that the app ships a CSP (see static/js/shell.js).
+            "page_config": {"year": competition.date.year},
         }
 
     @staticmethod
@@ -227,6 +287,9 @@ class RunOrderView(ActiveCompetitionMixin, View):
             "start_pattern_data": startpattern.serialize(competition.start_pattern_blocks()),
             "run_type_labels": startpattern.RUN_TYPE_LABELS,
             "max_dummy": startpattern.MAX_DUMMY_STARTERS,
+            # The same number again for the page's script, which is a file now
+            # and so cannot be handed a template variable (see shell.js).
+            "page_config": {"maxDummy": startpattern.MAX_DUMMY_STARTERS},
         })
 
     def post(self, request):
@@ -388,6 +451,7 @@ class PenaltiesView(ActiveCompetitionMixin, View):
             "post_count": len(rows),
             "tasks_summary": taskspec.summary(numbers),
             "max_posts": MAX_MARSHAL_POSTS,
+            "page_config": {"maxPosts": MAX_MARSHAL_POSTS},
             # Recorded penalties per post number, so the page can say what a
             # change would destroy before it is submitted.
             "penalty_counts": PenaltiesView._penalty_counts(competition),
@@ -476,9 +540,47 @@ class PenaltiesView(ActiveCompetitionMixin, View):
 
 
 class CompetitionDeleteView(DeleteView):
+    """Delete a competition — and, when it is the *current* one, treat that as
+    the installation-wide act it is.
+
+    `select_competition` below already does: it names the other people signed
+    in, refuses without an explicit confirmation, and announces the change over
+    the timing WebSocket so open screens say what happened instead of quietly
+    re-rendering. Deleting the running event is that same act plus the data it
+    takes with it, and it used to do none of the three — every Manual timing,
+    Auto timing, Marshal Posts and Dashboard screen in the venue simply became
+    "no competition selected" mid-event, the marshals' phones stopped working,
+    and nothing on any of them said why.
+
+    The page already spelled out the *data*; this is the live consequence.
+    """
+
     model = Competition
     template_name = "competitions/competition_confirm_delete.html"
     success_url = reverse_lazy("competitions:list")
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if self.object.is_active and not request.POST.get("confirm_active"):
+            # The confirmation page posts this hidden field, so a normal delete
+            # is still one click from that page. A POST arriving without it
+            # never saw the page — a stale tab, a re-submitted form, a link
+            # followed back — and the running event is not something to take
+            # down on an unconfirmed request.
+            return self.render_to_response(self.get_context_data(object=self.object))
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        was_current = self.object.is_active
+        name = self.object.name
+        response = super().form_valid(form)
+        if was_current:
+            # Deleting the current event leaves *no* current event, so every open
+            # live view has nothing left to show. Tell them, the way a switch
+            # does; four screens going blank at once is not an explanation.
+            from apps.timing.services import notify_competition_deleted
+            notify_competition_deleted(name)
+        return response
 
     def get_context_data(self, **kwargs):
         # Spell out what deleting the competition takes with it: everything below
@@ -500,6 +602,12 @@ class CompetitionDeleteView(DeleteView):
             TimedRun.objects.filter(competition=competition)
             .filter(Q(start_signal__isnull=False) | Q(finish_signal__isnull=False))
             .count()
+        )
+        # Only the current event's deletion moves anybody else's screen, so only
+        # then is there anybody to name.
+        context["is_current"] = competition.is_active
+        context["others"] = (
+            other_signed_in_users(self.request) if competition.is_active else []
         )
         return context
 
@@ -648,8 +756,16 @@ class MarshalPostsView(ActiveCompetitionMixin, View):
     """Top-level operator surface a marshal uses on their phone: pick your post,
     then tap the task buttons to enter penalties for the current starter. The
     config (which tasks, stop-line) comes from the active competition's setup;
-    penalty amounts come from its type. Submitting is a no-op stub for now — the
-    transmission back into the system is a later feature."""
+    penalty amounts come from its type.
+
+    Submitting is real, and has been for several features: static/js/marshal_posts.js
+    posts each tap and the final submit to timing:marshal-submit through a
+    localStorage outbox that retries until the server takes it, and the boxes on
+    Auto timing fill from the same rows. A post is claimed by one device at a time
+    (marshal-claim, heartbeated), and that claim is what *authorises* a write from
+    a non-timekeeper — the access gate cannot tell the two roles apart, since both
+    pages grant the same URLs.
+    """
 
     template_name = "competitions/marshal_posts.html"
 
@@ -672,8 +788,19 @@ class MarshalPostsView(ActiveCompetitionMixin, View):
         max_pylons = None
         if ctype.pylon_penalty and ctype.max_penalty_per_task:
             max_pylons = ctype.max_penalty_per_task // ctype.pylon_penalty
+        from django.urls import reverse as _reverse
+
         config = {
             "competitionId": competition.pk,
+            # The endpoints this board drives. They were an inline <script> until
+            # the app grew a CSP; json_script escapes them for us.
+            "urls": {
+                key: _reverse(f"timing:marshal-{name}")
+                for key, name in (
+                    ("state", "state"), ("submit", "submit"), ("claim", "claim"),
+                    ("release", "release"), ("claims", "claims"),
+                )
+            },
             "posts": posts_data,
             "maxPylons": max_pylons,
             "pylonPenalty": ctype.pylon_penalty,

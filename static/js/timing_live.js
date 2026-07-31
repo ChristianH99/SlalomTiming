@@ -6,8 +6,7 @@
 (function () {
   "use strict";
 
-  const URLS = window.TIMING_URLS;
-  const CSRF = window.TIMING_CSRF;
+  const URLS = window.pageData("page-urls");
   const dataEl = document.getElementById("timing-data");
   if (!URLS || !dataEl) return;
 
@@ -25,7 +24,7 @@
   async function postJSON(url, body) {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      headers: { "Content-Type": "application/json", "X-CSRFToken": window.csrfToken() },
       body: JSON.stringify(body || {}),
     });
     return res.json().catch(() => ({ ok: false }));

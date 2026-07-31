@@ -136,7 +136,10 @@
           const file = cell.querySelector('input[type="file"]');
           if (file) file.value = "";
         } catch (e) {
-          alert(interpolate(gettext("Could not remove the logo (%(error)s)."), { error: e.message }, true));
+          window.appAlert({
+            title: gettext("Could not remove the logo"),
+            body: e.message,
+          });
           btn.disabled = false;
         }
       });
@@ -162,7 +165,10 @@
         window.open(url, "_blank");
         setTimeout(() => URL.revokeObjectURL(url), 60000);
       } catch (e) {
-        alert(interpolate(gettext("Could not build the sample PDF (%(error)s)."), { error: e.message }, true));
+        window.appAlert({
+          title: gettext("Could not build the sample PDF"),
+          body: e.message,
+        });
       } finally {
         sampleBtn.disabled = false;
         sampleBtn.textContent = original;

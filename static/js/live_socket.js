@@ -48,7 +48,12 @@
   // The active competition is one global flag: someone pressing "Set as current"
   // moves every screen in the venue at once. The data on this page is about to
   // become another event's, so say so rather than let it re-render silently.
-  function competitionChanged(name) {
+  //
+  // `deleted` is the harsher version of the same thing — the event this screen
+  // was showing has been removed, so there is no current event and the page has
+  // nothing left to render. It cannot be worded as a switch: nobody is being
+  // shown another event, they are being shown none.
+  function competitionChanged(name, deleted) {
     let bar = document.getElementById("live-event-changed");
     if (!bar) {
       bar = document.createElement("div");
@@ -65,9 +70,16 @@
       bar.append(text, reload);
       document.body.prepend(bar);
     }
-    bar.querySelector(".live-notice-text").textContent = name
-      ? interpolate(gettext("The current event was changed to “%(name)s”. This screen now shows that event."), { name: name }, true)
-      : gettext("The current event was changed. This screen now shows another event.");
+    const text = bar.querySelector(".live-notice-text");
+    if (deleted) {
+      text.textContent = name
+        ? interpolate(gettext("“%(name)s” was deleted. There is no current event, so this screen has nothing left to show."), { name: name }, true)
+        : gettext("The current event was deleted. There is no current event, so this screen has nothing left to show.");
+    } else {
+      text.textContent = name
+        ? interpolate(gettext("The current event was changed to “%(name)s”. This screen now shows that event."), { name: name }, true)
+        : gettext("The current event was changed. This screen now shows another event.");
+    }
   }
 
   window.liveSocket = function (options) {
@@ -147,7 +159,7 @@
         attempt = 0;
         setState("online");
         startHeartbeat();
-        // The whole point of OPS-4: anything that happened while we were away is
+        // The whole point of the reconnect: anything that happened while we were away is
         // sitting on the server, and nothing else will come and tell us about it.
         if (everOpened) onRefresh();
         everOpened = true;
@@ -166,7 +178,7 @@
         }
         if (msg.event === "refresh") onRefresh();
         if (msg.event === "competition") {
-          onCompetition(msg.name || "");
+          onCompetition(msg.name || "", !!msg.deleted);
           onRefresh();
         }
       });

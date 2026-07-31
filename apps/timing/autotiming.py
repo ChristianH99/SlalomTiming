@@ -285,6 +285,15 @@ def serialize(competition):
     # request (sync_bindings, then bind_runs again, then current_run).
     slots, aligned, orphans, _ = apply_bindings(competition)
     posts = list(competition.marshal_posts.all())
+    # What a post's box looks like with nothing recorded against it. Every field
+    # of it comes from the *post* — the number, the tasks it watches, whether it
+    # judges the stop line — so it is the same object for every run that has no
+    # marshal penalty yet, which on a field of 200 is most of them. It used to be
+    # written out per item: at four posts watching six tasks each, `marshals` was
+    # 958 KiB of a 1.34 MiB payload, re-downloaded by every open browser on every
+    # incoming time. Sent once here; an item with nothing recorded sends `null`
+    # and the page falls back to this (see auto_timing.js).
+    blank_marshals = _marshals(None, posts, {})
     runs_in_order = aligned + orphans  # index lines up with the items below
     items = [
         _item(precision, ctype, marshal_mode, index,
@@ -314,25 +323,38 @@ def serialize(competition):
         "empty_reason": _empty_reason(competition) if not items else "",
         # The state codes a run can be closed with — one list for the page.
         "status_options": runstatus.options(),
-        "posts": [{"number": post.number} for post in posts],
+        # The blank box per post — both "which posts exist" (the page checks the
+        # length) and the template an item with nothing recorded renders from.
+        "posts": blank_marshals,
     }
 
 
 def _empty_reason(competition):
-    """Why the start order is empty, as a key the page turns into a sentence:
-    no class is running, no start pattern is set, or nobody is registered in the
-    running classes. Only asked when there is nothing to show, so the extra reads
-    are over empty tables."""
+    """Why the start order is empty, as a key the page turns into a sentence: no
+    class is running, or nobody is registered in the running classes, or the
+    running classes grant no runs. Only asked when there is nothing to show, so
+    the extra reads are over empty tables.
+
+    "No pattern" is deliberately not one of these. It is not a *reason the order
+    came out empty* — it is the page not applying at all, and it is answered
+    before any of this runs (see AutoTimingView.needs_pattern)."""
     if not competition.run_groups():
         return "classes"
-    if not competition.start_pattern_blocks():
-        return "pattern"
     if not any(starters for _run, starters in competition.starters_by_run()):
         return "starters"
     return "runs"
 
 
 def _item(precision, ctype, marshal_mode, index, slot, run, posts):
+    """One row of the Auto timing payload.
+
+    Every open browser re-downloads all of these on every nudge (a nudge carries
+    no payload), so what is *not* here matters: the penalty steppers and the
+    marshal boxes are only rendered for a slot that has a run, and the marshal
+    boxes only when there are posts at all. At 200 starters that is 600 items,
+    and the two of them were being written out in full for every one — including
+    the ~500 that have not started yet.
+    """
     start = run.start_signal if run else None
     finish = run.finish_signal if run else None
     rt = calc.resolved_run_time(run, precision) if run else None
@@ -340,6 +362,16 @@ def _item(precision, ctype, marshal_mode, index, slot, run, posts):
     lines = _penalty_lines(run, marshal_mode)
     seconds = _penalty_seconds(lines, ctype)
     total_time = calc.format_clock(rt + seconds, precision) if rt is not None else ""
+    # The steppers are only rendered for a slot that *has* a run (auto_timing.js
+    # guards on item.run_id), and three penalty lines per slot is most of the
+    # payload on a field that has barely started — 600 slots, ~500 of them not yet
+    # run.
+    penalties = lines if run is not None else []
+    # `null` when no post has recorded anything against this run: every box would
+    # then be the blank template the payload already carries once (`posts`), and
+    # the page substitutes it. The operator still sees the empty boxes on an
+    # upcoming competitor's tile — this changes the wire, not the screen.
+    marshals = _marshals(run, posts, stored) if stored else None
     return {
         "index": index,
         "key": slot["key"] if slot else None,
@@ -360,14 +392,15 @@ def _item(precision, ctype, marshal_mode, index, slot, run, posts):
         "status": run.status if run else "",
         # One line per penalty type: its non-editable base, the run field the Auto
         # stepper edits, its value, and the grand count. Drives the +/- steppers.
-        "penalties": lines,
+        # Empty for a slot with no run — there is nothing to step.
+        "penalties": penalties,
         # Grand counts (for the boxes / callers that just want the totals).
         "total_pylons": lines[0]["total"],
         "total_tasks": lines[1]["total"],
         "total_stop": lines[2]["total"],
         "started": start is not None,
         "finished": finish is not None,
-        "marshals": _marshals(run, posts, stored),
+        "marshals": marshals,
         # A run with no matching slot (more starts than the order expects).
         "orphan": run is not None and slot is None,
     }
@@ -502,10 +535,12 @@ def ignored_signals(competition, precision, settings):
     """The ignored-times panel's contents, newest first. Shared by both timing
     views so the rail is identical on each.
 
-    ``received_at`` rides along because the chip's own time is the *device's*
-    clock, which on a real rig is not wall-clock (often 00:40:xx) — so on its own
-    it tells the operator nothing about when the signal turned up. The panel
-    renders the arrival as an age.
+    Newest first is load-bearing rather than cosmetic: the panel shows the ten most
+    recent per column and folds the rest away, and the chips that matter are always
+    the ones that just arrived. The arrival timestamp itself used to ride along so
+    each chip could show its age — dropped with the age, because this is a live
+    endpoint that every open browser re-fetches on every incoming time, and a
+    morning of practice runs puts a couple of hundred chips on this list.
     """
     return [
         {
@@ -513,7 +548,6 @@ def ignored_signals(competition, precision, settings):
             "role": signal.role(settings) or "",
             "time": format_device_time(signal.device_time, precision),
             "manual": signal.is_manual,
-            "received_at": signal.received_at.isoformat(),
         }
         for signal in competition.timing_signals.filter(ignored=True).order_by("-received_at")
     ]
@@ -583,9 +617,13 @@ def marshal_state(competition, post_number):
     # detail lets the marshal's board resume its exact per-task state after an
     # unlock; submitted == locked.
     penalty = {"detail": {}, "submitted": False}
-    post = competition.marshal_posts.filter(number=post_number).first()
+    post = next((p for p in competition.marshal_posts.all()
+                 if p.number == post_number), None)
     if post is not None:
-        mp = run.marshal_penalties.filter(marshal_post=post).first()
+        # From the prefetch the run already carries (autotiming.all_runs), not a
+        # fresh query: this is polled by every marshal phone on the course.
+        mp = next((m for m in run.marshal_penalties.all()
+                   if m.marshal_post_id == post.id), None)
         if mp is not None:
             penalty = {"detail": mp.detail or {}, "submitted": mp.submitted}
     return {

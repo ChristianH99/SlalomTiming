@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load static i18n %}
 {% block title %}{% trans "Competition Types" %} – Slalom Timing{% endblock %}
 {% block topbar_title %}{% trans "Competition Types" %}{% endblock %}
 {% block content %}
@@ -40,7 +40,7 @@
               <button type="button" class="link-button link-button--danger" disabled
                       title="{% trans 'This type is in use and can’t be deleted' %}">{% trans "Delete" %}</button>
             {% else %}
-              <form method="post" action="{% url 'competitions:type-delete' competition_type.pk %}" style="display:inline">
+              <form method="post" action="{% url 'competitions:type-delete' competition_type.pk %}" class="inline-form">
                 {% csrf_token %}
                 <button type="submit" class="link-button link-button--danger">{% trans "Delete" %}</button>
               </form>
@@ -66,19 +66,8 @@
   </table>
   </div>
 
-  <script>
-    (function () {
-      document.querySelectorAll("[data-expander]").forEach((button) => {
-        button.addEventListener("click", () => {
-          const row = button.closest("tr");
-          const panel = row.nextElementSibling;
-          if (!panel || !panel.matches("[data-type-competitions]")) return;
-          const opening = panel.hasAttribute("hidden");
-          panel.toggleAttribute("hidden", !opening);
-          button.setAttribute("aria-expanded", String(opening));
-          button.innerHTML = opening ? "&#9660;" : "&#9654;";
-        });
-      });
-    })();
-  </script>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/competitiontype_list.js' %}"></script>
 {% endblock %}

@@ -5,6 +5,27 @@
 {% block content %}
   <a class="back-link" href="{% url 'competitions:list' %}">{% trans "← Back to Competition Setup" %}</a>
   <p class="hint">{% trans "Create a competition, then configure its classes and run order. The new competition becomes the current one." %}</p>
+
+  {% comment %}One active competition serves the whole installation, so creating
+  one moves every open screen — the same fact select_competition confirms before
+  switching. Said here rather than refused: creating a competition is a normal
+  thing to do, and the operator can weigh it once they can see it.{% endcomment %}
+  {% if others %}
+    <div class="notice notice--warning">
+      <p class="notice-title">{% trans "Somebody else is using this system" %}</p>
+      <p>
+        {% if current %}
+          {% blocktrans with name=current.name %}The current event is <strong>{{ name }}</strong>. Creating a competition makes the new one current instead, and every timing screen, results table and marshal post follows it — including theirs.{% endblocktrans %}
+        {% else %}
+          {% blocktrans %}Creating a competition makes it the current one, and every timing screen, results table and marshal post follows it — including theirs.{% endblocktrans %}
+        {% endif %}
+      </p>
+      <p class="hint">
+        {% trans "Signed in now:" %}
+        {% for user in others %}<strong>{{ user.username }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+      </p>
+    </div>
+  {% endif %}
   <form method="post" data-unsaved-guard>
     {% csrf_token %}
     <input type="hidden" name="next" value="">

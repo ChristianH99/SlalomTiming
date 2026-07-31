@@ -1,12 +1,11 @@
 import json
 
-from django import forms
 from django.contrib import messages
-from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import content_disposition_header
 from django.utils.translation import gettext as _
 from django.views import View
 
@@ -16,19 +15,13 @@ from apps.competitions.views import ActiveCompetitionMixin
 from apps.timing import calc
 from apps.timing.models import TimedRun
 
-from . import pdf, pdfmarkup, resultscalc
+from . import logos, pdf, pdfmarkup, resultscalc
 from .models import (
     RESULT_COLUMNS, ManualTieResolution, ResultColumnSettings, ResultsPdfLayout,
 )
 
 # Name-block lines rendered in bold (the competitor's and co-driver's names).
 BOLD_KEYS = {"driver_name", "co_driver"}
-
-# A PDF logo is a club emblem printed at ~18 mm high. The two logo fields are
-# assigned straight from request.FILES (there is no ModelForm here), so nothing else
-# checks them: without this an upload of any size is written into MEDIA_ROOT, and
-# anything at all is written as an "image" for ReportLab to choke on at export time.
-MAX_LOGO_BYTES = 4 * 1024 * 1024
 
 # The tallies under a results table. "Classified / not classified" said very little
 # — every competitor was one or the other and neither number told the operator
@@ -155,7 +148,8 @@ def build_layout(enabled, counted_count, training_count, include_class,
 
 
 def build_table(competition, enabled, ranked, status_rows, unranked, precision,
-                counted_count, training_count, include_class, score_heading):
+                counted_count, training_count, include_class, score_heading,
+                participants=None):
     """Assemble the layout + per-row data both the class and Overall tables render.
 
     Header and body come from one computed structure so they never drift. Returns
@@ -163,7 +157,15 @@ def build_table(competition, enabled, ranked, status_rows, unranked, precision,
     the foot of the ranked table, the unranked ones in their own block below it.
     """
     # Summary tallies: every starter, then how many finished on each state code.
+    # These count a *competitor's* outcome, which is not the same thing as a code
+    # on a run: a DNS on a practice run means nothing to a result, so a table can
+    # legitimately show "DNS" in a cell above a tally reading "DNS: 0". Both are
+    # right and together they read as a bug, so when it happens the table says
+    # which of the two it is counting.
     everyone = list(ranked) + list(status_rows) + list(unranked)
+    practice_only_code = any(
+        run.status for c in everyone for run in c.training
+    ) and not any(c.final_status for c in everyone)
     summary = {
         "starters": len(everyone),
         "statuses": [
@@ -171,6 +173,7 @@ def build_table(competition, enabled, ranked, status_rows, unranked, precision,
              "count": sum(1 for c in everyone if c.final_status == status)}
             for status, label in SUMMARY_STATUSES
         ],
+        "practice_only_code": practice_only_code,
     }
     layout = build_layout(enabled, counted_count, training_count, include_class,
                           score_heading, summary)
@@ -235,10 +238,13 @@ def build_table(competition, enabled, ranked, status_rows, unranked, precision,
             "gap": gap,
         }
 
-    participants = {
-        entry.participant_id: entry.participant
-        for entry in competition.entries.select_related("participant").all()
-    }
+    # Handed in by a caller rendering several tables (see resultscalc.event_data);
+    # read here when there is only one.
+    if participants is None:
+        participants = {
+            entry.participant_id: entry.participant
+            for entry in competition.entries.select_related("participant").all()
+        }
 
     def rows(competitors, kind):
         return [
@@ -250,12 +256,17 @@ def build_table(competition, enabled, ranked, status_rows, unranked, precision,
             rows(unranked, "unranked"))
 
 
-def class_section(competition, cclass):
+def class_section(competition, cclass, data=None):
     """The full render payload for one class results table (layout + rows + labels).
-    Shared by the on-screen view and the PDF export so both show the same table."""
-    results = resultscalc.compute_class_results(competition, cclass)
+    Shared by the on-screen view and the PDF export so both show the same table.
+
+    ``data`` is ``resultscalc.event_data(competition)`` for a caller rendering more
+    than one table — "export everything" otherwise re-read the whole event per
+    class."""
+    results = resultscalc.compute_class_results(competition, cclass, data=data)
     precision = competition.competition_type.timing_precision
-    enabled = ResultColumnSettings.columns_for(competition, cclass)
+    enabled = ResultColumnSettings.columns_for(
+        competition, cclass, running=data["running"] if data else None)
     layout, ranked, status_rows, unranked = build_table(
         competition, enabled, results.ranked, results.status_rows, results.unranked,
         precision,
@@ -263,6 +274,7 @@ def class_section(competition, cclass):
         training_count=cclass.practice_runs or 0,
         include_class=False,
         score_heading=_score_heading(cclass.scoring_method),
+        participants=data["participants"] if data else None,
     )
     # "Class 1" for a class named "1", but "Klasse 1" alone for one already named
     # that way — see CompetitionClass.display_name.
@@ -278,12 +290,13 @@ def class_section(competition, cclass):
     }
 
 
-def overall_section(competition, method, runs):
+def overall_section(competition, method, runs, data=None):
     """The full render payload for one Overall results table. Shared by the
-    on-screen view and the PDF export."""
-    results = resultscalc.compute_overall_results(competition, method, runs)
+    on-screen view and the PDF export. ``data`` as in ``class_section``."""
+    results = resultscalc.compute_overall_results(competition, method, runs, data=data)
     precision = competition.competition_type.timing_precision
-    enabled = ResultColumnSettings.general_columns(competition)
+    enabled = ResultColumnSettings.general_columns(
+        competition, running=data["running"] if data else None)
     layout, ranked, status_rows, unranked = build_table(
         competition, enabled, results.ranked, results.status_rows, results.unranked,
         precision,
@@ -291,6 +304,7 @@ def overall_section(competition, method, runs):
         training_count=results.training_runs,
         include_class=True,
         score_heading=_score_heading(method),
+        participants=data["participants"] if data else None,
     )
     return {
         # title/scoring_label feed the PDF headline only (the web view reads
@@ -392,7 +406,13 @@ def sample_section(competition, layout_ctx):
 def _pdf_response(competition, layout, sections, filename):
     data = pdf.render_results_pdf(competition, layout, sections)
     response = HttpResponse(data, content_type="application/pdf")
-    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    # A filename carries a class name, which an organiser types. Interpolating it
+    # into the header let a class named `A"; x` close the quoted string and append
+    # a second `filename=` of its choosing; a name in a script the header's latin-1
+    # encoding can't hold came out RFC-2047-encoded and unreadable to every
+    # browser; and a name with a newline in it raised BadHeaderError, i.e. a 500.
+    # Django's own builder handles all three (RFC 5987 `filename*=` when needed).
+    response["Content-Disposition"] = content_disposition_header(False, filename)
     return response
 
 
@@ -437,12 +457,15 @@ class ResultsExportAllView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             raise Http404("No active competition.")
+        # One read of the event for the whole document, not one per table.
+        data = resultscalc.event_data(competition)
         sections = []
         if ResultColumnSettings.overall_enabled(competition):
-            for g in resultscalc.overall_groups(competition):
-                sections.append(overall_section(competition, g["method"], g["counted_runs"]))
-        for cclass in competition._running_classes_ordered():
-            sections.append(class_section(competition, cclass))
+            for g in resultscalc.overall_groups(competition, running=data["running"]):
+                sections.append(overall_section(
+                    competition, g["method"], g["counted_runs"], data=data))
+        for cclass in data["running"]:
+            sections.append(class_section(competition, cclass, data=data))
         if not sections:
             raise Http404("No running classes to export.")
         layout = ResultsPdfLayout.for_competition(competition)
@@ -472,22 +495,8 @@ class ResultsExportSampleView(ActiveCompetitionMixin, View):
         return _pdf_response(competition, layout, [section], "results-sample.pdf")
 
 
-def _clean_logo(upload):
-    """A picked logo, or ``(None, message)`` saying why it was refused.
-
-    Size first, then Pillow's own verification via ``forms.ImageField`` — the same
-    check a ModelForm would have run, which this page bypasses by assigning
-    ``request.FILES`` onto the model directly."""
-    if upload is None:
-        return None, None
-    if upload.size > MAX_LOGO_BYTES:
-        return None, _(
-            "The logo “%(name)s” is too large (limit %(limit)s MB)."
-        ) % {"name": upload.name, "limit": MAX_LOGO_BYTES // (1024 * 1024)}
-    try:
-        return forms.ImageField().clean(upload), None
-    except ValidationError:
-        return None, _("“%(name)s” is not an image file.") % {"name": upload.name}
+# Both logo doors (this page and the import) share one check — see apps/results/logos.py.
+_clean_logo = logos.clean_upload
 
 
 def _parse_year(value):

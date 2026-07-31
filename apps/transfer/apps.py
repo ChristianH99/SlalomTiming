@@ -5,4 +5,4 @@ class TransferConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.transfer"
     label = "transfer"
-    verbose_name = "Import / Export"
+    verbose_name = "Backup"

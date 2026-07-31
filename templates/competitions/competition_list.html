@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load static i18n %}
 {% block title %}{% trans "Competition Setup" %} – Slalom Timing{% endblock %}
 {% block topbar_title %}{% trans "Competition Setup" %}{% endblock %}
 {% block content %}
   <div class="list-toolbar">
-    <form class="search-form" role="search" id="competition-search" onsubmit="return false;">
+    <form class="search-form" role="search" id="competition-search">
       <input type="text" id="competition-search-input"
              placeholder="{% trans 'Search by name or type…' %}" autocomplete="off">
       <button class="button button--secondary" type="submit">{% trans "Search" %}</button>
@@ -61,27 +61,8 @@
     <p class="empty-state no-results-row" hidden>{% trans "No competitions match your search." %}</p>
   </div>
 
-  <script>
-    (function () {
-      const input = document.getElementById("competition-search-input");
-      const body = document.getElementById("competitions-body");
-      if (!input || !body) return;
-      const noResults = body.querySelector(".no-results-row");
-      const tiles = Array.from(body.querySelectorAll("[data-search]"));
+{% endblock %}
 
-      function apply() {
-        const term = input.value.trim().toLowerCase();
-        let visible = 0;
-        for (const tile of tiles) {
-          const match = term === "" || tile.dataset.search.includes(term);
-          tile.hidden = !match;
-          if (match) visible += 1;
-        }
-        if (noResults) noResults.hidden = !(tiles.length > 0 && visible === 0);
-      }
-
-      input.addEventListener("input", apply);
-      apply();
-    })();
-  </script>
+{% block scripts %}
+  <script src="{% static 'js/competition_list.js' %}"></script>
 {% endblock %}

@@ -5,7 +5,7 @@
 (function () {
   "use strict";
 
-  const URLS = window.DASH_URLS;
+  const URLS = window.pageData("page-urls");
   const dataEl = document.getElementById("dash-data");
   if (!URLS || !dataEl) return;
 
@@ -144,7 +144,10 @@
       body.append(figure(gettext("Total time"), c.total_time || "—", "primary"));
       if (state.penalties_enabled) {
         // Already rendered by calc.format_penalty — the notation lives there.
-        body.append(figure(gettext("Penalties"), c.penalty || "—"));
+        // Toned "penalty", which is what the flame colour means on the results
+        // table and in the PDF; the total used to wear it, so a clean run's time
+        // read as penalised.
+        body.append(figure(gettext("Penalties"), c.penalty || "—", "penalty"));
       }
     } else {
       const note = el("p", "dash-current-note",
