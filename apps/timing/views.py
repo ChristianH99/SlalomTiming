@@ -18,6 +18,7 @@ from django.views.generic import TemplateView, UpdateView
 
 from apps.accounts import pages
 from apps.competitions.models import Competition, CompetitionClass
+from apps.common import json_body as _shared_json_body
 from apps.participants.models import EventEntry
 
 from . import arrangement, autotiming, calc, cp540, dashboard, runstatus
@@ -655,9 +656,8 @@ def timing_signal(request):
             status=409,
         )
 
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
+    payload = _json_body(request)
+    if not payload:
         return JsonResponse({"ok": False, "error": "Malformed request."}, status=400)
 
     try:
@@ -1379,10 +1379,9 @@ def _over_max(ctx, run):
 # ----- small parsing helpers -----
 
 def _json_body(request):
-    try:
-        return json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return {}
+    """The request's JSON body as a dict. See apps/common.json_body for the three
+    ways a body that is not our JSON used to reach a view as a 500."""
+    return _shared_json_body(request)
 
 
 def _digits(value):

@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 
 from django.conf import settings
-from django.db import OperationalError
+from django.db import DatabaseError, OperationalError
 
 from apps.competitions.models import Competition
 
@@ -67,13 +67,22 @@ def record_signal(running_number, port, is_manual, device_time, source="device")
     thread."""
     from .views import broadcast_live
 
-    competition = Competition.get_current()
-    # Operator lock: when on, the time is still captured (never lost) but goes
-    # straight to the ignore list instead of into a run.
-    locked = TimingSettings.load().ignore_incoming
+    unrecorded = {
+        "running_number": running_number, "port": port,
+        "is_manual": bool(is_manual), "device_time": device_time.isoformat(),
+        "source": str(source)[:20],
+    }
 
     # 1) Capture the time itself first — this is what must never be lost.
+    #
+    # The two *reads* below are inside the same guard as the insert, and that is
+    # the point: they used to sit above it, unretried, so a lock while reading
+    # the active competition or the settings row raised straight out of
+    # record_signal — losing the time without it even reaching the recovery
+    # file, which is the one thing this module promises cannot happen. They are
+    # ordinary reads and a lock on them is rare, but "rare" is not the guarantee.
     try:
+        competition, locked = _retry(_context)
         signal = _retry(lambda: TimingSignal.objects.create(
             competition=competition,
             running_number=running_number,
@@ -83,15 +92,8 @@ def record_signal(running_number, port, is_manual, device_time, source="device")
             source=str(source)[:20],
             ignored=locked,
         ))
-    except OperationalError as exc:
-        _capture_unrecorded(
-            {
-                "running_number": running_number, "port": port,
-                "is_manual": bool(is_manual), "device_time": device_time.isoformat(),
-                "source": str(source)[:20],
-            },
-            exc,
-        )
+    except DatabaseError as exc:          # OperationalError is one of these
+        _capture_unrecorded(unrecorded, exc)
         return None
 
     # 2) Place it into a run — unless the input is locked, in which case it stays on
@@ -101,11 +103,22 @@ def record_signal(running_number, port, is_manual, device_time, source="device")
         if not locked:
             try:
                 _retry(lambda: _place(competition, signal))
-            except OperationalError:
+            except DatabaseError:
+                # OperationalError *and* IntegrityError: two signals being placed
+                # at the same moment can both try to pair with the same start,
+                # and TimedRun.start_signal is a OneToOne. Either way the time is
+                # already saved and reconcile() re-places it on the next signal —
+                # which is exactly why this is logged rather than raised.
                 logger.exception("Signal %s saved but not yet placed into a run", signal.id)
         broadcast_live()
 
     return signal
+
+
+def _context():
+    """The active competition and the operator lock, read together so the retry
+    around them covers both."""
+    return Competition.get_current(), TimingSettings.load().ignore_incoming
 
 
 def _place(competition, signal):

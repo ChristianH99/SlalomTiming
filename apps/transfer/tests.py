@@ -1683,3 +1683,94 @@ class TestTheBackupTimestampsReadAsLocalTime:
         row.save()
         body = client.get(reverse("transfer:backup")).content.decode()
         assert "08:37" in body, "the timestamp is still being rendered in UTC"
+
+
+# --- TST-7: an archive is a file a person picked, so it is hostile -----------
+#
+# The existing tests here cover the archive *budgets* (over-sized entries, a
+# lying header) and the happy path. What they did not cover is the thing that
+# actually went wrong: BLK-1, where the import wrote whatever bytes the document
+# carried under whatever name it asked for, so a crafted .zip could put an
+# executable file on the app's own origin. That fix lives in apps/results/logos,
+# and this is the test that it is still in the door.
+
+def _crafted_archive(competition, name, content):
+    """A real export with its logo replaced by something the archive chose.
+
+    Both halves are what an attacker controls: the *bytes* under media/ and the
+    *name* the document asks for them to be saved under.
+    """
+    document, _media = exporters._event_document(competition)
+    document["results"]["pdf_layout"]["image_left"] = name
+    return archive.write(document, {name: content})
+
+
+def test_an_imported_logo_that_is_not_an_image_is_refused(settings, tmp_path):
+    """Media is served from this app's own origin, so a file that is not an
+    image is not a cosmetic problem: `evil.html` under /media/ is script running
+    in the operator's session, from a file they merely *imported*."""
+    settings.MEDIA_ROOT = tmp_path
+    competition = make_event()
+    ResultsPdfLayout.objects.create(competition=competition, header_html="<b>Hi</b>")
+    payload = _crafted_archive(competition, "evil.html",
+                               b"<script>alert(document.cookie)</script>")
+    wipe()
+
+    _plan, result = import_archive(payload)
+
+    layout = ResultsPdfLayout.objects.get(competition=result.competition)
+    assert not layout.image_left, "a non-image was accepted as a logo"
+    assert not list(Path(tmp_path).rglob("*.html")), "an HTML file was written under MEDIA_ROOT"
+
+
+def test_an_imported_logo_cannot_choose_its_own_path(settings, tmp_path):
+    """The archive names the file. A name is not a thing to be trusted: `../`
+    in one is a write outside MEDIA_ROOT, and Django answers that with a
+    SuspiciousFileOperation — a 500 on the import page at best."""
+    settings.MEDIA_ROOT = tmp_path / "media"
+    (tmp_path / "media").mkdir()
+    competition = make_event()
+    ResultsPdfLayout.objects.create(competition=competition)
+    pixel = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04"
+             b"\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
+    payload = _crafted_archive(competition, "../../escaped.gif", pixel)
+    wipe()
+
+    _plan, result = import_archive(payload)
+
+    layout = ResultsPdfLayout.objects.get(competition=result.competition)
+    # Either refused outright or saved under a name of *our* choosing — never
+    # one that climbs out of MEDIA_ROOT.
+    if layout.image_left:
+        assert ".." not in layout.image_left.name
+        assert Path(layout.image_left.path).resolve().is_relative_to(
+            Path(settings.MEDIA_ROOT).resolve())
+    assert not (tmp_path / "escaped.gif").exists()
+
+
+def test_a_document_with_a_damaged_value_is_refused_as_a_sentence():
+    """apps/transfer/schema runs each field's own validators on the way in, so a
+    value SQLite would accept and every later read would choke on is refused
+    here — as a TransferError the operator can read, not a traceback."""
+    competition = make_event()
+    document, media = exporters._event_document(competition)
+    for row in document["participants"]:
+        row["date_of_birth"] = "not-a-date"
+    payload = archive.write(document, media)
+    wipe()
+
+    with pytest.raises(TransferError):
+        import_archive(payload)
+
+
+def test_a_document_missing_a_section_the_importer_needs_is_refused():
+    """A hand-edited or truncated document, rather than a crafted one — the
+    ordinary way a file arrives damaged."""
+    competition = make_event()
+    document, media = exporters._event_document(competition)
+    del document["competition"]
+    payload = archive.write(document, media)
+    wipe()
+
+    with pytest.raises((TransferError, KeyError)):
+        import_archive(payload)

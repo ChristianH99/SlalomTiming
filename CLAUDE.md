@@ -43,7 +43,19 @@ config/                  Django project (settings, urls, asgi/wsgi). health.py i
                          ever serves an event (the channel layer, the CP540 reader thread and its
                          event loop are all per-process — a second worker splits the live updates
                          silently). Refused in a deployment, warned about while DEBUG is on.
-                         tests.py holds the deployment tests (the DEBUG=False-only failures).
+                         tests.py holds the deployment tests (the DEBUG=False-only failures)
+                         plus the cross-cutting file checks (CSP, the design-system
+                         scales, the sidebar registry, the JS structural check).
+                         hostility_tests.py is its sibling for what happens when a client
+                         is *unkind*: it **discovers** every JSON endpoint from the
+                         URLconf and asks each the same hostile questions, so the
+                         endpoint added next month is covered the day it is added — BLK-2
+                         was reachable on nine endpoints at once precisely because the
+                         tests that existed named their targets one at a time. It also
+                         holds the concurrency tests, which need
+                         `django_db(transaction=True)`: the ordinary fixture wraps a test
+                         in a transaction other threads cannot see, so a threaded test
+                         written on it is a test of nothing.
                          settings.py: HTTPS is the default once DEBUG is off and there is exactly
                          ONE way off it — DJANGO_ALLOW_PLAIN_HTTP (the older per-setting hatches
                          DJANGO_SECURE_SSL_REDIRECT/DJANGO_SECURE_COOKIES now *refuse to start*,
@@ -150,6 +162,15 @@ apps/common.py           Helpers shared across apps: safe_next() resolves the PO
                          other_signed_in_users() reads the live session table — how a page
                          owning an installation-wide setting knows whether changing it
                          would move somebody else's screen (see select_competition).
+                         json_body() is the one door a posted JSON body comes through.
+                         Three endpoints parsed their own and all three were 500s:
+                         `json.loads` on *bytes* sniffs the encoding from the leading
+                         octets, so a body starting with a null byte is read as UTF-16
+                         and raises UnicodeDecodeError — a ValueError but **not** a
+                         JSONDecodeError, which is what they caught; and valid JSON need
+                         not be an object, so `"a string"` parses and every
+                         `payload.get(...)` after it is an AttributeError. Anything that
+                         is not an object comes back as {}.
 apps/nav.py              Which sidebar entry base.html marks as current: entry id ->
                          the (app_name, url_name) pairs that are that page, plus
                          PARENTS (a parent is marked when any child is). A context
@@ -436,9 +457,16 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          arrangement, syncs bindings, broadcasts. A time is never lost: a locked DB
                          is waited out (WAL + busy timeout, apps.py) and the insert retried; if it
                          still fails the signal is appended to a durable recovery file
-                         (timing_unrecorded.log) and record_signal returns None. Placement is a
-                         second retried step — if it loses a lock race the signal is already saved
-                         and gets re-placed by arrangement.reconcile() on the next signal. When the
+                         (timing_unrecorded.log) and record_signal returns None. The two *reads*
+                         it needs first — the active competition and the operator lock — are
+                         inside that same guard, which they were not: they sat above it,
+                         unretried, so a lock while reading either raised straight out of
+                         record_signal and the time reached neither the table nor the recovery
+                         file. Placement is a second retried step — if it loses a lock race the
+                         signal is already saved and gets re-placed by arrangement.reconcile() on
+                         the next signal; it catches DatabaseError, not just OperationalError,
+                         because two signals placed at once can both try to pair with the same
+                         start and TimedRun.start_signal is a OneToOne. When the
                          operator Lock (TimingSettings.ignore_incoming) is on, the signal is still
                          captured but stored ignored and *not* placed — it lands on the ignore list.
   cp540.py               Tag Heuer CP540 driver: a daemon reader thread (module-level `reader`)

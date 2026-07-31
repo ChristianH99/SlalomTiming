@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 from asgiref.sync import async_to_sync, sync_to_async
-from django.urls import reverse
+from django.urls import resolve, reverse
 
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
 from apps.participants.models import ClassAssignment, EventEntry, Participant
@@ -2553,4 +2553,129 @@ def test_the_payload_no_longer_grows_with_the_number_of_posts(client):
     assert sizes[4] < sizes[0] * 1.1, (
         f"four posts cost {sizes[4]} bytes against {sizes[0]} with none — the "
         f"boxes are being written out per item again"
+    )
+
+
+# --- TST-2: a login is not authorisation ------------------------------------
+#
+# The audit's point, and the reason this reads as a sweep rather than a case:
+# the shared `client` fixture is a **superuser**, so almost every view test in
+# this suite proves nothing whatever about access control. Four endpoints are
+# reachable from two pages at once (the marshal endpoints), and one is reachable
+# from outside the gate entirely (timing:signal), which means each has to decide
+# for itself who is calling. Each of those decisions needs a test that a
+# *scoped* role is refused — and it needs to be a sweep, because the failure
+# mode is the fifth endpoint somebody adds next to the four.
+
+# Endpoint -> a payload that would otherwise do something. Every one of these is
+# a timekeeper's action offered on a page a marshal can also open.
+TIMEKEEPER_ONLY = {
+    "timing:marshal-unlock": {"post": 1, "run_id": None},
+    "timing:marshal-lock": {"post": 1, "run_id": None},
+    "timing:marshal-lock-all": {"run_id": None},
+    "timing:marshal-task-edit": {"post": 1, "run_id": None, "task": 1, "pylons": 2},
+}
+
+
+@pytest.mark.parametrize("endpoint", sorted(TIMEKEEPER_ONLY))
+def test_a_marshal_cannot_do_a_timekeepers_job(endpoint):
+    """Marshal Posts and Timing grant the same URLs, so the access gate cannot
+    tell the two roles apart — these views draw the line themselves."""
+    comp, _ = auto_scenario()
+    MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+
+    body = dict(TIMEKEEPER_ONLY[endpoint], run_id=run.id)
+    phone = marshal_client("marshal_posts")
+    assert post_json(phone, endpoint, **body).status_code == 403, endpoint
+
+    # …and the timekeeper, holding the Timing page, is not refused.
+    desk = marshal_client("timing")
+    assert post_json(desk, endpoint, **body).status_code != 403, endpoint
+
+
+def test_every_timekeeper_endpoint_is_covered_by_the_sweep():
+    """The list above is only worth having if it is the whole list. Every view
+    that calls _timekeeper_required has to appear in it, so adding a fifth
+    without a test fails here rather than in a year."""
+    import inspect
+
+    from apps.timing import views
+
+    guarded = {
+        name for name, fn in vars(views).items()
+        if inspect.isfunction(fn) and fn.__module__ == views.__name__
+        and name != "_timekeeper_required"          # the guard itself
+        and "_timekeeper_required" in inspect.getsource(fn)
+    }
+    # url name -> view function name, for the ones the sweep covers.
+    covered = {resolve(reverse(name)).func.__name__ for name in TIMEKEEPER_ONLY}
+    assert guarded <= covered, f"not swept: {sorted(guarded - covered)}"
+
+
+def test_the_open_signal_endpoint_still_asks_who_is_calling():
+    """timing:signal is the one ungated URL (a device cannot log in), so it
+    authorises itself: a *session*-authenticated caller must hold the Timing
+    page. A signed-in user without it is refused, not served."""
+    comp, _ = auto_scenario()
+    settings_row = TimingSettings.load()
+    settings_row.device = TimingSettings.Device.SIMULATOR
+    settings_row.save(update_fields=["device"])
+
+    body = {"running_number": 1, "port": 1, "time": "10:00:00.000"}
+    phone = marshal_client("marshal_posts")
+    assert post_json(phone, "timing:signal", **body).status_code == 403
+    assert not TimingSignal.objects.exists()
+
+    desk = marshal_client("timing")
+    assert post_json(desk, "timing:signal", **body).status_code == 200
+    assert TimingSignal.objects.count() == 1
+
+
+# --- TST-5: no start pattern, but runs already recorded ----------------------
+
+def test_recorded_runs_survive_a_competition_with_no_start_pattern(client):
+    """The state the real database is in, and the one nobody had a test for.
+
+    A pattern is optional (INT-1): an event can be timed entirely on the Manual
+    view, and Auto timing then replaces itself with a sentence. What must not
+    happen is that the *runs* become unreachable — they are the event. So with
+    times recorded and no pattern at all, the Manual view, the results and the
+    Dashboard all still have to answer.
+    """
+    comp, cls = auto_scenario()
+    comp.start_pattern = []
+    comp.save(update_fields=["start_pattern"])
+    run = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    signal_in(comp, 1, "10:00:42.500", running=2)
+
+    # Auto timing says what is missing and renders none of its apparatus…
+    auto = client.get(reverse("timing:auto"))
+    assert auto.context["needs_pattern"] is True
+    assert b'id="autotiming"' not in auto.content
+
+    # …while everything that reads the runs is unaffected.
+    assert client.get(reverse("timing:manual")).status_code == 200
+    arrangement = client.get(reverse("timing:arrangement")).json()
+    assert any(row.get("run", {}).get("id") == run.id for row in arrangement["rows"])
+    assert client.get(reverse("timing:dashboard")).status_code == 200
+    assert client.get(reverse("results:class", args=[cls.pk])).status_code == 200
+
+
+def test_a_pattern_can_be_added_after_times_are_recorded(client):
+    """The other half: an operator who starts on Manual and switches to Auto
+    mid-event. The runs already recorded must bind to the new order, not be
+    stranded beside it."""
+    comp, _ = auto_scenario()
+    comp.start_pattern = []
+    comp.save(update_fields=["start_pattern"])
+    signal_in(comp, 1, "10:00:00.000", running=1)
+
+    comp.start_pattern = [{"window": None, "chips": ["counted"]}]
+    comp.save(update_fields=["start_pattern"])
+
+    state = client.get(reverse("timing:auto-state")).json()
+    assert state["items"], "the start order came back empty"
+    assert any(item.get("run_id") for item in state["items"]), (
+        "a run recorded before the pattern existed did not bind to it"
     )

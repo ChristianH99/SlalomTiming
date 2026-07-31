@@ -451,7 +451,7 @@ class TestContentSecurityPolicy:
             )
 
     def test_no_script_file_starts_a_token_with_an_escaped_quote(self):
-        r"""A cheap parse check, because there is no JS engine in the test run.
+        r"""The signature of the edit that broke two files at once.
 
         Moving 1,778 lines out of templates was a mechanical edit, and the way it
         went wrong was ``querySelector(\"[data-run]\")`` — an escaped quote where
@@ -459,7 +459,7 @@ class TestContentSecurityPolicy:
         with it. Nothing on the server notices: the page renders, the script is
         dead, and you find out at an event.
         """
-        for script in (settings.BASE_DIR / 'static' / 'js').glob('*.js'):
+        for script in JS_DIR.glob('*.js'):
             source = script.read_text(encoding='utf-8')
             # Only where an *argument* should open — `href=\"…\"` inside a
             # string is legitimate and common.
@@ -468,6 +468,128 @@ class TestContentSecurityPolicy:
                 f'{script.name}: escaped quote opening a token ({len(bad)}x) — '
                 f'the file will not parse'
             )
+
+
+
+    @pytest.mark.parametrize('script', sorted(JS_DIR.glob('*.js')),
+                             ids=lambda p: p.name)
+    def test_every_script_is_structurally_whole(self, script):
+        """TST-10. The check above catches one signature; this catches the class.
+
+        There is no JS engine in this test run (no node on the machine), so this
+        is a lexer rather than a parser: it walks the file tracking strings,
+        template literals, regex literals and both comment forms, then asserts
+        that every bracket outside them closes and nothing is left open at EOF.
+
+        That covers what actually goes wrong in a hand edit — a brace lost in a
+        move, a string never closed, a comment never terminated — each of which
+        is a SyntaxError that kills the whole file while the server serves it
+        happily and the page renders without its behaviour. It is not a parser
+        and does not pretend to be: it cannot see a misplaced `return` or a
+        duplicate `const`. It sees the shape.
+        """
+        source = script.read_text(encoding='utf-8')
+        pairs = {')': '(', ']': '[', '}': '{'}
+        stack = []
+        i, n, line = 0, len(source), 1
+        # Whether a "/" here opens a regex or divides: after a value it divides,
+        # after an operator or an opening bracket it opens a regex.
+        after_value = False
+
+        while i < n:
+            ch = source[i]
+
+            if ch == chr(10):
+                line += 1
+                i += 1
+                continue
+            if ch in ' \t\r':
+                i += 1
+                continue
+
+            if source.startswith('//', i):
+                nl = source.find(chr(10), i)
+                if nl == -1:
+                    break
+                i = nl
+                continue
+
+            if source.startswith('/*', i):
+                end = source.find('*/', i + 2)
+                assert end != -1, f'{script.name}:{line} block comment never closed'
+                line += source.count(chr(10), i, end)
+                i = end + 2
+                continue
+
+            if ch == '"' or ch == "'":
+                j = i + 1
+                while j < n and source[j] != ch:
+                    if source[j] == chr(92):
+                        j += 2
+                        continue
+                    assert source[j] != chr(10), (
+                        f'{script.name}:{line} string literal never closed'
+                    )
+                    j += 1
+                assert j < n, f'{script.name}:{line} string literal never closed'
+                i, after_value = j + 1, True
+                continue
+
+            if ch == '`':
+                j = i + 1
+                while j < n and source[j] != '`':
+                    if source[j] == chr(92):
+                        j += 2
+                        continue
+                    if source[j] == chr(10):
+                        line += 1
+                    j += 1
+                assert j < n, f'{script.name}:{line} template literal never closed'
+                i, after_value = j + 1, True
+                continue
+
+            if ch == '/' and not after_value:
+                j, in_class, closed = i + 1, False, False
+                while j < n:
+                    c = source[j]
+                    if c == chr(92):
+                        j += 2
+                        continue
+                    if c == chr(10):
+                        break
+                    if c == '[':
+                        in_class = True
+                    elif c == ']':
+                        in_class = False
+                    elif c == '/' and not in_class:
+                        closed = True
+                        break
+                    j += 1
+                if closed:
+                    i, after_value = j + 1, True
+                    continue
+                # A stray slash after all — treat it as an operator.
+
+            if ch in '([{':
+                stack.append((ch, line))
+                after_value = False
+            elif ch in ')]}':
+                assert stack, f'{script.name}:{line} closing {ch} with nothing open'
+                opener, opened_at = stack.pop()
+                assert opener == pairs[ch], (
+                    f'{script.name}:{line} {ch} closes {opener} opened at line {opened_at}'
+                )
+                after_value = True
+            elif ch in ';,=+-*<>!&|?:':
+                after_value = False
+            else:
+                after_value = True
+            i += 1
+
+        assert not stack, (
+            f'{script.name}: {len(stack)} bracket(s) never closed — '
+            + ', '.join(f'{ch} at line {ln}' for ch, ln in stack)
+        )
 
 
 class TestDataDirectoryPermissions:
@@ -1039,6 +1161,82 @@ def _url_names_in_the_project():
 
     walk(get_resolver(), '')
     return found
+
+
+class TestThePagesCanBeUsedWithoutAMouse:
+    """TST-8. The suite had no accessibility assertions at all, which is how UI-9
+    (a focus ring removed on almost every input), UI-14 (no modal focus
+    management), UI-21 (a hard-coded aria-expanded) and UI-22 (a table row
+    claiming to be a button) all shipped together.
+
+    These are file tests over the templates rather than a rendered-page audit —
+    cheap, and they catch the whole class on the way in. The rendered halves live
+    in TestModalsManageFocus and TestKeyboardFocusIsVisible."""
+
+    @pytest.mark.parametrize('template', sorted(TEMPLATE_DIR.rglob('*.html')), ids=str)
+    def test_every_control_has_a_name(self, template):
+        """A button with only an icon in it is an unlabelled button to a screen
+        reader — "button", and nothing else. The × on a dialog, the chevron on a
+        participant row and the hamburger are all this shape."""
+        source = template.read_text(encoding='utf-8')
+        source = re.sub(r'\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}', '',
+                        source, flags=re.S)
+        for match in re.finditer(r'<button([^>]*)>(.*?)</button>', source, re.S):
+            attrs, inner = match.group(1), match.group(2)
+            if 'aria-label' in attrs or 'aria-labelledby' in attrs:
+                continue
+            # Text the user can actually read: tags and template tags removed.
+            text = re.sub(r'<[^>]*>|\{%.*?%\}', '', inner)
+            text = re.sub(r'\{\{.*?\}\}', 'x', text).strip()
+            assert text, (
+                f'{template.name}: a <button> with no text and no aria-label — '
+                f'{match.group(0)[:80]}'
+            )
+
+    @pytest.mark.parametrize('template', sorted(TEMPLATE_DIR.rglob('*.html')), ids=str)
+    def test_no_element_claims_to_be_something_it_is_not(self, template):
+        """`<tr role="button">` told a screen reader the row was not a row: no
+        column headers, no position in the table. If a thing behaves like a
+        button it should *be* one — see participant_list.html."""
+        source = template.read_text(encoding='utf-8')
+        source = re.sub(r'\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}', '',
+                        source, flags=re.S)
+        for tag in ('tr', 'td', 'th', 'table', 'ul', 'ol', 'li'):
+            offenders = re.findall(rf'<{tag}[^>]*role="(?:button|link|checkbox)"',
+                                   source)
+            assert not offenders, f'{template.name}: <{tag} role=…> — {offenders}'
+
+    def test_the_hamburger_does_not_render_a_state_the_server_cannot_know(self):
+        """UI-21. The sidebar is shown by default on desktop and off-canvas on
+        mobile, so a rendered aria-expanded is simply wrong on a phone until the
+        script runs. shell.js sets it from the real state on load."""
+        source = (TEMPLATE_DIR / 'base.html').read_text(encoding='utf-8')
+        hamburger = re.search(r'<button[^>]*id="shell-hamburger"[^>]*>', source)
+        assert hamburger, 'the hamburger is gone'
+        assert 'aria-expanded' not in hamburger.group(0)
+        assert 'aria-controls="shell-sidebar"' in hamburger.group(0)
+        assert 'syncAria' in (JS_DIR / 'shell.js').read_text(encoding='utf-8')
+
+    def test_a_message_is_announced_and_can_be_dismissed(self):
+        """UI-15. Django's messages were a plain <ul>, so "Timing settings
+        saved" never reached a screen reader — the page simply had one more list
+        on it than before."""
+        source = (TEMPLATE_DIR / 'base.html').read_text(encoding='utf-8')
+        block = re.search(r'<ul class="messages"[^>]*>', source)
+        assert block, 'the messages block is gone'
+        assert 'role="status"' in block.group(0), (
+            'messages are added to the page silently'
+        )
+        assert 'notice-dismiss' in (JS_DIR / 'shell.js').read_text(encoding='utf-8')
+
+    @pytest.mark.django_db
+    def test_every_page_offers_a_way_past_the_navigation(self, client):
+        """A sidebar of twenty links in front of every page is the reason skip
+        links exist."""
+        body = client.get(reverse('accounts:users')).content.decode()
+        assert 'class="skip-link"' in body
+        assert 'href="#main-content"' in body
+        assert 'id="main-content"' in body
 
 
 class TestTheSidebarMarksOnePage:

@@ -1,5 +1,3 @@
-import json
-
 from django.db import IntegrityError
 from django.db.models import F, OuterRef, Q, Subquery
 from django.http import JsonResponse
@@ -9,7 +7,7 @@ from django.utils.translation import gettext, ngettext, gettext_lazy as _
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
-from apps.common import safe_next
+from apps.common import json_body, safe_next
 from apps.competitions.models import Competition, CompetitionType
 
 from .bibs import bib_change_effect
@@ -344,9 +342,8 @@ def participant_set_bib(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
+    payload = json_body(request)
+    if not payload:
         return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
 
     participant = Participant.objects.filter(
@@ -420,9 +417,8 @@ def participant_set_dsq(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
+    payload = json_body(request)
+    if not payload:
         return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
 
     entry = EventEntry.objects.filter(

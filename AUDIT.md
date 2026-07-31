@@ -20,11 +20,10 @@ Baseline at audit time: the shipped suite was **603 passed, 0 failed** (8 m 29 s
 **Progress:** §1 (release blockers), §2 (security & access control), §3 (data
 integrity) and §5 (performance) are complete. **DOC-5 and OPS-1 are done** — the app
 now backs its own database up on a timer (Backup → Automatic backup), which is what
-the run-book's manual USB instruction was standing in for. **§4 (privacy) is still
-short**: five of its eight items were carried by §1–§3; **PRV-4 now has its half
-that has to exist first** (`Participant.last_used_at` — a record's last edit *or*
-entry, indexed and backfilled), with the bulk-delete screen still to come, and
-**PRV-5 (a privacy notice) is untouched**. **§6 (operability) is complete** — six
+the run-book's manual USB instruction was standing in for. **§4 (privacy) is closed**: five of its
+eight items were carried by §1–§3, `Participant.last_used_at` landed (a record's
+last edit *or* entry, indexed and backfilled), and **PRV-4's bulk-delete screen
+and PRV-5's privacy notice are waived by the owner** — see the decisions table. **§6 (operability) is complete** — six
 fixed, one waived by the owner (OPS-4). **§7.1 (broken or misleading states) is
 complete** — six fixed, one waived (UI-5). **§7.2 (consistency) is complete** —
 all six fixed, plus UI-31, which the audit itself missed: two sidebar entries
@@ -35,7 +34,11 @@ browser dialog became one of the app's own: the only `window.confirm` /
 `alert` left in the codebase is the `beforeunload` on tab close, which a page
 cannot draw itself. **§8 (documentation) is complete** — all four DOC items
 fixed, plus a mechanical re-check of every symbol, path and environment
-variable the two documents name. §9 (test gaps) still open.
+variable the two documents name. **§9 (test gaps) is complete** — all ten,
+four of them already carried by §3/§5/§7.2; two of the new suites found live
+bugs (a JSON body that is not an object, and a lock on the two reads above
+`record_signal`'s guard). **PRV-4's bulk-delete screen and PRV-5's privacy
+notice are waived by the owner (2026-07-31) and will not be done.**
 
 ---
 
@@ -61,6 +64,7 @@ intended, do not change"; **deferred** means "not now, note it".
 | UI-8 | **Changed scope.** Always prefix "Class" (translated) — drop the conditional in `display_name()`. |
 | UI-16 | **Extended.** The unsaved-changes guard must also fire the browser's own dialog when the tab is closed. |
 | UI-19 | **Waived** — Ctrl-P is not supported. |
+| PRV-4 / PRV-5 | **Waived (2026-07-31).** No bulk-delete-by-age screen and no privacy notice. `Participant.last_used_at` stays: it is the field such a sweep would need, and it costs nothing to keep recording. |
 
 ---
 
@@ -704,33 +708,101 @@ age-based case are both written up).
 
 ## 9. Test-coverage gaps
 
-The 603-test suite is strong on behaviour and weak on hostility. What it does not do:
+The 603-test suite is strong on behaviour and weak on hostility. What it did not do —
+**all of it now done**, and two of the tests found real bugs on the way in (below).
 
-* **TST-1** — **No malformed-input tests.** Nothing posts a non-numeric id, a Unicode
-  digit, an over-long integer or a wrong-typed JSON value at any endpoint. That is the
-  whole of BLK-2.
-* **TST-2** — **Role scoping is barely tested.** The `client` fixture is a superuser
-  (`conftest.py`), so almost every view test proves nothing about access control. The
-  four probes I wrote are the shape needed, per shared/open endpoint.
-* **TST-3** — **The performance tests only cover Manual assignment** (PRF-1) and do not
-  cover `export-all` (PRF-2).
-* **TST-4** — **No test crosses midnight** (INT-3), and none exercises the device-clock
-  wrap that `cp540.parse_time` explicitly implements.
-* **TST-5** — **No test for an empty start pattern with recorded runs** (INT-1) — the
-  state the real database is in.
-* **TST-6** — **No concurrency tests**: two writers on one bib, two PDF exports, a GET
-  racing the reader thread.
-* **TST-7** — **No import-hostility tests**: crafted media, duplicate rows, traversing
-  names. `apps/transfer/tests.py` tests the happy path and the archive budgets.
-* **TST-8** — **No accessibility assertions** (focus order, aria-live, labels).
-* **TST-10** — *(found during §2b)* Nothing checks that a `static/js` file
-  parses. Moving 1,778 lines out of templates broke two files with an escaped
-  quote where a string should open; the server was perfectly happy, the page
-  rendered, and the script was simply dead. `config/tests.py` now has a cheap
-  heuristic for that exact signature — a real JS parse in CI would be better.
-* **TST-9** — Nothing asserts the design-system rules the CSS comment states (no raw
-  colour / length outside the token block) — those would be cheap file tests, and
-  UI-10..13 are what slipped through.
+The shape that mattered most: the new tests **discover** what they cover rather than
+listing it. `config/hostility_tests.py` finds every JSON endpoint in the app from the
+URLconf and asks each one the same hostile questions; `apps/timing/tests.py` finds every
+view guarded by `_timekeeper_required` and fails if one is not in the sweep. BLK-2 was
+reachable on *nine* endpoints at once, and TST-2's hole was four endpoints wide — in
+both cases because the tests that existed named their targets one at a time. A sweep
+that has to be extended by hand is the same bug in a different file.
+
+* **TST-1 (✅ FIXED)** — **No malformed-input tests.** Nothing posted a non-numeric id, a
+  Unicode digit, an over-long integer or a wrong-typed JSON value at any endpoint. That
+  is the whole of BLK-2. Now `config/hostility_tests.py`: 22 JSON endpoints discovered
+  from the URLconf × ten hostile values under every key they read, plus a non-JSON body,
+  an empty body and a JSON *scalar* where an object goes — 274 cases, against a fixture
+  with a real active event so the endpoints reach their parsing instead of answering
+  "no competition selected" and returning.
+
+  **It found two live bugs.** `json.loads` on *bytes* sniffs the encoding from the
+  leading octets, so a body starting with a null byte is read as UTF-16 and raises
+  `UnicodeDecodeError` — a `ValueError`, but **not** a `JSONDecodeError`, so it went
+  straight through the `except json.JSONDecodeError` that three endpoints had written
+  for themselves. And valid JSON need not be an object: `"a string"`, `42` and `null`
+  all parse, after which every `payload.get(...)` in the view is an `AttributeError`.
+  Both were 500s. Fixed by giving the app one door — `apps/common.json_body` — which
+  timing and participants now share (results already caught `ValueError`, so it was
+  safe by accident).
+* **TST-2 (✅ FIXED)** — **Role scoping is barely tested.** The `client` fixture is a
+  superuser (`conftest.py`), so almost every view test proves nothing whatever about
+  access control. Now a sweep over the four timekeeper-only endpoints — a
+  marshal-scoped client is refused 403, a Timing-scoped one is not — plus
+  `timing:signal`, the one ungated URL, where a session-authenticated caller without the
+  Timing page is refused and *nothing is recorded*. And the test that keeps it honest:
+  every view whose source calls `_timekeeper_required` must appear in the sweep, so the
+  fifth one somebody adds fails here rather than in a year.
+* **TST-3 (✅ FIXED in §5)** — **The performance tests only cover Manual assignment**
+  (PRF-1) and do not cover `export-all` (PRF-2). Both are pinned now: age-based
+  assignment at 5/20/50/100 starters, and `results:export-all` by class count.
+* **TST-4 (✅ FIXED in §3)** — **No test crosses midnight** (INT-3), and none exercises
+  the device-clock wrap. Covered by the INT-3 block in `apps/timing/tests.py`, including
+  that the fractions survive the wrap.
+* **TST-5 (✅ FIXED)** — **No test for an empty start pattern with recorded runs**
+  (INT-1) — the state the real database is in. Two now: with times recorded and no
+  pattern, Auto timing replaces itself with a sentence while the Manual view, the
+  arrangement endpoint, the Dashboard and the results all still answer (the runs are the
+  event; they must not become unreachable); and the other direction, an operator who
+  starts on Manual and adds a pattern mid-event — the runs already recorded bind to the
+  new order rather than being stranded beside it.
+* **TST-6 (✅ FIXED)** — **No concurrency tests**: two writers on one bib, a GET racing
+  the reader thread. Three now, on `transaction=True` (the ordinary `django_db` fixture
+  wraps each test in a transaction other threads cannot see, so a concurrency test
+  written on it tests nothing): eight signals arriving together, four operators claiming
+  one bib, and a browser refreshing the arrangement while the reader thread inserts.
+
+  **The first found a real gap.** `record_signal` promises a time is never lost — the
+  insert is retried and falls back to `timing_unrecorded.log`. But
+  `Competition.get_current()` and `TimingSettings.load()` were read *above* that guard,
+  unretried, so a lock on either raised straight out of `record_signal` and the time
+  went nowhere at all: not the table, not the recovery file. Both reads are inside the
+  guard now. The placement step also caught only `OperationalError`, while two signals
+  placed at the same moment can both try to pair with the same start — `TimedRun.start_signal`
+  is a OneToOne, so that is an `IntegrityError`; it is caught and left to
+  `reconcile()`, which is what the code comment already said would happen. The test
+  asserts the actual promise: stored rows **plus** recovery-file lines equals what was
+  sent.
+* **TST-7 (✅ FIXED)** — **No import-hostility tests**: crafted media, traversing names.
+  The existing tests covered the archive *budgets* and the happy path, but not the thing
+  that actually went wrong (BLK-1). Four now: an imported logo that is not an image is
+  refused and no `.html` is written under MEDIA_ROOT; a logo whose name climbs out of
+  MEDIA_ROOT is either refused or saved under a name of *our* choosing; a document
+  carrying a value the model's own validators reject comes back as a `TransferError`
+  sentence; and a truncated document does too.
+* **TST-8 (✅ FIXED)** — **No accessibility assertions** (focus order, aria-live,
+  labels). Which is how UI-9, UI-14, UI-21 and UI-22 all shipped together. Now, over
+  every template: no `<button>` without text or an `aria-label`; no `<tr>`/`<td>`/`<li>`
+  claiming `role="button"`; the hamburger renders no state the server cannot know; the
+  messages region is `role="status"` and dismissable; every page carries a skip link.
+  With §7.3's `TestModalsManageFocus` and `TestKeyboardFocusIsVisible`, the rendered half
+  is covered too.
+* **TST-10 (✅ FIXED)** — *(found during §2b)* Nothing checks that a `static/js` file
+  parses. Moving 1,778 lines out of templates broke two files with an escaped quote
+  where a string should open; the server was perfectly happy, the page rendered, and the
+  script was simply dead. The heuristic for that one signature is now joined by a
+  **structural check over every script**: a lexer that tracks strings, template
+  literals, regex literals and both comment forms, then asserts every bracket outside
+  them closes and nothing is left open at EOF. There is no JS engine on the machine (no
+  node), so it is a lexer and not a parser — it sees a brace lost in a move, a string
+  never closed, a comment never terminated, and not a misplaced `return`. Verified by
+  removing one closing brace from `shell.js` and watching it fail.
+* **TST-9 (✅ FIXED in §7.2)** — Nothing asserts the design-system rules the CSS comment
+  states — and UI-10..13 are what slipped through. `TestTheScalesAreClosed` now fails on
+  a raw z-index, a raw transition duration, a raw length in
+  `padding`/`margin`/`gap`/`font-size`, two stacking layers sharing a step, or the
+  sidebar width written anywhere but its token.
 
 ---
 
