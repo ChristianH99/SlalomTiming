@@ -842,6 +842,55 @@ def test_committing_discards_the_staged_upload(client):
     assert staging.read(token) is None
 
 
+# --- the review form is bigger than Django's default form ---------------------
+
+
+def test_a_realistic_review_page_stays_under_the_field_limit(client, settings):
+    """The review form is urlencoded, so DATA_UPLOAD_MAX_NUMBER_FIELDS applies to
+    it — and Django's default of 1000 is fewer fields than the wizard's own main
+    use case renders. Re-importing a club's roster into a system that already
+    knows those people is the *normal* case: 200 participants differing in six
+    fields each is 1400 radio groups, all of which submit. It came back as a bare
+    browser 400 — no message, no partial save, and the staged upload gone.
+
+    So this asks the two questions that keep it fixed: does a realistic page fit
+    inside the configured limit, and does it still not fit inside Django's
+    default — because a test that only checks the first would pass just as
+    happily on a page that had quietly shrunk.
+    """
+    import re
+
+    ctype = make_type()
+    for n in range(200):
+        make_participant(ctype, first=f"P{n}", last=f"Racer{n}")
+    payload = exporters.export(competition_type=ctype)
+    # Every one of them now disagrees with the file on six fields, which is what
+    # turns each into a CONFLICT with a row per field to decide.
+    Participant.objects.update(
+        club="Old Club", email="old@example.org", phone_number="0700",
+        vehicle="Old Kart", address_street="Old Street 1", address_city="Oldtown",
+    )
+
+    upload(client, payload)
+    page = client.get(reverse("transfer:review")).content.decode()
+
+    posted = set(re.findall(r'name="((?:choice|field)-[^"]+)"', page))
+    assert len(posted) > 1000, (
+        f"only {len(posted)} fields — this page no longer reproduces the case, "
+        "so it no longer guards it"
+    )
+    assert len(posted) < settings.DATA_UPLOAD_MAX_NUMBER_FIELDS
+
+    # And end to end: the same page's POST is accepted rather than refused
+    # before any view sees it.
+    response = client.post(reverse("transfer:review"), {
+        name: "create" if name.startswith("choice-") else "imported"
+        for name in posted
+    })
+    assert response.status_code == 200
+    assert Participant.objects.count() == 400        # each kept separate
+
+
 # --- staging -----------------------------------------------------------------
 
 

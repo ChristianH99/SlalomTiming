@@ -54,7 +54,15 @@ on has gone" rather than going blank.
 
 ---
 
-### [ ] N-2 — A large import review dies with a bare 400  · moderate · one-line fix
+### [x] N-2 — A large import review dies with a bare 400  · moderate · one-line fix
+
+**Fixed 2026-07-31.** `DATA_UPLOAD_MAX_NUMBER_FIELDS` is set explicitly in
+`config/settings.py` (20 000, env-settable, with the arithmetic and this form
+named as the reason) and documented in `.env.example`. A test renders the review
+page for the 200-participant roster above, checks its 1400 fields fit — and that
+they still would *not* fit inside Django's default, so the test can't quietly
+stop reproducing the case — then posts them and asserts the import goes through.
+
 
 `templates/transfer/import_review.html:32`, `config/settings.py`
 

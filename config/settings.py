@@ -289,6 +289,29 @@ if not DEBUG:
 # this system's scarce resource is the SQLite write lock the timing device needs.
 SESSION_COOKIE_AGE = _env_int('DJANGO_SESSION_HOURS', 12) * 3600
 
+# --- How many fields one form may post ---
+# Django's default is 1000, which is a guess about forms nobody in particular
+# designed. The import review (templates/transfer/import_review.html) is a form
+# somebody did design, and it is the largest in the app: it posts one
+# `choice-<ref>` radio group per participant this system recognises but cannot
+# match exactly, plus one `field-<ref>-<pk>-<name>` group per differing field per
+# candidate. Radio groups always submit, so the count is the count of *rendered*
+# inputs, not of what the operator touched. With the 13 comparable participant
+# fields (transfer/schema.PARTICIPANT_FIELDS) that is up to 27 fields per
+# conflict against two candidates — so the default ran out at ~37 conflicts, and
+# a plain re-import of a club's own roster (200 people differing in six fields
+# each renders 1400 inputs) came back as a bare browser 400: no message, no
+# partial save, and the staged upload gone.
+#
+# 20 000 covers a 700-strong roster in which every single person conflicts on
+# every field against two candidates, which is well past any club event. The
+# body itself stays small — roughly 40 bytes per field, so ~800 KB at the
+# ceiling, under DATA_UPLOAD_MAX_MEMORY_SIZE's 2.5 MB, which is the limit that
+# actually bounds the memory. apps/transfer/tests.py keeps a realistic review
+# page's field count under this number, so the form can't drift back past it
+# unnoticed.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = _env_int('DJANGO_DATA_UPLOAD_MAX_NUMBER_FIELDS', 20000)
+
 # --- Login throttling (apps/accounts/throttle.py) ---
 # Attempts per (username, IP) before that pair is refused, and for how long. The
 # counters live in the cache below; both are env-settable so a locked-out timekeeper
