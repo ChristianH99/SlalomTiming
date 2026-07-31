@@ -540,9 +540,47 @@ class PenaltiesView(ActiveCompetitionMixin, View):
 
 
 class CompetitionDeleteView(DeleteView):
+    """Delete a competition — and, when it is the *current* one, treat that as
+    the installation-wide act it is.
+
+    `select_competition` below already does: it names the other people signed
+    in, refuses without an explicit confirmation, and announces the change over
+    the timing WebSocket so open screens say what happened instead of quietly
+    re-rendering. Deleting the running event is that same act plus the data it
+    takes with it, and it used to do none of the three — every Manual timing,
+    Auto timing, Marshal Posts and Dashboard screen in the venue simply became
+    "no competition selected" mid-event, the marshals' phones stopped working,
+    and nothing on any of them said why.
+
+    The page already spelled out the *data*; this is the live consequence.
+    """
+
     model = Competition
     template_name = "competitions/competition_confirm_delete.html"
     success_url = reverse_lazy("competitions:list")
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if self.object.is_active and not request.POST.get("confirm_active"):
+            # The confirmation page posts this hidden field, so a normal delete
+            # is still one click from that page. A POST arriving without it
+            # never saw the page — a stale tab, a re-submitted form, a link
+            # followed back — and the running event is not something to take
+            # down on an unconfirmed request.
+            return self.render_to_response(self.get_context_data(object=self.object))
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        was_current = self.object.is_active
+        name = self.object.name
+        response = super().form_valid(form)
+        if was_current:
+            # Deleting the current event leaves *no* current event, so every open
+            # live view has nothing left to show. Tell them, the way a switch
+            # does; four screens going blank at once is not an explanation.
+            from apps.timing.services import notify_competition_deleted
+            notify_competition_deleted(name)
+        return response
 
     def get_context_data(self, **kwargs):
         # Spell out what deleting the competition takes with it: everything below
@@ -564,6 +602,12 @@ class CompetitionDeleteView(DeleteView):
             TimedRun.objects.filter(competition=competition)
             .filter(Q(start_signal__isnull=False) | Q(finish_signal__isnull=False))
             .count()
+        )
+        # Only the current event's deletion moves anybody else's screen, so only
+        # then is there anybody to name.
+        context["is_current"] = competition.is_active
+        context["others"] = (
+            other_signed_in_users(self.request) if competition.is_active else []
         )
         return context
 

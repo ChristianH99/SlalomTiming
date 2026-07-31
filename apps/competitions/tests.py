@@ -1178,6 +1178,99 @@ def test_switching_tells_every_open_live_view_which_event_it_now_shows(client, m
     assert sent == [{"type": "timing.competition", "name": "Spring Slalom"}]
 
 
+# --- ...and deleting it is the same act, plus the data --------------
+# Deleting the running event is strictly more destructive than switching away
+# from it and used to be the quieter of the two: no other-people warning, no
+# confirmation beyond the page itself, and no word to the screens that were
+# following it — which simply emptied, mid-event, saying nothing.
+
+def test_deleting_the_current_event_names_who_else_is_signed_in(client, django_user_model):
+    other = _sign_in_someone_else(django_user_model)
+    competition = make_active_competition()
+
+    page = client.get(reverse("competitions:delete", kwargs={"pk": competition.pk}))
+
+    body = page.content.decode()
+    assert other.get_username() in body
+    assert "current event" in body
+
+
+def test_deleting_an_event_nobody_is_on_says_nothing_about_screens(client,
+                                                                   django_user_model):
+    """A competition that isn't the current one moves no screen at all, so the
+    warning would be false — and a warning that is sometimes false is read past."""
+    _sign_in_someone_else(django_user_model)
+    other_event = make_competition(name="Next month", type_name="A")
+
+    body = client.get(
+        reverse("competitions:delete", kwargs={"pk": other_event.pk})).content.decode()
+
+    assert "current event" not in body
+
+
+def test_the_current_event_is_not_deleted_by_an_unconfirmed_post(client):
+    """The confirmation page carries the flag; a POST without it never saw the
+    page — a stale tab, a re-submitted form — and the running event is not
+    something to take down on one of those."""
+    competition = make_active_competition()
+
+    response = client.post(reverse("competitions:delete", kwargs={"pk": competition.pk}))
+
+    assert response.status_code == 200          # the confirmation page, not a redirect
+    assert Competition.objects.filter(pk=competition.pk).exists()
+
+
+def test_deleting_the_current_event_goes_through_once_confirmed(client):
+    competition = make_active_competition()
+
+    response = client.post(reverse("competitions:delete", kwargs={"pk": competition.pk}),
+                           {"confirm_active": "1"})
+
+    assert response.status_code == 302
+    assert not Competition.objects.filter(pk=competition.pk).exists()
+
+
+def test_deleting_a_competition_that_is_not_current_needs_no_extra_flag(client):
+    """Only the running event is everybody's; deleting next month's is one click."""
+    make_active_competition()
+    other_event = make_competition(name="Next month", type_name="A")
+
+    response = client.post(reverse("competitions:delete", kwargs={"pk": other_event.pk}))
+
+    assert response.status_code == 302
+    assert not Competition.objects.filter(pk=other_event.pk).exists()
+
+
+def test_deleting_the_current_event_tells_every_open_live_view_it_is_gone(client,
+                                                                         monkeypatch):
+    """Not the switch nudge: nobody is being shown another event, they are being
+    shown none, and a page cannot word that as a change of event."""
+    from apps.timing import services
+
+    sent = []
+    monkeypatch.setattr(services, "_send", sent.append)
+    competition = make_active_competition(name="Spring Slalom")
+
+    client.post(reverse("competitions:delete", kwargs={"pk": competition.pk}),
+                {"confirm_active": "1"})
+
+    assert sent == [{"type": "timing.competition", "name": "Spring Slalom",
+                     "deleted": True}]
+
+
+def test_deleting_a_competition_that_is_not_current_nudges_nobody(client, monkeypatch):
+    from apps.timing import services
+
+    sent = []
+    monkeypatch.setattr(services, "_send", sent.append)
+    make_active_competition()
+    other_event = make_competition(name="Next month", type_name="A")
+
+    client.post(reverse("competitions:delete", kwargs={"pk": other_event.pk}))
+
+    assert sent == []
+
+
 # ----- A competition that can actually be timed -----
 
 def test_a_new_competition_has_no_start_pattern():

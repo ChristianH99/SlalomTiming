@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-31 09:22+0200\n"
+"POT-Creation-Date: 2026-07-31 19:46+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -380,11 +380,27 @@ msgstr ""
 "Verbindung verloren — dieser Bildschirm wird nicht aktualisiert. "
 "Neuverbindung läuft…"
 
-#: .\static\js\live_socket.js:63
+#: .\static\js\live_socket.js:68
 msgid "Reload"
 msgstr "Neu laden"
 
-#: .\static\js\live_socket.js:69
+#: .\static\js\live_socket.js:76
+msgid ""
+"“%(name)s” was deleted. There is no current event, so this screen has "
+"nothing left to show."
+msgstr ""
+"„%(name)s“ wurde gelöscht. Es gibt keine aktuelle Veranstaltung mehr, dieser "
+"Bildschirm hat also nichts mehr anzuzeigen."
+
+#: .\static\js\live_socket.js:77
+msgid ""
+"The current event was deleted. There is no current event, so this screen has "
+"nothing left to show."
+msgstr ""
+"Die aktuelle Veranstaltung wurde gelöscht. Es gibt keine aktuelle "
+"Veranstaltung mehr, dieser Bildschirm hat also nichts mehr anzuzeigen."
+
+#: .\static\js\live_socket.js:80
 msgid ""
 "The current event was changed to “%(name)s”. This screen now shows that "
 "event."
@@ -392,7 +408,7 @@ msgstr ""
 "Die aktuelle Veranstaltung wurde auf „%(name)s“ gewechselt. Dieser "
 "Bildschirm zeigt jetzt diese Veranstaltung."
 
-#: .\static\js\live_socket.js:70
+#: .\static\js\live_socket.js:81
 msgid "The current event was changed. This screen now shows another event."
 msgstr ""
 "Die aktuelle Veranstaltung wurde gewechselt. Dieser Bildschirm zeigt jetzt "

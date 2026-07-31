@@ -71,4 +71,11 @@ class TimingLiveConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json({"event": "refresh"})
 
     async def timing_competition(self, event):
-        await self.send_json({"event": "competition", "name": event.get("name", "")})
+        # `deleted` separates "you are now looking at another event" from "the
+        # event you were looking at is gone" — the second leaves the page with
+        # nothing to show, so it cannot be phrased as a switch.
+        await self.send_json({
+            "event": "competition",
+            "name": event.get("name", ""),
+            "deleted": bool(event.get("deleted")),
+        })

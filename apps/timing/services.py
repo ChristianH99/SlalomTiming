@@ -44,6 +44,17 @@ def notify_competition_changed(name):
     _send({"type": "timing.competition", "name": name})
 
 
+def notify_competition_deleted(name):
+    """The same nudge for the harsher case: the event these screens are showing
+    has been *deleted*, so there is no current event at all.
+
+    Without it every timing view, marshal phone and dashboard in the venue
+    simply empties out mid-event with nothing on it saying why. The name is the
+    deleted event's — it is what the people looking at those screens were
+    timing, and the only thing that makes the message mean anything."""
+    _send({"type": "timing.competition", "name": name, "deleted": True})
+
+
 def _send(message):
     layer = get_channel_layer()
     if layer is None:

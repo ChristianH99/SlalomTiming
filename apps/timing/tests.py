@@ -1729,7 +1729,33 @@ def test_a_changed_event_reaches_the_open_views_by_name(django_user_model):
         await comm.disconnect()
         return message
 
-    assert async_to_sync(run)() == {"event": "competition", "name": "Autumn Slalom"}
+    assert async_to_sync(run)() == {"event": "competition", "name": "Autumn Slalom",
+                                    "deleted": False}
+
+
+def test_a_deleted_event_reaches_the_open_views_as_a_deletion(django_user_model):
+    """Deleting the current event leaves no current event, so the page has
+    nothing left to render. A page told only that the event "changed" would say
+    it now shows another one, which is the one thing that isn't true."""
+    from channels.testing import WebsocketCommunicator
+
+    from .consumers import TimingLiveConsumer
+    from .services import notify_competition_deleted
+
+    user = _live_listener(django_user_model, "mourner")
+
+    async def run():
+        comm = WebsocketCommunicator(TimingLiveConsumer.as_asgi(), "/ws/timing/live/")
+        comm.scope["user"] = user
+        connected, _ = await comm.connect()
+        assert connected
+        await sync_to_async(notify_competition_deleted)("Autumn Slalom")
+        message = await comm.receive_json_from()
+        await comm.disconnect()
+        return message
+
+    assert async_to_sync(run)() == {"event": "competition", "name": "Autumn Slalom",
+                                    "deleted": True}
 
 
 # --- the device connection survives a restart ------------------------

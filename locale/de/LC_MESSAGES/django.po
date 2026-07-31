@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-31 09:22+0200\n"
+"POT-Creation-Date: 2026-07-31 19:46+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -441,12 +441,12 @@ msgstr ""
 "Einige Aufgabenlisten konnten nicht gelesen werden — korrigieren Sie sie und "
 "speichern Sie erneut."
 
-#: .\apps\competitions\views.py:704
+#: .\apps\competitions\views.py:748
 #, python-format
 msgid "Settings for “%(name)s” saved."
 msgstr "Einstellungen für „%(name)s“ gespeichert."
 
-#: .\apps\competitions\views.py:782
+#: .\apps\competitions\views.py:826
 msgid "That type is still in use and can't be deleted."
 msgstr "Dieser Typ wird noch verwendet und kann nicht gelöscht werden."
 
@@ -1603,7 +1603,7 @@ msgstr "auswählen"
 #: .\templates\base.html:169 .\templates\base.html:181
 #: .\templates\competitions\competition_add.html:52
 #: .\templates\competitions\competition_classes.html:85
-#: .\templates\competitions\competition_confirm_delete.html:30
+#: .\templates\competitions\competition_confirm_delete.html:55
 #: .\templates\competitions\competition_confirm_switch.html:33
 #: .\templates\competitions\competition_general.html:55
 #: .\templates\competitions\competition_penalties.html:90
@@ -1856,7 +1856,29 @@ msgstr ""
 "Die Teilnehmerdatensätze selbst bleiben erhalten — nur die Nennungen und "
 "Klassen dieses Wettbewerbs werden entfernt."
 
-#: .\templates\competitions\competition_confirm_delete.html:29
+#: .\templates\competitions\competition_confirm_delete.html:37
+msgid "This is the <strong>current event</strong>."
+msgstr "Dies ist die <strong>aktuelle Veranstaltung</strong>."
+
+#: .\templates\competitions\competition_confirm_delete.html:38
+msgid ""
+"Timing, results and the marshal posts all follow it, so deleting it leaves "
+"every open screen with no event to show — including anyone in the middle of "
+"timing a run. There will be no current event until somebody picks one."
+msgstr ""
+"Zeitmessung, Ergebnisse und die Streckenposten folgen ihr alle — beim Löschen "
+"bleibt also jeder offene Bildschirm ohne Veranstaltung zurück, auch bei "
+"jemandem, der gerade einen Lauf misst. Es gibt dann keine aktuelle "
+"Veranstaltung mehr, bis jemand eine auswählt."
+
+#: .\templates\competitions\competition_confirm_delete.html:41
+#, python-format
+msgid "<strong>%(count)s</strong> other person is signed in right now:"
+msgid_plural "<strong>%(count)s</strong> other people are signed in right now:"
+msgstr[0] "<strong>%(count)s</strong> weitere Person ist gerade angemeldet:"
+msgstr[1] "<strong>%(count)s</strong> weitere Personen sind gerade angemeldet:"
+
+#: .\templates\competitions\competition_confirm_delete.html:54
 #: .\templates\participants\participant_confirm_delete.html:28
 msgid "Confirm delete"
 msgstr "Löschen bestätigen"

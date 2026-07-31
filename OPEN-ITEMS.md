@@ -15,7 +15,15 @@ either 1392 passed or 1391 passed / 1 failed. `manage.py check --deploy` with
 
 ## 1. New this round
 
-### [ ] N-1 — Deleting the running event tells nobody it happened  · moderate · small fix
+### [x] N-1 — Deleting the running event tells nobody it happened  · moderate · small fix
+
+**Fixed 2026-07-31.** `CompetitionDeleteView` now has the same three guards
+`select_competition` has: the confirmation page names the other people signed in
+and says the screens are left with no event at all, the POST is refused without
+`confirm_active` (so a stale tab can't take the running event down), and
+`services.notify_competition_deleted` tells every open live view it is gone —
+a *deletion*, not a switch, since nobody is being shown another event.
+
 
 `apps/competitions/views.py:542` (`CompetitionDeleteView`)
 
