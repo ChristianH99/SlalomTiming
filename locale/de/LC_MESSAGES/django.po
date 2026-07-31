@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-30 21:08+0200\n"
+"POT-Creation-Date: 2026-07-31 09:22+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -224,19 +224,19 @@ msgstr "Wie gleiche Ergebnisse getrennt werden."
 msgid "Resolution of the timing device."
 msgstr "Auflösung des Zeitmessgeräts."
 
-#: .\apps\competitions\models.py:106 .\apps\participants\views.py:118
+#: .\apps\competitions\models.py:106 .\apps\participants\views.py:116
 #: .\apps\results\models.py:13
 msgid "Co-driver"
 msgstr "Beifahrer"
 
 #: .\apps\competitions\models.py:108 .\apps\participants\models.py:65
-#: .\apps\participants\views.py:120 .\apps\results\models.py:19
+#: .\apps\participants\views.py:118 .\apps\results\models.py:19
 #: .\apps\results\pdf.py:293 .\apps\transfer\merge.py:40
 #: .\templates\results\_results_head.html:7
 msgid "Vehicle"
 msgstr "Fahrzeug"
 
-#: .\apps\competitions\models.py:110 .\apps\participants\views.py:121
+#: .\apps\competitions\models.py:110 .\apps\participants\views.py:119
 #: .\templates\participants\participant_form.html:87
 msgid "Address"
 msgstr "Adresse"
@@ -253,12 +253,12 @@ msgid "Licence number"
 msgstr "Lizenznummer"
 
 #: .\apps\competitions\models.py:114 .\apps\participants\forms.py:161
-#: .\apps\participants\models.py:70 .\apps\participants\views.py:122
+#: .\apps\participants\models.py:70 .\apps\participants\views.py:120
 #: .\apps\results\models.py:15 .\apps\transfer\merge.py:45
 msgid "E-Mail"
 msgstr "E-Mail"
 
-#: .\apps\competitions\models.py:115 .\apps\participants\views.py:123
+#: .\apps\competitions\models.py:115 .\apps\participants\views.py:121
 #: .\apps\results\models.py:16 .\apps\transfer\merge.py:46
 msgid "Phone"
 msgstr "Telefon"
@@ -446,7 +446,7 @@ msgstr ""
 msgid "Settings for “%(name)s” saved."
 msgstr "Einstellungen für „%(name)s“ gespeichert."
 
-#: .\apps\competitions\views.py:774
+#: .\apps\competitions\views.py:782
 msgid "That type is still in use and can't be deleted."
 msgstr "Dieser Typ wird noch verwendet und kann nicht gelöscht werden."
 
@@ -579,43 +579,43 @@ msgstr "Disqualifiziert"
 msgid "Finished"
 msgstr "Beendet"
 
-#: .\apps\participants\views.py:243 .\apps\participants\views.py:256
+#: .\apps\participants\views.py:241 .\apps\participants\views.py:254
 msgid "This bib number was just taken by somebody else."
 msgstr "Diese Startnummer wurde gerade von jemand anderem vergeben."
 
-#: .\apps\participants\views.py:346 .\apps\participants\views.py:422
+#: .\apps\participants\views.py:344 .\apps\participants\views.py:419
 msgid "No competition is selected."
 msgstr "Es ist kein Wettbewerb ausgewählt."
 
-#: .\apps\participants\views.py:350 .\apps\participants\views.py:426
+#: .\apps\participants\views.py:347 .\apps\participants\views.py:422
 #: .\apps\results\views.py:635
 msgid "Malformed request."
 msgstr "Fehlerhafte Anfrage."
 
-#: .\apps\participants\views.py:357
+#: .\apps\participants\views.py:354
 msgid "Unknown participant."
 msgstr "Unbekannter Teilnehmer."
 
-#: .\apps\participants\views.py:376
+#: .\apps\participants\views.py:373
 msgid "Bib must be a positive number."
 msgstr "Die Startnummer muss eine positive Zahl sein."
 
-#: .\apps\participants\views.py:383
+#: .\apps\participants\views.py:380
 #, python-format
 msgid "Bib %(bib)s is already taken."
 msgstr "Startnummer %(bib)s ist bereits vergeben."
 
-#: .\apps\participants\views.py:402
+#: .\apps\participants\views.py:399
 #, python-format
 msgid "Bib %(bib)s was just taken by somebody else."
 msgstr "Startnummer %(bib)s wurde gerade von jemand anderem vergeben."
 
-#: .\apps\participants\views.py:437
+#: .\apps\participants\views.py:433
 #: .\templates\participants\participant_list.html:119
 msgid "Give this participant a bib first."
 msgstr "Vergeben Sie diesem Teilnehmer zuerst eine Startnummer."
 
-#: .\apps\participants\views.py:457
+#: .\apps\participants\views.py:453
 #, python-format
 msgid ""
 "%(count)s recorded run stays with bib %(bib)s and stops being this "
@@ -630,7 +630,7 @@ msgstr[1] ""
 "%(count)s erfasste Läufe bleiben bei Startnummer %(bib)s und gehören dann "
 "nicht mehr zu diesem Teilnehmer."
 
-#: .\apps\participants\views.py:463
+#: .\apps\participants\views.py:459
 #, python-format
 msgid ""
 "%(count)s run already recorded under bib %(bib)s becomes this participant's."
@@ -643,19 +643,19 @@ msgstr[1] ""
 "%(count)s bereits unter Startnummer %(bib)s erfasste Läufe gehören dann zu "
 "diesem Teilnehmer."
 
-#: .\apps\participants\views.py:470
+#: .\apps\participants\views.py:466
 msgid "This moves recorded times."
 msgstr "Dadurch werden erfasste Zeiten verschoben."
 
-#: .\apps\participants\views.py:503
+#: .\apps\participants\views.py:499
 msgid "licence number"
 msgstr "Lizenznummer"
 
-#: .\apps\participants\views.py:507
+#: .\apps\participants\views.py:503
 msgid "name and licence number"
 msgstr "Name und Lizenznummer"
 
-#: .\apps\participants\views.py:509
+#: .\apps\participants\views.py:505
 msgid "name"
 msgstr "Name"
 
@@ -920,16 +920,16 @@ msgstr "Nicht gewertet"
 msgid "Intermediate"
 msgstr "Zwischenzeit"
 
-#: .\apps\timing\views.py:169
+#: .\apps\timing\views.py:170
 #, python-format
 msgid "Connecting to the Tag Heuer CP540 at %(ip)s:%(port)s…"
 msgstr "Verbinde mit dem Tag Heuer CP540 unter %(ip)s:%(port)s…"
 
-#: .\apps\timing\views.py:175
+#: .\apps\timing\views.py:176
 msgid "Disconnected from the timing device."
 msgstr "Verbindung zum Zeitmessgerät getrennt."
 
-#: .\apps\timing\views.py:177
+#: .\apps\timing\views.py:178
 msgid "Timing settings saved."
 msgstr "Zeitmess-Einstellungen gespeichert."
 
@@ -2518,6 +2518,7 @@ msgid "DSQ"
 msgstr "DSQ"
 
 #: .\templates\participants\participant_list.html:83
+#, python-format
 msgid "Details for %(first)s %(last)s"
 msgstr "Details zu %(first)s %(last)s"
 
@@ -2585,7 +2586,10 @@ msgstr ""
 msgid ""
 "Counting how each competitor’s event ended. A state code on a practice run "
 "is shown in its own cell but does not end anybody’s event."
-msgstr "Gezählt wird, wie die Veranstaltung für jeden Teilnehmer geendet hat. Ein Status auf einem Trainingslauf steht in seiner eigenen Zelle, beendet aber niemandes Veranstaltung."
+msgstr ""
+"Gezählt wird, wie die Veranstaltung für jeden Teilnehmer geendet hat. Ein "
+"Status auf einem Trainingslauf steht in seiner eigenen Zelle, beendet aber "
+"niemandes Veranstaltung."
 
 #: .\templates\results\_results_table.html:85
 msgid "Drag the tied competitors into order and set their ranks."

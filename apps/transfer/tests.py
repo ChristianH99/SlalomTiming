@@ -53,7 +53,7 @@ def make_event(ctype=None, with_timing=True):
     """A competition exercising every section of the document: classes, marshal
     posts, entries, assignments, timing, penalties and results config."""
     ctype = ctype or make_type()
-    # Exactly one competition may be active (INT-2, enforced by the database), and
+    # Exactly one competition may be active (enforced by the database), and
     # creating one in the app makes it current — so the helper does the same.
     Competition.objects.filter(is_active=True).update(is_active=False)
     competition = Competition.objects.create(
@@ -158,7 +158,7 @@ def test_a_newer_document_version_is_refused():
     assert "newer version" in str(error.value)
 
 
-# --- SEC-5: an archive is a hand-picked file, so its size is not a promise ----
+# --- an archive is a hand-picked file, so its size is not a promise ----
 
 
 def _zip_of(name, content):
@@ -220,7 +220,7 @@ def test_an_over_sized_participant_csv_is_refused(client, monkeypatch):
     assert "too large" in response.content.decode()
 
 
-# --- SEC-1: markup arriving in a file ----------------------------------------
+# --- markup arriving in a file ----------------------------------------
 
 
 def test_imported_pdf_header_is_sanitised(settings, tmp_path):
@@ -1272,7 +1272,7 @@ def test_every_fault_in_a_file_is_reported_in_one_pass():
     assert "77" in messages_of(report)
 
 
-# --- Automatic backup (DOC-5 / OPS-1) ---------------------------------------
+# --- Automatic backup ---------------------------------------
 # The event *is* the database, and the only backup used to be a line in the
 # run-book asking the operator to run VACUUM INTO between runs and copy the
 # result to a USB stick — a thing to remember while timing a race.
@@ -1685,11 +1685,11 @@ class TestTheBackupTimestampsReadAsLocalTime:
         assert "08:37" in body, "the timestamp is still being rendered in UTC"
 
 
-# --- TST-7: an archive is a file a person picked, so it is hostile -----------
+# --- an archive is a file a person picked, so it is hostile -----------
 #
 # The existing tests here cover the archive *budgets* (over-sized entries, a
 # lying header) and the happy path. What they did not cover is the thing that
-# actually went wrong: BLK-1, where the import wrote whatever bytes the document
+# actually went wrong: the import wrote whatever bytes the document
 # carried under whatever name it asked for, so a crafted .zip could put an
 # executable file on the app's own origin. That fix lives in apps/results/logos,
 # and this is the test that it is still in the door.
@@ -1774,3 +1774,48 @@ def test_a_document_missing_a_section_the_importer_needs_is_refused():
 
     with pytest.raises((TransferError, KeyError)):
         import_archive(payload)
+
+
+def test_a_competition_name_outside_latin_1_still_downloads(client):
+    """The download header is latin-1 encoded, so a Cyrillic event name has to be
+    RFC 5987 encoded rather than raising on the way out. Same lesson as the
+    results PDF's Content-Disposition — one door per header, not one per page."""
+    competition = make_event()
+    competition.name = "Слалом"
+    competition.save()
+
+    response = client.post(
+        reverse("transfer:export"), {"target": "competition", "pk": competition.pk},
+    )
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/zip"
+
+
+def test_a_document_with_two_general_column_rows_is_refused_cleanly(settings, tmp_path):
+    """Only one ResultColumnSettings row may have competition_class=None. A
+    document carrying two is damaged, and has to come back as a TransferError
+    sentence rather than whatever the database raises three sections later."""
+    settings.MEDIA_ROOT = tmp_path
+    document = {
+        "format": "slalomtiming-export", "version": 1, "scope": SCOPE_EVENT,
+        "competition_type": {"ref": 1, "name": "Motorcycle"},
+        "competition": {"ref": 1, "name": "Imported", "date": "2026-07-01",
+                        "assignment_method": "manual", "start_pattern": [],
+                        "auto_timing_order": []},
+        "classes": [], "participants": [], "entries": [], "class_assignments": [],
+        "marshal_posts": [], "timing": {},
+        "results": {"columns": [
+            {"ref": 1, "columns": [], "show_overall": True},
+            {"ref": 2, "columns": [], "show_overall": False},
+        ]},
+    }
+    read, _media = archive.read(archive.write(document, {}))
+    plan = importers.plan(read)
+
+    try:
+        importers.commit(plan, resolutions={}, media={})
+    except TransferError:
+        pass  # a sentence the operator can read is the wanted outcome
+    except Exception as exc:  # noqa: BLE001
+        pytest.fail(f"a duplicate General row raised {type(exc).__name__}: {exc}")

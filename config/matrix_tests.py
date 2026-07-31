@@ -1,9 +1,22 @@
-"""Audit matrix — exercise the app across the configuration space an organiser
-can actually reach: precisions, scoring methods, penalty modes, assignment
-methods, barrier setups, languages and participant-set sizes.
+"""The app across the configuration space an organiser can actually reach.
 
-NOT part of the shipped suite. A failure here is a configuration that is legal
-to set up and does not work.
+Every other test file in this project fixes a configuration and varies the
+behaviour. This one does the opposite: it drives the same few pages while
+varying precision, scoring method, penalty mode, assignment method, barrier
+setup, language and field size. **A failure here is a setup that is legal to
+save and does not work** — which is the class of bug an operator hits on race
+morning and nobody can reproduce, because it needs their combination of
+settings rather than their sequence of clicks.
+
+It is a sibling of `config/tests.py` (things that only break with DEBUG off)
+and `config/hostility_tests.py` (things that only break when a client is
+unkind) for the same reason: the subject is the whole app, so it does not
+belong under any one app's tests.
+
+The last two tests are query-count ceilings rather than behaviour. They are
+here because the combinations are here — an N+1 that only appears under
+age-based assignment, or only when a second class is exported, is invisible to
+a test that fixes one configuration.
 """
 import datetime
 import itertools
@@ -37,7 +50,7 @@ def build(precision=2, penalties=True, marshal=False, scoring="aggregate",
         competition_type=ctype, name="Matrix", date=datetime.date(2026, 7, 1),
         is_active=True, assignment_method=assignment,
         penalties_by_marshal_posts=marshal,
-        # A competition has no start pattern by default (§3, INT-1) and Auto
+        # A competition has no start pattern by default, and Auto
         # timing then asks for one instead of showing an order. The matrix is
         # about a *configured* event, so it configures one.
         start_pattern=[{"window": None, "chips": ["practice", "counted", "counted"]}],

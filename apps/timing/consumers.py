@@ -7,7 +7,7 @@ from .services import LIVE_GROUP, TIMING_GROUP, register_server_loop
 
 # Which pages a live socket belongs to. The nudges it carries are about the event
 # being timed — that a time landed, and which competition is now active — so it is
-# for the screens that show one. A login was the only check before (SEC-12), which
+# for the screens that show one. A login was the only check before, which
 # meant any account at all could listen in on a running event.
 LIVE_PAGES = {"dashboard", "timing", "marshal_posts", "results"}
 

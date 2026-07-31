@@ -1,8 +1,9 @@
 """What happens when a client sends something the app never expected.
 
-The shipped suite was strong on behaviour and weak on hostility (audit §9): it
+The shipped suite was strong on behaviour and weak on hostility: it
 proved at length what the app does when it is driven correctly, and almost
-nothing about what it does when it is not. That is the gap BLK-2 lived in —
+nothing about what it does when it is not. That is the gap the malformed-id
+500 lived in —
 `filter(id="abc")` raises inside Django's query preparation, which is a 500, and
 it was reachable on **nine** endpoints at once. Nine, because nobody had written
 the test that asks all of them the same question.
@@ -182,7 +183,7 @@ class TestNoEndpointCanBeMadeToCrash:
             )
 
 
-# --- TST-6: two people doing it at once --------------------------------------
+# --- two people doing it at once --------------------------------------
 #
 # This app is single-process by design, but it is not single-*threaded*: the
 # CP540 reader has its own thread, the backup runner has another, and a venue

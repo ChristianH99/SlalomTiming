@@ -49,8 +49,8 @@ config/                  Django project (settings, urls, asgi/wsgi). health.py i
                          hostility_tests.py is its sibling for what happens when a client
                          is *unkind*: it **discovers** every JSON endpoint from the
                          URLconf and asks each the same hostile questions, so the
-                         endpoint added next month is covered the day it is added — BLK-2
-                         was reachable on nine endpoints at once precisely because the
+                         endpoint added next month is covered the day it is added. The
+                         malformed-id 500 was reachable on nine endpoints at once precisely because the
                          tests that existed named their targets one at a time. It also
                          holds the concurrency tests, which need
                          `django_db(transaction=True)`: the ordinary fixture wraps a test
@@ -145,7 +145,7 @@ Cross-cutting bits       Each app also carries the ordinary Django plumbing: adm
                          **templatetags/**: apps/competitions/templatetags/competitions_tags.py
                          (participant_classes — a participant's classes under the competition's
                          assignment method) and apps/results/templatetags/pdf_markup.py.
-apps/audit.py            Who changed what (SEC-9). AuditMiddleware writes one line per
+apps/audit.py            Who changed what. AuditMiddleware writes one line per
                          *mutating* request to `<DATA_DIR>/logs/audit.log` — user, IP,
                          view name, response code and the redacted payload. A middleware
                          rather than a call per view (forty endpoints is forty chances to
@@ -712,7 +712,7 @@ apps/results/           A "Results" landing page (index) listing every running c
                          `content_disposition_header()` rather than interpolated. Three
                          separate things went wrong when it was an f-string: a class named
                          `A"; x` closed the quoted string and appended a second `filename=`
-                         of its choosing (SEC-6); a name in a script the header's latin-1
+                         of its choosing; a name in a script the header's latin-1
                          encoding can't hold came out RFC-2047-encoded and unreadable to
                          every browser; and a name with a newline in it raised
                          BadHeaderError, i.e. a 500. Django's builder handles all three,
@@ -728,7 +728,7 @@ apps/results/           A "Results" landing page (index) listing every running c
                          for both doors is the point: the import used to write whatever bytes
                          the archive carried under whatever name it asked for, which is how a
                          crafted `.zip` could plant an HTML file under /media/ and have the app
-                         serve it from its own origin (BLK-1). Size, then Pillow's own
+                         serve it from its own origin. Size, then Pillow's own
                          verification, then a name we generate rather than one we were given.
                          A refused logo is a message and the rest of the settings still save.
   pdf.py                 The **results-PDF export**: the same tables, on A4, for the notice board.
@@ -754,7 +754,7 @@ apps/results/           A "Results" landing page (index) listing every running c
                          differently: the import wrote whatever bytes it was given under
                          whatever name it asked for, so a crafted `.zip` could plant
                          `evil.html` under /media/ and have the app serve it as text/html
-                         from its own origin (BLK-1) — with `SuspiciousFileOperation` one
+                         from its own origin — with `SuspiciousFileOperation` one
                          `../` away. Same shape as the pdfmarkup sanitiser below, and the
                          same lesson: one check per *column*, not one per page.
   pdfmarkup.py           The header/footer's two halves. **Wildcards**: WILDCARDS is the token
@@ -768,7 +768,7 @@ apps/results/           A "Results" landing page (index) listing every running c
                          mini-markup. Three callers share it: the settings form's save, the
                          *import* path (apps/transfer/importers._import_results) and the template
                          filter below. Sanitising in one of those only is what made an imported
-                         file able to run script in the importer's session (SEC-1).
+                         file able to run script in the importer's session.
   templatetags/
     pdf_markup.py        pdf_header / pdf_footer: re-sanitise the stored PDF header/footer as the
                          settings page loads it back into its contenteditable. Replaces a bare
@@ -1314,9 +1314,10 @@ Four rules to keep in mind when adding anything to this app:
 - **Every change is recorded.** `apps/audit.py` — see the layout section.
 
 Failed logins are throttled and logged (`apps/accounts/throttle.py`), and the login throttle
-also caps attempts per address, not just per (username, IP). Still open from the audit and
-deliberately not done yet: the WebSocket consumers now check a page role, but there is no
-per-competition scoping on them.
+also caps attempts per address, not just per (username, IP). Known and deliberately not
+done yet: the WebSocket consumers check a page role, but there is no per-competition
+scoping on them — a signed-in user holding a live page sees the nudges for whichever
+event is active, which is the only event there is.
 
 ## Performance
 
@@ -1350,7 +1351,7 @@ event reaches by mid-afternoon), before → after the stage-5 work:
 | `results:class`, 200 competitors | 629 queries | **29 queries** |
 | six clients refreshing flat out, worst recorded signal | 1851 ms | **796 ms** |
 
-And from the audit's §5 (the same harness shape, query counts only):
+And from the later round on the same harness shape (query counts only):
 
 | | before | after |
 |---|---|---|
@@ -1359,8 +1360,9 @@ And from the audit's §5 (the same harness shape, query counts only):
 | `timing:auto-state` payload, 200 starters | 389 KiB | **259 KiB** |
 | …the same with 4 marshal posts watching 6 tasks each | 1341 KiB | **260 KiB** |
 
-No signal was lost and no refresh failed in either run, so `REL-8` (SQLite vs a live multi-user
-event) is **survivable at 200 starters** and does not force Postgres. The payload headroom the earlier note called `PRF-6` is now taken too: a nudge still
+No signal was lost and no refresh failed in either run, so SQLite against a live
+multi-user event is **survivable at 200 starters** and does not force Postgres.
+The payload headroom is now taken too: a nudge still
 carries nothing and each client re-downloads the state, but what it downloads no longer
 repeats itself. A marshal post's box is derived entirely from the *post* until somebody
 records against the run, so it is sent **once** as `posts` and an item with nothing

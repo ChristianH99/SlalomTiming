@@ -21,8 +21,8 @@ Consequences worth knowing:
   an account for everybody else; and per IP alone, because the pair counter on its
   own let a single host walk a user list — ten guesses at each of a hundred names
   trips nothing, and a guess at a name that doesn't exist is free.
-* Every failure is logged with the username and IP — SEC-4 was as much about having
-  nothing to look at afterwards as about the guessing itself.
+* Every failure is logged with the username and IP — throttling was as much about
+  having nothing to look at afterwards as about the guessing itself.
 """
 
 import logging

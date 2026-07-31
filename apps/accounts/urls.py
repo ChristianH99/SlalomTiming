@@ -10,7 +10,7 @@ urlpatterns = [
     path("login/", views.LoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("users/", views.UserAccessView.as_view(), name="users"),
-    # The audit trail (SEC-9). Under the accounts app because the middleware makes
+    # The audit trail. Under the accounts app because the middleware makes
     # this whole app superuser-only — see apps/accounts/middleware.py.
     path("audit-log/", views.audit_log, name="audit-log"),
     path("roles/create/", views.role_create, name="role-create"),

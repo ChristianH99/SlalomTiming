@@ -472,7 +472,7 @@ def participant_check(request):
     an exact (case-insensitive) licence-number match, or the same first and
     last name. Used by the add/edit form to warn before a duplicate is saved.
 
-    Scoped to the **active competition's type** (SEC-7). A participant belongs to
+    Scoped to the **active competition's type**. A participant belongs to
     exactly one discipline and the form can only ever register them under the
     active one, so a match from another discipline could not be acted on anyway —
     but the answer carried that person's name, club and licence number, which made

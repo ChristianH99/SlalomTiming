@@ -6,9 +6,9 @@ signing key a development checkout generated for itself. Between them that is
 every competitor's name, date of birth, address, e-mail, phone and licence number
 — and a key that forges sessions.
 
-The audit asked whether that should be encrypted at rest. It is not, deliberately:
-SQLCipher means a different driver and a passphrase somebody has to supply on race
-morning, and a passphrase kept beside the database protects nothing. What is worth
+Whether that should be encrypted at rest has been asked and answered: it is not,
+deliberately. SQLCipher means a different driver and a passphrase somebody has to
+supply on race morning, and a passphrase kept beside the database protects nothing. What is worth
 doing is the part that costs nothing — making sure the files are readable by the
 account running the server and nobody else, rather than by every account on the
 machine.

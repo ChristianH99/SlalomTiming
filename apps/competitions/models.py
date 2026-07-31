@@ -27,8 +27,8 @@ class CompetitionType(models.Model):
     are read live.** So changing a penalty amount, the tie-break or the timing
     precision in November re-ranks July's event the next time anybody opens its
     results — the times are unchanged, the numbers over them are not. That is
-    accepted for now (INT-6 in AUDIT.md): the settings are edited between events,
-    not during one, and the alternative is versioning every field.
+    accepted for now: the settings are edited between events, not during one,
+    and the alternative is versioning every field.
 
     The proper answer is an **archive**: a snapshot of a competition — its results
     as computed on the day, with the type settings that produced them — taken when

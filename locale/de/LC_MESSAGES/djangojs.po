@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-30 21:08+0200\n"
+"POT-Creation-Date: 2026-07-31 09:22+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -628,15 +628,15 @@ msgstr "{name} — {cls}, {type} Lauf {n}"
 msgid "Not scheduled: {list}."
 msgstr "Nicht geplant: {list}."
 
-#: .\static\js\shell.js:177 .\static\js\shell.js:186
+#: .\static\js\shell.js:178 .\static\js\shell.js:187
 msgid "OK"
 msgstr "OK"
 
-#: .\static\js\shell.js:184 .\static\js\shell.js:319
+#: .\static\js\shell.js:185 .\static\js\shell.js:320
 msgid "Continue"
 msgstr "Fortfahren"
 
-#: .\static\js\shell.js:413
+#: .\static\js\shell.js:414
 msgid "Dismiss"
 msgstr "Schließen"
 

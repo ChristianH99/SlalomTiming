@@ -168,7 +168,7 @@ MIDDLEWARE = [
     # without this a real deployment renders with no CSS and no JS at all. Must sit
     # directly below SecurityMiddleware and above everything else.
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    # Content-Security-Policy (SEC-11). Below WhiteNoise — a static file needs no
+    # Content-Security-Policy. Below WhiteNoise — a static file needs no
     # policy and WhiteNoise answers those without going further — but above
     # everything that renders a page, so an error page carries it too.
     'config.csp.ContentSecurityPolicyMiddleware',
@@ -186,7 +186,7 @@ MIDDLEWARE = [
     # Login required everywhere + role-based page gating (see apps/accounts).
     # Must sit after AuthenticationMiddleware (needs request.user).
     'apps.accounts.middleware.AccessControlMiddleware',
-    # Who changed what (SEC-9). Innermost, so it sees request.user and the
+    # Who changed what. Innermost, so it sees request.user and the
     # resolved view, and only records requests the gate above let through.
     'apps.audit.AuditMiddleware',
 ]

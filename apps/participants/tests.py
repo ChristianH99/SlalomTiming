@@ -298,7 +298,7 @@ def test_list_view_search_by_name(client):
 # ----- duplicate check endpoint -----
 
 def test_participant_check_flags_matching_license_and_name(client):
-    # Scoped to the active competition's type (SEC-7), so there has to be one.
+    # Scoped to the active competition's type, so there has to be one.
     ctype = make_competition().competition_type
     existing = Participant.objects.create(
         competition_type=ctype, first_name="John", last_name="Smith",
@@ -820,7 +820,7 @@ def test_clearing_a_bib_with_times_on_it_asks_too(client):
     assert not EventEntry.objects.filter(participant=person).exists()
 
 
-# --- INT-10: a date of birth has to be a plausible one ----------------------
+# --- a date of birth has to be a plausible one ----------------------
 
 class TestBirthDateBounds:
     """A slipped keystroke put a competitor in the year 3000 or the year 1200,
@@ -858,7 +858,7 @@ class TestBirthDateBounds:
             schema.load(Participant, {"date_of_birth": "3000-01-01"}, ["date_of_birth"])
 
 
-# --- INT-7: two registration desks, one bib ---------------------------------
+# --- two registration desks, one bib ---------------------------------
 
 def test_a_bib_taken_between_the_check_and_the_write_is_reported(client):
     """The uniqueness check is a read and the insert is a write, so two desks can
@@ -885,7 +885,7 @@ def test_a_bib_taken_between_the_check_and_the_write_is_reported(client):
     assert "7" in response.json()["error"]
 
 
-# --- PRV-4: when a participant record was last actually used -----------------
+# --- when a participant record was last actually used -----------------
 # A personal record kept because it might be needed again stops being kept for
 # that reason once it stops being used. updated_at can't answer that question: a
 # competitor who has raced every year since 2019 and never changed their address
@@ -1024,3 +1024,25 @@ class TestLastUsed:
             stale = list(Participant.objects.filter(last_used_at__lt=cutoff))
         assert [p.pk for p in stale] == [old.pk]
         assert fresh.pk not in [p.pk for p in stale]
+
+
+def test_the_duplicate_check_does_not_reach_into_another_discipline(client):
+    """participant_check used to search Participant.objects.all(), so the
+    response carried the name, club and licence number of people registered under
+    a discipline the caller has nothing to do with — an unthrottled licence-number
+    oracle for anyone holding the Participants page."""
+    other = make_type("Go-Cart")
+    Participant.objects.create(
+        competition_type=other, first_name="Erika", last_name="Mustermann",
+        date_of_birth=datetime.date(1990, 5, 5),
+        license_number="SECRET-1", club="Geheimclub",
+    )
+    make_competition()  # active type is Motorcycle, not Go-Cart
+
+    by_license = client.get(reverse("participants:check"), {"license_number": "SECRET-1"})
+    by_name = client.get(
+        reverse("participants:check"), {"first_name": "Erika", "last_name": "Mustermann"},
+    )
+
+    assert by_license.json()["matches"] == []
+    assert by_name.json()["matches"] == []

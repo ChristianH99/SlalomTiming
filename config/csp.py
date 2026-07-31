@@ -1,4 +1,4 @@
-"""Content-Security-Policy (SEC-11).
+"""Content-Security-Policy.
 
 A CSP is the difference between "an injected string reached the page" and "an
 injected string ran". This app has real injection surface — a results-PDF
@@ -15,8 +15,8 @@ be in the templates.
 
 Deliberately no nonce. A nonce would let the inline blocks stay, at the cost of a
 per-request random value threaded through every template — and it fails open the
-moment somebody forgets one, which is exactly the kind of quiet regression this
-audit found elsewhere. Files cannot be forgotten.
+moment somebody forgets one, which is the quiet kind of regression — the page
+still renders. Files cannot be forgotten.
 
 Notes on individual directives:
 

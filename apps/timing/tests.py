@@ -992,7 +992,7 @@ def test_every_view_writes_a_run_time_the_same_way(client):
     """One quantity, one notation. The Manual view, the Auto view and the
     Dashboard used to render plain seconds while results rendered mm:ss.xxx, so
     the same run read three ways depending on which screen you were looking at
-    (UI-5). They all go through calc.format_clock now; this is the pin."""
+. They all go through calc.format_clock now; this is the pin."""
     comp, _ = auto_scenario()
     comp.penalties_by_marshal_posts = True
     comp.save(update_fields=["penalties_by_marshal_posts"])
@@ -1089,7 +1089,7 @@ def test_post_claim_is_exclusive(client):
     assert post_json(client, "timing:marshal-claim", post=1, token="B").json()["ok"] is True
 
 
-# ----- SEC-3: a claim is what authorises a marshal's write -----
+# ----- a claim is what authorises a marshal's write -----
 
 def marshal_client(*page_keys):
     """A signed-in client holding only the given pages — a marshal's phone, which is
@@ -1111,7 +1111,7 @@ def marshal_client(*page_keys):
 
 
 def test_marshal_submit_needs_the_claim_for_that_post(client):
-    """The reproduction from the audit: a device that claimed post 1 could write
+    """A device that claimed post 1 could write
     post 2's penalties, because no write path looked at claim_token."""
     comp, _ = auto_scenario()
     MarshalPost.objects.create(competition=comp, number=1, tasks="1-5")
@@ -1615,7 +1615,7 @@ def test_rejected_pairing_leaves_the_dragged_time_on_the_rail(client):
 
 
 # --- Live connection: the socket the operator is trusting -------------------
-# OPS-3/OPS-4. Every live view used to open its own socket that neither showed
+# Every live view used to open its own socket that neither showed
 # its state nor re-fetched after an outage, so a drop left a frozen screen and
 # the signals that arrived meanwhile stayed invisible. The lifecycle now lives in
 # static/js/live_socket.js; these pin the parts the server owns.
@@ -1659,7 +1659,7 @@ def test_every_live_view_shares_one_socket_implementation():
 def _live_listener(django_user_model, username):
     """A user allowed to open a live socket.
 
-    The socket is gated on holding a page a live view is rendered on (SEC-12) —
+    The socket is gated on holding a page a live view is rendered on —
     a login on its own no longer gets you the event's nudges — so a test user
     needs a role, or to be a superuser.
     """
@@ -1732,7 +1732,7 @@ def test_a_changed_event_reaches_the_open_views_by_name(django_user_model):
     assert async_to_sync(run)() == {"event": "competition", "name": "Autumn Slalom"}
 
 
-# --- OPS-5: the device connection survives a restart ------------------------
+# --- the device connection survives a restart ------------------------
 # The reader thread dies with the process, so a restart used to leave the CP540
 # still selected on the settings page with nothing reading it and nobody told.
 # TimingSettings.reader_enabled is the bit that outlives the process; asgi.py
@@ -2060,7 +2060,7 @@ def test_a_marshal_detail_blob_is_bounded_and_reshaped(client):
 # --- SEC-E: the live socket carries event news, so it needs a page ----------
 
 def test_a_login_alone_does_not_open_the_live_socket(django_user_model):
-    """SEC-12: the consumers checked is_authenticated and nothing else, so any
+    """The consumers checked is_authenticated and nothing else, so any
     account at all could listen in on a running event."""
     from channels.testing import WebsocketCommunicator
 
@@ -2079,7 +2079,7 @@ def test_a_login_alone_does_not_open_the_live_socket(django_user_model):
     assert async_to_sync(run)() is False
 
 
-# --- INT-1: Auto timing is the start order, so it needs one ------------------
+# --- Auto timing is the start order, so it needs one ------------------
 # With no start pattern the page used to render its whole apparatus around an
 # empty order — and once times existed, one flame-bordered "unattributed time"
 # alarm per run, because every recorded run is an orphan when there are no slots
@@ -2151,7 +2151,7 @@ def test_the_other_screens_do_not_need_a_pattern(client):
     assert state["progress"]["expected"] == (cclass.practice_runs + cclass.counted_runs)
 
 
-# --- INT-3: a run that crosses midnight -------------------------------------
+# --- a run that crosses midnight -------------------------------------
 
 class TestMidnight:
     """Both device times are clock *times*, not instants, so 23:59:59 → 00:00:02
@@ -2177,7 +2177,7 @@ class TestMidnight:
                              datetime.time(10, 0, 42, 270000), 3) == Decimal("42.270")
 
 
-# --- INT-9: format_clock truncates, like everything else --------------------
+# --- format_clock truncates, like everything else --------------------
 
 class TestClockTruncates:
     """The app's rule is "as fast as the device fully resolved, never faster".
@@ -2198,7 +2198,7 @@ class TestClockTruncates:
         assert calc.format_clock(Decimal(value), precision) == expected
 
 
-# --- INT-8: a recorded time may not vanish from under its run ---------------
+# --- a recorded time may not vanish from under its run ---------------
 
 def test_deleting_a_signal_a_run_uses_is_refused():
     """SET_NULL silently blanked the run's time: the row stayed, the measurement
@@ -2232,7 +2232,7 @@ def test_deleting_the_whole_competition_still_works():
     assert not TimingSignal.objects.filter(pk=signal.pk).exists()
 
 
-# --- INT-13: a reorder may not repeat a slot --------------------------------
+# --- a reorder may not repeat a slot --------------------------------
 
 def test_a_reorder_drops_repeats(client):
     """A key twice over puts one competitor in two places; ordered_slots resolves
@@ -2247,7 +2247,7 @@ def test_a_reorder_drops_repeats(client):
     assert competition.auto_timing_order == [keys[1], keys[0]]
 
 
-# --- PRF-1: the rule held for *manual* assignment only ----------------------
+# --- the rule held for *manual* assignment only ----------------------
 # AgeAssignment resolves a participant's class by walking the running classes, and
 # it asked for them inside the loop over the field: 34 / 64 / 114 queries at 20 /
 # 50 / 100 starters, against a flat 15 for manual. Re-paid by every open browser
@@ -2297,7 +2297,7 @@ def test_resolving_a_whole_field_reads_the_classes_once(django_assert_num_querie
         comp.starters_by_class()
 
 
-# --- PRF-2: "export everything" re-read the event once per class ------------
+# --- "export everything" re-read the event once per class ------------
 
 def test_export_all_does_not_re_read_the_event_per_class(client):
     """RunIndex exists precisely so an event's runs are read once. export-all
@@ -2326,7 +2326,7 @@ def test_export_all_does_not_re_read_the_event_per_class(client):
     )
 
 
-# --- PRF-3: the live path does not want the device log ----------------------
+# --- the live path does not want the device log ----------------------
 
 def test_the_device_link_check_does_not_copy_the_log():
     """link_state is asked on every live refresh of both timing pages, by every
@@ -2365,7 +2365,7 @@ def test_the_device_log_survives_being_read_while_written():
         thread.join(timeout=2)
 
 
-# --- PRF-4: reconcile scaled its own SQL with the event ---------------------
+# --- reconcile scaled its own SQL with the event ---------------------
 
 def test_reconcile_does_not_send_every_placed_signal_back(client):
     from django.db import connection
@@ -2384,7 +2384,7 @@ def test_reconcile_does_not_send_every_placed_signal_back(client):
         )
 
 
-# --- PRF-7: the marshal boxes are sent once, not once per slot --------------
+# --- the marshal boxes are sent once, not once per slot --------------
 # Every field of a post's box is derived from the *post* until somebody records
 # something against the run: the number, the tasks it watches, whether it judges
 # the stop line. So for a field of 200 it was the same object written out 600
@@ -2556,9 +2556,9 @@ def test_the_payload_no_longer_grows_with_the_number_of_posts(client):
     )
 
 
-# --- TST-2: a login is not authorisation ------------------------------------
+# --- a login is not authorisation ------------------------------------
 #
-# The audit's point, and the reason this reads as a sweep rather than a case:
+# The reason this reads as a sweep rather than a case:
 # the shared `client` fixture is a **superuser**, so almost every view test in
 # this suite proves nothing whatever about access control. Four endpoints are
 # reachable from two pages at once (the marshal endpoints), and one is reachable
@@ -2632,12 +2632,12 @@ def test_the_open_signal_endpoint_still_asks_who_is_calling():
     assert TimingSignal.objects.count() == 1
 
 
-# --- TST-5: no start pattern, but runs already recorded ----------------------
+# --- no start pattern, but runs already recorded ----------------------
 
 def test_recorded_runs_survive_a_competition_with_no_start_pattern(client):
     """The state the real database is in, and the one nobody had a test for.
 
-    A pattern is optional (INT-1): an event can be timed entirely on the Manual
+    A pattern is optional: an event can be timed entirely on the Manual
     view, and Auto timing then replaces itself with a sentence. What must not
     happen is that the *runs* become unreachable — they are the event. So with
     times recorded and no pattern at all, the Manual view, the results and the
@@ -2679,3 +2679,31 @@ def test_a_pattern_can_be_added_after_times_are_recorded(client):
     assert any(item.get("run_id") for item in state["items"]), (
         "a run recorded before the pattern existed did not bind to it"
     )
+
+
+# --- the gate itself, from a role that should not get through ----------------
+#
+# The sweep above covers the endpoints two pages share. These two cover the other
+# shape: a page key that grants nothing here at all, and the one URL that sits
+# outside the gate entirely.
+
+def test_a_results_only_role_cannot_read_the_live_arrangement():
+    comp, _ = auto_scenario()
+    reader = marshal_client("results")
+    assert reader.get(reverse("timing:arrangement")).status_code == 403
+    assert reader.get(reverse("timing:auto-state")).status_code == 403
+
+
+def test_a_participants_only_role_cannot_inject_a_timing_signal():
+    """timing:signal is pages.OPEN — a device cannot log in, so the gate lets the
+    URL through and the view authorises the caller itself. A session that holds
+    only the Participants page is a person, not a device, and must be refused."""
+    comp, _ = auto_scenario()
+    TimingSettings.load()
+    desk = marshal_client("participants")
+
+    response = post_json(desk, "timing:signal",
+                         running_number=1, port=1, time="10:00:00.000")
+
+    assert response.status_code == 403
+    assert not TimingSignal.objects.filter(running_number=1, port=1).exists()

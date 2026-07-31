@@ -147,7 +147,7 @@
         attempt = 0;
         setState("online");
         startHeartbeat();
-        // The whole point of OPS-4: anything that happened while we were away is
+        // The whole point of the reconnect: anything that happened while we were away is
         // sitting on the server, and nothing else will come and tell us about it.
         if (everOpened) onRefresh();
         everOpened = true;

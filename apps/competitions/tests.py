@@ -1229,7 +1229,7 @@ def test_only_a_running_class_is_flagged():
 # ----- stage 7: how a class is titled -----
 
 def test_the_word_is_always_added():
-    """UI-8. The prefix used to be conditional — a name already opening with the
+    """The prefix used to be conditional — a name already opening with the
     word (in any shipped language) was shown alone — so the heading depended on
     how somebody had typed a name. The organiser owns the name, the app owns the
     word; a name that repeats it is answered by name_hint(), on the page where
@@ -1288,7 +1288,7 @@ def test_the_german_heading_uses_the_german_word(settings):
 
 
 def test_the_sidebar_names_a_class_as_a_class(client, settings):
-    """UI-8: the Results sub-list read "1", "2", "Bobbycar Mini" while every one
+    """The Results sub-list read "1", "2", "Bobbycar Mini" while every one
     of those links opens a page titled "Result Class 7"."""
     settings.LANGUAGE_CODE = "en"
     competition = make_competition()
@@ -1300,7 +1300,7 @@ def test_the_sidebar_names_a_class_as_a_class(client, settings):
     assert ">Class 1</a>" in sidebar
 
 
-# --- INT-2: exactly one active competition ----------------------------------
+# --- exactly one active competition ----------------------------------
 
 def test_two_active_competitions_are_refused_by_the_database():
     """`get_current()` is `filter(is_active=True).first()`, so with two active
@@ -1340,7 +1340,7 @@ def test_switching_the_active_competition_still_works(client):
     assert (first.is_active, second.is_active) == (False, True)
 
 
-# --- INT-11 / INT-12: what an age range covers, and what "age" means --------
+# --- what an age range covers, and what "age" means --------
 
 class TestAgeRanges:
     """Under age-based assignment these decide which class a competitor lands in,
@@ -1402,3 +1402,21 @@ class TestAgeRanges:
         assert competition.class_for_birth_year(2026 - 6) == mini
         assert competition.class_for_birth_year(2026 - 10) == mini
         assert competition.class_for_birth_year(2026 - 11) is None
+
+
+def test_the_database_refuses_a_second_active_competition():
+    """`get_current()` is `filter(is_active=True).first()`, so two active
+    rows — from the admin, a bad import, an interrupted transaction — meant the
+    app silently served one of them and the operator had no way to see the
+    conflict. The invariant belongs in the database, not in whichever code path
+    happened to set the flag; this asserts it is still there."""
+    ctype = CompetitionType.objects.create(name="Motorcycle")
+    Competition.objects.create(
+        competition_type=ctype, name="A", date=datetime.date(2026, 5, 1), is_active=True,
+    )
+
+    with pytest.raises(IntegrityError):
+        Competition.objects.create(
+            competition_type=ctype, name="B", date=datetime.date(2026, 6, 1),
+            is_active=True,
+        )

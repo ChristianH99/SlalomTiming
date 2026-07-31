@@ -92,7 +92,7 @@ def test_signal_endpoint_requires_matching_token_in_production():
 
 
 def test_signal_endpoint_requires_the_timing_page():
-    """SEC-2: the device door is outside the login gate, so it used to accept any
+    """The device door is outside the login gate, so it used to accept any
     authenticated session — a registration desk could write times into the live
     event. A login is not authorisation; the Timing page is."""
     desk = Client()
@@ -111,7 +111,7 @@ def test_signal_endpoint_requires_the_timing_page():
     assert TimingSignal.objects.count() == 1
 
 
-# ----- SEC-4: failed-login throttling -----
+# ----- failed-login throttling -----
 
 @pytest.fixture
 def clean_throttle():
@@ -315,7 +315,7 @@ class TestAccountManagement:
         assert response.status_code == 403
 
 
-# --- SEC-9: who changed what ------------------------------------------------
+# --- who changed what ------------------------------------------------
 
 class TestAuditTrail:
     """A timekeeper, a marshal and an organiser write to the same rows. Until now

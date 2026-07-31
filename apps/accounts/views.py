@@ -129,7 +129,7 @@ def _refused(request):
 # ----- audit trail -----
 
 def audit_log(request):
-    """Download the audit trail (SEC-9).
+    """Download the audit trail.
 
     Superuser-only, and on this page because this page is already the one place
     only a superuser can open — a "Logs" page of its own would need its own key in

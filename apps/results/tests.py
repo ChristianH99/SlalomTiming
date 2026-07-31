@@ -282,7 +282,7 @@ def test_state_code_on_a_practice_run_does_not_affect_the_result():
 
 
 def test_a_practice_code_beside_a_zero_tally_is_explained(client):
-    """UI-24. The tally counts a *competitor's* outcome, and a code on a
+    """The tally counts a *competitor's* outcome, and a code on a
     practice run is not one — so the table legitimately showed "DNS" in a cell
     above a tally reading "DNS: 0", and the two together read as a bug. In
     exactly that case the table now says which of the two it is counting."""
@@ -577,7 +577,7 @@ def test_results_settings_page_saves(client):
     assert ResultColumnSettings.class_additions(competition, cclass) == ["city"]
 
 
-# ----- SEC-1 / SEC-5: the PDF layout's own inputs -----
+# ----- the PDF layout's own inputs -----
 
 # A 1x1 GIF: small, and a real image, so ImageField and Pillow both accept it.
 PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04"
@@ -585,7 +585,7 @@ PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04"
 
 
 def test_settings_page_renders_stored_markup_sanitised(client):
-    """SEC-1's other half. The editor sanitises on save, but a row can also be
+    """The other half of the stored-XSS fix. The editor sanitises on save, but a row can also be
     written by an *import*, so the page sanitises again on the way out instead of
     trusting the column with a bare |safe."""
     _, competition, _ = make_setup()
@@ -976,3 +976,69 @@ def test_saving_a_resolution_sweeps_ones_whose_tie_is_gone(client):
     _resolve(client, competition, cclass, ranks=(1, 1))
     assert not ManualTieResolution.objects.filter(pk=stale.pk).exists()
     assert ManualTieResolution.objects.filter(competition=competition).count() == 1
+
+
+# --- what a class name can do to a download header ---------------------------
+#
+# A class name is typed by an organiser and ends up in Content-Disposition. Three
+# separate things went wrong when that header was an f-string, and each needs its
+# own test because each fails differently: a quote splits the header into two
+# parameters, a name outside latin-1 cannot be encoded into a header at all, and
+# a newline raises BadHeaderError. Django's own content_disposition_header()
+# handles all three; these pin that it is still the thing being used.
+
+def test_a_quote_in_a_class_name_cannot_split_the_download_header(client):
+    _, competition, cclass = make_setup()
+    cclass.name = 'A"; attachment; filename="evil.pdf'
+    cclass.save()
+    make_competitor(competition, cclass, 1)
+
+    response = client.get(reverse("results:export-class", args=[cclass.pk]))
+
+    assert response.status_code == 200
+    header = response["Content-Disposition"]
+    # The quote has to arrive backslash-escaped, so the name stays one parameter
+    # instead of closing it and opening another of the attacker's choosing.
+    inner = header.split('filename="', 1)[1]
+    assert '\\"' in inner, f"quote not escaped, header split apart: {header!r}"
+
+
+def test_a_class_name_outside_latin_1_still_exports(client):
+    """A header is latin-1 encoded, so a Cyrillic class name has to reach for
+    RFC 5987 `filename*=` rather than raising on the way out."""
+    _, competition, cclass = make_setup()
+    cclass.name = "Кла"
+    cclass.save()
+    make_competitor(competition, cclass, 1)
+
+    response = client.get(reverse("results:export-class", args=[cclass.pk]))
+
+    assert response.status_code == 200
+    assert "filename*=" in response["Content-Disposition"]
+
+
+def test_a_newline_in_a_class_name_does_not_500_the_export(client):
+    _, competition, cclass = make_setup()
+    cclass.name = "Two\nLines"
+    cclass.save()
+    make_competitor(competition, cclass, 1)
+
+    assert client.get(reverse("results:export-class", args=[cclass.pk])).status_code == 200
+
+
+def test_contact_details_are_not_published_by_default():
+    """With no saved ResultColumnSettings the general columns used to be
+    *every* available column, so a sheet pinned to the notice board carried the
+    e-mail, phone number and home address of every competitor before anyone had
+    chosen anything. A default that publishes is the wrong default."""
+    ctype, competition, _ = make_setup()
+    ctype.requires_email = True
+    ctype.requires_phone = True
+    ctype.requires_address = True
+    ctype.save()
+
+    columns = ResultColumnSettings.general_columns(competition)
+
+    assert "email" not in columns
+    assert "phone" not in columns
+    assert "street" not in columns

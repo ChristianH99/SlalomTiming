@@ -85,7 +85,7 @@ class TestMedia:
 
 
 class TestFonts:
-    """REL-4: no third-party font requests. A venue has no uplink (every page load
+    """No third-party font requests. A venue has no uplink (every page load
     would block on a timing-out request), and sending visitors' IPs to Google is the
     pattern German courts have ruled against."""
 
@@ -132,7 +132,7 @@ class TestTemplateComments:
 
 
 class TestSecretKey:
-    """SEC-15: no signing key may be committed, and a deployment must bring its own.
+    """No signing key may be committed, and a deployment must bring its own.
 
     There used to be a literal key in settings.py. This repository is public, so
     that key was public: anyone who had read it could forge a session cookie for
@@ -181,7 +181,7 @@ class TestSecretKey:
 
 
 class TestTls:
-    """REL-7: HTTPS is the default and turning it off is one explicit decision.
+    """HTTPS is the default and turning it off is one explicit decision.
 
     These run `manage.py diffsettings` in a subprocess because the hardening block
     only exists with DEBUG off — it cannot be reached with override_settings.
@@ -264,7 +264,7 @@ class TestSessions:
 
 
 class TestSingleInstance:
-    """REL-5: one event, one process — enforced, not assumed."""
+    """One event, one process — enforced, not assumed."""
 
     def _release(self):
         if singleinstance._lock_file is not None:
@@ -370,7 +370,7 @@ class TestWritablePaths:
 
 class TestRunBook:
     def test_deployment_documentation_exists(self):
-        """REL-3: a deployment needs a written procedure, not a README bullet."""
+        """A deployment needs a written procedure, not a README bullet."""
         root = Path(settings.BASE_DIR)
         assert (root / 'DEPLOYMENT.md').exists()
         assert (root / 'deploy' / 'slalomtiming.service').exists()
@@ -391,7 +391,7 @@ class TestRunBook:
 
 
 class TestContentSecurityPolicy:
-    """SEC-11. The policy is only worth having if it stays strict, and it only
+    """The policy is only worth having if it stays strict, and it only
     *can* be strict while no page carries inline script or style — so both halves
     are pinned here."""
 
@@ -474,7 +474,7 @@ class TestContentSecurityPolicy:
     @pytest.mark.parametrize('script', sorted(JS_DIR.glob('*.js')),
                              ids=lambda p: p.name)
     def test_every_script_is_structurally_whole(self, script):
-        """TST-10. The check above catches one signature; this catches the class.
+        """The check above catches one signature; this catches the class.
 
         There is no JS engine in this test run (no node on the machine), so this
         is a lexer rather than a parser: it walks the file tracking strings,
@@ -594,8 +594,8 @@ class TestContentSecurityPolicy:
 
 class TestDataDirectoryPermissions:
     """DATA_DIR holds every competitor's personal data, the audit trail and (in a
-    checkout) the signing key. The audit asked about encryption at rest; the
-    answer was file permissions, because a SQLCipher passphrase kept beside the
+    checkout) the signing key. Encryption at rest was considered and rejected in
+    favour of file permissions, because a SQLCipher passphrase kept beside the
     database protects nothing. See config/datasecurity.py."""
 
     def test_it_restricts_the_directory_and_its_contents(self, tmp_path):
@@ -644,7 +644,7 @@ class TestDataDirectoryPermissions:
 
 
 class TestAllowedHosts:
-    """OPS-8: a deployment must say which hosts it answers on.
+    """A deployment must say which hosts it answers on.
 
     Empty with DEBUG off, the app *starts* and then refuses every request with
     DisallowedHost — which on race morning reads as "the server is broken" from
@@ -706,7 +706,7 @@ class TestAllowedHosts:
 
 @pytest.mark.django_db
 class TestHealthEndpoint:
-    """OPS-3: something a check can be pointed at.
+    """Something a check can be pointed at.
 
     "Is it up" used to mean opening a page, which means logging in, which means a
     person.
@@ -807,7 +807,7 @@ class TestHealthEndpoint:
 
 
 class TestStatusRowsStayReadable:
-    """UI-2 / UI-3: a run closed with a state code used to fill its whole row with
+    """A run closed with a state code used to fill its whole row with
     amber. Fifteen non-starters in a row — an ordinary morning — turned the Manual
     timing table into a wall of it, with the rows that still needed work invisible
     among them.
@@ -840,7 +840,7 @@ class TestStatusRowsStayReadable:
 
 
 class TestTheIgnoredRailIsBounded:
-    """UI-4: the real database reached 230 ignored times. Beside a live timing
+    """The real database reached 230 ignored times. Beside a live timing
     table that is not a list anybody reads."""
 
     def test_it_shows_the_ten_most_recent_per_column(self):
@@ -866,7 +866,7 @@ class TestTheIgnoredRailIsBounded:
 
 
 class TestFlameOnlyEverMeansPenalty:
-    """UI-7: the Dashboard rendered the current competitor's *total time* in the
+    """The Dashboard rendered the current competitor's *total time* in the
     flame colour, which everywhere else in this app — the results table's .rt-pen,
     the penalty chips, pdf._PEN — means "seconds added". A clean run's time read as
     penalised."""
@@ -888,7 +888,7 @@ class TestFlameOnlyEverMeansPenalty:
 
 
 class TestNoMadeUpBibNumbers:
-    """UI-6: an unattributed run — a real time no slot owns — rendered "#?" in the
+    """An unattributed run — a real time no slot owns — rendered "#?" in the
     field an operator reads first, on a tile that already says what it is in words
     and in flame."""
 
@@ -905,7 +905,7 @@ class TestNoMadeUpBibNumbers:
 
 
 class TestAutoTimingWithoutAStartPattern:
-    """UI-1 (= INT-1): the page's most common failure mode used to be 100 % alarm —
+    """The page's most common failure mode used to be 100 % alarm —
     every tile a flame-bordered "Unattributed time" card repeating the same
     instruction paragraph. An alarm that fires on every row is not an alarm."""
 
@@ -964,7 +964,7 @@ class TestEveryDialogIsTheAppsOwn:
         something to lose — a guard that always warns gets clicked through."""
         source = (JS_DIR / 'shell.js').read_text(encoding='utf-8')
         block = re.search(r'window\.addEventListener\("beforeunload".*?\}\);', source, re.S)
-        assert block, 'the tab-close guard is gone (UI-16)'
+        assert block, 'the tab-close guard is gone'
         assert 'if (!dirty || bypass) return;' in block.group(0)
 
     def test_the_app_dialog_is_on_every_page(self, client):
@@ -976,7 +976,7 @@ class TestEveryDialogIsTheAppsOwn:
 
 
 class TestModalsManageFocus:
-    """UI-14. Every dialog was `role="dialog" aria-modal="true"` and none of them
+    """Every dialog was `role="dialog" aria-modal="true"` and none of them
     moved focus in, kept it there or gave it back — so Tab walked straight
     through to the page behind the overlay, and a keyboard user could type into a
     form they could not see."""
@@ -1020,7 +1020,7 @@ class TestModalsManageFocus:
 
 
 class TestTheUnsavedGuardCoversLeaving:
-    """UI-16/17. The guard caught a click on a link we render and nothing else —
+    """The guard caught a click on a link we render and nothing else —
     closing the tab and pressing Back both discarded silently — and its own
     "Save changes" then posted through form.submit(), which skips HTML5
     validation and every submit listener."""
@@ -1052,7 +1052,7 @@ class TestTheScalesAreClosed:
     had a bug living in the gap."""
 
     def test_nothing_sets_a_raw_z_index(self):
-        """UI-10. The ladder ran 3, 5, 10, 20, 30, 40, 199, 200, 200, 300, 1000
+        """The ladder ran 3, 5, 10, 20, 30, 40, 199, 200, 200, 300, 1000
         — 200 shared by the sidebar and the event-changed bar, so which of two
         overlapping *fixed* elements won came down to document order."""
         css = CSS.read_text(encoding='utf-8')
@@ -1068,7 +1068,7 @@ class TestTheScalesAreClosed:
         assert not repeated, f'two layers share a step: {repeated}'
 
     def test_nothing_sets_a_raw_transition_duration(self):
-        """UI-11. Seven durations were in use, several a rounding apart, so the
+        """Seven durations were in use, several a rounding apart, so the
         same interaction felt different depending on the component."""
         css = CSS.read_text(encoding='utf-8')
         raw = []
@@ -1077,7 +1077,7 @@ class TestTheScalesAreClosed:
         assert raw == [], f'raw durations: {raw}'
 
     def test_spacing_and_type_come_from_the_scales(self):
-        """UI-13. Seven lengths sat outside them — chevron nudges, a drag-gap
+        """Seven lengths sat outside them — chevron nudges, a drag-gap
         height, a `font-size: 0.85em`."""
         css = CSS.read_text(encoding='utf-8')
         offenders = []
@@ -1093,7 +1093,7 @@ class TestTheScalesAreClosed:
         assert offenders == [], offenders
 
     def test_the_sidebar_width_is_written_once(self):
-        """UI-12. The width and the room the main column leaves for it are two
+        """The width and the room the main column leaves for it are two
         numbers that must agree, and were written out separately."""
         css = CSS.read_text(encoding='utf-8')
         assert re.search(r'--sidebar-w:\s*\d+px;', css)
@@ -1107,7 +1107,7 @@ class TestTheScalesAreClosed:
 
 
 class TestKeyboardFocusIsVisible:
-    """UI-9. There is a correct global `:focus-visible` outline — and then eight
+    """There is a correct global `:focus-visible` outline — and then eight
     component rules turning the outline off, every one of which outranks it on
     specificity (`form input:focus` beats `input:focus-visible`). So on almost
     every input in the app a keyboard user got a border-colour change, and on
@@ -1164,10 +1164,10 @@ def _url_names_in_the_project():
 
 
 class TestThePagesCanBeUsedWithoutAMouse:
-    """TST-8. The suite had no accessibility assertions at all, which is how UI-9
-    (a focus ring removed on almost every input), UI-14 (no modal focus
-    management), UI-21 (a hard-coded aria-expanded) and UI-22 (a table row
-    claiming to be a button) all shipped together.
+    """The suite had no accessibility assertions at all, which is how four
+    defects shipped together: a focus ring removed on almost every input, no
+    modal focus management, a hard-coded aria-expanded, and a table row
+    claiming to be a button.
 
     These are file tests over the templates rather than a rendered-page audit —
     cheap, and they catch the whole class on the way in. The rendered halves live
@@ -1207,7 +1207,7 @@ class TestThePagesCanBeUsedWithoutAMouse:
             assert not offenders, f'{template.name}: <{tag} role=…> — {offenders}'
 
     def test_the_hamburger_does_not_render_a_state_the_server_cannot_know(self):
-        """UI-21. The sidebar is shown by default on desktop and off-canvas on
+        """The sidebar is shown by default on desktop and off-canvas on
         mobile, so a rendered aria-expanded is simply wrong on a phone until the
         script runs. shell.js sets it from the real state on load."""
         source = (TEMPLATE_DIR / 'base.html').read_text(encoding='utf-8')
@@ -1218,7 +1218,7 @@ class TestThePagesCanBeUsedWithoutAMouse:
         assert 'syncAria' in (JS_DIR / 'shell.js').read_text(encoding='utf-8')
 
     def test_a_message_is_announced_and_can_be_dismissed(self):
-        """UI-15. Django's messages were a plain <ul>, so "Timing settings
+        """Django's messages were a plain <ul>, so "Timing settings
         saved" never reached a screen reader — the page simply had one more list
         on it than before."""
         source = (TEMPLATE_DIR / 'base.html').read_text(encoding='utf-8')
@@ -1341,3 +1341,39 @@ class TestTheSidebarMarksOnePage:
             reverse('results:settings'),    # its Results sub-page
         ]), marked
         assert reverse('timing:settings') not in marked
+
+
+class TestTheSecurityLogGoesSomewhere:
+    """The project configured no LOGGING at all, which hid two things.
+
+    Python's last-resort handler emits WARNING and above, so `throttle.note_success`
+    — "who signed in", written at INFO — was dropped on the floor: the login trail
+    the throttle module exists to keep did not reach anywhere. And nothing was
+    written to a *file*, so on the packaged Windows build (Daphne in a console
+    window closed at the end of the day) failed logins and "this time could not be
+    stored" went with it. Both are exactly the records somebody asks for a week
+    later, which is why the absence was invisible until it mattered.
+    """
+
+    def test_the_project_configures_logging(self, settings):
+        assert getattr(settings, 'LOGGING', None), 'no LOGGING configuration at all'
+
+    def test_a_handler_writes_to_a_file_under_the_data_directory(self, settings):
+        handlers = settings.LOGGING['handlers']
+        files = [h for h in handlers.values()
+                 if 'FileHandler' in h.get('class', '')]
+        assert files, 'nothing is written to a file, only to a console that closes'
+        for handler in files:
+            assert str(handler['filename']).startswith(str(settings.DATA_DIR)), (
+                'a log file outside DATA_DIR is overwritten by the next installer'
+            )
+
+    def test_the_login_trail_is_captured_at_info(self, settings):
+        """The throttle logs a successful sign-in at INFO. A configuration that
+        only keeps WARNING and above keeps none of it."""
+        from apps.accounts import throttle
+
+        logger = settings.LOGGING['loggers'].get(throttle.logger.name) \
+            or settings.LOGGING['loggers'].get('apps') \
+            or settings.LOGGING['root']
+        assert logger['level'] in ('DEBUG', 'INFO'), logger

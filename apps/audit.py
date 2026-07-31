@@ -1,4 +1,4 @@
-"""Who changed what (SEC-9).
+"""Who changed what.
 
 A timekeeper, a marshal and an organiser all write to the same rows, and until
 now nothing recorded which of them did. That is fine on one laptop and useless
