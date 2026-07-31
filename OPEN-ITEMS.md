@@ -5,9 +5,11 @@ previous round's findings were closed and its paperwork removed.
 
 Tick the ones you want fixed. Nothing here has been changed yet.
 
-**State of the tree:** 1392 tests pass. `manage.py check --deploy` with `DEBUG=False`
-is clean. No missing migrations. Both translation catalogs are complete (0 untranslated,
-0 fuzzy) and in sync with the code.
+**State of the tree:** 1392 tests, all of which pass — except that the three threaded
+tests in `TestTwoWritersAtOnce` are **intermittently red** (N-4 below), so a given run is
+either 1392 passed or 1391 passed / 1 failed. `manage.py check --deploy` with
+`DEBUG=False` is clean. No missing migrations. Both translation catalogs are complete
+(0 untranslated, 0 fuzzy) and in sync with the code.
 
 ---
 
@@ -108,42 +110,55 @@ started.
 
 ---
 
-### [ ] N-4 — A concurrency test is flaky, and flaky is worse than absent  · moderate · two-line fix
+### [ ] N-4 — The concurrency tests are intermittently red  · moderate · small fix
 
-`config/hostility_tests.py::TestTwoWritersAtOnce::test_two_writers_on_one_bib_leave_one_entry`
+`config/hostility_tests.py::TestTwoWritersAtOnce` (3 threaded tests)
 
-Four threads race to claim bib 7; the test asserts one row survives and that the other
-three were **refused**. It counts a refusal only when the thread caught an
-`IntegrityError`.
+These are the only non-deterministic tests in the project, and they fail often enough to
+matter. Measured over this session:
 
-Under SQLite contention the loser does not always find out by hitting the constraint. It
-can be turned away by the lock first, and that arrives as `OperationalError: database
-table is locked` — which the `except IntegrityError` does not catch, so the thread dies
-with an unhandled exception and is never counted.
+| how it was run | runs | red |
+| --- | ---: | ---: |
+| the class on its own | 10 | 3 |
+| the full suite, nothing else on the machine | 2 | 1 |
+| the full suite with a second pytest running | 1 | 1 |
+| `test_two_writers_on_one_bib_leave_one_entry` on its own | 5 | 0 |
 
-Measured:
+So a clean full run is **not** reliably green — roughly one in two — and the failure moves
+between tests. Two of the three have been observed failing:
+`test_two_writers_on_one_bib_leave_one_entry` and
+`test_a_live_read_does_not_block_behind_a_writer`.
 
-| how it is run | result |
-| --- | --- |
-| the test alone, 5 runs | 5 passed |
-| the whole `TestTwoWritersAtOnce` class, 3 runs | 1 failed, 0 failed, 2 failed |
-| the full suite, clean | passed (1392 passed) |
+**Confirmed cause, for `test_two_writers_on_one_bib_leave_one_entry`:** four threads race
+to claim bib 7; the test asserts one row survives and the other three were **refused**,
+counting a refusal only when the thread caught an `IntegrityError`. Under SQLite
+contention the loser does not always find out by hitting the constraint — it can be turned
+away by the lock first, which arrives as `OperationalError: database table is locked`. The
+`except IntegrityError` does not catch that, so the thread dies with an unhandled
+exception and is never counted. Captured failure:
 
-The failure reads `assert 1 == (4 - 1)` with two `OperationalError: database table is
-locked` tracebacks above it. It only appears when the preceding test in the class has
-left its eight threads' connections contending, which is why a clean full run is green
-and running the file on its own is not.
+```
+E    assert 2 == (4 - 1)
+E     +  where 2 = len([<Participant: A 1>, <Participant: A 0>])
+```
 
-The invariant the test exists for — **exactly one entry survives** — holds every time. It
-is the second assertion that is wrong: it assumes the constraint always decides who
-loses, when the lock can decide instead. Both outcomes mean the same thing to an
+The invariant the test exists for — **exactly one entry survives** — held on every run I
+saw. It is the second assertion that is wrong: it assumes the constraint always decides
+who loses, when the lock can decide instead. Both outcomes mean the same thing to an
 operator: that desk did not get bib 7.
 
-**Suggested fix:** catch `DatabaseError` (the parent of both `IntegrityError` and
-`OperationalError`) rather than `IntegrityError` alone, and say in the docstring that
-either is a legitimate way to lose the race.
+**Suggested fix:** catch `DatabaseError` (the parent of both) rather than `IntegrityError`
+alone, and say in the docstring that either is a legitimate way to lose the race.
 
-This matters more than its size. A test that fails two runs in three teaches everyone to
+**Not confirmed, for `test_a_live_read_does_not_block_behind_a_writer`:** I saw it fail
+once, in a clean full run, but did not capture its assertion and could not reproduce it in
+18 further attempts. Reading it, the likely mechanism is the same shape: it asserts all 20
+signals reach the table, when under lock contention `record_signal` may legitimately divert
+some to the recovery file instead — which is the documented promise ("a time is never
+lost", not "a time is always in the table"), and unlike its sibling test this one does not
+monkeypatch `UNRECORDED_LOG` to notice. **Worth confirming before fixing.**
+
+This matters more than its size. A test that fails one run in two teaches everyone to
 re-run the suite instead of reading it, and the next real failure gets the same shrug.
 
 ---

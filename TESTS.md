@@ -129,16 +129,24 @@ ones with no equivalent already in the suite.
 
 ---
 
-## 6. One test needs fixing, not keeping or dropping
+## 6. Three tests need fixing, not keeping or dropping
 
-`config/hostility_tests.py::TestTwoWritersAtOnce::test_two_writers_on_one_bib_leave_one_entry`
-is **flaky** — it passes alone, fails roughly two runs in three when its own file is run,
-and passed in the clean full run. It catches `IntegrityError` when SQLite can also refuse
-the losing writer with `OperationalError: database table is locked`.
+`config/hostility_tests.py::TestTwoWritersAtOnce` — the three threaded tests — are the only
+non-deterministic ones in the project, and a clean full suite run is green only about half
+the time. Two of the three have been seen failing; the failure moves between them.
 
-Full diagnosis and the two-line fix are in `OPEN-ITEMS.md` (N-4). It is worth doing before
-this branch goes anywhere: a test that fails two runs in three teaches people to re-run
-the suite rather than read it.
+The confirmed one catches `IntegrityError` where SQLite can also refuse the losing writer
+with `OperationalError: database table is locked`. Both mean "this desk did not get the
+bib", only one is counted.
+
+Full measurements, the captured failure, and the fix are in `OPEN-ITEMS.md` (N-4). Worth
+doing before this branch goes anywhere: a test that fails one run in two teaches people to
+re-run the suite rather than read it, and the next real failure gets the same shrug.
+
+Note that these tests are **worth keeping** — they are the only ones that exercise the
+app's actual threading model (`transaction=True`, so other threads can see the data), and
+writing them is what found a real gap in `record_signal`. The problem is their assertions,
+not their existence.
 
 ---
 
