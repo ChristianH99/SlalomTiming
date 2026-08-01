@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-31 19:46+0200\n"
+"POT-Creation-Date: 2026-08-01 21:49+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -151,29 +151,29 @@ msgstr "Manuell"
 msgid "Based on age"
 msgstr "Nach Alter"
 
-#: .\apps\competitions\forms.py:10
+#: .\apps\competitions\forms.py:12
 msgid "Select a type…"
 msgstr "Typ auswählen…"
 
-#: .\apps\competitions\forms.py:41 .\templates\timing\live.html:63
+#: .\apps\competitions\forms.py:45 .\templates\timing\live.html:64
 msgid "Pylon"
 msgstr "Pylone"
 
-#: .\apps\competitions\forms.py:42 .\apps\timing\autotiming.py:412
-#: .\templates\timing\live.html:64
+#: .\apps\competitions\forms.py:46 .\apps\timing\autotiming.py:412
+#: .\templates\timing\live.html:65
 msgid "Task"
 msgstr "Aufgabe"
 
-#: .\apps\competitions\forms.py:43 .\apps\timing\autotiming.py:413
-#: .\templates\timing\live.html:65
+#: .\apps\competitions\forms.py:47 .\apps\timing\autotiming.py:413
+#: .\templates\timing\live.html:66
 msgid "Stop line"
 msgstr "Stopplinie"
 
-#: .\apps\competitions\forms.py:44
+#: .\apps\competitions\forms.py:48
 msgid "Max per task"
 msgstr "Max. pro Aufgabe"
 
-#: .\apps\competitions\forms.py:64
+#: .\apps\competitions\forms.py:68
 msgid "Required when penalties are enabled."
 msgstr "Erforderlich, wenn Strafen aktiviert sind."
 
@@ -252,7 +252,7 @@ msgstr "Verein"
 msgid "Licence number"
 msgstr "Lizenznummer"
 
-#: .\apps\competitions\models.py:114 .\apps\participants\forms.py:161
+#: .\apps\competitions\models.py:114 .\apps\participants\forms.py:165
 #: .\apps\participants\models.py:70 .\apps\participants\views.py:120
 #: .\apps\results\models.py:15 .\apps\transfer\merge.py:45
 msgid "E-Mail"
@@ -316,7 +316,7 @@ msgstr ""
 #: .\apps\competitions\models.py:441 .\apps\results\pdf.py:287
 #: .\templates\participants\participant_form.html:37
 #: .\templates\participants\participant_list.html:41
-#: .\templates\results\_results_head.html:4 .\templates\timing\live.html:54
+#: .\templates\results\_results_head.html:4 .\templates\timing\live.html:55
 msgid "Class"
 msgstr "Klasse"
 
@@ -450,46 +450,46 @@ msgstr "Einstellungen für „%(name)s“ gespeichert."
 msgid "That type is still in use and can't be deleted."
 msgstr "Dieser Typ wird noch verwendet und kann nicht gelöscht werden."
 
-#: .\apps\participants\forms.py:115
+#: .\apps\participants\forms.py:116
 #, python-format
 msgid "“%(name)s” can’t be added more than once."
 msgstr "„%(name)s“ kann nicht mehr als einmal hinzugefügt werden."
 
-#: .\apps\participants\forms.py:118
+#: .\apps\participants\forms.py:119
 msgid "Only one class can be assigned to this participant."
 msgstr "Diesem Teilnehmer kann nur eine Klasse zugewiesen werden."
 
-#: .\apps\participants\forms.py:156 .\apps\participants\models.py:61
+#: .\apps\participants\forms.py:160 .\apps\participants\models.py:61
 #: .\apps\transfer\merge.py:38
 msgid "Co-driver first name"
 msgstr "Vorname Beifahrer"
 
-#: .\apps\participants\forms.py:157 .\apps\participants\models.py:63
+#: .\apps\participants\forms.py:161 .\apps\participants\models.py:63
 #: .\apps\transfer\merge.py:39
 msgid "Co-driver last name"
 msgstr "Nachname Beifahrer"
 
-#: .\apps\participants\forms.py:158 .\apps\participants\models.py:66
+#: .\apps\participants\forms.py:162 .\apps\participants\models.py:66
 #: .\apps\transfer\merge.py:41
 msgid "Street address"
 msgstr "Straße"
 
-#: .\apps\participants\forms.py:159 .\apps\transfer\merge.py:42
+#: .\apps\participants\forms.py:163 .\apps\transfer\merge.py:42
 msgid "ZIP code"
 msgstr "PLZ"
 
-#: .\apps\participants\forms.py:160 .\apps\participants\models.py:68
+#: .\apps\participants\forms.py:164 .\apps\participants\models.py:68
 #: .\apps\results\models.py:18 .\apps\transfer\merge.py:43
 msgid "City"
 msgstr "Ort"
 
-#: .\apps\participants\forms.py:167 .\apps\participants\forms.py:197
+#: .\apps\participants\forms.py:171 .\apps\participants\forms.py:201
 #: .\apps\transfer\csvimport.py:126
 #: .\templates\participants\participant_list.html:92
 msgid "Bib number"
 msgstr "Startnummer"
 
-#: .\apps\participants\forms.py:168
+#: .\apps\participants\forms.py:172
 msgid ""
 "Optional — assigns this participant a bib for the current competition right "
 "away."
@@ -497,23 +497,23 @@ msgstr ""
 "Optional — weist diesem Teilnehmer sofort eine Startnummer für den aktuellen "
 "Wettbewerb zu."
 
-#: .\apps\participants\forms.py:183
+#: .\apps\participants\forms.py:187
 msgid "No competition is currently selected, so a bib can't be assigned yet."
 msgstr ""
 "Derzeit ist kein Wettbewerb ausgewählt, daher kann noch keine Startnummer "
 "zugewiesen werden."
 
-#: .\apps\participants\forms.py:192 .\apps\participants\forms.py:233
+#: .\apps\participants\forms.py:196 .\apps\participants\forms.py:237
 msgid "This bib number is already taken in the current competition."
 msgstr "Diese Startnummer ist im aktuellen Wettbewerb bereits vergeben."
 
-#: .\apps\participants\forms.py:207
+#: .\apps\participants\forms.py:211
 msgid "No competition is currently selected, so a bib can't be assigned."
 msgstr ""
 "Derzeit ist kein Wettbewerb ausgewählt, daher kann keine Startnummer "
 "zugewiesen werden."
 
-#: .\apps\participants\forms.py:218
+#: .\apps\participants\forms.py:222
 msgid ""
 "This participant's type doesn't match the current competition, so a bib "
 "can't be assigned."
@@ -707,7 +707,7 @@ msgstr "Platz"
 
 #: .\apps\results\pdf.py:285 .\templates\participants\participant_form.html:18
 #: .\templates\participants\participant_list.html:38
-#: .\templates\results\_results_head.html:3 .\templates\timing\live.html:47
+#: .\templates\results\_results_head.html:3 .\templates\timing\live.html:48
 msgid "Bib"
 msgstr "Startnr."
 
@@ -801,7 +801,7 @@ msgstr "Bester Lauf"
 msgid "Difference"
 msgstr "Differenz"
 
-#: .\apps\results\views.py:79 .\templates\timing\live.html:68
+#: .\apps\results\views.py:79 .\templates\timing\live.html:69
 msgid "Total"
 msgstr "Gesamt"
 
@@ -895,12 +895,12 @@ msgid "TCP port of the Tag Heuer CP540."
 msgstr "TCP-Port des Tag Heuer CP540."
 
 #: .\apps\timing\models.py:87 .\apps\timing\models.py:282
-#: .\templates\timing\_ignored.html:21 .\templates\timing\live.html:44
+#: .\templates\timing\_ignored.html:21 .\templates\timing\live.html:45
 msgid "Start"
 msgstr "Start"
 
 #: .\apps\timing\models.py:88 .\apps\timing\models.py:283
-#: .\templates\timing\_ignored.html:25 .\templates\timing\live.html:45
+#: .\templates\timing\_ignored.html:25 .\templates\timing\live.html:46
 msgid "Finish"
 msgstr "Ziel"
 
@@ -1244,11 +1244,11 @@ msgstr "Import abgebrochen – es wurde nichts geändert."
 msgid "The upload has expired. Please choose the file again."
 msgstr "Der Upload ist abgelaufen. Bitte wähle die Datei erneut aus."
 
-#: .\config\settings.py:495
+#: .\config\settings.py:518
 msgid "German"
 msgstr "Deutsch"
 
-#: .\config\settings.py:496
+#: .\config\settings.py:519
 msgid "English"
 msgstr "Englisch"
 
@@ -1439,7 +1439,7 @@ msgid "leave blank to keep"
 msgstr "leer lassen zum Beibehalten"
 
 #: .\templates\accounts\user_access.html:113
-#: .\templates\competitions\competition_classes.html:75
+#: .\templates\competitions\competition_classes.html:74
 #: .\templates\competitions\competition_general.html:34
 #: .\templates\competitions\competition_penalties.html:69
 #: .\templates\competitions\competition_runorder.html:75
@@ -1548,7 +1548,7 @@ msgstr "Strafen"
 
 #: .\templates\base.html:57 .\templates\timing\live.html:3
 #: .\templates\timing\live.html:4 .\templates\timing\live.html:12
-#: .\templates\timing\live.html:30
+#: .\templates\timing\live.html:31
 msgid "Manual timing"
 msgstr "Manuelle Zeitmessung"
 
@@ -1602,7 +1602,7 @@ msgstr "auswählen"
 
 #: .\templates\base.html:169 .\templates\base.html:181
 #: .\templates\competitions\competition_add.html:52
-#: .\templates\competitions\competition_classes.html:85
+#: .\templates\competitions\competition_classes.html:84
 #: .\templates\competitions\competition_confirm_delete.html:55
 #: .\templates\competitions\competition_confirm_switch.html:33
 #: .\templates\competitions\competition_general.html:55
@@ -1637,39 +1637,39 @@ msgstr "Änderungen speichern"
 msgid "Discard"
 msgstr "Verwerfen"
 
-#: .\templates\competitions\_class_tile.html:17
+#: .\templates\competitions\_class_tile.html:27
 msgid "Running"
 msgstr "Läuft"
 
-#: .\templates\competitions\_class_tile.html:23
+#: .\templates\competitions\_class_tile.html:33
 msgid "Practice runs"
 msgstr "Trainingsläufe"
 
-#: .\templates\competitions\_class_tile.html:24
+#: .\templates\competitions\_class_tile.html:34
 msgid "Counted runs"
 msgstr "Wertungsläufe"
 
-#: .\templates\competitions\_class_tile.html:25
+#: .\templates\competitions\_class_tile.html:35
 msgid "Scoring"
 msgstr "Wertung"
 
-#: .\templates\competitions\_class_tile.html:29
+#: .\templates\competitions\_class_tile.html:39
 msgid "Age from"
 msgstr "Alter von"
 
-#: .\templates\competitions\_class_tile.html:30
+#: .\templates\competitions\_class_tile.html:40
 msgid "Age to"
 msgstr "Alter bis"
 
-#: .\templates\competitions\_class_tile.html:31
+#: .\templates\competitions\_class_tile.html:41
 msgid "Birth years"
 msgstr "Geburtsjahre"
 
-#: .\templates\competitions\_class_tile.html:61
+#: .\templates\competitions\_class_tile.html:71
 msgid "Allow multiple entries per participant"
 msgstr "Mehrfachnennungen pro Teilnehmer erlauben"
 
-#: .\templates\competitions\_class_tile.html:67
+#: .\templates\competitions\_class_tile.html:85
 msgid "Remove class"
 msgstr "Klasse entfernen"
 
@@ -1770,15 +1770,15 @@ msgstr "Zuordnungsmethode"
 msgid "Allow participation in multiple classes"
 msgstr "Teilnahme in mehreren Klassen erlauben"
 
-#: .\templates\competitions\competition_classes.html:67
+#: .\templates\competitions\competition_classes.html:66
 msgid "+ Add class"
 msgstr "+ Klasse hinzufügen"
 
-#: .\templates\competitions\competition_classes.html:81
+#: .\templates\competitions\competition_classes.html:80
 msgid "Delete class?"
 msgstr "Klasse löschen?"
 
-#: .\templates\competitions\competition_classes.html:84
+#: .\templates\competitions\competition_classes.html:83
 msgid "Delete class"
 msgstr "Klasse löschen"
 
@@ -1866,9 +1866,9 @@ msgid ""
 "every open screen with no event to show — including anyone in the middle of "
 "timing a run. There will be no current event until somebody picks one."
 msgstr ""
-"Zeitmessung, Ergebnisse und die Streckenposten folgen ihr alle — beim Löschen "
-"bleibt also jeder offene Bildschirm ohne Veranstaltung zurück, auch bei "
-"jemandem, der gerade einen Lauf misst. Es gibt dann keine aktuelle "
+"Zeitmessung, Ergebnisse und die Streckenposten folgen ihr alle — beim "
+"Löschen bleibt also jeder offene Bildschirm ohne Veranstaltung zurück, auch "
+"bei jemandem, der gerade einen Lauf misst. Es gibt dann keine aktuelle "
 "Veranstaltung mehr, bis jemand eine auswählt."
 
 #: .\templates\competitions\competition_confirm_delete.html:41
@@ -2969,7 +2969,7 @@ msgstr ""
 "Disqualifikation von der gesamten Veranstaltung erfolgt auf der Seite "
 "Teilnehmer."
 
-#: .\templates\timing\auto.html:17 .\templates\timing\live.html:17
+#: .\templates\timing\auto.html:17 .\templates\timing\live.html:18
 msgid ""
 "The red <strong>Lock</strong> switch sends every incoming time straight to "
 "the Ignored list — a way to pause capture without disconnecting the device."
@@ -3082,18 +3082,31 @@ msgstr "So funktioniert die manuelle Zeitmessung"
 
 #: .\templates\timing\live.html:14
 msgid ""
-"Hover between the header and the top row for a <strong>+</strong> to pre-"
-"enter an upcoming starter. <strong>Double-click</strong> a Start, Finish or "
-"Run time (or an empty slot) to type it in by hand when the device didn't "
-"fire — keyed-in times are highlighted."
+"The <strong>top line is always empty</strong> — it is where whatever you "
+"record next goes. Type a bib, pick a status or key a time into it and the "
+"run is made below it, with a fresh empty line above. An incoming start "
+"signal lands in the same place."
 msgstr ""
-"Fahren Sie mit der Maus zwischen die Kopfzeile und die oberste Zeile, um "
-"über ein <strong>+</strong> einen kommenden Starter vorab einzugeben. "
-"<strong>Doppelklicken</strong> Sie eine Start-, Ziel- oder Laufzeit (oder "
-"einen leeren Platz), um sie von Hand einzugeben, wenn das Gerät nicht "
-"ausgelöst hat — von Hand eingegebene Zeiten sind hervorgehoben."
+"Die <strong>oberste Zeile ist immer leer</strong> — dort landet, was Sie als "
+"Nächstes erfassen. Geben Sie eine Startnummer ein, wählen Sie einen Status "
+"oder tippen Sie eine Zeit hinein: Der Lauf entsteht darunter, und darüber "
+"steht wieder eine leere Zeile. Ein eingehendes Startsignal landet an "
+"derselben Stelle."
 
 #: .\templates\timing\live.html:15
+msgid ""
+"The <strong>+</strong> above it pre-enters an upcoming starter, as many rows "
+"as you want. <strong>Double-click</strong> a Start, Finish or Run time (or "
+"an empty slot) to type it in by hand when the device didn't fire — keyed-in "
+"times are highlighted."
+msgstr ""
+"Mit dem <strong>+</strong> darüber geben Sie kommende Starter vorab ein, so "
+"viele Zeilen Sie möchten. <strong>Doppelklicken</strong> Sie eine Start-, "
+"Ziel- oder Laufzeit (oder einen leeren Platz), um sie von Hand einzugeben, "
+"wenn das Gerät nicht ausgelöst hat — von Hand eingegebene Zeiten sind "
+"hervorgehoben."
+
+#: .\templates\timing\live.html:16
 msgid ""
 "<strong>Drag</strong> a wrong time to the Ignored list on the right to "
 "ignore it; drag it back onto a slot (or double-click the chip) to use it "
@@ -3103,7 +3116,7 @@ msgstr ""
 "um sie zu ignorieren; ziehen Sie sie zurück auf einen Platz (oder "
 "doppelklicken Sie den Chip), um sie erneut zu verwenden."
 
-#: .\templates\timing\live.html:16
+#: .\templates\timing\live.html:17
 msgid ""
 "The <strong>Status</strong> column closes a run without a time: <strong>DNF</"
 "strong> did not finish, <strong>DNC</strong> did not classify, <strong>DNS</"
@@ -3118,7 +3131,7 @@ msgstr ""
 "gewertet. Eine Disqualifikation von der gesamten Veranstaltung erfolgt auf "
 "der Seite Teilnehmer."
 
-#: .\templates\timing\live.html:32
+#: .\templates\timing\live.html:33
 #, python-format
 msgid ""
 "No competition is selected. Timing runs against the active competition, so "
@@ -3128,27 +3141,27 @@ msgstr ""
 "Wettbewerb — <a href=\"%(list_url)s\">wählen Sie einen Wettbewerb</a>, um "
 "mit der Messung zu beginnen."
 
-#: .\templates\timing\live.html:46
+#: .\templates\timing\live.html:47
 msgid "Run time"
 msgstr "Laufzeit"
 
-#: .\templates\timing\live.html:53
+#: .\templates\timing\live.html:54
 msgid "Competitor"
 msgstr "Starter"
 
-#: .\templates\timing\live.html:55
+#: .\templates\timing\live.html:56
 msgid "Run"
 msgstr "Lauf"
 
-#: .\templates\timing\live.html:61
+#: .\templates\timing\live.html:62
 msgid "Status"
 msgstr "Status"
 
-#: .\templates\timing\live.html:66
+#: .\templates\timing\live.html:67
 msgid "Penalty"
 msgstr "Strafe"
 
-#: .\templates\timing\live.html:79
+#: .\templates\timing\live.html:80
 msgid "Waiting for the first start signal…"
 msgstr "Warten auf das erste Startsignal…"
 

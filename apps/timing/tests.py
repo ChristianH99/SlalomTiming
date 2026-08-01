@@ -737,6 +737,18 @@ def test_a_settled_run_does_not_invert_the_single_barrier_phase(client):
     assert TimedRun.objects.count() == 2
 
 
+def test_adding_a_row_names_it(client):
+    """The Manual view keeps a blank line at the top of the table that is *not* a
+    stored row — it is where whatever is recorded next goes. The moment anything
+    is typed into it, it asks for a row and then puts the edit on that row, so
+    this reply has to name it. Nothing else about the endpoint changes: the "+"
+    strip still calls it and still ignores the id."""
+    make_active_competition()
+    reply = post_json(client, "timing:run-add").json()
+    assert reply["ok"] is True
+    assert reply["run_id"] == TimedRun.objects.get().id
+
+
 def test_a_row_settled_by_hand_stops_floating_above_the_times(client):
     """A pre-entered row rides on top *while it waits for a starter*. Once the
     operator has typed its run time it is a recorded outcome, not a placeholder,
