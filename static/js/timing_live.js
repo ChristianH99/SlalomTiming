@@ -163,9 +163,10 @@
     chip.dataset.role = role;
     chip.dataset.time = sig.time;
     const kind = sig.entered ? gettext("Typed in by hand") : sig.manual ? gettext("Manual") : gettext("Light barrier");
-    chip.title = interpolate(gettext("%(kind)s · drag to pair or to the Ignored panel · double-click to edit"), { kind: kind }, true);
+    chip.title = interpolate(gettext("%(kind)s · right-click to ignore · drag to pair · double-click to edit"), { kind: kind }, true);
     chip.addEventListener("dragstart", (e) => onDragStart(e, sig.id, role, sig.time));
     chip.addEventListener("dragend", clearDrag);
+    chip.addEventListener("contextmenu", (e) => ignoreOnRightClick(e, sig.id));
     wrap.append(chip);
     return wrap;
   }
@@ -378,6 +379,17 @@
   }
 
   // ---- ignored times ------------------------------------------------------
+  // Right-click a time to ignore it. Discarding a wrong measurement is the one
+  // thing an operator does in a hurry and mid-run, and the drag to the rail
+  // crosses the whole table to get there. It is deliberately **one way**: a chip
+  // comes back off the rail only by a drag or a double-click, so a right-click
+  // that lands on the wrong chip can't re-pair a time onto a run — the far more
+  // expensive mistake, and the one nobody would notice.
+  function ignoreOnRightClick(event, signalId) {
+    event.preventDefault();
+    setIgnored(signalId, true).then(refresh);
+  }
+
   // The rail itself is shared with Auto timing (static/js/ignored_panel.js); this
   // view only supplies the drag/restore behaviour that differs between them.
   const ignoredPanel = IgnoredPanel.create({
