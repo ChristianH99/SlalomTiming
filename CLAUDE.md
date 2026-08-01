@@ -446,6 +446,25 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          a code takes the run over (`manual_entry`), so the positional binding
                          can't hand it to the next starter. What a code means for a *result* is
                          apps/results/resultscalc.py's business, not this module's.
+  unassigned.py          A run recorded against a bib **nobody is registered under**. Somebody
+                         turns up wearing 47 and the paperwork hasn't caught up; the bib was
+                         always kept (TimedRun.bib_number is a loose integer), but the Run
+                         dropdown is built from the class and there is no class, so the time went
+                         down as "bib 47, no idea which run" — unscoreable and unmatchable.
+                         run_choices() offers the **union** over the running classes instead (one
+                         practice option per practice run *any* class grants, likewise counted):
+                         which class the bib is in is exactly what isn't known, and an option too
+                         many is a choice while an option too few is a time that can't be
+                         recorded. recorded_for_bib() is "already done?" asked of the *bib*, since
+                         there is no class to ask it of. apply() is the other half — once an entry
+                         carries the bib, the run takes that competitor's class (their first slot
+                         this run isn't already in) and joins their result. It is folded on in
+                         memory and written by autotiming.sync_bindings, same split and same
+                         reason as apply_bindings/sync_bindings: a reader binds, a writer
+                         persists. unregistered() is the ones still waiting for a name, which the
+                         Results landing page lists with a highlighted name box — a class table
+                         can't show them (no competitor, no class) and the results are where
+                         somebody asks whether the event is complete.
   calc.py                Run time (integer-microsecond truncation to the type's precision, never
                          rounded); resolved_run_time() prefers a run's manual_run_time override;
                          total penalty; fixed-decimal formatting (format_precision) plus
@@ -719,9 +738,16 @@ apps/results/           A "Results" landing page (index) listing every running c
                          DNS button posts. The tally below the table names the outcomes
                          (Starters / DNS / DNC / DSQ): "classified / not classified" never said
                          which one was being looked at. ResultsIndexView (the
-                         landing list), ResultsClassView (one class), ResultsOverallView
+                         landing list — plus unregistered_bibs(), the times recorded against a bib
+                         no participant is registered under: a class table can't show them, since
+                         without a competitor there is no class, and this is the page somebody
+                         opens to ask whether the event is complete. See
+                         apps/timing/unassigned.py), ResultsClassView (one class), ResultsOverallView
                          (a scoring-method × counted-run group, with an extra Class column and the
-                         General columns) all sync identities then compute. ResultsSettingsView: the
+                         General columns) — all of them pure reads: the identity a run picks up
+                         (its bound slot, or the class of a now-registered bib) is folded on in
+                         memory by RunIndex and written by the next thing that writes.
+                         ResultsSettingsView: the
                          show_overall toggle, General columns, and per-class additions.
                          ResultsTieResolveView (JSON endpoint results:tie-resolve): recomputes the
                          table, validates a posted manual ordering, saves the ManualTieResolution
@@ -1047,7 +1073,10 @@ during the outage is otherwise invisible until the next one happens to arrive. A
   times (shown at the type's precision, truncated) paired into runs (newest first), with bib, class,
   run, and penalty entry (−/+ steppers, out of the tab order), live over a WebSocket. Entering a bib
   looks up the name, sets the class (updating it if the bib changes, clearing it if the bib is cleared),
-  and auto-selects the next not-yet-done run (P then C); an unknown bib is flagged but kept. Tab out of
+  and auto-selects the next not-yet-done run (P then C); an unknown bib is flagged but kept — and is
+  still offered its runs, from the union over the running classes, so a time on a bib nobody has
+  registered yet is recorded as a *run* rather than as a loose number (apps/timing/unassigned.py).
+  Tab out of
   the bib field lands on the Class dropdown for a multi-class participant. The dropdown has one slot per
   class the participant is entered into — a class entered more than once shows as "Klasse 2 (1)/(2)"
   (TimedRun.class_occurrence tracks which), each with its own runs; a run already recorded, or a class

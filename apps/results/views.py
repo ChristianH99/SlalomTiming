@@ -12,7 +12,8 @@ from django.views import View
 from apps.common import safe_next
 from apps.competitions.models import CompetitionClass
 from apps.competitions.views import ActiveCompetitionMixin
-from apps.timing import calc
+from apps.competitions import startpattern
+from apps.timing import autotiming, calc, unassigned
 from apps.timing.models import TimedRun
 
 from . import logos, pdf, pdfmarkup, resultscalc
@@ -535,9 +536,40 @@ class ResultsPdfLogoRemoveView(ActiveCompetitionMixin, View):
         return JsonResponse({"ok": True})
 
 
+def unregistered_bibs(competition):
+    """Times recorded against a bib no competitor is registered under, ready to
+    render: one entry per bib, with each run's label and time.
+
+    They are in the results because the results are where somebody asks "is the
+    event complete?", and these are precisely the times that are not in it — a
+    class table cannot show them, since without a competitor there is no class to
+    show them under. See apps/timing/unassigned.py."""
+    precision = competition.competition_type.timing_precision
+    rows = []
+    for group in unassigned.unregistered(competition):
+        runs = []
+        for run in group["runs"]:
+            run_time = calc.resolved_run_time(run, precision)
+            total = (
+                run_time + autotiming.penalty_seconds(run, competition)
+                if run_time is not None else None
+            )
+            runs.append({
+                "label": (
+                    startpattern.RUN_TYPE_SHORT[run.run_type] + str(run.run_number)
+                    if run.run_type and run.run_number else "—"
+                ),
+                "time": calc.format_clock(total, precision),
+                "status": run.status.upper() if run.status else "",
+            })
+        rows.append({"bib": group["bib"], "runs": runs})
+    return rows
+
+
 class ResultsIndexView(ActiveCompetitionMixin, View):
     """Results landing page: the Overall pages (when enabled) and every running
-    class, each linking to its own results table."""
+    class, each linking to its own results table — plus any times recorded
+    against a bib that still has no competitor."""
 
     template_name = "results/index.html"
 
@@ -553,6 +585,7 @@ class ResultsIndexView(ActiveCompetitionMixin, View):
             "object": competition,
             "overall_groups": overall,
             "classes": competition._running_classes_ordered(),
+            "unregistered_bibs": unregistered_bibs(competition),
         })
 
 
