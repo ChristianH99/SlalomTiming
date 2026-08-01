@@ -900,15 +900,20 @@ def timing_pair(request):
 @require_POST
 def timing_add_run(request):
     """Add an empty run row so the operator can enter a bib/run for an upcoming
-    starter. Incoming start times fill these placeholders oldest-first."""
+    starter. Incoming start times fill these placeholders oldest-first.
+
+    Called from the "+" strip, and by the blank line the Manual view always keeps
+    at the top of the table the moment anything is typed into it — which is why
+    the reply names the row: the caller's next request is the edit that goes on
+    it (see static/js/timing_live.js, blankLineRun)."""
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
     # An operator-created row: owned from the start so the Auto view treats it as
     # a pre-entry rather than an auto-bound slot.
-    TimedRun.objects.create(competition=competition, manual_entry=True)
+    run = TimedRun.objects.create(competition=competition, manual_entry=True)
     _rebind_and_broadcast(competition)
-    return JsonResponse({"ok": True})
+    return JsonResponse({"ok": True, "run_id": run.id})
 
 
 @require_POST

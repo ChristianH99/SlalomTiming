@@ -2498,6 +2498,17 @@ textarea:focus-visible,
 
 /* Pre-entered (placeholder) rows and the hover strip that adds them. */
 .timing-row--placeholder { background: rgba(62,142,222,0.05); }
+/* The blank line the table always keeps at the top: where whatever is recorded
+   next goes. It is not a row in the database and must not read as one, so it is
+   marked rather than filled — a dashed leading edge, the same vocabulary the "+"
+   strip above it uses — and its dashes are quietened so a table of real times
+   isn't led by a line of them. */
+.timing-row--new > td:first-child { box-shadow: inset 2px 0 0 var(--border); }
+.timing-row--new .time-empty,
+.timing-row--new .run-time,
+.timing-row--new .class-static,
+.timing-row--new .pen-total,
+.timing-row--new .run-total { color: var(--text-light); }
 .bib-input--unknown { border-color: var(--flame); background: var(--flame-bg); }
 /* Pre-enter an upcoming starter. It used to be `color: transparent` until the
    row was hovered — so it was undiscoverable, unreachable on a touch screen (a

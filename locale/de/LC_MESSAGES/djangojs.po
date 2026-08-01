@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-01 23:09+0200\n"
+"POT-Creation-Date: 2026-08-01 23:12+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -23,21 +23,21 @@ msgstr "▲ Aktuell"
 msgid "▼ current"
 msgstr "▼ Aktuell"
 
-#: .\static\js\auto_timing.js:170 .\static\js\timing_live.js:74
+#: .\static\js\auto_timing.js:170 .\static\js\timing_live.js:77
 msgid "Locked"
 msgstr "Gesperrt"
 
 #: .\static\js\auto_timing.js:170 .\static\js\auto_timing.js:641
-#: .\static\js\timing_live.js:74
+#: .\static\js\timing_live.js:77
 msgid "Lock"
 msgstr "Sperren"
 
-#: .\static\js\auto_timing.js:175 .\static\js\timing_live.js:79
+#: .\static\js\auto_timing.js:175 .\static\js\timing_live.js:82
 msgid "Incoming times go straight to Ignored — nothing is being recorded."
 msgstr ""
 "Eingehende Zeiten gehen direkt in „Ignoriert“ — es wird nichts aufgezeichnet."
 
-#: .\static\js\auto_timing.js:176 .\static\js\timing_live.js:80
+#: .\static\js\auto_timing.js:176 .\static\js\timing_live.js:83
 msgid "Times are being recorded."
 msgstr "Zeiten werden aufgezeichnet."
 
@@ -107,7 +107,8 @@ msgstr "Nach „Ignoriert“ verschieben"
 msgid "Run time"
 msgstr "Laufzeit"
 
-#: .\static\js\auto_timing.js:409 .\static\js\timing_live.js:180
+#: .\static\js\auto_timing.js:409 .\static\js\timing_live.js:193
+#: .\static\js\timing_live.js:365
 msgid "Double-click to type a run time"
 msgstr "Doppelklicken, um eine Laufzeit einzugeben"
 
@@ -115,7 +116,7 @@ msgstr "Doppelklicken, um eine Laufzeit einzugeben"
 msgid "%(kind)s · right-click to ignore · double-click to edit"
 msgstr "%(kind)s · Rechtsklick zum Ignorieren · zum Bearbeiten doppelklicken"
 
-#: .\static\js\auto_timing.js:441 .\static\js\timing_live.js:165
+#: .\static\js\auto_timing.js:441 .\static\js\timing_live.js:350
 msgid "Typed in by hand"
 msgstr "Von Hand eingegeben"
 
@@ -664,50 +665,54 @@ msgstr "Signal abgelehnt."
 msgid "#{n} · {label} · {time} — failed: {err}"
 msgstr "#{n} · {label} · {time} — fehlgeschlagen: {err}"
 
-#: .\static\js\timing_live.js:92
+#: .\static\js\timing_live.js:95
 msgid "Add a row for an upcoming starter"
 msgstr "Eine Zeile für einen kommenden Starter hinzufügen"
 
-#: .\static\js\timing_live.js:133
-msgid "Remove this row"
-msgstr "Diese Zeile entfernen"
-
-#: .\static\js\timing_live.js:153
+#: .\static\js\timing_live.js:182 .\static\js\timing_live.js:338
 msgid "Double-click to type a time"
 msgstr "Doppelklicken, um eine Zeit einzugeben"
 
-#: .\static\js\timing_live.js:165
+#: .\static\js\timing_live.js:257 .\static\js\timing_live.js:523
+msgid "Close this run with a state code instead of a time"
+msgstr "Diesen Lauf mit einem Statuscode statt einer Zeit abschließen"
+
+#: .\static\js\timing_live.js:272
+msgid "Penalties belong to a recorded run."
+msgstr "Strafen gehören zu einem erfassten Lauf."
+
+#: .\static\js\timing_live.js:318
+msgid "Remove this row"
+msgstr "Diese Zeile entfernen"
+
+#: .\static\js\timing_live.js:350
 msgid "Manual"
 msgstr "Manuell"
 
-#: .\static\js\timing_live.js:165
+#: .\static\js\timing_live.js:350
 msgid "Light barrier"
 msgstr "Lichtschranke"
 
-#: .\static\js\timing_live.js:166
+#: .\static\js\timing_live.js:351
 msgid "%(kind)s · right-click to ignore · drag to pair · double-click to edit"
 msgstr ""
 "%(kind)s · Rechtsklick zum Ignorieren · ziehen zum Zuordnen · zum Bearbeiten "
 "doppelklicken"
 
-#: .\static\js\timing_live.js:234 .\static\js\timing_live.js:266
+#: .\static\js\timing_live.js:419 .\static\js\timing_live.js:451
 msgid "No starter with this bib is registered (kept anyway)."
 msgstr "Kein Starter mit dieser Startnummer registriert (trotzdem behalten)."
 
-#: .\static\js\timing_live.js:265
+#: .\static\js\timing_live.js:450
 msgid "Not registered"
 msgstr "Nicht gemeldet"
 
-#: .\static\js\timing_live.js:337
+#: .\static\js\timing_live.js:522
 msgid "This run is closed with a state code — it is not scored."
 msgstr ""
 "Dieser Lauf ist mit einem Statuscode abgeschlossen — er wird nicht gewertet."
 
-#: .\static\js\timing_live.js:338
-msgid "Close this run with a state code instead of a time"
-msgstr "Diesen Lauf mit einem Statuscode statt einer Zeit abschließen"
-
-#: .\static\js\timing_live.js:359
+#: .\static\js\timing_live.js:544
 msgid "The marshal posts enter this run's penalties."
 msgstr "Die Strafen dieses Laufs erfassen die Streckenposten."
 

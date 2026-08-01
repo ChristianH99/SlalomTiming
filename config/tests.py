@@ -943,6 +943,39 @@ class TestFlameOnlyEverMeansPenalty:
         assert '"penalty"' in source, 'the penalty figure is not toned as one'
 
 
+class TestTheManualTimingBlankLine:
+    """The Manual timing table always leads with an empty line — where whatever
+    the operator records next goes. It is a rendered line, not a stored row, and
+    the two things that would make it a liability are pinned here:
+
+    * it must not create a row on a *render*. This table is re-rendered by every
+      open browser on every incoming time, so a row per render is a row per
+      screen per competitor.
+    * a burst of edits (a bib, then a status a moment later) must land on **one**
+      row, so the line only lets go of the row it made once that row has come
+      back from the server and the line on screen is genuinely a new one."""
+
+    @staticmethod
+    def _source():
+        return (JS_DIR / 'timing_live.js').read_text(encoding='utf-8')
+
+    def test_the_table_leads_with_it(self):
+        assert re.search(r'replaceChildren\(\s*addStrip\(\),\s*blankLineRow\(\)',
+                         self._source())
+
+    def test_a_render_never_creates_its_row(self):
+        render = re.search(r'\n  function render\(\) \{.*?\n  \}', self._source(), re.S)
+        assert render, 'render() is gone'
+        assert 'addRun' not in render.group(0), render.group(0)
+        assert 'blankLineRun' not in render.group(0), render.group(0)
+
+    def test_it_holds_its_row_until_the_server_has_it(self):
+        release = re.search(r'function releaseBlankLine\(\) \{.*?\n  \}',
+                            self._source(), re.S)
+        assert release, 'nothing releases the blank line'
+        assert 'state.rows.some' in release.group(0), release.group(0)
+
+
 class TestRightClickOnlyEverIgnoresATime:
     """Throwing a wrong measurement away is the one thing an operator does in a
     hurry and mid-run, so both timing views take a right-click for it. Putting a

@@ -57,7 +57,10 @@
 
   // ---- rendering ----------------------------------------------------------
   function render() {
-    rowsEl.replaceChildren(addStrip(), ...state.rows.map(renderRow));
+    // The blank line is always the first row. Anything the operator records next
+    // goes into it — see blankLineRow below.
+    releaseBlankLine();
+    rowsEl.replaceChildren(addStrip(), blankLineRow(), ...state.rows.map(renderRow));
     emptyEl.hidden = state.rows.length > 0;
     renderIgnored();
     renderLock();
@@ -94,6 +97,188 @@
     td.append(btn);
     tr.append(td);
     return tr;
+  }
+
+  // ---- the blank line at the top ------------------------------------------
+  // The table's first row is always empty, and is not a row in the database: it
+  // is simply where whatever the operator records next goes. Type a bib, pick a
+  // status, or key a time into it and the run is created underneath, with a fresh
+  // blank line taking its place above. An incoming start signal arrives at the
+  // same place from the other end — it opens its own run, which sorts directly
+  // below this line — so the effect the operator sees is one rule: the top line
+  // is free, and everything recorded pushes it up.
+  //
+  // Deliberately *not* a persisted empty row. A stored placeholder is a
+  // pre-entry the operator owns (`manual_entry`): it claims a slot in the Auto
+  // timing order and an incoming time that lands in it is never bound
+  // positionally. One kept permanently at the top of this table would quietly
+  // break the Auto view for every event that never opens this page. The "+"
+  // strip still makes those, because pre-entering an upcoming starter is exactly
+  // what it is for — and it still stacks as many as the operator wants.
+  let blankRunId = null;      // the run this blank line has just become
+  let blankRunPromise = null; // its in-flight creation
+
+  /* The run for the blank line, made on first use. Held across edits — a bib and
+   * a status a moment apart both belong to the same new row, not to one each —
+   * and only let go once that row has come back in a refresh, which is when the
+   * blank line on screen is genuinely a new one. */
+  function blankLineRun() {
+    if (!blankRunPromise) {
+      blankRunPromise = addRun().then((resp) => {
+        blankRunId = (resp && resp.run_id) || null;
+        // The add failed — drop the promise so the next edit tries again rather
+        // than resolving null for the rest of the session.
+        if (blankRunId === null) blankRunPromise = null;
+        return blankRunId;
+      });
+    }
+    return blankRunPromise;
+  }
+
+  function releaseBlankLine() {
+    if (blankRunId !== null && state.rows.some((row) => row.id === blankRunId)) {
+      blankRunId = null;
+      blankRunPromise = null;
+    }
+  }
+
+  // Run an edit against the blank line's run, making it first. A blank commit
+  // makes nothing — leaving an empty field must not litter the table with rows.
+  function onBlankLine(edit) {
+    return blankLineRun().then((runId) => (runId ? edit(runId) : refresh()));
+  }
+
+  function blankLineRow() {
+    const tr = el("tr", "timing-row timing-row--new");
+    tr.dataset.newRow = "1";
+    tr.append(cell("tt-time", blankTimeSlot("start")));
+    tr.append(cell("tt-time", blankTimeSlot("finish")));
+    tr.append(blankRunTimeCell());
+    tr.append(cell("tt-bib", blankBibField()));
+    tr.append(cell("tt-name"));
+    tr.append(cell("tt-class", el("span", "class-static", "–")));
+    // No bib yet, so there is nothing to choose from — the same empty dropdown a
+    // pre-entered row shows before its bib resolves, kept so the columns line up.
+    const runSelect = el("select", "run-select");
+    runSelect.append(el("option", null, "–"));
+    runSelect.disabled = true;
+    tr.append(cell("tt-run-sel", runSelect));
+    tr.append(cell("tt-status", blankStatusField()));
+    if (state.penalties_enabled) {
+      // A penalty belongs to a recorded run. Shown, so the row is the same shape
+      // as every other, and disabled, so it can't take a number with nothing to
+      // put it on.
+      for (let i = 0; i < 3; i += 1) tr.append(cell("tt-pen", blankPenaltyBox()));
+      tr.append(cell("tt-pen-total", el("span", "pen-total", "–")));
+    }
+    tr.append(cell("tt-total", el("span", "run-total", "–")));
+    return tr;
+  }
+
+  function blankTimeSlot(role) {
+    const wrap = el("div", "time-slot time-slot--empty");
+    wrap.dataset.role = role;
+    wrap.append(el("span", "time-empty", "–"));
+    wrap.title = gettext("Double-click to type a time");
+    wrap.addEventListener("dblclick", () =>
+      inlineEdit(wrap, "", "hh:mm:ss.xx", (value) => {
+        if (!value) { refresh(); return; }
+        onBlankLine((runId) => setTime(runId, role, value).then(() => refresh()));
+      }));
+    return wrap;
+  }
+
+  function blankRunTimeCell() {
+    const td = cell("tt-run", el("span", "run-time", "–"));
+    td.title = gettext("Double-click to type a run time");
+    td.addEventListener("dblclick", () =>
+      inlineEdit(td, "", "s.xx", (value) => {
+        if (!value) { refresh(); return; }
+        onBlankLine((runId) => setRuntime(runId, value).then(() => refresh()));
+      }));
+    return td;
+  }
+
+  function blankBibField() {
+    const wrap = el("div", "bib-field");
+    const input = el("input", "bib-input");
+    input.type = "number";
+    input.min = "1";
+    // Keyed like a real row's field, so a WebSocket nudge landing mid-type puts
+    // the caret back where it was instead of emptying the box (see refresh).
+    input.dataset.rowKey = "new";
+    input.dataset.field = "bib";
+    let sent = false;
+    const submit = () => {
+      if (sent || !input.value.trim()) return null;
+      sent = true;
+      return onBlankLine((runId) =>
+        updateRun({ run_id: runId, bib_number: input.value }).then(() => runId));
+    };
+    input.addEventListener("change", () => {
+      const pending = submit();
+      if (pending) pending.then(() => refresh());
+    });
+    // Tab lands on the new row's Class dropdown (or its Run field), the same way
+    // it does on a row that already exists. The blur is not cosmetic: a refresh
+    // puts the caller back in whatever field it left, *by value*, and the field
+    // it left is keyed "new" — which the next blank line reuses. Without it the
+    // bib just recorded would be typed back into the empty line above it.
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab" || e.shiftKey || !input.value.trim()) return;
+      e.preventDefault();
+      const pending = submit();
+      input.blur();
+      if (pending) pending.then((runId) => refresh().then(() => focusRow(runId)));
+    });
+    wrap.append(input);
+    return wrap;
+  }
+
+  function focusRow(runId) {
+    const tr = runId && rowsEl.querySelector(`tr[data-run-id="${runId}"]`);
+    const target = tr && (tr.querySelector(".class-select") || tr.querySelector(".run-select"));
+    if (target) target.focus();
+  }
+
+  function blankStatusField() {
+    const select = el("select", "status-select");
+    select.dataset.rowKey = "new";
+    select.dataset.field = "status";
+    const blank = el("option", null, "–");
+    blank.value = "";
+    select.append(blank);
+    (state.status_options || []).forEach((opt) => {
+      const o = el("option", null, opt.label);
+      o.value = opt.value;
+      o.title = opt.title;
+      select.append(o);
+    });
+    select.title = gettext("Close this run with a state code instead of a time");
+    select.addEventListener("change", () => {
+      if (!select.value) return;
+      const status = select.value;
+      // Let go of the field before the refresh, for the reason the bib input
+      // does: the restore would otherwise put this code back on the fresh blank
+      // line, which reuses the same key.
+      select.blur();
+      onBlankLine((runId) => setStatus(runId, status).then(() => refresh()));
+    });
+    return select;
+  }
+
+  function blankPenaltyBox() {
+    const wrap = el("div", "pen-stepper pen-stepper--locked");
+    wrap.title = gettext("Penalties belong to a recorded run.");
+    const input = el("input", "penalty-input");
+    input.type = "number";
+    input.value = 0;
+    const minus = el("button", "pen-btn", "−");
+    const plus = el("button", "pen-btn", "+");
+    [minus, plus].forEach((btn) => { btn.type = "button"; btn.tabIndex = -1; });
+    [minus, input, plus].forEach((node) => { node.disabled = true; });
+    wrap.append(minus, input, plus);
+    return wrap;
   }
 
   function renderRow(row) {
@@ -457,6 +642,13 @@
     if (!slot || !dragged || dragged.role !== slot.dataset.role) return;
     e.preventDefault();
     slot.classList.remove("time-slot--drop");
+    // The blank line has no run behind it yet — dropping a time on it makes one,
+    // exactly as typing into it does. It is empty, so nothing can conflict.
+    if (!slot.dataset.runId) {
+      const signalId = dragged.id;
+      onBlankLine((runId) => pair(signalId, runId, slot.dataset.role).then(refresh));
+      return;
+    }
     if (!pairingValid(slot.dataset.role, slot.dataset.runId)) {
       wiggle(slot);
       return;
