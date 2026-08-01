@@ -140,7 +140,14 @@
 
     const body = el("div", "dash-current-body");
     if (c.finished) {
-      body.append(figure(gettext("Run time"), c.run_time || "—"));
+      // Without penalties a run's total is its run time, so the two figures were
+      // the same number printed twice under two labels. The operator screens keep
+      // both (a fixed layout the timekeeper reads at speed); this one is a glance,
+      // so the run time goes and the total — the figure that stays meaningful when
+      // penalties *are* on — stands alone.
+      if (state.penalties_enabled) {
+        body.append(figure(gettext("Run time"), c.run_time || "—"));
+      }
       body.append(figure(gettext("Total time"), c.total_time || "—", "primary"));
       if (state.penalties_enabled) {
         // Already rendered by calc.format_penalty — the notation lives there.
