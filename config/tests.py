@@ -865,6 +865,62 @@ class TestTheIgnoredRailIsBounded:
         assert '"received_at"' not in listing.group(0)
 
 
+class TestTheIgnoredRailStaysReachable:
+    """Every operation this rail exists for is a drag *between* it and a run,
+    so a rail that scrolls off the top with the first few rows is a rail the
+    operator can't use for the rest of the table — and the Lock switch above it,
+    which pauses the whole rig, goes with it. Forty runs is an ordinary morning."""
+
+    def _rule(self, css, selector):
+        match = re.search(r'^' + re.escape(selector) + r'\s*\{([^}]*)\}', css, re.M)
+        assert match, f'{selector} is gone'
+        return match.group(1)
+
+    def test_the_rail_is_pinned_below_the_topbar(self):
+        css = CSS.read_text(encoding='utf-8')
+        rule = self._rule(css, '.ignored-side')
+        assert 'position: sticky' in rule, rule
+        # Below the topbar, which is itself sticky at top: 0 — a rail pinned at
+        # 0 sits underneath it.
+        assert 'var(--topbar-h)' in rule, rule
+        assert 'max-height' in rule, rule
+
+    def test_the_topbar_height_is_written_once(self):
+        """The rail's offset and the topbar's own height are two numbers that
+        have to agree, the same trap as --sidebar-w."""
+        css = CSS.read_text(encoding='utf-8')
+        assert re.search(r'--topbar-h:\s*\d+px;', css)
+        assert 'min-height: var(--topbar-h)' in self._rule(css, '.shell-topbar')
+
+    def test_only_the_chip_list_scrolls(self):
+        """The count, "show all", the drag hint and above all the Lock switch
+        stay on screen however deep the list has grown."""
+        css = CSS.read_text(encoding='utf-8')
+        assert 'overflow-y: auto' in self._rule(css, '.ignored-box')
+        # Both flex items have to be allowed to shrink or the box overflows the
+        # cap instead of scrolling inside it.
+        assert 'min-height: 0' in self._rule(css, '.ignored-panel')
+
+    def test_the_auto_column_gives_it_room_to_travel(self):
+        """`.auto-layout` is `align-items: start`, so this aside is exactly its
+        content's height — and a sticky child of a box its own size never
+        moves."""
+        css = CSS.read_text(encoding='utf-8')
+        rule = self._rule(css, '.auto-ignored')
+        assert 'align-self: stretch' in rule, rule
+        assert 'align-items: flex-start' in rule, rule
+
+    def test_it_lets_go_where_it_stacks_under_the_table(self):
+        """Below 1100px both timing views fold to one column: there is nothing
+        beside the rail to reach, and pinning it would cover the table."""
+        css = CSS.read_text(encoding='utf-8')
+        stacked = re.findall(
+            r'@media \(max-width: 1100px\) \{(.*?)\n\}', css, re.S)
+        release = [block for block in stacked if '.ignored-side' in block]
+        assert release, 'the rail stays pinned on a stacked layout'
+        assert 'position: static' in release[0], release[0]
+
+
 class TestFlameOnlyEverMeansPenalty:
     """The Dashboard rendered the current competitor's *total time* in the
     flame colour, which everywhere else in this app — the results table's .rt-pen,

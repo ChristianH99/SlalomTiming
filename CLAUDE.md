@@ -607,6 +607,14 @@ static/js/               dashboard_overview.js (organiser Dashboard: renders the
                          payload every open browser re-fetches on every incoming time. There
                          is deliberately no clear-all: an ignored signal is still the only
                          record the device fired, and this app does not delete recorded times.
+                         The rail **sticks** (`.ignored-side`, main.css): every operation it
+                         exists for is a drag between it and a run, so one that rides the page
+                         is unreachable past the first few rows — and the Lock switch above it,
+                         which pauses the whole rig, goes with it. Pinned below the topbar
+                         (`--topbar-h`), capped to the viewport, and only the *chip list*
+                         scrolls, so the count, "show all" and the drag hint stay put however
+                         deep the list has grown. It lets go below 1100px, where both views
+                         stack and there is nothing beside it to reach.
                          live_socket.js owns the WebSocket for all four live views (no other
                          file may call `new WebSocket` — a test enforces it): reconnect with
                          backoff, a heartbeat so a link that died without a close frame is
@@ -1243,7 +1251,9 @@ each exist because breaking one is what made the app read as several products st
 
 - **No raw colour, spacing, font-size, duration or z-index outside the token block.**
   `--space-1…10` (a 4px grid) for padding, gap and margin; `--text-2xs…4xl` for type; `--radius-*`;
-  `--font-mono`; `--dur-1…5` for transitions; `--z-*` for stacking; `--sidebar-w`; the palette plus
+  `--font-mono`; `--dur-1…5` for transitions; `--z-*` for stacking; `--sidebar-w` and `--topbar-h`
+  (each a chrome dimension two rules have to agree on — the sidebar's width and the room the main
+  column leaves for it, the topbar's height and how far down a sticky panel starts); the palette plus
   the `--success` and `--amber` families. A value that appears twice is a token. The scales are
   closed sets: a component that needs a step which isn't there means the *scale* is missing a step.
   This replaced 33 distinct font sizes, 25 gaps and 25+ paddings, which is why the same relationship

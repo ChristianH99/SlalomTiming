@@ -131,6 +131,12 @@
      have to agree, written out separately in both places until now. */
   --sidebar-w: 240px;
 
+  /* ---- topbar ----
+     Its height, and how far down anything that sticks below it has to start.
+     Same reason as the sidebar width: two numbers that have to agree. The
+     Ignored-times rail reads it for both its `top` and its viewport cap. */
+  --topbar-h: 56px;
+
   /* ---- breakpoints ----
      Not tokens, because `@media` cannot read a custom property — the values are
      written out at each rule. Listed here so the set stays closed like the
@@ -341,7 +347,7 @@ a:hover { color: var(--flame-hover); }
   position: sticky;
   top: 0;
   z-index: var(--z-topbar);
-  min-height: 56px;
+  min-height: var(--topbar-h);
 }
 
 /* ===== TOPBAR TITLES (the "topper") ===== */
@@ -2585,8 +2591,32 @@ textarea:focus-visible,
 
 /* Shared Ignored-times panel (Manual + Auto): the Lock switch on top, then a
    two-column (Start / Finish) list of ignored chips. A fixed width so the Lock
-   toggle can't grow it, and identical on both pages. */
-.ignored-side { flex: none; width: 14rem; display: flex; flex-direction: column; gap: var(--space-4); }
+   toggle can't grow it, and identical on both pages.
+
+   It *sticks*. Both operations this rail exists for are drags between it and a
+   run — dragging a wrong time out of the table, dragging a chip back onto a
+   slot — so a rail that scrolls off the top with the first few rows is a rail
+   the operator can't reach for the rest of the table. It rode the page: forty
+   runs is an ordinary morning and the panel was gone by row six, with the Lock
+   switch (a pause on the whole rig) gone with it. Now it is pinned below the
+   topbar, capped to the viewport, and only the *chip list* scrolls, so the
+   Lock, the count, "show all" and the drag hint stay on screen however deep the
+   list has grown. Unstuck below 1100px, where the rail stacks under the table
+   and there is nothing beside it to reach. */
+.ignored-side {
+  flex: none; width: 14rem;
+  display: flex; flex-direction: column; gap: var(--space-4);
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--space-6));
+  /* The topbar above it, the content padding below it. A cap, not a height:
+     a short list still ends where it ends. */
+  max-height: calc(100vh - var(--topbar-h) - var(--space-9));
+}
+/* A column, so the chip box can be the one part of it that takes the slack.
+   `min-height: 0` because a flex item refuses by default to shrink below its
+   content: without it the panel keeps its full height and the list overflows
+   the cap instead of scrolling inside it. */
+.ignored-panel { display: flex; flex-direction: column; min-height: 0; }
 .ignored-head { display: flex; align-items: baseline; gap: var(--space-3); margin: 0 0 var(--space-3); }
 .ignored-title {
   font-family: 'Manrope', sans-serif; font-size: var(--text-sm); font-weight: 800;
@@ -2600,11 +2630,18 @@ textarea:focus-visible,
   color: var(--text-mid); background: var(--border-light);
   padding: 0 var(--space-3); border-radius: var(--radius-pill);
 }
+/* The one thing here that scrolls: the chips take whatever height is left under
+   the cap and get their own bar. The existing `min-height: 3rem` is its floor,
+   well under the cap, so `flex: 1 1 auto` shrinks it to fit. The dashed drop
+   border stays put while the list moves inside it, which is what keeps it a
+   drop target at any scroll position. */
 .ignored-box {
   box-sizing: border-box; width: 100%;
   display: flex; gap: var(--space-4); align-items: flex-start;
   min-height: 3rem; padding: var(--space-4);
   border: 1px dashed var(--border); border-radius: var(--radius-md);
+  flex: 1 1 auto;
+  overflow-y: auto;
 }
 /* One channel: a single full-width list rather than two columns, one of which
    could never fill (see autotiming.ignored_split). */
@@ -2629,11 +2666,17 @@ textarea:focus-visible,
   font-variant-numeric: tabular-nums;
   text-decoration: line-through; text-decoration-color: var(--text-muted);
 }
-/* When it arrived. The chip's own time is the device's clock, which on a real rig
-   isn't wall-clock — without this a chip carries no sense of when. */
 .ignored-chip--manual { background: var(--amber-soft-bg); color: var(--amber-soft); }
 .ignored-more { font-size: var(--text-2xs); align-self: flex-start; }
 .ignored-hint { font-size: var(--text-2xs); margin: var(--space-3) 0 0; }
+/* Stacked under the table (both timing views fold at this width): there is
+   nothing beside it to reach, so pinning it would cover the table it belongs
+   to and cap a full-width list to a phone's viewport. It scrolls with the page
+   again, in full. */
+@media (max-width: 1100px) {
+  .ignored-side { position: static; max-height: none; }
+  .ignored-box { flex: none; overflow-y: visible; }
+}
 
 /* ===== AUTO TIMING =====
    Three columns: the start order (draggable), the prev/current/next stage, and
@@ -2908,8 +2951,13 @@ textarea:focus-visible,
 .auto-popup-foot { margin-top: var(--space-4); display: flex; justify-content: flex-end; }
 .auto-popup-note { font-size: var(--text-sm); color: var(--text-light); }
 
-/* The Ignored-times column uses the shared .ignored-side panel (see above). */
-.auto-ignored { display: flex; }
+/* The Ignored-times column uses the shared .ignored-side panel (see above).
+   `.auto-layout` is `align-items: start`, which sizes this aside to its content
+   — and a sticky child of a box exactly its own height has nowhere to travel,
+   so the rail would have scrolled away regardless. It stretches to the grid
+   row instead, and `align-items: flex-start` keeps the rail itself at its own
+   height inside that. */
+.auto-ignored { display: flex; align-self: stretch; align-items: flex-start; }
 
 /* Run-group divider in the start order (classes starting together). Sticks to the
    top of the list as its run scrolls under it, and is replaced when the next run's
