@@ -20,7 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from apps.competitions import startpattern
 from apps.participants.models import EventEntry
 
-from . import arrangement, calc
+from . import arrangement, calc, unassigned
 from .models import TimedRun, TimingSignal
 
 
@@ -207,9 +207,18 @@ def apply_bindings(competition, runs=None):
     the posts + the run's own counts (see penalty_seconds), so nothing to cache.
     Manual (operator-owned) runs are left untouched — their identity is authored.
 
+    A run recorded against a bib nobody was registered under is the other half of
+    the same question — "who does this run belong to?" — and is answered in the
+    same pass (see apps/timing/unassigned.py), so a time taken before the entry
+    existed reaches that competitor's results the moment they are registered.
+
     Nothing here writes. A reader binds the objects it is about to render and
     leaves the database alone; only ``sync_bindings`` persists (see there for why)."""
-    slots, aligned, orphans = bind_runs(competition, runs)
+    # Read once and hand the same list down: the unassigned-bib pass below is
+    # about rows the start order never bound (an operator-owned row with a bib and
+    # no class), so it needs every run, not just the aligned ones.
+    known = all_runs(competition) if runs is None else list(runs)
+    slots, aligned, orphans = bind_runs(competition, known)
     classes = None  # {pk: CompetitionClass}, read only if a class actually moves
     dirty = []
     for i, run in enumerate(aligned):
@@ -239,19 +248,25 @@ def apply_bindings(competition, runs=None):
                         continue
                 setattr(run, f, wanted[f])
             dirty.append((run, changed))
+    # A run whose bib has since been registered gets its competitor's class here,
+    # in the same list of changed rows, so the one writer below persists both.
+    dirty += unassigned.apply(competition, known)
     return slots, aligned, orphans, dirty
 
 
 def sync_bindings(competition):
-    """Persist the bound-slot identity onto the runs, so the surfaces that read a
-    ``TimedRun`` on its own — the Manual timing view's other rows, an export, a
-    slot lookup — see the same competitor the Auto view derives.
+    """Persist the runs' identity — the bound start-order slot, and the class of a
+    run recorded against a bib that has since been registered — so the surfaces
+    that read a ``TimedRun`` on its own (the Manual timing view's other rows, an
+    export, a slot lookup, the results engine) see the same competitor the Auto
+    view derives.
 
-    Called from the paths that *change* the binding: a signal arriving (ingest), a
-    reorder, and the operator's edits. Never from a GET — a read that writes takes
-    the same lock the timing rig's own thread needs to record a time, and several
-    open browsers refreshing on the same nudge raced each other on these rows. The
-    readers bind in memory instead (``apply_bindings``)."""
+    Called from the paths that *change* it: a signal arriving (ingest), a reorder,
+    the operator's edits. Never from a GET — a read that writes takes the same lock
+    the timing rig's own thread needs to record a time, and several open browsers
+    refreshing on the same nudge raced each other on these rows. The readers bind
+    in memory instead (``apply_bindings``), so a screen is never waiting on this to
+    have run."""
     _, _, _, dirty = apply_bindings(competition)
     for run, changed in dirty:
         run.save(update_fields=[*changed, "updated_at"])
