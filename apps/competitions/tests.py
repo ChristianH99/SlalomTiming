@@ -6,7 +6,7 @@ import pytest
 from django.db import IntegrityError
 from django.urls import reverse
 
-from . import startpattern
+from . import archiving, startpattern
 from .models import Competition, CompetitionClass, CompetitionType
 
 pytestmark = pytest.mark.django_db
@@ -1629,3 +1629,182 @@ def test_the_general_page_still_shows_the_events_date_in_german(client, settings
     page = client.get(reverse("competitions:general")).content.decode()
 
     assert 'value="2026-05-01"' in page
+
+
+# ----- archiving: a finished event stops following its type (issue #8) -----
+#
+# A CompetitionType is shared by every competition of its discipline and its
+# settings are read live, so editing a penalty amount to set up next month's
+# event re-ranked last month's. Archiving is the answer: the settings are copied
+# onto the competition and it is evaluated from the copy for ever after. These
+# tests are about the copy; config/archived_tests.py is about the other half —
+# that a signed-off event then takes no writes.
+
+def test_archiving_freezes_the_settings_the_event_was_run_under():
+    competition = make_competition()
+    ctype = competition.competition_type
+    ctype.pylon_penalty = 5
+    ctype.timing_precision = CompetitionType.Precision.HUNDREDTHS
+    ctype.save()
+
+    archiving.archive(competition)
+    # …and now somebody sets up next season.
+    ctype.pylon_penalty = 10
+    ctype.timing_precision = CompetitionType.Precision.THOUSANDTHS
+    ctype.save()
+
+    competition.refresh_from_db()
+    assert competition.rules.pylon_penalty == 5
+    assert competition.rules.timing_precision == CompetitionType.Precision.HUNDREDTHS
+    # The discipline it belongs to is a different question and still answers live.
+    assert competition.competition_type.pylon_penalty == 10
+
+
+def test_a_live_competition_still_follows_its_type():
+    """The freeze must be the archived event's alone — an app where every
+    competition quietly reads a snapshot would be one where editing a type does
+    nothing and nobody could say why."""
+    competition = make_competition()
+    competition.competition_type.pylon_penalty = 7
+    competition.competition_type.save()
+
+    assert competition.rules.pylon_penalty == 7
+    assert competition.rules.pk == competition.competition_type.pk
+
+
+def test_reopening_puts_the_event_back_on_the_live_settings():
+    competition = make_competition()
+    archiving.archive(competition)
+    competition.competition_type.pylon_penalty = 9
+    competition.competition_type.save()
+
+    archiving.reopen(competition)
+
+    assert not competition.is_archived
+    assert competition.archived_rules == {}
+    assert competition.rules.pylon_penalty == 9
+
+
+def test_archiving_twice_keeps_the_first_snapshot():
+    """A second click must not re-take the snapshot against a type that has
+    moved on since — which is the one way this feature could quietly lose the
+    settings it exists to keep."""
+    competition = make_competition()
+    competition.competition_type.pylon_penalty = 3
+    competition.competition_type.save()
+    archiving.archive(competition)
+    taken_at = competition.archived_at
+
+    competition.competition_type.pylon_penalty = 12
+    competition.competition_type.save()
+    archiving.archive(competition)
+
+    assert competition.archived_at == taken_at
+    assert competition.rules.pylon_penalty == 3
+
+
+def test_the_snapshot_carries_every_setting_of_the_type():
+    """FROZEN_FIELDS is derived from the model, so a field added to
+    CompetitionType is frozen the day it is added rather than the day somebody
+    remembers to add it here."""
+    competition = make_competition()
+    archiving.archive(competition)
+
+    stored = set(competition.archived_rules)
+    model_fields = {
+        f.name for f in CompetitionType._meta.concrete_fields if not f.primary_key
+    }
+    assert stored == model_fields
+
+
+def test_a_frozen_snapshot_cannot_be_saved_back():
+    """It behaves like the type in every way a reader needs; writing it is the
+    one thing it refuses, because a snapshot that can become a row is a snapshot
+    somebody will eventually turn into one."""
+    competition = make_competition()
+    archiving.archive(competition)
+
+    with pytest.raises(RuntimeError):
+        competition.rules.save()
+
+
+def test_the_archive_view_signs_the_event_off(client):
+    competition = make_active_competition()
+
+    response = client.post(reverse("competitions:archive", args=[competition.pk]))
+
+    competition.refresh_from_db()
+    assert response.status_code == 302
+    assert competition.is_archived
+    assert competition.archived_rules
+
+
+def test_the_reopen_view_takes_it_back(client):
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    client.post(reverse("competitions:reopen", args=[competition.pk]))
+
+    competition.refresh_from_db()
+    assert not competition.is_archived
+
+
+def test_archiving_needs_a_post(client):
+    competition = make_active_competition()
+    assert client.get(reverse("competitions:archive", args=[competition.pk])).status_code == 405
+    competition.refresh_from_db()
+    assert not competition.is_archived
+
+
+def test_the_list_offers_archive_and_the_archived_tile_offers_reopen(client):
+    competition = make_active_competition()
+
+    page = client.get(reverse("competitions:list")).content.decode()
+    assert reverse("competitions:archive", args=[competition.pk]) in page
+
+    archiving.archive(competition)
+    page = client.get(reverse("competitions:list")).content.decode()
+    assert reverse("competitions:reopen", args=[competition.pk]) in page
+    assert "Archived" in page
+
+
+def test_every_page_says_so_while_an_archived_event_is_selected(client):
+    """The banner is in base.html rather than on the timing views alone: an
+    operator who discovers the event is read-only one refused save at a time has
+    already lost the work."""
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    for url in (reverse("timing:manual"), reverse("participants:list"),
+                reverse("results:index"), reverse("competitions:general")):
+        assert "archived-banner" in client.get(url).content.decode(), url
+
+
+def test_the_setup_pages_refuse_to_save_and_say_why(client):
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    response = client.post(
+        reverse("competitions:general"),
+        {"competition_type": competition.competition_type.pk,
+         "name": "Renamed", "date": "2026-06-01"},
+        follow=True,
+    )
+
+    competition.refresh_from_db()
+    assert competition.name != "Renamed"
+    assert str(archiving.READ_ONLY) in response.content.decode()
+
+
+def test_a_duplicate_of_an_archived_event_is_a_live_one(client):
+    """Duplicating is how last year's setup becomes this year's event, so the
+    copy has to be editable — an archived duplicate would be a competition
+    nobody could put starters into, for no reason anyone could see."""
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    client.post(reverse("competitions:duplicate", args=[competition.pk]))
+
+    copy = Competition.objects.exclude(pk=competition.pk).get()
+    assert not copy.is_archived
+    assert copy.archived_rules == {}

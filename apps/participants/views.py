@@ -8,6 +8,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.common import json_body, safe_next
+from apps.competitions import archiving
 from apps.competitions.models import Competition, CompetitionType
 
 from .bibs import bib_change_effect
@@ -136,6 +137,27 @@ def participant_detail_rows(participant, collected_info):
     return rows
 
 
+class RefuseWhenArchived:
+    """The participants section stops taking writes while the active competition
+    is archived.
+
+    The whole section, not only the bib field, even though a Participant belongs
+    to a *discipline* rather than to one event: the list is scoped to the active
+    competition, every form on it saves a registration (bib, class assignment,
+    whole-event DSQ) alongside the personal data, and the row for "which of these
+    edits could reach a signed-off event" is not one an operator should have to
+    reason about mid-task. Registering for the *next* event is unaffected —
+    selecting it is what un-archives the screen.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.method == "POST" and archiving.refuse_page(
+            request, Competition.get_current()
+        ):
+            return redirect("participants:list")
+        return super().dispatch(request, *args, **kwargs)
+
+
 class ParticipantListView(ListView):
     model = Participant
     context_object_name = "participants"
@@ -213,7 +235,7 @@ class ParticipantListView(ListView):
         return context
 
 
-class ParticipantCreateView(ParticipantFormContextMixin, CreateView):
+class ParticipantCreateView(RefuseWhenArchived, ParticipantFormContextMixin, CreateView):
     model = Participant
     form_class = ParticipantCreateForm
     template_name = "participants/participant_form.html"
@@ -257,7 +279,7 @@ class ParticipantCreateView(ParticipantFormContextMixin, CreateView):
         return response
 
 
-class ParticipantUpdateView(ParticipantFormContextMixin, UpdateView):
+class ParticipantUpdateView(RefuseWhenArchived, ParticipantFormContextMixin, UpdateView):
     model = Participant
     form_class = ParticipantUpdateForm
     template_name = "participants/participant_form.html"
@@ -304,7 +326,7 @@ class ParticipantUpdateView(ParticipantFormContextMixin, UpdateView):
         return bib_change_effect(form.competition, old_bib, form.cleaned_data.get("bib_number"))
 
 
-class ParticipantDeleteView(DeleteView):
+class ParticipantDeleteView(RefuseWhenArchived, DeleteView):
     model = Participant
     template_name = "participants/participant_confirm_delete.html"
     success_url = reverse_lazy("participants:list")
@@ -342,6 +364,9 @@ def participant_set_bib(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
+    refusal = archiving.refuse_json(competition)
+    if refusal is not None:
+        return refusal
     payload = json_body(request)
     if not payload:
         return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
@@ -417,6 +442,9 @@ def participant_set_dsq(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
+    refusal = archiving.refuse_json(competition)
+    if refusal is not None:
+        return refusal
     payload = json_body(request)
     if not payload:
         return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)

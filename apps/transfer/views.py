@@ -21,6 +21,7 @@ from django.views import View
 from django.views.decorators.http import require_POST
 
 from apps.common import other_signed_in_users
+from apps.competitions import archiving
 from apps.competitions.models import Competition, CompetitionType
 
 from . import (archive, backup, csvimport, exporters, folders, importers,
@@ -226,6 +227,11 @@ class ImportView(View):
         competition = Competition.get_current()
         if competition is None:
             messages.error(request, _("Choose a competition to import participants into."))
+            return redirect("transfer:import")
+        # A CSV registers starters *into the active competition*, which a signed-off
+        # one no longer takes. The archive half of this page is unaffected: an
+        # import creates its own competition and never touches this one.
+        if archiving.refuse_page(request, competition):
             return redirect("transfer:import")
 
         upload = request.FILES["csv"]

@@ -19,7 +19,13 @@
       {% if active_only %}<input type="hidden" name="active" value="1">{% endif %}
       <button class="button button--secondary" type="submit">{% trans "Search" %}</button>
     </form>
-    <a class="button" href="{% url 'participants:add' %}">{% trans "+ Add participant" %}</a>
+    {% comment %}Nothing can be registered into a signed-off event, so the button
+    that opens a registration form isn't offered. The server refuses either way
+    (apps/participants/views.RefuseWhenArchived); this is so the operator finds
+    that out before filling the form in rather than after.{% endcomment %}
+    {% if not competition.is_archived %}
+      <a class="button" href="{% url 'participants:add' %}">{% trans "+ Add participant" %}</a>
+    {% endif %}
   </div>
 
   <p class="hint">

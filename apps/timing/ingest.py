@@ -116,9 +116,21 @@ def record_signal(running_number, port, is_manual, device_time, source="device")
 
 
 def _context():
-    """The active competition and the operator lock, read together so the retry
-    around them covers both."""
-    return Competition.get_current(), TimingSettings.load().ignore_incoming
+    """The active competition and whether the signal is to be held off the runs,
+    read together so the retry around them covers both.
+
+    Two things hold it off, and they are the same thing to a signal arriving: the
+    operator's red Lock switch, and an *archived* event. A signed-off competition
+    does not take new times — but "does not take" must not mean "loses", so the
+    signal is still written, still visible on the ignore list, and can still be
+    dragged onto a run if the operator reopens the event. Refusing it at the door
+    instead would be the one thing this module promises cannot happen.
+    """
+    competition = Competition.get_current()
+    hold = TimingSettings.load().ignore_incoming or (
+        competition is not None and competition.is_archived
+    )
+    return competition, hold
 
 
 def _place(competition, signal):

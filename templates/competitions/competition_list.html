@@ -17,13 +17,17 @@
 
   <div class="competition-tiles" id="competitions-body">
     {% for competition in competitions %}
-      <div class="competition-tile{% if competition.is_active %} competition-tile--active{% endif %}"
+      <div class="competition-tile{% if competition.is_active %} competition-tile--active{% endif %}{% if competition.is_archived %} competition-tile--archived{% endif %}"
            data-search="{{ competition.name|lower }} {{ competition.competition_type.name|lower }}">
         <div class="tile-body">
           <div class="tile-head">
             <h2 class="tile-name">{{ competition.name }}</h2>
             {% if competition.is_active %}
               <span class="status-pill status-pill--active">{% trans "Current" %}</span>
+            {% endif %}
+            {% if competition.is_archived %}
+              <span class="status-pill status-pill--archived"
+                    title="{% blocktrans with when=competition.archived_at|date:'d.m.Y' %}Signed off on {{ when }}. Evaluated by the settings it was run under.{% endblocktrans %}">{% trans "Archived" %}</span>
             {% endif %}
           </div>
           <div class="tile-meta">
@@ -52,6 +56,24 @@
             {% csrf_token %}
             <button type="submit" class="link-button">{% trans "Duplicate" %}</button>
           </form>
+          {% comment %}Archiving is what stops a later edit to the competition type
+          re-ranking a finished event, so the dialog says what it buys as well as
+          what it costs. Reopening is the one that can *change* a result, so it
+          says that in as many words — data-confirm hands both to the app's own
+          dialog (shell.js), never the browser's.{% endcomment %}
+          {% if competition.is_archived %}
+            <form method="post" action="{% url 'competitions:reopen' competition.pk %}"
+                  data-confirm="{% blocktrans with name=competition.name %}Reopen “{{ name }}”? It will follow its competition type's current settings again — if those have changed since it was archived, its results can change with them.{% endblocktrans %}">
+              {% csrf_token %}
+              <button type="submit" class="link-button">{% trans "Reopen" %}</button>
+            </form>
+          {% else %}
+            <form method="post" action="{% url 'competitions:archive' competition.pk %}"
+                  data-confirm="{% blocktrans with name=competition.name %}Archive “{{ name }}”? It keeps the settings it was run under, so later changes to the competition type can no longer change its results — and it stops taking times and edits until you reopen it.{% endblocktrans %}">
+              {% csrf_token %}
+              <button type="submit" class="link-button">{% trans "Archive" %}</button>
+            </form>
+          {% endif %}
           <a class="link-button link-button--danger" href="{% url 'competitions:delete' competition.pk %}">{% trans "Delete" %}</a>
         </div>
       </div>

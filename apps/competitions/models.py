@@ -1,5 +1,5 @@
 from collections import Counter
-from functools import lru_cache
+from functools import cached_property, lru_cache
 
 from django.conf import settings
 from django.db import models
@@ -23,18 +23,19 @@ class CompetitionType(models.Model):
     recorded here only; the timing screen, the results calculation and the
     participant form each read them when those features are built.
 
-    **A type is shared by every competition of that discipline, and its settings
-    are read live.** So changing a penalty amount, the tie-break or the timing
-    precision in November re-ranks July's event the next time anybody opens its
-    results — the times are unchanged, the numbers over them are not. That is
-    accepted for now: the settings are edited between events, not during one,
-    and the alternative is versioning every field.
+    **A type is shared by every competition of that discipline, and a *live*
+    competition reads its settings live.** So changing a penalty amount, the
+    tie-break or the timing precision in November would re-rank July's event the
+    next time anybody opened its results — the times unchanged, the numbers over
+    them not.
 
-    The proper answer is an **archive**: a snapshot of a competition — its results
-    as computed on the day, with the type settings that produced them — taken when
-    the event is signed off, so a finished result stops depending on a live row.
-    That is a feature, not a fix, and it belongs with the export machinery in
-    apps/transfer/ when it is built.
+    That is what **archiving** answers (apps/competitions/archiving.py): signing
+    an event off copies these settings onto the competition and the event is
+    evaluated from the copy for ever after. Nothing reads this row for an
+    archived competition — see ``Competition.rules``, which is what every
+    evaluation asks instead of reaching for ``competition_type`` directly.
+    A competition that has *not* been archived still follows its type live, so
+    the warning above is exactly true right up to the moment it is signed off.
     """
 
     class TieBreak(models.TextChoices):
@@ -148,6 +149,32 @@ class CompetitionType(models.Model):
         return f"{seconds:.{self.timing_precision}f}"
 
 
+class FrozenCompetitionType(CompetitionType):
+    """A competition type as it stood on the day, rebuilt from an archived
+    competition's stored snapshot.
+
+    A proxy rather than a plain unsaved ``CompetitionType`` for one reason: a
+    snapshot must never become a row. Every method and every field of the real
+    thing is inherited — ``format_time``, ``participant_field_requirements``,
+    ``PARTICIPANT_INFO`` — so every reader that used to hold a type holds this
+    instead and cannot tell the difference; but writing it back is a mistake the
+    class refuses rather than a rule somebody has to remember. Built only by
+    ``apps/competitions/archiving.frozen_rules``.
+    """
+
+    class Meta:
+        proxy = True
+
+    def save(self, *args, **kwargs):
+        raise RuntimeError(
+            "A frozen competition type is an archived competition's snapshot of "
+            "its settings, not a row. Edit the real CompetitionType instead."
+        )
+
+    def delete(self, *args, **kwargs):
+        raise RuntimeError("A frozen competition type is a snapshot; there is no row to delete.")
+
+
 class Competition(models.Model):
     competition_type = models.ForeignKey(
         CompetitionType, on_delete=models.PROTECT, related_name="competitions"
@@ -183,6 +210,19 @@ class Competition(models.Model):
         blank=True,
         help_text="Manual override of the Auto timing start order, as a list of slot "
         "keys. Empty means the computed order (run order × start pattern) is used.",
+    )
+    archived_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the event was signed off. An archived competition is read-only "
+        "and is evaluated by the settings stored in archived_rules rather than by its "
+        "type's live ones (see apps/competitions/archiving.py).",
+    )
+    archived_rules = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="The competition type's settings as they stood when the event was "
+        "archived. Empty for a live competition, which follows its type.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -221,6 +261,39 @@ class Competition(models.Model):
                 CompetitionClass(competition=self, name=name, position=position)
                 for position, name in enumerate(CompetitionClass.DEFAULT_NAMES)
             )
+
+    def refresh_from_db(self, *args, **kwargs):
+        # `rules` is cached, and re-reading the row is exactly when it can have
+        # stopped being true — somebody else archived the event. Django clears
+        # cached *relations* here and knows nothing about ours.
+        super().refresh_from_db(*args, **kwargs)
+        self.__dict__.pop("rules", None)
+
+    @property
+    def is_archived(self):
+        """Whether this event has been signed off. An archived competition is
+        read-only: every door that would write it refuses (see
+        apps/competitions/archiving.py), and it is evaluated from ``rules``."""
+        return self.archived_at is not None
+
+    @cached_property
+    def rules(self):
+        """The settings this event is run and evaluated under.
+
+        **Every evaluation reads this, never ``competition_type``.** For a live
+        competition the two are the same object; for an archived one this is the
+        frozen snapshot taken on the day, so changing a penalty amount or the
+        timing precision next winter cannot re-rank a finished event.
+
+        ``competition_type`` itself remains the discipline a competition belongs
+        to — which participants are registered under, which types can be deleted,
+        what an export carries. That question keeps its own answer.
+        """
+        from . import archiving
+
+        if self.archived_rules:
+            return archiving.frozen_rules(self.archived_rules)
+        return self.competition_type
 
     def active_classes(self):
         return [cc.name for cc in self._running_classes_ordered()]

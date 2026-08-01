@@ -293,7 +293,7 @@ def serialize(competition):
     from .models import TimingSettings
 
     settings = TimingSettings.load()
-    ctype = competition.competition_type
+    ctype = competition.rules
     precision = ctype.timing_precision
     marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
     # One read, one bind: the start order used to be replayed three times per
@@ -470,7 +470,7 @@ def penalty_seconds(run, competition):
     """The whole penalty seconds a run adds, resolved the one canonical way (marshal
     posts + adjust for a marshal-driven run, else the run's own counts). Shared by
     the Auto view, the Manual view total and the results engine."""
-    ctype = competition.competition_type
+    ctype = competition.rules
     marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
     return _penalty_seconds(_penalty_lines(run, marshal_mode), ctype)
 
@@ -485,7 +485,7 @@ def own_counts_apply(run, competition):
     the operator could see a count they typed sitting there with no effect on the
     total, with no cue and no disabled state.
     """
-    ctype = competition.competition_type
+    ctype = competition.rules
     marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
     return not marshal_mode or bool(run.manual_entry)
 
@@ -494,7 +494,7 @@ def penalty_counts(run, competition):
     """The run's grand ``(pylons, tasks, stop_line)`` penalty counts, resolved the
     same canonical way as ``penalty_seconds`` — for callers that show the tallies
     rather than the seconds (e.g. the Dashboard's current-competitor chips)."""
-    ctype = competition.competition_type
+    ctype = competition.rules
     marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
     lines = _penalty_lines(run, marshal_mode)
     return lines[0]["total"], lines[1]["total"], lines[2]["total"]

@@ -1,0 +1,17 @@
+{% load i18n %}
+{% comment %}The active competition is signed off. Rendered by base.html on every
+page, because "read-only" is not a property of one screen: the timing views take
+no times, the setup pages take no edits and the participant list takes no
+registrations, and an operator who finds that out one refused save at a time has
+already lost the work. Frost rather than flame — this is the state the event is
+in, not something going wrong, and flame in this app means "seconds added".{% endcomment %}
+<div class="archived-banner" role="status">
+  <span class="archived-banner-label">{% trans "Archived" %}</span>
+  <span class="archived-banner-text">
+    {% blocktrans trimmed %}
+      This event is signed off: it keeps the settings it was run under and no
+      longer takes times or edits.
+    {% endblocktrans %}
+  </span>
+  <a class="archived-banner-link" href="{% url 'competitions:list' %}">{% trans "Manage competitions" %}</a>
+</div>

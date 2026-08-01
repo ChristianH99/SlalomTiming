@@ -40,7 +40,7 @@ DNX_STATUSES = (EventEntry.Status.DNS, EventEntry.Status.DNF, EventEntry.Status.
 def serialize(competition):
     """The whole organiser overview as a JSON-able dict: headline stats, overall
     run progress, per-class status, and the competitor on course now."""
-    ctype = competition.competition_type
+    ctype = competition.rules
     precision = ctype.timing_precision
     # Fold Auto timing's positional identities onto the runs first, so a
     # pattern-bound run carries the bib/class/run its recorded-run tally is

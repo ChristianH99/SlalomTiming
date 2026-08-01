@@ -115,6 +115,9 @@
           <span class="topbar-sub">
             {% if active_competition %}
               {{ active_competition.name }} · {{ active_competition.date|date:"d.m.Y" }}
+              {% if active_competition.is_archived %}
+                <span class="topbar-archived">{% trans "Archived" %}</span>
+              {% endif %}
             {% else %}
               <span class="topbar-sub--none">{% trans "No event selected" %}</span> · <a href="{% url 'competitions:list' %}">{% trans "choose one" %}</a>
             {% endif %}
@@ -137,6 +140,7 @@
             {% endfor %}
           </ul>
         {% endif %}
+        {% if active_competition.is_archived %}{% include "competitions/_archived_banner.html" %}{% endif %}
         {% block content %}{% endblock %}
       </main>
     </div>

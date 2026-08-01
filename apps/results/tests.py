@@ -1083,3 +1083,87 @@ def test_contact_details_are_not_published_by_default():
     assert "email" not in columns
     assert "phone" not in columns
     assert "street" not in columns
+
+
+# ----- an archived event's result stops moving (issue #8) -----
+#
+# The whole reason archiving exists. A CompetitionType is shared by every
+# competition of its discipline and read live, so setting up next season used to
+# re-compute last season: the times never moved, the numbers over them did. The
+# results engine now reads `competition.rules`, which for a signed-off event is
+# the snapshot taken on the day.
+
+def test_a_penalty_amount_edited_later_cannot_re_rank_an_archived_event():
+    from apps.competitions import archiving
+
+    ctype, competition, cclass = make_setup(counted_runs=1, penalties_enabled=True)
+    make_competitor(competition, cclass, 1)
+    make_competitor(competition, cclass, 2)
+    # Bib 1 is a second quicker but hit one pylon; at 5 s a pylon that puts them
+    # second, at 0 s it would put them first.
+    add_run(competition, cclass, 1, 1, 29, pylons=1)
+    add_run(competition, cclass, 2, 1, 30)
+    assert ranks(resultscalc.compute_class_results(competition, cclass)) == [
+        (2, 1, False, False), (1, 2, False, False)]
+
+    archiving.archive(competition)
+    ctype.pylon_penalty = 0
+    ctype.save()
+
+    competition.refresh_from_db()
+    assert ranks(resultscalc.compute_class_results(competition, cclass)) == [
+        (2, 1, False, False), (1, 2, False, False)]
+
+
+def test_the_same_edit_does_move_a_live_event():
+    """The mirror of the test above, and the one that makes it mean something:
+    without it a bug that froze *every* competition's settings would pass."""
+    ctype, competition, cclass = make_setup(counted_runs=1, penalties_enabled=True)
+    make_competitor(competition, cclass, 1)
+    make_competitor(competition, cclass, 2)
+    add_run(competition, cclass, 1, 1, 29, pylons=1)
+    add_run(competition, cclass, 2, 1, 30)
+
+    ctype.pylon_penalty = 0
+    ctype.save()
+
+    competition.refresh_from_db()
+    assert ranks(resultscalc.compute_class_results(competition, cclass)) == [
+        (1, 1, False, False), (2, 2, False, False)]
+
+
+def test_an_archived_event_keeps_the_precision_it_was_timed_at():
+    from apps.competitions import archiving
+
+    ctype, competition, cclass = make_setup(counted_runs=1)
+    ctype.timing_precision = CompetitionType.Precision.HUNDREDTHS
+    ctype.save()
+    make_competitor(competition, cclass, 1)
+    add_run(competition, cclass, 1, 1, 30)
+    archiving.archive(competition)
+
+    ctype.timing_precision = CompetitionType.Precision.TENTHS
+    ctype.save()
+
+    competition.refresh_from_db()
+    page = views.class_section(competition, cclass)
+    # Two decimals, as the day's device resolved them — not the one the type
+    # has been set to since.
+    assert page["ranked"][0]["total"] == "00:30.00"
+    assert page["ranked"][0]["counted"][0]["time"] == "00:30.00"
+
+
+def test_an_archived_events_results_are_still_readable(client):
+    """Read-only has to mean read-*able*: the results are the reason an event is
+    signed off at all, so every one of these pages still renders."""
+    from apps.competitions import archiving
+
+    _, competition, cclass = make_setup(counted_runs=1)
+    make_competitor(competition, cclass, 1)
+    add_run(competition, cclass, 1, 1, 30)
+    archiving.archive(competition)
+
+    assert client.get(reverse("results:index")).status_code == 200
+    assert client.get(reverse("results:class", args=[cclass.pk])).status_code == 200
+    assert client.get(reverse("results:export-class", args=[cclass.pk])).status_code == 200
+    assert client.get(reverse("results:export-all")).status_code == 200

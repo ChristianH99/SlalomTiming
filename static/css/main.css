@@ -376,6 +376,20 @@ a:hover { color: var(--flame-hover); }
   text-overflow: ellipsis;
 }
 .topbar-sub--none { font-style: italic; }
+/* The event named in the topbar is signed off. A micro-cap, not a label, so it
+   takes the uppercase treatment (see the design-system note on case). */
+.topbar-archived {
+  margin-left: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--glacier);
+  border-radius: var(--radius-pill);
+  background: var(--frost-bg);
+  color: var(--ink);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
 
 /* Right-aligned topbar controls (currently just the page Help "?"). */
 .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
@@ -689,6 +703,13 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   flex: 0 0 auto;
 }
 
+/* A signed-off event. Same frost family as the banner it goes with. */
+.status-pill--archived {
+  background: var(--frost-bg);
+  color: var(--ink);
+  flex: 0 0 auto;
+}
+
 /* First pill takes the space that's left and ellipsises; the +N pill never
    shrinks, so it stays readable however long the class name is. */
 .class-cell { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
@@ -721,6 +742,12 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
 }
 .competition-tile:hover { box-shadow: 0 4px 14px rgba(22,35,63,0.08); }
 .competition-tile--active { border-left-color: var(--flame); }
+/* A state is marked, not filled: the leading edge says "signed off" without
+   tinting a whole row that a list of finished seasons would be full of. The
+   active event keeps the flame edge either way — which event is current is the
+   more urgent of the two facts. */
+.competition-tile--archived { border-left-color: var(--glacier); }
+.competition-tile--archived.competition-tile--active { border-left-color: var(--flame); }
 .tile-body { min-width: 0; }
 .tile-head {
   display: flex;
@@ -3857,6 +3884,42 @@ textarea:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .device-alarm-dot { animation: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   Archived-event banner (templates/competitions/_archived_banner.html)
+
+   Shown on every page while the active competition is signed off. Deliberately
+   in the frost family and not the flame one: nothing is going wrong, the event
+   is simply finished — and flame in this app means "seconds added", so a page
+   wearing it for any other reason reads as penalised.
+   --------------------------------------------------------------------------- */
+.archived-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin: 0 0 var(--space-6);
+  padding: var(--space-5) var(--space-6);
+  border: 1.5px solid var(--glacier);
+  border-radius: var(--radius-md);
+  background: var(--frost-bg);
+  color: var(--ink);
+  font-size: var(--text-base);
+}
+.archived-banner-label {
+  flex: none;
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--glacier);
+  color: var(--white);
+  font-family: 'Manrope', sans-serif;
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.archived-banner-text { flex: 1 1 16rem; }
+.archived-banner-link { flex: none; color: var(--ink); font-weight: 700; white-space: nowrap; }
 
 /* ---------------------------------------------------------------------------
    Live-connection indicator (templates/timing/_live_connection.html)

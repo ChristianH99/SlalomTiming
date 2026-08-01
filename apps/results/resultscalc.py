@@ -549,7 +549,7 @@ def compute_class_results(competition, cclass, data=None):
 
     ``data`` is ``event_data(competition)`` when the caller is rendering several
     tables; without it this reads the event for itself."""
-    precision = competition.competition_type.timing_precision
+    precision = competition.rules.timing_precision
     data = data or event_data(competition)
     entries = data["entries"]
     starters = data["by_class"].get(cclass.pk, [])
@@ -567,7 +567,7 @@ def compute_class_results(competition, cclass, data=None):
     scope = class_scope(cclass)
     complete, status_rows, waiting = _split(competitors)
     ranked = _rank(
-        complete, competition.competition_type.tie_break,
+        complete, competition.rules.tie_break,
         scope=scope, manual=load_manual(competition, scope),
     )
     unranked = sorted(waiting, key=lambda c: (c.bib, c.occurrence))
@@ -632,7 +632,7 @@ def compute_overall_results(competition, method, counted_runs, data=None):
 
     ``data`` is ``event_data(competition)`` when the caller is rendering several
     tables — see there."""
-    precision = competition.competition_type.timing_precision
+    precision = competition.rules.timing_precision
     data = data or event_data(competition)
     entries = data["entries"]
     classes = [
@@ -655,7 +655,7 @@ def compute_overall_results(competition, method, counted_runs, data=None):
     scope = overall_scope(method, counted_runs)
     complete, status_rows, waiting = _split(competitors)
     ranked = _rank(
-        complete, competition.competition_type.tie_break,
+        complete, competition.rules.tie_break,
         dedup_key=lambda c: (c.participant_id, c.class_pk),
         scope=scope, manual=load_manual(competition, scope),
     )

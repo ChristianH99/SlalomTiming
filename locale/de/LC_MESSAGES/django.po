@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-01 23:12+0200\n"
+"POT-Creation-Date: 2026-08-02 00:02+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -142,7 +142,16 @@ msgstr "Der letzte Superuser kann nicht gelöscht werden."
 msgid "User “%(name)s” deleted."
 msgstr "Benutzer „%(name)s“ gelöscht."
 
-#: .\apps\competitions\assignment.py:35 .\apps\competitions\models.py:42
+#: .\apps\competitions\archiving.py:60
+msgid ""
+"This competition is archived, so it cannot be changed. Reopen it from "
+"Competition Setup if you need to edit it."
+msgstr ""
+"Dieser Wettbewerb ist archiviert und kann daher nicht geändert werden. "
+"Öffnen Sie ihn unter „Wettbewerb einrichten“ wieder, wenn Sie ihn bearbeiten "
+"müssen."
+
+#: .\apps\competitions\assignment.py:35 .\apps\competitions\models.py:43
 #: .\templates\timing\simulator.html:46
 msgid "Manual"
 msgstr "Manuell"
@@ -177,107 +186,107 @@ msgstr "Max. pro Aufgabe"
 msgid "Required when penalties are enabled."
 msgstr "Erforderlich, wenn Strafen aktiviert sind."
 
-#: .\apps\competitions\models.py:41
+#: .\apps\competitions\models.py:42
 msgid "Fastest run time"
 msgstr "Schnellste Laufzeit"
 
-#: .\apps\competitions\models.py:49
+#: .\apps\competitions\models.py:50
 msgid "1/10 s"
 msgstr "1/10 s"
 
-#: .\apps\competitions\models.py:50
+#: .\apps\competitions\models.py:51
 msgid "1/100 s"
 msgstr "1/100 s"
 
-#: .\apps\competitions\models.py:51
+#: .\apps\competitions\models.py:52
 msgid "1/1000 s"
 msgstr "1/1000 s"
 
-#: .\apps\competitions\models.py:64
+#: .\apps\competitions\models.py:65
 msgid ""
 "Show the penalties screen during timing so penalties can be entered per run."
 msgstr ""
 "Den Strafen-Bildschirm während der Zeitmessung anzeigen, damit Strafen pro "
 "Lauf eingegeben werden können."
 
-#: .\apps\competitions\models.py:67
+#: .\apps\competitions\models.py:68
 msgid "Seconds added per pylon hit."
 msgstr "Sekunden pro Pylonenberührung."
 
-#: .\apps\competitions\models.py:70
+#: .\apps\competitions\models.py:71
 msgid "Seconds added for a failed task."
 msgstr "Sekunden für eine nicht bestandene Aufgabe."
 
-#: .\apps\competitions\models.py:73
+#: .\apps\competitions\models.py:74
 msgid "Seconds added for missing the stop line."
 msgstr "Sekunden für das Verpassen der Stopplinie."
 
-#: .\apps\competitions\models.py:76
+#: .\apps\competitions\models.py:77
 msgid "Upper bound on the seconds a single task can add."
 msgstr "Obergrenze der Sekunden, die eine einzelne Aufgabe hinzufügen kann."
 
-#: .\apps\competitions\models.py:83
+#: .\apps\competitions\models.py:84
 msgid "How equal results are separated."
 msgstr "Wie gleiche Ergebnisse getrennt werden."
 
-#: .\apps\competitions\models.py:88
+#: .\apps\competitions\models.py:89
 msgid "Resolution of the timing device."
 msgstr "Auflösung des Zeitmessgeräts."
 
-#: .\apps\competitions\models.py:106 .\apps\participants\views.py:116
+#: .\apps\competitions\models.py:107 .\apps\participants\views.py:117
 #: .\apps\results\models.py:13
 msgid "Co-driver"
 msgstr "Beifahrer"
 
-#: .\apps\competitions\models.py:108 .\apps\participants\models.py:65
-#: .\apps\participants\views.py:118 .\apps\results\models.py:19
+#: .\apps\competitions\models.py:109 .\apps\participants\models.py:65
+#: .\apps\participants\views.py:119 .\apps\results\models.py:19
 #: .\apps\results\pdf.py:293 .\apps\transfer\merge.py:40
 #: .\templates\results\_results_head.html:7
 msgid "Vehicle"
 msgstr "Fahrzeug"
 
-#: .\apps\competitions\models.py:110 .\apps\participants\views.py:119
+#: .\apps\competitions\models.py:111 .\apps\participants\views.py:120
 #: .\templates\participants\participant_form.html:87
 msgid "Address"
 msgstr "Adresse"
 
-#: .\apps\competitions\models.py:112 .\apps\participants\models.py:69
+#: .\apps\competitions\models.py:113 .\apps\participants\models.py:69
 #: .\apps\results\models.py:14 .\apps\transfer\merge.py:44
-#: .\templates\participants\participant_list.html:42
+#: .\templates\participants\participant_list.html:49
 msgid "Club"
 msgstr "Verein"
 
-#: .\apps\competitions\models.py:113 .\apps\participants\models.py:60
+#: .\apps\competitions\models.py:114 .\apps\participants\models.py:60
 #: .\apps\results\models.py:20 .\apps\transfer\merge.py:37
 msgid "Licence number"
 msgstr "Lizenznummer"
 
-#: .\apps\competitions\models.py:114 .\apps\participants\forms.py:165
-#: .\apps\participants\models.py:70 .\apps\participants\views.py:120
+#: .\apps\competitions\models.py:115 .\apps\participants\forms.py:165
+#: .\apps\participants\models.py:70 .\apps\participants\views.py:121
 #: .\apps\results\models.py:15 .\apps\transfer\merge.py:45
 msgid "E-Mail"
 msgstr "E-Mail"
 
-#: .\apps\competitions\models.py:115 .\apps\participants\views.py:121
+#: .\apps\competitions\models.py:116 .\apps\participants\views.py:122
 #: .\apps\results\models.py:16 .\apps\transfer\merge.py:46
 msgid "Phone"
 msgstr "Telefon"
 
-#: .\apps\competitions\models.py:157
+#: .\apps\competitions\models.py:184
 msgid "The competition currently being run."
 msgstr "Der aktuell laufende Wettbewerb."
 
-#: .\apps\competitions\models.py:162
+#: .\apps\competitions\models.py:189
 msgid "How participants are assigned to classes."
 msgstr "Wie Teilnehmer den Klassen zugeordnet werden."
 
-#: .\apps\competitions\models.py:166
+#: .\apps\competitions\models.py:193
 msgid "Manual assignment only: may a participant be in more than one class."
 msgstr ""
 "Nur bei manueller Zuordnung: darf ein Teilnehmer in mehr als einer Klasse "
 "sein."
 
-#: .\apps\competitions\models.py:170
+#: .\apps\competitions\models.py:197
 msgid ""
 "Marshal posts enter penalties for their own area, instead of the timekeeper "
 "entering every penalty."
@@ -285,7 +294,7 @@ msgstr ""
 "Streckenposten geben Strafen für ihren eigenen Bereich ein, statt dass der "
 "Zeitnehmer jede Strafe einträgt."
 
-#: .\apps\competitions\models.py:376
+#: .\apps\competitions\models.py:442
 #, python-format
 msgid ""
 "“%(name)s” runs from age %(a)s to %(b)s, which is backwards — nobody falls "
@@ -294,7 +303,7 @@ msgstr ""
 "„%(name)s“ geht von Alter %(a)s bis %(b)s, also rückwärts — dort fällt "
 "niemand hinein."
 
-#: .\apps\competitions\models.py:384
+#: .\apps\competitions\models.py:450
 #, python-format
 msgid ""
 "“%(first)s” and “%(second)s” both cover age %(range)s — a competitor that "
@@ -304,7 +313,7 @@ msgstr ""
 "Teilnehmer dieses Alters kommt in „%(first)s“, weil diese Klasse in der "
 "Liste zuerst steht."
 
-#: .\apps\competitions\models.py:397
+#: .\apps\competitions\models.py:463
 #, python-format
 msgid ""
 "No running class covers age %(range)s — a competitor that age is assigned no "
@@ -313,42 +322,42 @@ msgstr ""
 "Keine startende Klasse deckt Alter %(range)s ab — ein Teilnehmer dieses "
 "Alters bekommt keine Klasse und taucht in keiner Startliste auf."
 
-#: .\apps\competitions\models.py:441 .\apps\results\pdf.py:287
+#: .\apps\competitions\models.py:507 .\apps\results\pdf.py:287
 #: .\templates\participants\participant_form.html:37
-#: .\templates\participants\participant_list.html:41
+#: .\templates\participants\participant_list.html:48
 #: .\templates\results\_results_head.html:4 .\templates\timing\live.html:55
 msgid "Class"
 msgstr "Klasse"
 
-#: .\apps\competitions\models.py:453
+#: .\apps\competitions\models.py:519
 msgid "Aggregate times"
 msgstr "Zeiten summiert"
 
-#: .\apps\competitions\models.py:454
+#: .\apps\competitions\models.py:520
 msgid "Best run only"
 msgstr "Nur bester Lauf"
 
-#: .\apps\competitions\models.py:455
+#: .\apps\competitions\models.py:521
 msgid "Regularity test"
 msgstr "Gleichmäßigkeitsprüfung"
 
-#: .\apps\competitions\models.py:459
+#: .\apps\competitions\models.py:525
 msgid "Display order in the classes list."
 msgstr "Anzeigereihenfolge in der Klassenliste."
 
-#: .\apps\competitions\models.py:461
+#: .\apps\competitions\models.py:527
 msgid "Starting age, e.g. 6"
 msgstr "Startalter, z. B. 6"
 
-#: .\apps\competitions\models.py:462
+#: .\apps\competitions\models.py:528
 msgid "Ending age, e.g. 7"
 msgstr "Endalter, z. B. 7"
 
-#: .\apps\competitions\models.py:469
+#: .\apps\competitions\models.py:535
 msgid "How this class's counted runs are turned into a result."
 msgstr "Wie die Wertungsläufe dieser Klasse zu einem Ergebnis werden."
 
-#: .\apps\competitions\models.py:473
+#: .\apps\competitions\models.py:539
 msgid ""
 "Manual assignment only: may a participant be entered into this class more "
 "than once."
@@ -356,7 +365,7 @@ msgstr ""
 "Nur bei manueller Zuordnung: darf ein Teilnehmer mehr als einmal in diese "
 "Klasse eingetragen werden."
 
-#: .\apps\competitions\models.py:478
+#: .\apps\competitions\models.py:544
 msgid ""
 "The run this class belongs to. Classes sharing a run_position start "
 "together; runs execute in ascending order. Null when not placed."
@@ -365,12 +374,12 @@ msgstr ""
 "starten gemeinsam; Läufe werden in aufsteigender Reihenfolge ausgeführt. "
 "Null, wenn nicht zugeordnet."
 
-#: .\apps\competitions\models.py:507
+#: .\apps\competitions\models.py:573
 #, python-format
 msgid "Class %(name)s"
 msgstr "Klasse %(name)s"
 
-#: .\apps\competitions\models.py:526
+#: .\apps\competitions\models.py:592
 #, python-format
 msgid ""
 "The word is added automatically, so this reads “%(shown)s”. Name the class "
@@ -379,11 +388,11 @@ msgstr ""
 "Das Wort wird automatisch ergänzt, dies liest sich also als „%(shown)s“. "
 "Nenne die Klasse „%(suggested)s“."
 
-#: .\apps\competitions\models.py:550
+#: .\apps\competitions\models.py:616
 msgid "No counted runs, so nobody in this class can be ranked."
 msgstr "Keine Wertungsläufe – in dieser Klasse kann niemand gewertet werden."
 
-#: .\apps\competitions\models.py:553
+#: .\apps\competitions\models.py:619
 msgid ""
 "A regularity test needs at least two counted runs — over a single run every "
 "competitor scores 0 and the class is ranked by fastest run."
@@ -392,15 +401,15 @@ msgstr ""
 "einen einzigen Lauf erreicht jeder 0 und die Klasse wird nach der "
 "schnellsten Zeit gewertet."
 
-#: .\apps\competitions\models.py:579
+#: .\apps\competitions\models.py:645
 msgid "1-based post number, in setup order."
 msgstr "1-basierte Postennummer, in Einrichtungsreihenfolge."
 
-#: .\apps\competitions\models.py:583
+#: .\apps\competitions\models.py:649
 msgid "Task numbers this post watches, e.g. “1, 5, 11-15”."
 msgstr "Aufgabennummern, die dieser Posten überwacht, z. B. „1, 5, 11-15“."
 
-#: .\apps\competitions\models.py:587
+#: .\apps\competitions\models.py:653
 msgid "This post also judges the stop line (at most one post per competition)."
 msgstr ""
 "Dieser Posten bewertet auch die Stopplinie (höchstens ein Posten pro "
@@ -414,39 +423,54 @@ msgstr "Training"
 msgid "Counted"
 msgstr "Wertung"
 
-#: .\apps\competitions\views.py:136
+#: .\apps\competitions\views.py:149
 #, python-format
 msgid "Removed %(count)s registration(s) that didn't belong to “%(type)s”."
 msgstr "%(count)s Nennung(en) entfernt, die nicht zu „%(type)s“ gehörten."
 
-#: .\apps\competitions\views.py:139
+#: .\apps\competitions\views.py:152
 msgid "General settings saved."
 msgstr "Allgemeine Einstellungen gespeichert."
 
-#: .\apps\competitions\views.py:255
+#: .\apps\competitions\views.py:271
 msgid "Classes saved."
 msgstr "Klassen gespeichert."
 
-#: .\apps\competitions\views.py:302
+#: .\apps\competitions\views.py:321
 msgid "Run order saved."
 msgstr "Laufreihenfolge gespeichert."
 
-#: .\apps\competitions\views.py:409 .\apps\competitions\views.py:424
+#: .\apps\competitions\views.py:431 .\apps\competitions\views.py:446
 msgid "Penalties settings saved."
 msgstr "Strafen-Einstellungen gespeichert."
 
-#: .\apps\competitions\views.py:414
+#: .\apps\competitions\views.py:436
 msgid "Some task lists couldn't be read — fix them and save again."
 msgstr ""
 "Einige Aufgabenlisten konnten nicht gelesen werden — korrigieren Sie sie und "
 "speichern Sie erneut."
 
-#: .\apps\competitions\views.py:748
+#: .\apps\competitions\views.py:690
+#, python-format
+msgid "“%(name)s” is archived. It now keeps the settings it was run under."
+msgstr ""
+"„%(name)s“ ist archiviert und behält nun die Einstellungen, unter denen der "
+"Wettbewerb gelaufen ist."
+
+#: .\apps\competitions\views.py:708
+#, python-format
+msgid ""
+"“%(name)s” is open again and follows its competition type's current settings."
+msgstr ""
+"„%(name)s“ ist wieder geöffnet und folgt den aktuellen Einstellungen seiner "
+"Wettbewerbsart."
+
+#: .\apps\competitions\views.py:829
 #, python-format
 msgid "Settings for “%(name)s” saved."
 msgstr "Einstellungen für „%(name)s“ gespeichert."
 
-#: .\apps\competitions\views.py:826
+#: .\apps\competitions\views.py:907
 msgid "That type is still in use and can't be deleted."
 msgstr "Dieser Typ wird noch verwendet und kann nicht gelöscht werden."
 
@@ -485,7 +509,7 @@ msgstr "Ort"
 
 #: .\apps\participants\forms.py:171 .\apps\participants\forms.py:201
 #: .\apps\transfer\csvimport.py:126
-#: .\templates\participants\participant_list.html:92
+#: .\templates\participants\participant_list.html:99
 msgid "Bib number"
 msgstr "Startnummer"
 
@@ -547,7 +571,7 @@ msgid "Last name"
 msgstr "Nachname"
 
 #: .\apps\participants\models.py:53 .\apps\transfer\merge.py:36
-#: .\templates\participants\participant_list.html:40
+#: .\templates\participants\participant_list.html:47
 msgid "Date of birth"
 msgstr "Geburtsdatum"
 
@@ -579,43 +603,43 @@ msgstr "Disqualifiziert"
 msgid "Finished"
 msgstr "Beendet"
 
-#: .\apps\participants\views.py:241 .\apps\participants\views.py:254
+#: .\apps\participants\views.py:263 .\apps\participants\views.py:276
 msgid "This bib number was just taken by somebody else."
 msgstr "Diese Startnummer wurde gerade von jemand anderem vergeben."
 
-#: .\apps\participants\views.py:344 .\apps\participants\views.py:419
+#: .\apps\participants\views.py:366 .\apps\participants\views.py:444
 msgid "No competition is selected."
 msgstr "Es ist kein Wettbewerb ausgewählt."
 
-#: .\apps\participants\views.py:347 .\apps\participants\views.py:422
-#: .\apps\results\views.py:668
+#: .\apps\participants\views.py:372 .\apps\participants\views.py:450
+#: .\apps\results\views.py:676
 msgid "Malformed request."
 msgstr "Fehlerhafte Anfrage."
 
-#: .\apps\participants\views.py:354
+#: .\apps\participants\views.py:379
 msgid "Unknown participant."
 msgstr "Unbekannter Teilnehmer."
 
-#: .\apps\participants\views.py:373
+#: .\apps\participants\views.py:398
 msgid "Bib must be a positive number."
 msgstr "Die Startnummer muss eine positive Zahl sein."
 
-#: .\apps\participants\views.py:380
+#: .\apps\participants\views.py:405
 #, python-format
 msgid "Bib %(bib)s is already taken."
 msgstr "Startnummer %(bib)s ist bereits vergeben."
 
-#: .\apps\participants\views.py:399
+#: .\apps\participants\views.py:424
 #, python-format
 msgid "Bib %(bib)s was just taken by somebody else."
 msgstr "Startnummer %(bib)s wurde gerade von jemand anderem vergeben."
 
-#: .\apps\participants\views.py:433
-#: .\templates\participants\participant_list.html:119
+#: .\apps\participants\views.py:461
+#: .\templates\participants\participant_list.html:126
 msgid "Give this participant a bib first."
 msgstr "Vergeben Sie diesem Teilnehmer zuerst eine Startnummer."
 
-#: .\apps\participants\views.py:453
+#: .\apps\participants\views.py:481
 #, python-format
 msgid ""
 "%(count)s recorded run stays with bib %(bib)s and stops being this "
@@ -630,7 +654,7 @@ msgstr[1] ""
 "%(count)s erfasste Läufe bleiben bei Startnummer %(bib)s und gehören dann "
 "nicht mehr zu diesem Teilnehmer."
 
-#: .\apps\participants\views.py:459
+#: .\apps\participants\views.py:487
 #, python-format
 msgid ""
 "%(count)s run already recorded under bib %(bib)s becomes this participant's."
@@ -643,19 +667,19 @@ msgstr[1] ""
 "%(count)s bereits unter Startnummer %(bib)s erfasste Läufe gehören dann zu "
 "diesem Teilnehmer."
 
-#: .\apps\participants\views.py:466
+#: .\apps\participants\views.py:494
 msgid "This moves recorded times."
 msgstr "Dadurch werden erfasste Zeiten verschoben."
 
-#: .\apps\participants\views.py:499
+#: .\apps\participants\views.py:527
 msgid "licence number"
 msgstr "Lizenznummer"
 
-#: .\apps\participants\views.py:503
+#: .\apps\participants\views.py:531
 msgid "name and licence number"
 msgstr "Name und Lizenznummer"
 
-#: .\apps\participants\views.py:505
+#: .\apps\participants\views.py:533
 msgid "name"
 msgstr "Name"
 
@@ -706,7 +730,7 @@ msgid "Rank"
 msgstr "Platz"
 
 #: .\apps\results\pdf.py:285 .\templates\participants\participant_form.html:18
-#: .\templates\participants\participant_list.html:38
+#: .\templates\participants\participant_list.html:45
 #: .\templates\results\_results_head.html:3 .\templates\timing\live.html:48
 msgid "Bib"
 msgstr "Startnr."
@@ -814,15 +838,15 @@ msgstr "Gesamt"
 msgid "Overall · %(label)s · %(runs)s Runs"
 msgstr "Gesamt · %(label)s · %(runs)s Läufe"
 
-#: .\apps\results\views.py:526 .\apps\results\views.py:659
+#: .\apps\results\views.py:526 .\apps\results\views.py:662
 msgid "No active competition."
 msgstr "Kein aktiver Wettbewerb."
 
-#: .\apps\results\views.py:673
+#: .\apps\results\views.py:681
 msgid "Unknown results table."
 msgstr "Unbekannte Ergebnistabelle."
 
-#: .\apps\results\views.py:767
+#: .\apps\results\views.py:778
 msgid "Results settings saved."
 msgstr "Ergebnis-Einstellungen gespeichert."
 
@@ -920,16 +944,16 @@ msgstr "Nicht gewertet"
 msgid "Intermediate"
 msgstr "Zwischenzeit"
 
-#: .\apps\timing\views.py:171
+#: .\apps\timing\views.py:190
 #, python-format
 msgid "Connecting to the Tag Heuer CP540 at %(ip)s:%(port)s…"
 msgstr "Verbinde mit dem Tag Heuer CP540 unter %(ip)s:%(port)s…"
 
-#: .\apps\timing\views.py:177
+#: .\apps\timing\views.py:196
 msgid "Disconnected from the timing device."
 msgstr "Verbindung zum Zeitmessgerät getrennt."
 
-#: .\apps\timing\views.py:179
+#: .\apps\timing\views.py:198
 msgid "Timing settings saved."
 msgstr "Zeitmess-Einstellungen gespeichert."
 
@@ -1181,31 +1205,31 @@ msgstr "„%(path)s“ ist eine Datei, kein Ordner."
 msgid "“%(path)s” can’t be written to (%(error)s)."
 msgstr "„%(path)s“ kann nicht beschrieben werden (%(error)s)."
 
-#: .\apps\transfer\schema.py:195
+#: .\apps\transfer\schema.py:202
 #, python-format
 msgid "The export holds a value %(model)s.%(field)s cannot store."
 msgstr ""
 "Die Exportdatei enthält einen Wert, den %(model)s.%(field)s nicht speichern "
 "kann."
 
-#: .\apps\transfer\views.py:69
+#: .\apps\transfer\views.py:70
 msgid "Backups are on. The first copy is being written now."
 msgstr ""
 "Die Sicherung ist eingeschaltet. Die erste Kopie wird jetzt geschrieben."
 
-#: .\apps\transfer\views.py:72
+#: .\apps\transfer\views.py:73
 msgid "Backups are off."
 msgstr "Die Sicherung ist ausgeschaltet."
 
-#: .\apps\transfer\views.py:153
+#: .\apps\transfer\views.py:154
 msgid "Choose what to export."
 msgstr "Wähle aus, was exportiert werden soll."
 
-#: .\apps\transfer\views.py:200
+#: .\apps\transfer\views.py:201
 msgid "Choose a file to import."
 msgstr "Wähle eine Datei zum Importieren aus."
 
-#: .\apps\transfer\views.py:204
+#: .\apps\transfer\views.py:205
 #, python-format
 msgid ""
 "That file is %(size)s MB — too large for an export archive (the limit is "
@@ -1214,12 +1238,12 @@ msgstr ""
 "Diese Datei ist %(size)s MB groß — zu groß für ein Export-Archiv (die Grenze "
 "liegt bei %(limit)s MB)."
 
-#: .\apps\transfer\views.py:228
+#: .\apps\transfer\views.py:229
 msgid "Choose a competition to import participants into."
 msgstr ""
 "Wähle einen Wettbewerb, in den die Teilnehmer importiert werden sollen."
 
-#: .\apps\transfer\views.py:234
+#: .\apps\transfer\views.py:240
 #, python-format
 msgid ""
 "That file is %(size)s MB — too large for a participant list (the limit is "
@@ -1228,19 +1252,19 @@ msgstr ""
 "Diese Datei ist %(size)s MB groß — zu groß für eine Teilnehmerliste (die "
 "Grenze liegt bei %(limit)s MB)."
 
-#: .\apps\transfer\views.py:247
+#: .\apps\transfer\views.py:253
 msgid "Participants imported."
 msgstr "Teilnehmer importiert."
 
-#: .\apps\transfer\views.py:304
+#: .\apps\transfer\views.py:310
 msgid "Import finished."
 msgstr "Import abgeschlossen."
 
-#: .\apps\transfer\views.py:324
+#: .\apps\transfer\views.py:330
 msgid "Import cancelled — nothing was changed."
 msgstr "Import abgebrochen – es wurde nichts geändert."
 
-#: .\apps\transfer\views.py:337
+#: .\apps\transfer\views.py:343
 msgid "The upload has expired. Please choose the file again."
 msgstr "Der Upload ist abgelaufen. Bitte wähle die Datei erneut aus."
 
@@ -1353,10 +1377,10 @@ msgstr ""
 
 #: .\templates\accounts\user_access.html:23
 #: .\templates\accounts\user_access.html:85
-#: .\templates\competitions\competition_list.html:55
+#: .\templates\competitions\competition_list.html:78
 #: .\templates\competitions\competitiontype_list.html:41
 #: .\templates\competitions\competitiontype_list.html:45
-#: .\templates\participants\participant_list.html:126
+#: .\templates\participants\participant_list.html:133
 msgid "Delete"
 msgstr "Löschen"
 
@@ -1444,7 +1468,7 @@ msgstr "leer lassen zum Beibehalten"
 #: .\templates\competitions\competition_penalties.html:69
 #: .\templates\competitions\competition_runorder.html:75
 #: .\templates\competitions\competitiontype_form.html:10
-#: .\templates\competitions\competitiontype_settings.html:83
+#: .\templates\competitions\competitiontype_settings.html:96
 #: .\templates\participants\participant_form.html:130
 #: .\templates\results\results_settings.html:176
 #: .\templates\timing\settings.html:38 .\templates\transfer\backup.html:90
@@ -1507,7 +1531,7 @@ msgstr "Slalom Timing"
 msgid "Skip to content"
 msgstr "Zum Inhalt springen"
 
-#: .\templates\base.html:40
+#: .\templates\base.html:40 .\templates\competitions\_archived_banner.html:17
 msgid "Manage competitions"
 msgstr "Wettbewerbe verwalten"
 
@@ -1542,7 +1566,7 @@ msgstr "Laufreihenfolge"
 #: .\templates\competitions\competition_penalties.html:3
 #: .\templates\competitions\competition_penalties.html:4
 #: .\templates\competitions\competition_penalties.html:6
-#: .\templates\competitions\competitiontype_settings.html:24
+#: .\templates\competitions\competitiontype_settings.html:37
 msgid "Penalties"
 msgstr "Strafen"
 
@@ -1592,15 +1616,20 @@ msgstr "Abmelden"
 msgid "Toggle navigation"
 msgstr "Navigation umschalten"
 
-#: .\templates\base.html:126
+#: .\templates\base.html:126 .\templates\competitions\_archived_banner.html:10
+#: .\templates\competitions\competition_list.html:30
+msgid "Archived"
+msgstr "Archiviert"
+
+#: .\templates\base.html:129
 msgid "No event selected"
 msgstr "Keine Veranstaltung ausgewählt"
 
-#: .\templates\base.html:126
+#: .\templates\base.html:129
 msgid "choose one"
 msgstr "auswählen"
 
-#: .\templates\base.html:169 .\templates\base.html:181
+#: .\templates\base.html:173 .\templates\base.html:185
 #: .\templates\competitions\competition_add.html:52
 #: .\templates\competitions\competition_classes.html:84
 #: .\templates\competitions\competition_confirm_delete.html:55
@@ -1608,7 +1637,7 @@ msgstr "auswählen"
 #: .\templates\competitions\competition_general.html:55
 #: .\templates\competitions\competition_penalties.html:90
 #: .\templates\competitions\competitiontype_form.html:11
-#: .\templates\competitions\competitiontype_settings.html:84
+#: .\templates\competitions\competitiontype_settings.html:97
 #: .\templates\participants\participant_confirm_delete.html:29
 #: .\templates\participants\participant_form.html:131
 #: .\templates\participants\participant_form.html:157
@@ -1617,11 +1646,11 @@ msgstr "auswählen"
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: .\templates\base.html:176
+#: .\templates\base.html:180
 msgid "Unsaved changes"
 msgstr "Nicht gespeicherte Änderungen"
 
-#: .\templates\base.html:177
+#: .\templates\base.html:181
 msgid ""
 "You have unsaved changes on this page. Do you want to save them before "
 "leaving?"
@@ -1629,13 +1658,21 @@ msgstr ""
 "Sie haben nicht gespeicherte Änderungen auf dieser Seite. Möchten Sie sie "
 "vor dem Verlassen speichern?"
 
-#: .\templates\base.html:179
+#: .\templates\base.html:183
 msgid "Save changes"
 msgstr "Änderungen speichern"
 
-#: .\templates\base.html:180
+#: .\templates\base.html:184
 msgid "Discard"
 msgstr "Verwerfen"
+
+#: .\templates\competitions\_archived_banner.html:12
+msgid ""
+"This event is signed off: it keeps the settings it was run under and no "
+"longer takes times or edits."
+msgstr ""
+"Diese Veranstaltung ist abgeschlossen: Sie behält die Einstellungen, unter "
+"denen sie gelaufen ist, und nimmt keine Zeiten und keine Änderungen mehr an."
 
 #: .\templates\competitions\_class_tile.html:27
 msgid "Running"
@@ -1977,31 +2014,69 @@ msgstr "Wettbewerbstypen verwalten"
 msgid "Current"
 msgstr "Aktuell"
 
-#: .\templates\competitions\competition_list.html:38
+#: .\templates\competitions\competition_list.html:30
+#, python-format
+msgid "Signed off on %(when)s. Evaluated by the settings it was run under."
+msgstr ""
+"Am %(when)s abgeschlossen. Wird nach den Einstellungen ausgewertet, unter "
+"denen der Wettbewerb gelaufen ist."
+
+#: .\templates\competitions\competition_list.html:42
 msgid "No classes running"
 msgstr "Keine Klassen aktiv"
 
-#: .\templates\competitions\competition_list.html:44
+#: .\templates\competitions\competition_list.html:48
 msgid "Configure"
 msgstr "Konfigurieren"
 
-#: .\templates\competitions\competition_list.html:48
+#: .\templates\competitions\competition_list.html:52
 msgid "Set as current"
 msgstr "Als aktuell festlegen"
 
-#: .\templates\competitions\competition_list.html:53
+#: .\templates\competitions\competition_list.html:57
 msgid "Duplicate"
 msgstr "Duplizieren"
 
-#: .\templates\competitions\competition_list.html:59
+#: .\templates\competitions\competition_list.html:67
+#, python-format
+msgid ""
+"Reopen “%(name)s”? It will follow its competition type's current settings "
+"again — if those have changed since it was archived, its results can change "
+"with them."
+msgstr ""
+"„%(name)s“ wieder öffnen? Der Wettbewerb folgt dann wieder den aktuellen "
+"Einstellungen seiner Wettbewerbsart — haben sich diese seit dem Archivieren "
+"geändert, können sich die Ergebnisse mit ändern."
+
+#: .\templates\competitions\competition_list.html:69
+msgid "Reopen"
+msgstr "Wieder öffnen"
+
+#: .\templates\competitions\competition_list.html:73
+#, python-format
+msgid ""
+"Archive “%(name)s”? It keeps the settings it was run under, so later changes "
+"to the competition type can no longer change its results — and it stops "
+"taking times and edits until you reopen it."
+msgstr ""
+"„%(name)s“ archivieren? Der Wettbewerb behält die Einstellungen, unter denen "
+"er gelaufen ist — spätere Änderungen an der Wettbewerbsart können seine "
+"Ergebnisse dann nicht mehr verändern — und nimmt keine Zeiten und keine "
+"Änderungen mehr an, bis Sie ihn wieder öffnen."
+
+#: .\templates\competitions\competition_list.html:75
+msgid "Archive"
+msgstr "Archivieren"
+
+#: .\templates\competitions\competition_list.html:82
 msgid "No competitions yet."
 msgstr "Noch keine Wettbewerbe."
 
-#: .\templates\competitions\competition_list.html:59
+#: .\templates\competitions\competition_list.html:82
 msgid "Create your first one."
 msgstr "Erstellen Sie Ihren ersten."
 
-#: .\templates\competitions\competition_list.html:61
+#: .\templates\competitions\competition_list.html:84
 msgid "No competitions match your search."
 msgstr "Keine Wettbewerbe entsprechen Ihrer Suche."
 
@@ -2192,7 +2267,7 @@ msgid "+ New type"
 msgstr "+ Neuer Typ"
 
 #: .\templates\competitions\competitiontype_list.html:18
-#: .\templates\participants\participant_list.html:39
+#: .\templates\participants\participant_list.html:46
 msgid "Name"
 msgstr "Name"
 
@@ -2241,25 +2316,40 @@ msgstr ""
 "Regeln, nach denen jeder Wettbewerb dieses Typs ausgetragen und ausgewertet "
 "wird."
 
-#: .\templates\competitions\competitiontype_settings.html:33
+#: .\templates\competitions\competitiontype_settings.html:16
+#, python-format
+msgid ""
+"%(count)s archived competition of this type is unaffected: it keeps the "
+"settings it was run under."
+msgid_plural ""
+"%(count)s archived competitions of this type are unaffected: they keep the "
+"settings they were run under."
+msgstr[0] ""
+"%(count)s archivierter Wettbewerb dieses Typs bleibt unberührt: Er behält die "
+"Einstellungen, unter denen er gelaufen ist."
+msgstr[1] ""
+"%(count)s archivierte Wettbewerbe dieses Typs bleiben unberührt: Sie behalten "
+"die Einstellungen, unter denen sie gelaufen sind."
+
+#: .\templates\competitions\competitiontype_settings.html:46
 msgid "Enter penalties during the race"
 msgstr "Strafen während des Rennens eingeben"
 
-#: .\templates\competitions\competitiontype_settings.html:35
+#: .\templates\competitions\competitiontype_settings.html:48
 msgid "With this on, the timing screen shows the penalties entry for each run."
 msgstr ""
 "Wenn dies aktiviert ist, zeigt der Zeitmessbildschirm die Strafeneingabe für "
 "jeden Lauf."
 
-#: .\templates\competitions\competitiontype_settings.html:50
+#: .\templates\competitions\competitiontype_settings.html:63
 msgid "Evaluation"
 msgstr "Auswertung"
 
-#: .\templates\competitions\competitiontype_settings.html:66
+#: .\templates\competitions\competitiontype_settings.html:79
 msgid "Required participant info"
 msgstr "Erforderliche Teilnehmerangaben"
 
-#: .\templates\competitions\competitiontype_settings.html:68
+#: .\templates\competitions\competitiontype_settings.html:81
 msgid ""
 "Which details the participant form asks for in this competition type. Name "
 "and date of birth are always asked for."
@@ -2267,7 +2357,7 @@ msgstr ""
 "Welche Angaben das Teilnehmerformular in diesem Wettbewerbstyp abfragt. Name "
 "und Geburtsdatum werden immer abgefragt."
 
-#: .\templates\competitions\competitiontype_settings.html:69
+#: .\templates\competitions\competitiontype_settings.html:82
 msgid ""
 "<span class=\"required-marker\">*</span> marks a detail that is mandatory "
 "once collected."
@@ -2275,7 +2365,7 @@ msgstr ""
 "<span class=\"required-marker\">*</span> kennzeichnet eine Angabe, die – "
 "sofern erhoben – verpflichtend ist."
 
-#: .\templates\competitions\competitiontype_settings.html:76
+#: .\templates\competitions\competitiontype_settings.html:89
 msgid "Mandatory"
 msgstr "Pflichtangabe"
 
@@ -2511,48 +2601,48 @@ msgstr "Nach Name, Verein oder Startnummer suchen…"
 msgid "Clear search"
 msgstr "Suche zurücksetzen"
 
-#: .\templates\participants\participant_list.html:22
+#: .\templates\participants\participant_list.html:28
 msgid "+ Add participant"
 msgstr "+ Teilnehmer hinzufügen"
 
-#: .\templates\participants\participant_list.html:28
+#: .\templates\participants\participant_list.html:35
 msgid "showing active participants only."
 msgstr "es werden nur aktive Teilnehmer angezeigt."
 
-#: .\templates\participants\participant_list.html:28
+#: .\templates\participants\participant_list.html:35
 msgid "Show all"
 msgstr "Alle anzeigen"
 
-#: .\templates\participants\participant_list.html:30
+#: .\templates\participants\participant_list.html:37
 msgid "showing all registered participants."
 msgstr "es werden alle registrierten Teilnehmer angezeigt."
 
-#: .\templates\participants\participant_list.html:30
+#: .\templates\participants\participant_list.html:37
 msgid "Show active only"
 msgstr "Nur aktive anzeigen"
 
-#: .\templates\participants\participant_list.html:43
+#: .\templates\participants\participant_list.html:50
 msgid "Licence"
 msgstr "Lizenz"
 
-#: .\templates\participants\participant_list.html:61
+#: .\templates\participants\participant_list.html:68
 msgid "DSQ"
 msgstr "DSQ"
 
-#: .\templates\participants\participant_list.html:83
+#: .\templates\participants\participant_list.html:90
 #, python-format
 msgid "Details for %(first)s %(last)s"
 msgstr "Details zu %(first)s %(last)s"
 
-#: .\templates\participants\participant_list.html:102
+#: .\templates\participants\participant_list.html:109
 msgid "No further details recorded."
 msgstr "Keine weiteren Angaben erfasst."
 
-#: .\templates\participants\participant_list.html:112
+#: .\templates\participants\participant_list.html:119
 msgid "Edit full details"
 msgstr "Alle Details bearbeiten"
 
-#: .\templates\participants\participant_list.html:119
+#: .\templates\participants\participant_list.html:126
 msgid ""
 "Removes them from every class result of this competition. A single run is "
 "disqualified on the timing views instead."
@@ -2560,15 +2650,15 @@ msgstr ""
 "Entfernt den Teilnehmer aus jedem Klassenergebnis dieser Veranstaltung. Ein "
 "einzelner Lauf wird stattdessen in den Zeitnahme-Ansichten disqualifiziert."
 
-#: .\templates\participants\participant_list.html:123
+#: .\templates\participants\participant_list.html:130
 msgid "Disqualified from this event"
 msgstr "Von dieser Veranstaltung disqualifiziert"
 
-#: .\templates\participants\participant_list.html:132
+#: .\templates\participants\participant_list.html:139
 msgid "No participants found."
 msgstr "Keine Teilnehmer gefunden."
 
-#: .\templates\participants\participant_list.html:134
+#: .\templates\participants\participant_list.html:141
 msgid "No participants match your search."
 msgstr "Keine Teilnehmer entsprechen Ihrer Suche."
 

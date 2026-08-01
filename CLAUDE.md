@@ -56,6 +56,13 @@ config/                  Django project (settings, urls, asgi/wsgi). health.py i
                          `django_db(transaction=True)`: the ordinary fixture wraps a test
                          in a transaction other threads cannot see, so a threaded test
                          written on it is a test of nothing.
+                         archived_tests.py is the third of that family: it discovers every
+                         *write* door in the app (a `post` method or an `@require_POST`,
+                         minus the admin and accounts namespaces) and checks each one
+                         refuses while the active competition is archived — or is named in
+                         STILL_WRITABLE with the reason it doesn't. "An archived event takes
+                         no writes" is a claim about forty endpoints, and the only version of
+                         that test worth having is the one the forty-first fails.
                          settings.py: HTTPS is the default once DEBUG is off and there is exactly
                          ONE way off it — DJANGO_ALLOW_PLAIN_HTTP (the older per-setting hatches
                          DJANGO_SECURE_SSL_REDIRECT/DJANGO_SECURE_COOKIES now *refuse to start*,
@@ -226,7 +233,12 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          table) rather than refused. Setup UI is a section: a tile list
                          ("Manage competitions") + General / Classes / Run order / Penalties /
                          Results sub-pages that all edit the *active* competition (no pk in the
-                         URL; the Results sub-page lives in apps/results).
+                         URL; the Results sub-page lives in apps/results). The tile list is also
+                         where an event is **archived** and reopened — one tile action each,
+                         both behind the app's own confirm dialog, the archived tile wearing a
+                         pill and a frost leading edge. Archiving is the only action there that
+                         changes what a *finished* event means, so both dialogs say what it
+                         costs: archiving stops times and edits, reopening can move the results.
                          MarshalPost (competition FK, 1-based number, tasks spec, one
                          handles_stop_line per competition, plus claim_token/claim_seen — a
                          heartbeated soft lock so only one device edits a post at a time)
@@ -246,7 +258,30 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
   taskspec.py            parse()/format_ranges()/summary() for the marshal-post task-number
                          specs. Shared by the Penalties page and the Marshal Posts page.
   Competition            also carries auto_timing_order (a saved manual override of the Auto
-                         timing start order; see apps/timing/autotiming.py).
+                         timing start order; see apps/timing/autotiming.py) and the archive
+                         state, archived_at + archived_rules (see archiving.py).
+  archiving.py           Signing an event off, which is what stops a CompetitionType edited
+                         in November from re-ranking July (issue #8). Two halves, both
+                         needed. **The snapshot**: archive() copies every setting of the
+                         competition's type onto the competition, and Competition.rules
+                         hands out that copy from then on — so the rule for the whole app is
+                         that an *evaluation* reads `competition.rules`, never
+                         `competition_type` (which stays the question "which discipline is
+                         this?" — what participants register under, what an export carries).
+                         The copy comes back as a FrozenCompetitionType, a proxy model that
+                         is every inch a CompetitionType except that saving it raises: a
+                         snapshot somebody can turn into a row eventually becomes one.
+                         **The lock**: refuse_json/refuse_page are the one door every write
+                         asks, because a frozen ranking over times recorded afterwards is
+                         not the day's result either. An incoming *time* is the deliberate
+                         exception — ingest stores it ignored rather than refusing it, since
+                         "does not take" must never become "loses". Reopening is possible and
+                         loud: it goes back to the live settings, which can move the results,
+                         so the page says so before it posts. Not to be confused with
+                         apps/transfer/archive.py, the export .zip — though a .zip carries
+                         this state, so a signed-off event moved between machines arrives
+                         signed off, with the settings it was run under rather than whatever
+                         the new machine's type row says.
   assignment.py          Pluggable class-assignment strategies (Manual, Based-on-age) chosen per
                          competition via Competition.assignment_method; add a method in code only
                          (subclass AssignmentMethod + register). Competition.classes_for_participant()
@@ -1215,10 +1250,11 @@ rather than a dead timing view — but it does mean CI runs `collectstatic` befo
 
 ## Tests
 
-~1400 cases from ~680 functions in nine files, in ~20 minutes. **Do not judge the suite by the case
+~1500 cases from ~710 functions in ten files, in ~20 minutes. **Do not judge the suite by the case
 count**: roughly a third of it is a handful of functions parametrised over a list — the hostile
-payloads × every discovered endpoint, the file checks × every template, one per `.js` file, one per
-sidebar entry. Those are the cheapest tests here and the ones with the best failure story, because
+payloads × every discovered endpoint, the archived refusal × every discovered write door, the file
+checks × every template, one per `.js` file, one per sidebar entry. Those are the cheapest tests
+here and the ones with the best failure story, because
 they catch a *class* of bug rather than an instance. The time is not concentrated anywhere either;
 it is the flat cost of ~900 database-backed tests each setting up a competition, so there is no big
 win available short of `pytest-xdist`.
@@ -1228,6 +1264,10 @@ Where the value is concentrated, and what not to break:
 - **`config/hostility_tests.py` discovers its own targets from the URLconf**, so an endpoint added
   next month is covered the day it is added. The malformed-id 500 was reachable on nine endpoints at
   once precisely because the tests that existed named their targets one at a time.
+- **`config/archived_tests.py` does the same for the archive lock** — it finds every write door in
+  the app and checks each refuses while the active competition is archived, or is listed in
+  `STILL_WRITABLE` with the reason it doesn't. Adding a mutating endpoint without a guard fails
+  this the day it lands, which is the only way "an archived event takes no writes" can stay true.
 - **The file-parametrised checks in `config/tests.py`** — no inline script or style, no `onclick=`,
   no multi-line `{# #}`, every dialog labelled, every `.js` structurally whole, the design-system
   scales closed, focus rings not removed. Each is a rule that is easy to break by accident and
@@ -1369,6 +1409,13 @@ each exist because breaking one is what made the app read as several products st
   is rare: forty closed runs is an ordinary afternoon, and the Manual timing table became a
   wall of amber with the rows that still needed work invisible in it. A stripe down the
   leading edge reads at any density.
+- **A read-only app says so once, at the top, everywhere.** The archived-event banner
+  (`templates/competitions/_archived_banner.html`) is included by `base.html` rather than by
+  the pages that refuse: "this event takes no writes" is true of the timing views, the setup
+  pages, the participant list and the results settings at the same moment, and an operator who
+  discovers it one refused save at a time has already lost the work. It is frost, not flame —
+  nothing is going wrong, the event is finished — and the topbar carries the same word beside
+  the event's name so it is visible without scrolling.
 - **"Nothing to operate" is a heading and a centred `.empty-state` card**, the shape Marshal
   Posts uses — never a bare paragraph at the top of a blank page, which reads as a page
   that failed to load. `.empty-state > p` carries its own measure, because the two timing
@@ -1444,11 +1491,13 @@ Things that look like gaps, have been raised, and have an answer. They are liste
 pass recognises them as decided rather than missed — not so they can never be revisited. Where a
 decision has a longer write-up it lives beside the code and is named here.
 
-- **A finished result still depends on a live row.** `CompetitionType`'s precision, penalty
-  amounts and tie-break are read live by `resultscalc`, and the type is shared by every
-  competition of that discipline — so editing a penalty amount in November re-ranks July's event.
-  **Deferred**, because the proper answer is an *archive*: a competition snapshotted when it is
-  signed off. Written up in `apps/competitions/models.py`.
+- **A finished result depended on a live row.** `CompetitionType`'s precision, penalty amounts
+  and tie-break are read live, and the type is shared by every competition of that discipline —
+  so editing a penalty amount in November re-ranked July's event. **Done 2026-08-02 (issue #8):
+  archiving**, `apps/competitions/archiving.py`. What is left of it is the rule that replaced it:
+  an evaluation reads **`Competition.rules`**, never `competition_type`. A *live* competition
+  still follows its type live, and deliberately so — the trap is only closed for events somebody
+  has signed off.
 - **No per-competition scoping on the WebSocket consumers** — see the paragraph above. Deliberate;
   there is only ever one active event.
 - **No self-service password change.** **Waived** — accounts are assigned and a reset is a

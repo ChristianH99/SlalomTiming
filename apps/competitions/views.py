@@ -14,7 +14,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from apps.common import other_signed_in_users, safe_next
 from apps.timing.models import MarshalPenalty
 
-from . import startpattern, taskspec
+from . import archiving, startpattern, taskspec
 from .assignment import assignment_methods_meta
 from .forms import (
     AssignmentForm,
@@ -80,6 +80,16 @@ class ActiveCompetitionMixin:
     def render_empty(self, request):
         return render(request, self.empty_template_name, {})
 
+    def refuse_archived(self, request, competition):
+        """A redirect back to this page when the active competition is archived,
+        else ``None``. Every ``post`` on a page that edits the active event calls
+        this first — an archived event is read-only, and the page it posts from
+        already says so (base.html's banner), so the answer is that page again
+        with the reason in a message rather than an error screen."""
+        if not archiving.refuse_page(request, competition):
+            return None
+        return redirect(request.path)
+
 
 class GeneralView(ActiveCompetitionMixin, View):
     template_name = "competitions/competition_general.html"
@@ -107,6 +117,9 @@ class GeneralView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        archived = self.refuse_archived(request, competition)
+        if archived is not None:
+            return archived
         old_type_id = competition.competition_type_id
         form = CompetitionForm(request.POST, instance=competition)
         if form.is_valid():
@@ -231,6 +244,9 @@ class ClassesView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        archived = self.refuse_archived(request, competition)
+        if archived is not None:
+            return archived
         assignment_form = AssignmentForm(request.POST, instance=competition)
         formset = CompetitionClassFormSet(request.POST, queryset=competition.classes.all())
         if assignment_form.is_valid() and formset.is_valid():
@@ -296,6 +312,9 @@ class RunOrderView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        archived = self.refuse_archived(request, competition)
+        if archived is not None:
+            return archived
         with transaction.atomic():
             self._apply_run_order(request, competition)
             self._apply_start_pattern(request, competition)
@@ -391,6 +410,9 @@ class PenaltiesView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        archived = self.refuse_archived(request, competition)
+        if archived is not None:
+            return archived
         enabled = bool(request.POST.get("penalties_by_marshal_posts"))
         confirmed = bool(request.POST.get("confirm_penalty_loss"))
 
@@ -649,6 +671,58 @@ def select_competition(request, pk):
 
 
 @require_POST
+def archive_competition(request, pk):
+    """Sign an event off: freeze the settings it was run under onto it and make
+    it read-only.
+
+    The one thing this view adds to ``archiving.archive`` is telling the live
+    views. Timing is scoped to the active competition, and archiving the active
+    one changes what every open Manual/Auto timing page is allowed to do — a page
+    that finds out by having its next save refused is a page that lost the
+    operator's work. The nudge is the same one a competition switch sends, and it
+    makes every open view re-render (and pick up the banner) at once.
+    """
+    competition = get_object_or_404(Competition, pk=pk)
+    if not competition.is_archived:
+        archiving.archive(competition)
+        messages.success(
+            request,
+            _("“%(name)s” is archived. It now keeps the settings it was run under.")
+            % {"name": competition.name},
+        )
+        _announce(competition)
+    return redirect(safe_next(request, reverse("competitions:list")))
+
+
+@require_POST
+def reopen_competition(request, pk):
+    """Undo a sign-off. The event follows its type's *current* settings again —
+    which is exactly what makes this worth confirming rather than a plain toggle:
+    if the type has been edited since, reopening moves the results. The page says
+    so before it posts; this view is the half that does it."""
+    competition = get_object_or_404(Competition, pk=pk)
+    if competition.is_archived:
+        archiving.reopen(competition)
+        messages.success(
+            request,
+            _("“%(name)s” is open again and follows its competition type's current settings.")
+            % {"name": competition.name},
+        )
+        _announce(competition)
+    return redirect(safe_next(request, reverse("competitions:list")))
+
+
+def _announce(competition):
+    """Nudge every open live view when the *active* event's archived state moved
+    under it. A competition nobody is looking at needs no announcement."""
+    if not competition.is_active:
+        return
+    from apps.timing.services import notify_competition_changed
+
+    notify_competition_changed(competition.name)
+
+
+@require_POST
 def duplicate_competition(request, pk):
     original = get_object_or_404(Competition, pk=pk)
     from apps.participants.models import ClassAssignment
@@ -742,6 +816,13 @@ class CompetitionTypeSettingsView(UpdateView):
             (form[setting], mandatory)
             for setting, (_label, mandatory, _fields) in CompetitionType.PARTICIPANT_INFO.items()
         ]
+        # How many of this discipline's events these settings can no longer reach.
+        # This is the page where somebody edits a penalty amount and then asks why
+        # last season's results didn't move — the answer belongs here rather than
+        # on the results table that didn't change.
+        context["archived_count"] = self.object.competitions.filter(
+            archived_at__isnull=False
+        ).count()
         return context
 
     def form_valid(self, form):
@@ -756,7 +837,8 @@ class MarshalPostsView(ActiveCompetitionMixin, View):
     """Top-level operator surface a marshal uses on their phone: pick your post,
     then tap the task buttons to enter penalties for the current starter. The
     config (which tasks, stop-line) comes from the active competition's setup;
-    penalty amounts come from its type.
+    penalty amounts come from its ``rules`` — the live type, or the snapshot the
+    event was signed off with (apps/competitions/archiving.py).
 
     Submitting is real, and has been for several features: static/js/marshal_posts.js
     posts each tap and the final submit to timing:marshal-submit through a
@@ -773,7 +855,7 @@ class MarshalPostsView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
-        ctype = competition.competition_type
+        ctype = competition.rules
         posts = list(competition.marshal_posts.all())
         posts_data = [
             {

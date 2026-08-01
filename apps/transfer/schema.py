@@ -68,6 +68,13 @@ COMPETITION_FIELDS = [
     "penalties_by_marshal_posts",
     "start_pattern",
     "auto_timing_order",
+    # An archived event arrives archived, carrying the settings it was run
+    # under — which is the whole point of having archived it. The type row this
+    # document also carries is the *current* one on the source machine and may
+    # already have moved on; a signed-off event must not be re-ranked by
+    # whichever of the two machines happens to hold it.
+    "archived_at",
+    "archived_rules",
 ]
 
 CLASS_FIELDS = [

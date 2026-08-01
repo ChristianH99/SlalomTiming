@@ -1868,3 +1868,39 @@ def test_a_document_with_two_general_column_rows_is_refused_cleanly(settings, tm
         pass  # a sentence the operator can read is the wanted outcome
     except Exception as exc:  # noqa: BLE001
         pytest.fail(f"a duplicate General row raised {type(exc).__name__}: {exc}")
+
+
+# --- an archived event travels archived (issue #8) ---------------------------
+
+def test_an_archived_event_arrives_archived_with_the_settings_it_was_run_under():
+    """The document also carries a competition *type* — the current one on the
+    source machine, which may already have moved on, and which the target may
+    merge into a type of its own. A signed-off event must be re-ranked by
+    neither, so its own snapshot travels with it."""
+    from apps.competitions import archiving
+
+    competition = make_event()
+    archiving.archive(competition)
+    competition.competition_type.pylon_penalty = 99
+    competition.competition_type.save()
+    payload = exporters.export(competition=competition)
+    wipe()
+
+    _plan, result = import_archive(payload)
+
+    imported = result.competition
+    assert imported.is_archived
+    assert imported.archived_at is not None
+    assert imported.rules.pylon_penalty == 5      # the day's, not the 99 above
+    assert imported.competition_type.pylon_penalty == 99
+
+
+def test_a_live_event_arrives_live():
+    competition = make_event()
+    payload = exporters.export(competition=competition)
+    wipe()
+
+    _plan, result = import_archive(payload)
+
+    assert not result.competition.is_archived
+    assert result.competition.archived_rules == {}

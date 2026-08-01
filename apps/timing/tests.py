@@ -2973,3 +2973,53 @@ def test_a_participants_only_role_cannot_inject_a_timing_signal():
 
     assert response.status_code == 403
     assert not TimingSignal.objects.filter(running_number=1, port=1).exists()
+
+
+# ----- a signed-off event takes no more times (issue #8) -----
+
+def test_a_time_arriving_at_an_archived_event_is_kept_but_not_placed(client):
+    """The same treatment the operator's Lock switch gives: an archived event is
+    not taking times, but "not taking" must never mean "losing" — the signal is
+    written, lands on the ignore list, and is still there if the event is
+    reopened. Refusing it at the door would be the one thing apps/timing/ingest.py
+    promises cannot happen."""
+    from apps.competitions import archiving
+
+    comp = make_active_competition()
+    TimingSettings.objects.create(device="simulator")
+    archiving.archive(comp)
+
+    _post_signal(client, running_number=1, port=1, is_manual=False, time="10:00:00.000")
+
+    signal = TimingSignal.objects.get()
+    assert signal.competition_id == comp.pk
+    assert signal.ignored is True
+    assert not TimedRun.objects.filter(start_signal=signal).exists()
+
+
+def test_reopening_lets_times_be_recorded_again(client):
+    from apps.competitions import archiving
+
+    comp = make_active_competition()
+    TimingSettings.objects.create(device="simulator")
+    archiving.archive(comp)
+    archiving.reopen(comp)
+
+    _post_signal(client, running_number=1, port=1, is_manual=False, time="10:00:00.000")
+
+    signal = TimingSignal.objects.get()
+    assert signal.ignored is False
+    assert TimedRun.objects.filter(start_signal=signal).exists()
+
+
+def test_the_timing_views_still_render_for_an_archived_event(client):
+    """Read-only, not closed: the operator opens these to look at what happened."""
+    from apps.competitions import archiving
+
+    comp = make_active_competition()
+    archiving.archive(comp)
+
+    assert client.get(reverse("timing:manual")).status_code == 200
+    assert client.get(reverse("timing:arrangement")).status_code == 200
+    assert client.get(reverse("timing:dashboard")).status_code == 200
+    assert client.get(reverse("timing:dashboard-state")).status_code == 200
