@@ -1,9 +1,19 @@
 {% load i18n %}
 {% comment %}One editable class tile. Age block and repeat toggle are shown/hidden
-by the Classes page JS according to the selected assignment method.{% endcomment %}
+by the Classes page JS according to the selected assignment method.
+
+A tile carries its form *whole* — the pk field included. The page manipulates a
+class by manipulating its tile (competition_classes.js), so a field rendered
+beside the tile instead of inside it is a field those operations leave behind:
+removing a class used to drop the tile while the pk stayed in the POST, which
+the formset read as an existing class submitted with an empty name, and the
+deleted class came back with "This field is required" on it (issue #6). Nothing
+about this form may live outside this element — pinned by
+tests.py::test_a_class_tile_carries_its_whole_form.{% endcomment %}
 <div class="competition-tile class-tile" data-class-tile
      data-run-count="{{ class_form.instance.recorded_run_count|default:0 }}"
      data-assignment-count="{{ class_form.instance.assignment_count|default:0 }}">
+  {{ class_form.id }}
   <div class="class-tile-body">
     <div class="class-tile-top">
       <div class="class-tile-name">
@@ -57,6 +67,13 @@ by the Classes page JS according to the selected assignment method.{% endcomment
       <span class="switch-track"><span class="switch-thumb"></span></span>
       <span class="switch-text">{% trans "Allow multiple entries per participant" %}</span>
     </label>
+
+    {% comment %}Inside the tile so it goes away with it: a class removed before
+    a *failed* save is hidden on the redisplay, and its errors are not the
+    operator's problem any more.{% endcomment %}
+    {% if class_form.non_field_errors %}
+      <div class="field-error">{{ class_form.non_field_errors }}</div>
+    {% endif %}
   </div>
 
   <div class="class-tile-actions">

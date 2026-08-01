@@ -1272,6 +1272,15 @@ each exist because breaking one is what made the app read as several products st
   every `submit` listener, so an invalid form posts and the page's own submit handlers never
   run — including, in one case, the destructive-save guard that was itself a submit listener.
   Use `requestSubmit()`.
+- **A formset row is never taken out of the DOM, and its whole form lives inside the row.**
+  A formset is an *index range*, not a list: a form left out of the POST is a hole, and Django
+  reads the absent fields against that form's own defaults, concludes it changed, and validates
+  it. Removing a row means ticking its `DELETE` box and hiding it — which the formset skips in
+  both validation and save, with or without a pk. And because removal (and any future reorder)
+  operates on the row element, every field of that form has to be *in* it, the pk included: a
+  field rendered beside the row is one those operations leave behind. Both halves were the
+  Classes page's issue #6 — a deleted class came back carrying "This field is required" — and
+  `test_a_class_tile_carries_its_whole_form` pins the second.
 - **A focus ring is never taken away, only quietened.** The global `:focus-visible` outline is
   outranked on specificity by any component rule (`form input:focus` beats `input:focus-visible`),
   so a component's own `outline: none` silently removed the keyboard indicator from every input in

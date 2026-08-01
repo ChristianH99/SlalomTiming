@@ -1,5 +1,6 @@
 import datetime
 import json
+from html.parser import HTMLParser
 
 import pytest
 from django.db import IntegrityError
@@ -183,6 +184,8 @@ def classes_post_data(competition, overrides=None, extra_rows=None,
         i = base + j
         data[f"form-{i}-id"] = ""
         fill(i, f"New{j}", row)
+        if row.get("DELETE"):
+            data[f"form-{i}-DELETE"] = "on"
     data["form-TOTAL_FORMS"] = str(base + len(extra_rows))
     return data
 
@@ -273,6 +276,104 @@ def test_classes_view_deletes_class(client):
     assert response.status_code == 302
     assert competition.classes.count() == before - 1
     assert not competition.classes.filter(name="E").exists()
+
+
+_VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input",
+              "link", "meta", "source", "track", "wbr"}
+
+
+class _ClassTileFields(HTMLParser):
+    """The input names inside each ``data-class-tile`` element, and the ones
+    that belong to a class form but sit outside every tile."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tiles = []
+        self.outside = set()
+        self._depth = 0  # open tags since the current tile's own; 0 = outside
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if self._depth == 0 and "data-class-tile" in attrs:
+            self.tiles.append(set())
+            self._depth = 1
+        elif self._depth and tag not in _VOID_TAGS:
+            self._depth += 1
+        name = attrs.get("name")
+        if tag in ("input", "select", "textarea") and name:
+            (self.tiles[-1] if self._depth else self.outside).add(name)
+
+    def handle_startendtag(self, tag, attrs):
+        # An explicitly closed tag brings no end tag of its own to count.
+        self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag):
+        if self._depth:
+            self._depth -= 1
+
+
+def test_a_class_tile_carries_its_whole_form(client):
+    """The page operates on a class by operating on its tile — removing one
+    ticks the DELETE box inside ``[data-class-tile]`` and hides the element — so
+    every field of a class form has to live in that element or the operation
+    leaves it behind. The pk field once didn't: it was rendered beside the tile,
+    and removing a class (which then dropped the tile) left its id in the POST
+    with the rest of the form gone. The formset read that as an existing class
+    submitted with an empty name, so the deleted class came back with "This
+    field is required" on it (issue #6)."""
+    competition = make_active_competition()
+    response = client.get(reverse("competitions:classes"))
+    assert response.status_code == 200
+    parser = _ClassTileFields()
+    parser.feed(response.content.decode())
+
+    # One tile per class, plus the empty_form in the "add class" <template>.
+    assert len(parser.tiles) == competition.classes.count() + 1
+    for names in parser.tiles:
+        ids = [n for n in names if n.endswith("-id")]
+        assert len(ids) == 1, f"tile does not carry exactly one pk field: {names}"
+        prefix = ids[0][: -len("-id")]
+        for field in ("name", "DELETE", "is_running", "practice_runs",
+                      "counted_runs", "scoring_method"):
+            assert f"{prefix}-{field}" in names, f"{field} rendered outside its tile"
+
+    management = {f"form-{k}" for k in
+                  ("TOTAL_FORMS", "INITIAL_FORMS", "MIN_NUM_FORMS", "MAX_NUM_FORMS")}
+    assert {n for n in parser.outside if n.startswith("form-")} == management
+
+
+def test_classes_view_drops_a_class_removed_before_it_was_ever_saved(client):
+    """"+ Add class", then × before pressing Save. The page keeps the tile and
+    ticks its DELETE box rather than taking it out of the DOM, because a formset
+    is an index range: a form left out of the POST is a hole, and Django reads
+    the absent fields against that form's own defaults (practice_runs=1,
+    counted_runs=2), decides it changed, and validates it — so the abandoned
+    class came back as an empty tile refusing to save without a name."""
+    competition = make_active_competition()
+    before = competition.classes.count()
+    data = classes_post_data(
+        competition,
+        extra_rows=[{"name": "", "practice_runs": "", "counted_runs": "",
+                     "scoring_method": "", "DELETE": True}],
+    )
+    response = client.post(reverse("competitions:classes"), data)
+    assert response.status_code == 302  # not redisplayed with "name is required"
+    assert competition.classes.count() == before
+
+
+def test_classes_view_deletes_the_last_classes_of_a_competition(client):
+    """Nothing fixes the class count at the seven that are seeded — an event
+    running five deletes the other two and keeps them deleted (issue #6)."""
+    competition = make_active_competition()
+    keep = {"1", "2", "3", "4", "5"}
+    doomed = [cc.name for cc in competition.classes.all() if cc.name not in keep]
+    assert doomed, "the seeded set is expected to be larger than the kept five"
+    data = classes_post_data(
+        competition, overrides={name: {"DELETE": True} for name in doomed}
+    )
+    response = client.post(reverse("competitions:classes"), data)
+    assert response.status_code == 302
+    assert set(competition.classes.values_list("name", flat=True)) == keep
 
 
 def test_save_redirects_to_safe_next(client):
