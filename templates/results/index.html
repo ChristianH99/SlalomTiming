@@ -9,6 +9,35 @@
   </div>
   <p class="hint">{{ object.name }} · {{ object.date|date:"d.m.Y" }}</p>
 
+  {% comment %}Times recorded against a bib nobody is registered under. They
+  cannot appear in a class table — with no competitor there is no class to show
+  them under — but this is the page somebody opens to ask whether the event is
+  complete, so they are named here rather than left out of it. Register the
+  participant with that bib and the runs join their results by themselves (see
+  apps/timing/unassigned.py).{% endcomment %}
+  {% if unregistered_bibs %}
+    <h2 class="form-section">{% trans "Times without a competitor" %}</h2>
+    <div class="unregistered">
+      <p class="hint">{% blocktrans %}These times were recorded against a bib that no participant is registered under. Register the participant with that bib and the runs are added to their result.{% endblocktrans %}</p>
+      <ul class="unregistered-list">
+        {% for row in unregistered_bibs %}
+          <li class="unregistered-row">
+            <span class="unregistered-bib">#{{ row.bib }}</span>
+            <span class="unregistered-name">{% trans "No name entered" %}</span>
+            <span class="unregistered-runs">
+              {% for run in row.runs %}
+                <span class="unregistered-run">
+                  <span class="unregistered-run-label">{{ run.label }}</span>
+                  <span class="unregistered-run-time">{% if run.status %}{{ run.status }}{% else %}{{ run.time|default:"–" }}{% endif %}</span>
+                </span>
+              {% endfor %}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
   {% if overall_groups %}
     <h2 class="form-section">{% trans "Overall" %}</h2>
     <div class="results-index">

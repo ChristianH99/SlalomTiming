@@ -665,6 +665,47 @@ def test_results_index_lists_classes(client):
     assert b"Class T1" in response.content
 
 
+def test_results_index_names_a_bib_with_no_competitor(client):
+    """A time recorded against a bib nobody is registered under cannot appear in
+    a class table — without a competitor there is no class to show it under — so
+    it would simply be missing from the one page somebody opens to ask whether
+    the event is complete. It is named here instead, with the name box
+    highlighted."""
+    _, competition, cclass = make_setup()
+    run = add_run(competition, cclass, 47, 1, 30)
+    TimedRun.objects.filter(pk=run.pk).update(competition_class=None)
+
+    rows = views.unregistered_bibs(competition)
+    assert [row["bib"] for row in rows] == [47]
+    assert rows[0]["runs"] == [{"label": "C1", "time": "00:30.00", "status": ""}]
+
+    response = client.get(reverse("results:index"))
+    assert response.status_code == 200
+    assert b"unregistered-name" in response.content
+    assert b"#47" in response.content
+
+
+def test_registering_the_bib_puts_its_runs_in_the_class_table(client):
+    """Registering the participant is the whole fix and needs no second action:
+    the run joins their class result, and the panel above empties. Computing the
+    table is a *read*, so the stored row is left alone until something writes
+    (autotiming.sync_bindings) — the screen never waits on that."""
+    _, competition, cclass = make_setup(counted_runs=1)
+    make_competitor(competition, cclass, 47)
+    run = add_run(competition, cclass, 47, 1, 30)
+    TimedRun.objects.filter(pk=run.pk).update(competition_class=None)
+
+    assert views.unregistered_bibs(competition) == []
+    results = resultscalc.compute_class_results(competition, cclass)
+    assert [(c.bib, c.rank) for c in results.ranked] == [(47, 1)]
+    run.refresh_from_db()
+    assert run.competition_class_id is None      # the read wrote nothing
+
+    resultscalc.sync_identities(competition)     # …the next writer does
+    run.refresh_from_db()
+    assert run.competition_class_id == cclass.pk
+
+
 # ----- time formatting -----
 
 def test_format_clock_mm_ss():

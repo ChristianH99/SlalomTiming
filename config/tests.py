@@ -974,6 +974,30 @@ class TestRightClickOnlyEverIgnoresATime:
         assert 'contextmenu' not in source
 
 
+class TestTheDashboardDoesNotPrintOneTimeTwice:
+    """With penalties turned off a run's total time *is* its run time, so the
+    current-competitor card printed the same number twice under two labels. The
+    timing views keep both — a fixed layout the timekeeper reads at speed — but the
+    Dashboard is a glance, so the run time only appears where it can differ."""
+
+    @staticmethod
+    def _guard_before(source, figure):
+        """The source between the nearest preceding penalties test and ``figure``.
+        A ``}`` in it means the guard closed before the figure was appended."""
+        at = source.index(figure)
+        return source[source.rindex('state.penalties_enabled', 0, at):at]
+
+    def test_the_run_time_figure_is_inside_the_penalty_guard(self):
+        source = (JS_DIR / 'dashboard_overview.js').read_text(encoding='utf-8')
+        between = self._guard_before(source, 'gettext("Run time")')
+        assert '}' not in between, between
+
+    def test_the_total_time_figure_is_not(self):
+        source = (JS_DIR / 'dashboard_overview.js').read_text(encoding='utf-8')
+        between = self._guard_before(source, 'gettext("Total time")')
+        assert '}' in between, 'the total time is gated away with the run time'
+
+
 class TestNoMadeUpBibNumbers:
     """An unattributed run — a real time no slot owns — rendered "#?" in the
     field an operator reads first, on a tile that already says what it is in words

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-01 21:31+0200\n"
+"POT-Creation-Date: 2026-08-01 23:08+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -159,12 +159,12 @@ msgstr "Typ auswählen…"
 msgid "Pylon"
 msgstr "Pylone"
 
-#: .\apps\competitions\forms.py:46 .\apps\timing\autotiming.py:412
+#: .\apps\competitions\forms.py:46 .\apps\timing\autotiming.py:427
 #: .\templates\timing\live.html:64
 msgid "Task"
 msgstr "Aufgabe"
 
-#: .\apps\competitions\forms.py:47 .\apps\timing\autotiming.py:413
+#: .\apps\competitions\forms.py:47 .\apps\timing\autotiming.py:428
 #: .\templates\timing\live.html:65
 msgid "Stop line"
 msgstr "Stopplinie"
@@ -588,7 +588,7 @@ msgid "No competition is selected."
 msgstr "Es ist kein Wettbewerb ausgewählt."
 
 #: .\apps\participants\views.py:347 .\apps\participants\views.py:422
-#: .\apps\results\views.py:635
+#: .\apps\results\views.py:668
 msgid "Malformed request."
 msgstr "Fehlerhafte Anfrage."
 
@@ -788,45 +788,45 @@ msgstr ""
 "Die Ränge müssen der Reihe nach vergeben werden – bei Gleichstand bleibt die "
 "kleinere Zahl."
 
-#: .\apps\results\resultscalc.py:609 .\apps\results\views.py:313
+#: .\apps\results\resultscalc.py:609 .\apps\results\views.py:314
 #, python-format
 msgid "%(label)s · %(runs)s Runs"
 msgstr "%(label)s · %(runs)s Läufe"
 
-#: .\apps\results\views.py:76
+#: .\apps\results\views.py:77
 msgid "Best run"
 msgstr "Bester Lauf"
 
-#: .\apps\results\views.py:78
+#: .\apps\results\views.py:79
 msgid "Difference"
 msgstr "Differenz"
 
-#: .\apps\results\views.py:79 .\templates\timing\live.html:68
+#: .\apps\results\views.py:80 .\templates\timing\live.html:68
 msgid "Total"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:312 .\templates\results\index.html:13
+#: .\apps\results\views.py:313 .\templates\results\index.html:43
 msgid "Overall"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:315 .\templates\base.html:72
+#: .\apps\results\views.py:316 .\templates\base.html:72
 #, python-format
 msgid "Overall · %(label)s · %(runs)s Runs"
 msgstr "Gesamt · %(label)s · %(runs)s Läufe"
 
-#: .\apps\results\views.py:525 .\apps\results\views.py:626
+#: .\apps\results\views.py:526 .\apps\results\views.py:659
 msgid "No active competition."
 msgstr "Kein aktiver Wettbewerb."
 
-#: .\apps\results\views.py:640
+#: .\apps\results\views.py:673
 msgid "Unknown results table."
 msgstr "Unbekannte Ergebnistabelle."
 
-#: .\apps\results\views.py:734
+#: .\apps\results\views.py:767
 msgid "Results settings saved."
 msgstr "Ergebnis-Einstellungen gespeichert."
 
-#: .\apps\timing\autotiming.py:411
+#: .\apps\timing\autotiming.py:426
 msgid "Pylons"
 msgstr "Pylonen"
 
@@ -920,16 +920,16 @@ msgstr "Nicht gewertet"
 msgid "Intermediate"
 msgstr "Zwischenzeit"
 
-#: .\apps\timing\views.py:170
+#: .\apps\timing\views.py:171
 #, python-format
 msgid "Connecting to the Tag Heuer CP540 at %(ip)s:%(port)s…"
 msgstr "Verbinde mit dem Tag Heuer CP540 unter %(ip)s:%(port)s…"
 
-#: .\apps\timing\views.py:176
+#: .\apps\timing\views.py:177
 msgid "Disconnected from the timing device."
 msgstr "Verbindung zum Zeitmessgerät getrennt."
 
-#: .\apps\timing\views.py:178
+#: .\apps\timing\views.py:179
 msgid "Timing settings saved."
 msgstr "Zeitmess-Einstellungen gespeichert."
 
@@ -1525,7 +1525,7 @@ msgstr "Allgemein"
 #: .\templates\competitions\competition_classes.html:4
 #: .\templates\competitions\competition_classes.html:12
 #: .\templates\competitions\competition_classes.html:21
-#: .\templates\results\index.html:24 .\templates\timing\dashboard.html:35
+#: .\templates\results\index.html:54 .\templates\timing\dashboard.html:35
 #: .\templates\timing\dashboard.html:36
 msgid "Classes"
 msgstr "Klassen"
@@ -2631,20 +2631,38 @@ msgstr "Diesen Lauf als nicht angetreten markieren?"
 msgid "Export all to PDF"
 msgstr "Alle als PDF exportieren"
 
-#: .\templates\results\index.html:17
+#: .\templates\results\index.html:20
+msgid "Times without a competitor"
+msgstr "Zeiten ohne Teilnehmer"
+
+#: .\templates\results\index.html:22
+msgid ""
+"These times were recorded against a bib that no participant is registered "
+"under. Register the participant with that bib and the runs are added to "
+"their result."
+msgstr ""
+"Diese Zeiten wurden auf eine Startnummer erfasst, unter der kein Teilnehmer "
+"registriert ist. Registrieren Sie den Teilnehmer mit dieser Startnummer, "
+"dann werden die Läufe seinem Ergebnis hinzugefügt."
+
+#: .\templates\results\index.html:27
+msgid "No name entered"
+msgstr "Kein Name hinterlegt"
+
+#: .\templates\results\index.html:47
 #: .\templates\results\results_overall.html:9
 #, python-format
 msgid "Overall · %(label)s"
 msgstr "Gesamt · %(label)s"
 
-#: .\templates\results\index.html:18
+#: .\templates\results\index.html:48
 #, python-format
 msgid "%(runs)s Runs · %(count)s class"
 msgid_plural "%(runs)s Runs · %(count)s classes"
 msgstr[0] "%(runs)s Läufe · %(count)s Klasse"
 msgstr[1] "%(runs)s Läufe · %(count)s Klassen"
 
-#: .\templates\results\index.html:32
+#: .\templates\results\index.html:62
 msgid "No running classes yet."
 msgstr "Noch keine laufenden Klassen."
 
