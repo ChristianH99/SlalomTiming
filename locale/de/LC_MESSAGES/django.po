@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-01 21:49+0200\n"
+"POT-Creation-Date: 2026-08-01 23:12+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -159,12 +159,12 @@ msgstr "Typ auswählen…"
 msgid "Pylon"
 msgstr "Pylone"
 
-#: .\apps\competitions\forms.py:46 .\apps\timing\autotiming.py:412
+#: .\apps\competitions\forms.py:46 .\apps\timing\autotiming.py:427
 #: .\templates\timing\live.html:65
 msgid "Task"
 msgstr "Aufgabe"
 
-#: .\apps\competitions\forms.py:47 .\apps\timing\autotiming.py:413
+#: .\apps\competitions\forms.py:47 .\apps\timing\autotiming.py:428
 #: .\templates\timing\live.html:66
 msgid "Stop line"
 msgstr "Stopplinie"
@@ -588,7 +588,7 @@ msgid "No competition is selected."
 msgstr "Es ist kein Wettbewerb ausgewählt."
 
 #: .\apps\participants\views.py:347 .\apps\participants\views.py:422
-#: .\apps\results\views.py:635
+#: .\apps\results\views.py:668
 msgid "Malformed request."
 msgstr "Fehlerhafte Anfrage."
 
@@ -788,45 +788,45 @@ msgstr ""
 "Die Ränge müssen der Reihe nach vergeben werden – bei Gleichstand bleibt die "
 "kleinere Zahl."
 
-#: .\apps\results\resultscalc.py:609 .\apps\results\views.py:313
+#: .\apps\results\resultscalc.py:609 .\apps\results\views.py:314
 #, python-format
 msgid "%(label)s · %(runs)s Runs"
 msgstr "%(label)s · %(runs)s Läufe"
 
-#: .\apps\results\views.py:76
+#: .\apps\results\views.py:77
 msgid "Best run"
 msgstr "Bester Lauf"
 
-#: .\apps\results\views.py:78
+#: .\apps\results\views.py:79
 msgid "Difference"
 msgstr "Differenz"
 
-#: .\apps\results\views.py:79 .\templates\timing\live.html:69
+#: .\apps\results\views.py:80 .\templates\timing\live.html:69
 msgid "Total"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:312 .\templates\results\index.html:13
+#: .\apps\results\views.py:313 .\templates\results\index.html:43
 msgid "Overall"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:315 .\templates\base.html:72
+#: .\apps\results\views.py:316 .\templates\base.html:72
 #, python-format
 msgid "Overall · %(label)s · %(runs)s Runs"
 msgstr "Gesamt · %(label)s · %(runs)s Läufe"
 
-#: .\apps\results\views.py:525 .\apps\results\views.py:626
+#: .\apps\results\views.py:526 .\apps\results\views.py:659
 msgid "No active competition."
 msgstr "Kein aktiver Wettbewerb."
 
-#: .\apps\results\views.py:640
+#: .\apps\results\views.py:673
 msgid "Unknown results table."
 msgstr "Unbekannte Ergebnistabelle."
 
-#: .\apps\results\views.py:734
+#: .\apps\results\views.py:767
 msgid "Results settings saved."
 msgstr "Ergebnis-Einstellungen gespeichert."
 
-#: .\apps\timing\autotiming.py:411
+#: .\apps\timing\autotiming.py:426
 msgid "Pylons"
 msgstr "Pylonen"
 
@@ -920,16 +920,16 @@ msgstr "Nicht gewertet"
 msgid "Intermediate"
 msgstr "Zwischenzeit"
 
-#: .\apps\timing\views.py:170
+#: .\apps\timing\views.py:171
 #, python-format
 msgid "Connecting to the Tag Heuer CP540 at %(ip)s:%(port)s…"
 msgstr "Verbinde mit dem Tag Heuer CP540 unter %(ip)s:%(port)s…"
 
-#: .\apps\timing\views.py:176
+#: .\apps\timing\views.py:177
 msgid "Disconnected from the timing device."
 msgstr "Verbindung zum Zeitmessgerät getrennt."
 
-#: .\apps\timing\views.py:178
+#: .\apps\timing\views.py:179
 msgid "Timing settings saved."
 msgstr "Zeitmess-Einstellungen gespeichert."
 
@@ -1525,7 +1525,7 @@ msgstr "Allgemein"
 #: .\templates\competitions\competition_classes.html:4
 #: .\templates\competitions\competition_classes.html:12
 #: .\templates\competitions\competition_classes.html:21
-#: .\templates\results\index.html:24 .\templates\timing\dashboard.html:35
+#: .\templates\results\index.html:54 .\templates\timing\dashboard.html:35
 #: .\templates\timing\dashboard.html:36
 msgid "Classes"
 msgstr "Klassen"
@@ -1554,7 +1554,7 @@ msgstr "Manuelle Zeitmessung"
 
 #: .\templates\base.html:58 .\templates\timing\auto.html:3
 #: .\templates\timing\auto.html:4 .\templates\timing\auto.html:12
-#: .\templates\timing\auto.html:31 .\templates\timing\auto.html:41
+#: .\templates\timing\auto.html:32 .\templates\timing\auto.html:42
 msgid "Auto timing"
 msgstr "Automatische Zeitmessung"
 
@@ -2631,20 +2631,38 @@ msgstr "Diesen Lauf als nicht angetreten markieren?"
 msgid "Export all to PDF"
 msgstr "Alle als PDF exportieren"
 
-#: .\templates\results\index.html:17
+#: .\templates\results\index.html:20
+msgid "Times without a competitor"
+msgstr "Zeiten ohne Teilnehmer"
+
+#: .\templates\results\index.html:22
+msgid ""
+"These times were recorded against a bib that no participant is registered "
+"under. Register the participant with that bib and the runs are added to "
+"their result."
+msgstr ""
+"Diese Zeiten wurden auf eine Startnummer erfasst, unter der kein Teilnehmer "
+"registriert ist. Registrieren Sie den Teilnehmer mit dieser Startnummer, "
+"dann werden die Läufe seinem Ergebnis hinzugefügt."
+
+#: .\templates\results\index.html:27
+msgid "No name entered"
+msgstr "Kein Name hinterlegt"
+
+#: .\templates\results\index.html:47
 #: .\templates\results\results_overall.html:9
 #, python-format
 msgid "Overall · %(label)s"
 msgstr "Gesamt · %(label)s"
 
-#: .\templates\results\index.html:18
+#: .\templates\results\index.html:48
 #, python-format
 msgid "%(runs)s Runs · %(count)s class"
 msgid_plural "%(runs)s Runs · %(count)s classes"
 msgstr[0] "%(runs)s Läufe · %(count)s Klasse"
 msgstr[1] "%(runs)s Läufe · %(count)s Klassen"
 
-#: .\templates\results\index.html:32
+#: .\templates\results\index.html:62
 msgid "No running classes yet."
 msgstr "Noch keine laufenden Klassen."
 
@@ -2937,7 +2955,18 @@ msgstr ""
 "Ziehen Sie eine Kachel in der Liste, um sie umzuordnen, und ziehen Sie eine "
 "ignorierte Zeit zurück auf einen Platz, um sie erneut zuzuordnen."
 
-#: .\templates\timing\auto.html:15
+#: .\templates\timing\auto.html:15 .\templates\timing\live.html:16
+msgid ""
+"<strong>Right-click</strong> a wrong time to send it to the Ignored list, or "
+"drag it there. Putting one back is a drag onto a slot (or a double-click on "
+"the chip) — never a right-click, so a mis-aimed one can't re-pair a time."
+msgstr ""
+"Mit einem <strong>Rechtsklick</strong> schicken Sie eine falsche Zeit auf "
+"die Ignorierliste; ziehen geht auch. Zurück kommt sie nur, indem Sie sie auf "
+"einen Platz ziehen (oder den Chip doppelklicken) — nie per Rechtsklick, "
+"damit ein danebengegangener Klick keine Zeit neu zuordnen kann."
+
+#: .\templates\timing\auto.html:16
 msgid ""
 "<strong>Double-click</strong> a Start, Finish or Run time to type it in by "
 "hand when the device didn't fire — keyed-in times are highlighted. "
@@ -2952,7 +2981,7 @@ msgstr ""
 "durchsehen, ohne den aktuellen Starter zu ändern; die Eingabe einer "
 "Startzeit bei einem kommenden Teilnehmer macht ihn zum aktuellen."
 
-#: .\templates\timing\auto.html:16
+#: .\templates\timing\auto.html:17
 msgid ""
 "The <strong>Status</strong> buttons close a run without a time: <strong>DNF</"
 "strong> did not finish, <strong>DNC</strong> did not classify, <strong>DNS</"
@@ -2969,7 +2998,7 @@ msgstr ""
 "Disqualifikation von der gesamten Veranstaltung erfolgt auf der Seite "
 "Teilnehmer."
 
-#: .\templates\timing\auto.html:17 .\templates\timing\live.html:18
+#: .\templates\timing\auto.html:18 .\templates\timing\live.html:18
 msgid ""
 "The red <strong>Lock</strong> switch sends every incoming time straight to "
 "the Ignored list — a way to pause capture without disconnecting the device."
@@ -2978,7 +3007,7 @@ msgstr ""
 "direkt auf die Ignorierliste — eine Möglichkeit, die Erfassung zu pausieren, "
 "ohne das Gerät zu trennen."
 
-#: .\templates\timing\auto.html:33
+#: .\templates\timing\auto.html:34
 #, python-format
 msgid ""
 "No competition is selected. Timing runs against the active competition, so "
@@ -2988,7 +3017,7 @@ msgstr ""
 "Wettbewerb — <a href=\"%(list_url)s\">wählen Sie einen Wettbewerb</a>, um "
 "ihn zu messen."
 
-#: .\templates\timing\auto.html:45
+#: .\templates\timing\auto.html:46
 #, python-format
 msgid ""
 "Automatic timing runs off the start pattern — the order competitors take "
@@ -3000,7 +3029,7 @@ msgstr ""
 "keines. <a href=\"%(runorder_url)s\">Legen Sie ein Startmuster an</a>, um "
 "diese Seite zu nutzen."
 
-#: .\templates\timing\auto.html:46
+#: .\templates\timing\auto.html:47
 #, python-format
 msgid ""
 "You don’t have to. <a href=\"%(manual_url)s\">Manual timing</a> records "
@@ -3009,20 +3038,20 @@ msgstr ""
 "Sie müssen nicht. Die <a href=\"%(manual_url)s\">manuelle Zeitmessung</a> "
 "erfasst Zeiten ohne Muster, mit der Startnummer je Lauf."
 
-#: .\templates\timing\auto.html:55
+#: .\templates\timing\auto.html:56
 msgid "Start order"
 msgstr "Startreihenfolge"
 
-#: .\templates\timing\auto.html:61
+#: .\templates\timing\auto.html:62
 msgid "Discard the manual order and re-derive it from the run order"
 msgstr ""
 "Die manuelle Reihenfolge verwerfen und neu aus der Laufreihenfolge ableiten"
 
-#: .\templates\timing\auto.html:61
+#: .\templates\timing\auto.html:62
 msgid "Reset order"
 msgstr "Reihenfolge zurücksetzen"
 
-#: .\templates\timing\auto.html:74
+#: .\templates\timing\auto.html:75
 #, python-format
 msgid ""
 "No class is running yet — mark the classes that start on the <a "
@@ -3031,7 +3060,7 @@ msgstr ""
 "Noch ist keine Klasse aktiv – markieren Sie die startenden Klassen auf der "
 "Seite <a href=\"%(classes_url)s\">Klassen</a>."
 
-#: .\templates\timing\auto.html:75
+#: .\templates\timing\auto.html:76
 #, python-format
 msgid ""
 "Nobody is registered in the running classes yet — <a "
@@ -3041,7 +3070,7 @@ msgstr ""
 "href=\"%(participants_url)s\">Teilnehmer anlegen</a> und einer Klasse "
 "zuweisen."
 
-#: .\templates\timing\auto.html:76
+#: .\templates\timing\auto.html:77
 #, python-format
 msgid ""
 "The running classes grant no runs — give them practice or counted runs on "
@@ -3105,16 +3134,6 @@ msgstr ""
 "Ziel- oder Laufzeit (oder einen leeren Platz), um sie von Hand einzugeben, "
 "wenn das Gerät nicht ausgelöst hat — von Hand eingegebene Zeiten sind "
 "hervorgehoben."
-
-#: .\templates\timing\live.html:16
-msgid ""
-"<strong>Drag</strong> a wrong time to the Ignored list on the right to "
-"ignore it; drag it back onto a slot (or double-click the chip) to use it "
-"again."
-msgstr ""
-"<strong>Ziehen</strong> Sie eine falsche Zeit auf die Ignorierliste rechts, "
-"um sie zu ignorieren; ziehen Sie sie zurück auf einen Platz (oder "
-"doppelklicken Sie den Chip), um sie erneut zu verwenden."
 
 #: .\templates\timing\live.html:17
 msgid ""

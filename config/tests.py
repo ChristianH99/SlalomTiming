@@ -976,6 +976,61 @@ class TestTheManualTimingBlankLine:
         assert 'state.rows.some' in release.group(0), release.group(0)
 
 
+class TestRightClickOnlyEverIgnoresATime:
+    """Throwing a wrong measurement away is the one thing an operator does in a
+    hurry and mid-run, so both timing views take a right-click for it. Putting a
+    time *back* deliberately does not: a right-click that lands on the wrong chip
+    would then re-pair a real time onto a run, which is the expensive mistake and
+    the one nobody would go looking for. So the gesture is one-way on both pages,
+    and the rail — the only place a restore lives — has no handler at all."""
+
+    @pytest.mark.parametrize('name', ['timing_live.js', 'auto_timing.js'])
+    def test_a_time_chip_ignores_on_right_click(self, name):
+        source = (JS_DIR / name).read_text(encoding='utf-8')
+        assert 'contextmenu' in source, f'{name} has no right-click handler'
+        handler = re.search(
+            r'function ignoreOnRightClick\(.*?\n  \}', source, re.S)
+        assert handler, f'{name} does not route the right-click through one place'
+        body = handler.group(0)
+        assert 'preventDefault' in body, body      # else the browser menu opens
+        assert re.search(r'\((?:signalId|.*?), true\)', body), body
+
+    @pytest.mark.parametrize('name', ['timing_live.js', 'auto_timing.js'])
+    def test_nothing_restores_a_time_on_one(self, name):
+        """The only ``ignored`` call a right-click may make is the ignoring one."""
+        source = (JS_DIR / name).read_text(encoding='utf-8')
+        handler = re.search(r'function ignoreOnRightClick\(.*?\n  \}', source, re.S)
+        assert 'false' not in handler.group(0), handler.group(0)
+
+    def test_the_ignored_rail_has_no_right_click_at_all(self):
+        source = (JS_DIR / 'ignored_panel.js').read_text(encoding='utf-8')
+        assert 'contextmenu' not in source
+
+
+class TestTheDashboardDoesNotPrintOneTimeTwice:
+    """With penalties turned off a run's total time *is* its run time, so the
+    current-competitor card printed the same number twice under two labels. The
+    timing views keep both — a fixed layout the timekeeper reads at speed — but the
+    Dashboard is a glance, so the run time only appears where it can differ."""
+
+    @staticmethod
+    def _guard_before(source, figure):
+        """The source between the nearest preceding penalties test and ``figure``.
+        A ``}`` in it means the guard closed before the figure was appended."""
+        at = source.index(figure)
+        return source[source.rindex('state.penalties_enabled', 0, at):at]
+
+    def test_the_run_time_figure_is_inside_the_penalty_guard(self):
+        source = (JS_DIR / 'dashboard_overview.js').read_text(encoding='utf-8')
+        between = self._guard_before(source, 'gettext("Run time")')
+        assert '}' not in between, between
+
+    def test_the_total_time_figure_is_not(self):
+        source = (JS_DIR / 'dashboard_overview.js').read_text(encoding='utf-8')
+        between = self._guard_before(source, 'gettext("Total time")')
+        assert '}' in between, 'the total time is gated away with the run time'
+
+
 class TestNoMadeUpBibNumbers:
     """An unattributed run — a real time no slot owns — rendered "#?" in the
     field an operator reads first, on a tile that already says what it is in words

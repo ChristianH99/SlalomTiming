@@ -17,11 +17,12 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView, UpdateView
 
 from apps.accounts import pages
+from apps.competitions import startpattern
 from apps.competitions.models import Competition, CompetitionClass
 from apps.common import json_body as _shared_json_body
 from apps.participants.models import EventEntry
 
-from . import arrangement, autotiming, calc, cp540, dashboard, runstatus
+from . import arrangement, autotiming, calc, cp540, dashboard, runstatus, unassigned
 from .forms import TimingSettingsForm
 from .ingest import record_signal
 from .models import MarshalPenalty, TimedRun, TimingSettings, TimingSignal
@@ -786,9 +787,12 @@ def timing_run_update(request):
         run.run_type, run.run_number = "", None  # class changed → re-derive the run
     if "run_value" in payload:
         run.run_type, run.run_number = _parse_run_value(payload.get("run_value"))
-    # Once a class is set (auto or manual) and the run wasn't set explicitly here,
-    # default the run to the next not-yet-done one, in order P then C.
-    if "run_value" not in payload and run.competition_class and not run.run_type:
+    # Once the bib is known (with a class, or without one — see _next_undone_run)
+    # and the run wasn't set explicitly here, default it to the next not-yet-done
+    # one, in order P then C.
+    if "run_value" not in payload and not run.run_type and (
+        run.competition_class or run.bib_number
+    ):
         nxt = _next_undone_run(ctx, run)
         if nxt:
             run.run_type, run.run_number = nxt
@@ -1098,14 +1102,33 @@ class _RowContext:
             # them makes participant_slots() free.
             .prefetch_related("participant__class_assignments__competition_class")
         }
+        # Materialised once: ``runs`` may be a queryset, and it is walked twice
+        # below (and again by runs_recorded_for_bib) — a second pass over a lazy
+        # one is a second query, on the endpoint every browser re-fetches.
+        self._runs = list(runs)
         # (bib, class pk, occurrence) -> the runs recorded in that slot. The key a
         # row asks about is a *candidate* class (a dropdown option), not
         # necessarily the run's own — hence the class in the key.
         self._by_slot = {}
-        for other in runs:
+        for other in self._runs:
             key = (other.bib_number, other.competition_class_id, other.class_occurrence)
             self._by_slot.setdefault(key, []).append(other)
         self._slots = {}  # participant pk -> [(class, occurrence)]
+        self._unassigned_choices = None
+
+    def unassigned_run_choices(self):
+        """The runs offered for a bib no competitor is registered under — the union
+        over the running classes (see apps/timing/unassigned.py). Read on first
+        use, so an event where every bib resolves never pays for it."""
+        if self._unassigned_choices is None:
+            self._unassigned_choices = unassigned.run_choices(self.competition)
+        return self._unassigned_choices
+
+    def runs_recorded_for_bib(self, run):
+        """The (run_type, number) pairs already recorded against this row's bib,
+        whatever class they went down in — the only question that can be asked
+        about a bib with no competitor behind it."""
+        return unassigned.recorded_for_bib(self._runs, run.bib_number, exclude=run)
 
     @classmethod
     def load(cls, competition):
@@ -1289,7 +1312,16 @@ def _next_undone_run(ctx, run):
     class occurrence."""
     cclass = run.competition_class
     if cclass is None:
-        return None
+        # No competitor behind this bib yet: fall back to the same union the Run
+        # dropdown offers, so typing an unknown bib still lands on the run that
+        # bib has not driven rather than leaving the column blank.
+        if not run.bib_number:
+            return None
+        used = ctx.runs_recorded_for_bib(run)
+        return next(
+            (choice for choice in ctx.unassigned_run_choices() if choice not in used),
+            None,
+        )
     used = ctx.recorded_runs(run, cclass, run.class_occurrence)
     for run_type, count in (
         ("practice", cclass.practice_runs or 0),
@@ -1347,7 +1379,22 @@ def _run_options(ctx, run):
     this bib marked disabled (e.g. P1 is disabled once this bib has a P1)."""
     cclass = run.competition_class
     if cclass is None:
-        return []
+        # A bib nobody is registered under yet. There is no class to read the runs
+        # off, so the union over the running classes is offered instead — see
+        # apps/timing/unassigned.py for why the union and not the intersection.
+        # Without this the Run column was an empty dropdown and a time went down
+        # as "bib 47, no idea which run", which nothing can score or match later.
+        if not run.bib_number:
+            return []
+        used = ctx.runs_recorded_for_bib(run)
+        return [
+            {
+                "value": f"{run_type}-{number}",
+                "label": startpattern.RUN_TYPE_SHORT[run_type] + str(number),
+                "disabled": (run_type, number) in used,
+            }
+            for run_type, number in ctx.unassigned_run_choices()
+        ]
     used = ctx.recorded_runs(run, cclass, run.class_occurrence)
     options = []
     for run_type, short, count in (

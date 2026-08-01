@@ -9,7 +9,7 @@ from django.urls import resolve, reverse
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
 from apps.participants.models import ClassAssignment, EventEntry, Participant
 
-from . import arrangement, autotiming, calc, views
+from . import arrangement, autotiming, calc, unassigned, views
 from .connectors import TimingPulse, get_connector
 from .connectors.simulator import SimulatorConnector
 from .models import MarshalPenalty, TimedRun, TimingEvent, TimingSettings, TimingSignal
@@ -617,6 +617,114 @@ def test_run_update_resolves_name_and_defaults_class(client):
     resp = post_json(client, "timing:run-update", run_id=run.id, bib_number="7").json()
     assert resp["ok"] and resp["row"]["run"]["name"] == "Ada Lovelace"
     assert resp["row"]["run"]["class_key"] == f"{cclass.pk}:0"
+
+
+# ----- a bib nobody is registered under (apps/timing/unassigned.py) -----
+
+def test_an_unregistered_bib_is_offered_its_runs(client):
+    """Somebody turns up at the line wearing 47 and the paperwork hasn't caught
+    up. The bib was always kept — the Run column was the problem: built from the
+    class, and with no competitor there is no class, so the dropdown was empty and
+    the time went down as "bib 47, some time, no idea which run"."""
+    comp = make_active_competition()
+    comp.classes.filter(name="1").update(is_running=True, practice_runs=1, counted_runs=2)
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    row = post_json(client, "timing:run-update", run_id=run.id, bib_number="47").json()["row"]
+    assert row["run"]["bib_unknown"] is True
+    assert [o["value"] for o in row["run"]["run_options"]] == [
+        "practice-1", "counted-1", "counted-2"]
+    # And the first not-yet-driven one is picked, as it is for a bib we know.
+    assert row["run"]["run_value"] == "practice-1"
+
+
+def test_the_offer_is_the_union_over_the_running_classes(client):
+    """Class 1 grants a practice run and Class 2 does not; both grant two counted
+    runs. Which class this bib belongs to is precisely what isn't known, so all
+    three runs are offered: an option too many is a choice, an option too few is a
+    time that cannot be recorded at all."""
+    comp = make_active_competition()
+    comp.classes.filter(name="1").update(is_running=True, practice_runs=1, counted_runs=2)
+    comp.classes.filter(name="2").update(is_running=True, practice_runs=0, counted_runs=2)
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    row = post_json(client, "timing:run-update", run_id=run.id, bib_number="47").json()["row"]
+    assert [o["label"] for o in row["run"]["run_options"]] == ["P1", "C1", "C2"]
+
+
+def test_a_run_already_recorded_for_that_bib_is_not_offered_again(client):
+    """"Only the runs not yet done" — asked of the *bib*, because there is no
+    class to ask it of. The one already recorded is disabled, the way a known
+    competitor's is."""
+    comp = make_active_competition()
+    comp.classes.filter(name="1").update(is_running=True, practice_runs=1, counted_runs=2)
+    first = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    post_json(client, "timing:run-update", run_id=first.id, bib_number="47",
+              run_value="practice-1")
+    second = run_of(signal_in(comp, 1, "10:01:00.000", running=2))
+    row = post_json(client, "timing:run-update", run_id=second.id,
+                    bib_number="47").json()["row"]
+    disabled = {o["value"] for o in row["run"]["run_options"] if o["disabled"]}
+    assert disabled == {"practice-1"}
+    assert row["run"]["run_value"] == "counted-1"   # the next one it hasn't done
+
+
+def test_the_class_arrives_when_the_bib_is_registered(client):
+    """The paperwork catches up: an entry now carries bib 47. The run recorded
+    against it gets that competitor's class, so the time reaches their result —
+    and their name was never the problem, since it is read from the bib."""
+    comp = make_active_competition()
+    comp.classes.filter(name="1").update(is_running=True)
+    cclass = comp.classes.get(name="1")
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    post_json(client, "timing:run-update", run_id=run.id, bib_number="47",
+              run_value="counted-1")
+    run.refresh_from_db()
+    assert run.competition_class_id is None
+
+    participant = Participant.objects.create(
+        competition_type=comp.competition_type, first_name="Ada", last_name="Lovelace",
+        date_of_birth=datetime.date(2010, 1, 1), license_number="L1",
+    )
+    EventEntry.objects.create(participant=participant, competition=comp, bib_number=47)
+    ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+
+    autotiming.sync_bindings(comp)
+    run.refresh_from_db()
+    assert run.competition_class_id == cclass.pk
+    row = serialize_arrangement(comp)["rows"][0]["run"]
+    assert row["name"] == "Ada Lovelace" and row["bib_unknown"] is False
+
+
+def test_a_reader_shows_the_class_without_writing_it(client):
+    """The Manual view is a GET and must not take the write lock the timing rig
+    needs, so it folds the class on in memory — the operator sees it at once and
+    the row is written by the next thing that writes anyway."""
+    comp = make_active_competition()
+    comp.classes.filter(name="1").update(is_running=True)
+    cclass = comp.classes.get(name="1")
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    post_json(client, "timing:run-update", run_id=run.id, bib_number="47",
+              run_value="counted-1")
+    participant = Participant.objects.create(
+        competition_type=comp.competition_type, first_name="Ada", last_name="Lovelace",
+        date_of_birth=datetime.date(2010, 1, 1), license_number="L2",
+    )
+    EventEntry.objects.create(participant=participant, competition=comp, bib_number=47)
+    ClassAssignment.objects.create(participant=participant, competition_class=cclass)
+
+    assert serialize_arrangement(comp)["rows"][0]["run"]["class_name"] == cclass.name
+    run.refresh_from_db()
+    assert run.competition_class_id is None   # the read left the row alone
+
+
+def test_a_bib_with_a_competitor_is_never_listed_as_unregistered(client):
+    comp = make_active_competition()
+    comp.classes.filter(name="1").update(is_running=True)
+    run = run_of(signal_in(comp, 1, "10:00:00.000"))
+    post_json(client, "timing:run-update", run_id=run.id, bib_number="47",
+              run_value="counted-1")
+    assert [g["bib"] for g in unassigned.unregistered(comp)] == [47]
+    make_participant(comp.competition_type, 47, comp)
+    assert unassigned.unregistered(comp) == []
 
 
 def test_run_update_marks_over_max(client):
