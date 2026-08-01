@@ -54,11 +54,9 @@
 
     <div class="class-tiles" id="class-tiles">
       {% for class_form in formset %}
-        {{ class_form.id }}
+        {% comment %}The pk field and the form's own errors are rendered by the
+        tile, not here — see the comment in _class_tile.html.{% endcomment %}
         {% include "competitions/_class_tile.html" with class_form=class_form %}
-        {% if class_form.errors %}
-          <div class="field-error">{{ class_form.non_field_errors }}</div>
-        {% endif %}
       {% endfor %}
     </div>
 

@@ -67,18 +67,30 @@
     if (nameInput) nameInput.focus();
   });
 
-  // Actually take a tile out of the form: existing classes are flagged for
-  // deletion (applied on Save) and hidden; brand-new ones are just dropped.
+  // Actually take a tile out of the form. Both kinds — a saved class and one
+  // added in this session — are flagged for deletion and hidden. Neither is
+  // taken out of the DOM, because a formset is an index range and a missing
+  // form is a *hole* in it rather than one form fewer: Django reads the absent
+  // fields against that form's own defaults, concludes it has changed, and so
+  // validates it. A class added and then removed before Save came back as an
+  // empty tile refusing to save without a name. A flagged form is skipped by
+  // both the validation and the save whether or not it has a pk (see
+  // BaseModelFormSet.save_new_objects), so one path serves both.
   function removeTile(tile) {
-    const idInput = tile.querySelector('input[name$="-id"]');
-    if (idInput && idInput.value) {
-      const del = tile.querySelector('input[name$="-DELETE"]');
-      if (del) del.checked = true;
-      tile.hidden = true;
-    } else {
-      tile.remove();
-    }
+    const del = tile.querySelector('input[name$="-DELETE"]');
+    if (del) del.checked = true;
+    tile.hidden = true;
     markUnsaved();
+  }
+
+  // A redisplay after a validation error renders the removed tiles again, their
+  // DELETE box still ticked but the tile visible — the operator would see a
+  // class they had already taken out. Honour the tick they cannot see.
+  function hideFlaggedTiles() {
+    container.querySelectorAll("[data-class-tile]").forEach((tile) => {
+      const del = tile.querySelector('input[name$="-DELETE"]');
+      if (del && del.checked) tile.hidden = true;
+    });
   }
 
   // In-page confirm (matching the unsaved-changes dialog) shown before a class
@@ -129,5 +141,6 @@
   }
 
   applyMethod();
+  hideFlaggedTiles();
   container.querySelectorAll("[data-class-tile]").forEach(updateBirthYears);
 })();
