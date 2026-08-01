@@ -1377,3 +1377,76 @@ class TestTheSecurityLogGoesSomewhere:
             or settings.LOGGING['loggers'].get('apps') \
             or settings.LOGGING['root']
         assert logger['level'] in ('DEBUG', 'INFO'), logger
+
+
+class TestEveryDateInputShowsItsDate:
+    """`<input type="date">` reads exactly one value format — ISO — and silently
+    ignores anything else, leaving the control **empty**. Django renders a date
+    through the active locale, so on the shipped default language (German) a
+    stored 15 June 2010 arrived as `15.06.2010`, the browser dropped it, and an
+    operator opening an existing participant saw no birthday. Nothing errored;
+    the value was still in the database.
+
+    Both dates this app edits had it (issue #1), independently, because each
+    declared its own widget — which is why the fix is one shared widget
+    (`apps.common.DateInput`) and this test is about the *class* of bug: any date
+    field anywhere in the project, including one added next month, must render a
+    format the picker will actually accept.
+
+    The suite is pinned to English (conftest), and English's first
+    DATE_INPUT_FORMATS entry happens to be ISO, so every existing test rendering
+    a form passed while the shipped language was broken. Hence the explicit
+    languages below rather than the ambient one.
+    """
+
+    ISO = '%Y-%m-%d'
+
+    def _date_widgets(self):
+        """Every date widget declared by any form in the project, found rather
+        than listed — a widget nobody remembered to add here is the whole
+        failure mode."""
+        import importlib
+
+        from django import forms
+
+        found = []
+        for path in sorted(Path(settings.BASE_DIR).glob('apps/*/forms.py')):
+            module = importlib.import_module(f'apps.{path.parent.name}.forms')
+            for name in dir(module):
+                candidate = getattr(module, name)
+                if not (isinstance(candidate, type)
+                        and issubclass(candidate, forms.BaseForm)):
+                    continue
+                for field_name, field in getattr(candidate, 'base_fields', {}).items():
+                    widget = field.widget
+                    if isinstance(widget, forms.DateInput) or \
+                            getattr(widget, 'input_type', None) == 'date':
+                        found.append((f'{name}.{field_name}', widget))
+        return found
+
+    def test_the_project_still_has_date_inputs_to_check(self):
+        """If the discovery breaks, everything below passes vacuously."""
+        assert len(self._date_widgets()) >= 2, self._date_widgets()
+
+    def test_every_date_widget_renders_iso(self):
+        for label, widget in self._date_widgets():
+            assert widget.format == self.ISO, (
+                f'{label} renders {widget.format!r}; a native date picker reads '
+                f'{self.ISO!r} and drops anything else, showing an empty field'
+            )
+
+    def test_a_date_survives_rendering_in_every_shipped_language(self):
+        """The guarantee stated the way the operator meets it, and asked of every
+        language we ship rather than of German alone."""
+        import datetime
+
+        from django.utils import translation
+
+        from apps.common import DateInput
+
+        for code, _label in settings.LANGUAGES:
+            with translation.override(code):
+                rendered = DateInput().render('date', datetime.date(2010, 6, 15))
+            assert 'value="2010-06-15"' in rendered, (
+                f'a date rendered for {code} as {rendered!r}'
+            )

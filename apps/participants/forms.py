@@ -1,6 +1,7 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
+from apps.common import DateInput
 from apps.competitions.models import Competition, CompetitionType
 
 from .models import EventEntry, Participant
@@ -145,7 +146,10 @@ class ParticipantForm(forms.ModelForm):
             "phone_number",
         ]
         widgets = {
-            "date_of_birth": forms.DateInput(attrs={"type": "date"}),
+            # apps.common.DateInput, not forms.DateInput: a native date picker
+            # only reads an ISO value and drops a localised one, which is how an
+            # existing birthday came up empty on a German page.
+            "date_of_birth": DateInput(),
             # autocomplete off: these fields get custom dropdowns (club memory
             # base, email-domain completion) that the browser's native autofill
             # would otherwise overlap.

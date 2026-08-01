@@ -2,7 +2,40 @@
 
 import json
 
+from django import forms
 from django.utils.http import url_has_allowed_host_and_scheme
+
+# The one format a browser's native date picker will read or write, whatever
+# language the page is in. It is not a display format and never reaches a reader:
+# the browser renders the value in the *user's* locale and posts it back as this.
+ISO_DATE = "%Y-%m-%d"
+
+
+class DateInput(forms.DateInput):
+    """A native date picker that shows the date it was given.
+
+    ``<input type="date">`` accepts exactly one value format — ISO ``2010-06-15``
+    — and **silently ignores anything else**, leaving the control empty. Django,
+    meanwhile, renders a date through the active locale: with the shipped default
+    language (German) a stored 15 June 2010 comes out as ``15.06.2010``, the
+    browser discards it, and the operator opens an existing participant to find
+    the birthday gone. Nothing errors; the value is still in the database.
+
+    So the format is pinned here rather than at each use. The two dates this app
+    edits (a participant's date of birth, a competition's date) each declared
+    their own ``forms.DateInput(attrs={"type": "date"})`` and each had the bug;
+    a third would have inherited it. ``config/tests.py`` fails on any date widget
+    in the project that is not this one.
+
+    Note this is a *rendering* fix only — the browser posts ISO back and Django's
+    ``DateField`` parses that in any locale, so saving was never broken. The
+    report was of a value that vanished from the screen, and that is what it was.
+    """
+
+    input_type = "date"
+
+    def __init__(self, attrs=None, format=None):        # noqa: A002 - Django's own name
+        super().__init__(attrs, format or ISO_DATE)
 
 
 def json_body(request):

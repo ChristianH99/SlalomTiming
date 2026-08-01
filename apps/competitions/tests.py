@@ -1513,3 +1513,18 @@ def test_the_database_refuses_a_second_active_competition():
             competition_type=ctype, name="B", date=datetime.date(2026, 6, 1),
             is_active=True,
         )
+
+
+# ----- the event's own date must survive the round trip (issue #1) -----
+
+def test_the_general_page_still_shows_the_events_date_in_german(client, settings):
+    """Same bug as the participant birthday, same cause: `<input type="date">`
+    reads ISO and nothing else, while Django renders a date through the active
+    locale — so on the shipped default language the General page offered the
+    operator an empty date, and the suite's English pin hid it."""
+    settings.LANGUAGE_CODE = "de"
+    make_active_competition()
+
+    page = client.get(reverse("competitions:general")).content.decode()
+
+    assert 'value="2026-05-01"' in page
