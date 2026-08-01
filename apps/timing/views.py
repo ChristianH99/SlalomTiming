@@ -1220,9 +1220,10 @@ def _serialize_run(run, ctx):
         # A row with neither time (and no typed run time) is a placeholder awaiting
         # a starter. A row closed with a state code is not awaiting anything — it
         # is a recorded outcome, so it neither reads as a placeholder nor offers
-        # the × that would throw the outcome away (clear the status first).
-        "placeholder": (start is None and finish is None
-                        and run.manual_run_time is None and not run.status),
+        # the × that would throw the outcome away (clear the status first). The
+        # rule lives in arrangement, which sorts by it too — read differently here,
+        # a row would read as a recorded outcome and still float above the times.
+        "placeholder": arrangement.is_placeholder(run),
         "run_time": calc.format_clock(rt, precision),
         # The run time was typed in by hand, not measured — highlighted apart.
         "run_time_manual": run.manual_run_time is not None,

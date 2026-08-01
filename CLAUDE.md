@@ -411,12 +411,28 @@ apps/timing/            The current timing path is TimingSignal -> arrangement -
                          autotiming (started_runs/_signal_activity/bind_runs) and results.
                          A start first fills the oldest empty *placeholder* row (one
                          pre-entered by the operator, no times *and no typed run time* yet) before
-                         opening a new run. ignore keeps a row that still carries a bib/run/typed
+                         opening a new run. open_runs()/awaits_finish() are the one rule for
+                         which runs a finish may still close — and the reason a run is open is
+                         **not** merely "start, no finish": a typed manual_run_time (the device
+                         missed the finish, so the operator keyed the time in) and a state code
+                         settle a run exactly as a finish signal does. Neither was excluded, so a
+                         settled run stayed the *oldest* open one for the rest of the event and
+                         swallowed every following finish, rewriting the typed time and leaving
+                         the runner who did cross the beam without one (issue #5). Same rule for
+                         the single-barrier phase — effective_role() and autotiming.barrier_phase()
+                         both read it, so the pill can't promise a phase the rig hasn't got.
+                         ignore keeps a row that still carries a bib/run/typed
                          time (placeholder) rather than deleting it. assign() (drag a time onto a
                          slot) drops the dragged signal in first so re-homing the previous occupant
                          can't break the OneToOne; a measured occupant it displaces keeps its own
                          row, a keyed-in override (entered) is discarded. ingest()/detach()/assign()/
-                         rows(); rows() is newest-first with placeholders on top. effective_role()
+                         rows(); rows() is newest-first with placeholders on top —
+                         is_placeholder() being the one rule for that (the view renders the
+                         row by it too): a row settled by hand with no signal on it, a typed
+                         run time or a DNS, is a recorded *outcome* rather than a row awaiting
+                         a starter, so it sorts by its own created_at among the times instead
+                         of being pinned above every later one for the rest of the event.
+                         effective_role()
                          handles a single light barrier (start_channel == finish_channel): the one
                          channel alternates start/finish/start/…
   runstatus.py           Closing a run with a **state code** instead of a time: DNF / DNC / DNS /

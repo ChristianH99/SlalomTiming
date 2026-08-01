@@ -2,10 +2,12 @@
 
 Pairing is *causal*: a finish can only join a start that came before it. When a
 finish arrives it closes the oldest still-open start; if none is open it stands
-on its own line with a blank start. A start never adopts a finish that arrived
-before it — those orphan finishes keep their own lines. The operator can override
-a pairing by dragging a time onto a run's slot (``assign``), which is rejected if
-it would put a start after its finish.
+on its own line with a blank start. "Open" is ``open_runs``: a run whose time has
+already been settled another way — a hand-typed run time, a state code — is not
+waiting for a finish, whatever its slots look like. A start never adopts a finish
+that arrived before it — those orphan finishes keep their own lines. The operator
+can override a pairing by dragging a time onto a run's slot (``assign``), which is
+rejected if it would put a start after its finish.
 
 Ordering (which run is "newest", which open start is "oldest") is by *arrival* —
 ``received_at``/``id`` — not by the device's own clock. A real timing device runs
@@ -79,6 +81,40 @@ def reconcile(competition, settings):
         ingest(signal, settings)
 
 
+def open_runs(competition):
+    """Runs still waiting for a finish — the ones an incoming finish may close.
+
+    A run is open while it has a start, no finish, **and** no run time by any other
+    route: the operator's own typed ``manual_run_time`` (the device missed the
+    finish, so the time was keyed in) and a state code both settle a run as surely
+    as a finish signal does. Neither used to be excluded, so a settled run sat in
+    this list for the rest of the event as the *oldest* open one and swallowed the
+    next competitor's finish — rewriting a time the operator had entered by hand
+    and leaving the runner who actually crossed the beam without one.
+
+    ``awaits_finish`` is the same rule for a run object already in memory; keep the
+    two in step (``test_the_two_open_run_rules_agree``)."""
+    return TimedRun.objects.filter(
+        competition=competition,
+        start_signal__isnull=False,
+        finish_signal__isnull=True,
+        manual_run_time__isnull=True,
+        status="",
+    )
+
+
+def awaits_finish(run):
+    """Whether ``run`` is still open for a finish — ``open_runs``' rule, asked of a
+    run the caller already holds (see autotiming.barrier_phase, which must read the
+    phase the arrangement will actually use)."""
+    return bool(
+        run.start_signal_id
+        and not run.finish_signal_id
+        and run.manual_run_time is None
+        and not run.status
+    )
+
+
 def effective_role(signal, settings):
     """The role a signal plays. With distinct start/finish channels it is fixed by
     port. With a single light barrier (start_channel == finish_channel) the one
@@ -88,25 +124,17 @@ def effective_role(signal, settings):
         return signal.role(settings)
     if signal.port != settings.start_channel:
         return None
-    has_open_run = TimedRun.objects.filter(
-        competition=signal.competition,
-        start_signal__isnull=False,
-        finish_signal__isnull=True,
-    ).exists()
+    has_open_run = open_runs(signal.competition).exists()
     return TimingSignal.Role.FINISH if has_open_run else TimingSignal.Role.START
 
 
 def _oldest_open_run(finish_signal):
-    """The open run (has a start, no finish) this finish closes: the earliest to
-    have *arrived* whose measured start time is no later than the finish's (so the
-    run time can't be negative)."""
+    """The open run (see ``open_runs``) this finish closes: the earliest to have
+    *arrived* whose measured start time is no later than the finish's (so the run
+    time can't be negative)."""
     candidates = [
         run
-        for run in TimedRun.objects.filter(
-            competition=finish_signal.competition,
-            start_signal__isnull=False,
-            finish_signal__isnull=True,
-        ).select_related("start_signal")
+        for run in open_runs(finish_signal.competition).select_related("start_signal")
         if run.start_signal.device_time <= finish_signal.device_time
     ]
     candidates.sort(key=lambda run: (run.start_signal.received_at, run.start_signal_id))
@@ -189,6 +217,20 @@ def assign(signal, target_run, slot):
     return True
 
 
+def is_placeholder(run):
+    """Whether a row is still *awaiting* a starter — pre-entered by the operator
+    and holding nothing but their bib and run. A row settled by hand (a typed run
+    time, a state code) is a recorded outcome, not a placeholder, even though it
+    has no signals: it is not waiting for anything, so it neither reads as one on
+    the timing view (views._serialize_run) nor floats above the times (_sort_key)."""
+    return (
+        run.start_signal_id is None
+        and run.finish_signal_id is None
+        and run.manual_run_time is None
+        and not run.status
+    )
+
+
 def rows(competition):
     """Every run for the competition, newest first (by arrival of its anchor
     signal), so fresh times appear at the top without scrolling. Placeholders (no
@@ -206,8 +248,15 @@ def rows(competition):
 
 def _sort_key(run):
     signal = run.start_signal or run.finish_signal
-    if signal is None:
-        # Placeholder: bucket 1 (above timed rows), newest-added (created_at) first.
+    if signal is not None:
+        # Timed: bucket 0, most recently *arrived* first (not by the device clock).
+        return (0, signal.received_at, signal.id)
+    if is_placeholder(run):
+        # Awaiting a starter: bucket 1 (above the timed rows), newest-added first.
         return (1, run.created_at, run.id)
-    # Timed: bucket 0, most recently *arrived* first (not by the device clock).
-    return (0, signal.received_at, signal.id)
+    # Settled by hand and holding no signal at all — a run time typed onto a
+    # pre-entered row, or a DNS for a competitor who never started. It is a
+    # recorded outcome, so it belongs among the times rather than pinned above
+    # them for the rest of the event: it takes its own creation time as its
+    # arrival and keeps that place while later times come in above it.
+    return (0, run.created_at, run.id)
