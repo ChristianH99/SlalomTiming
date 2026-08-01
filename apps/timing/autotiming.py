@@ -20,7 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from apps.competitions import startpattern
 from apps.participants.models import EventEntry
 
-from . import calc
+from . import arrangement, calc
 from .models import TimedRun, TimingSignal
 
 
@@ -567,12 +567,15 @@ def barrier_phase(settings, runs):
     rail) deletes its half-open run and puts the phase back.
 
     Computed from the runs the caller has already read — this is on the live path,
-    which must not grow a query per refresh."""
+    which must not grow a query per refresh. What counts as *open* is
+    ``arrangement``'s rule and not a second opinion (a run given a typed run time or
+    a state code is settled, so the next pulse is the next competitor's start);
+    reading it differently here would show the operator a phase the rig doesn't
+    have."""
     if settings.start_channel != settings.finish_channel:
         return None
     open_run = any(
-        run is not None and run.start_signal_id and not run.finish_signal_id
-        for run in runs
+        run is not None and arrangement.awaits_finish(run) for run in runs
     )
     role = TimingSignal.Role.FINISH if open_run else TimingSignal.Role.START
     return {"next_role": role.value}

@@ -687,6 +687,119 @@ def test_a_run_closed_with_a_state_code_does_not_absorb_the_next_time(client):
     assert TimedRun.objects.get(start_signal=signal).id != marked.id
 
 
+def test_a_typed_run_time_closes_the_run_to_the_next_finish(client):
+    """The device missed a finish and the operator keyed the run time in, so that
+    run is settled. It used to stay the *oldest open* one for the rest of the
+    event and swallow every following finish — overwriting the typed time and
+    leaving the runner who actually crossed the beam without one."""
+    comp = make_active_competition()
+    first = run_of(signal_in(comp, 1, "10:00:00.000", running=1))   # start A
+    post_json(client, "timing:set-runtime", run_id=first.id, run_time="30.00")
+    second = run_of(signal_in(comp, 1, "10:01:00.000", running=2))  # start B
+    signal_in(comp, 2, "10:01:30.000", running=3)                   # finish → B's
+
+    first.refresh_from_db(); second.refresh_from_db()
+    assert first.finish_signal_id is None
+    assert first.manual_run_time == Decimal("30.000")
+    assert second.finish_signal is not None
+
+
+def test_a_run_closed_with_a_state_code_does_not_absorb_the_next_finish(client):
+    """Same rule from the other door: a DNF run has no finish coming, so the next
+    one belongs to the next starter."""
+    comp = make_active_competition()
+    first = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    post_json(client, "timing:run-status", run_id=first.id, status="dnf")
+    second = run_of(signal_in(comp, 1, "10:01:00.000", running=2))
+    signal_in(comp, 2, "10:01:30.000", running=3)
+
+    first.refresh_from_db(); second.refresh_from_db()
+    assert first.finish_signal_id is None and first.status == "dnf"
+    assert second.finish_signal is not None
+
+
+def test_a_settled_run_does_not_invert_the_single_barrier_phase(client):
+    """One beam alternates start/finish by asking whether a run is open. A run the
+    operator has closed by hand is not, so the next pulse is the next competitor's
+    *start* — and the phase pill has to say the same thing the arrangement does."""
+    comp = make_active_competition()
+    settings = TimingSettings.load()
+    settings.start_channel = settings.finish_channel = 1
+    settings.save()
+    first = run_of(signal_in(comp, 1, "10:00:00.000", running=1))   # start
+    post_json(client, "timing:set-runtime", run_id=first.id, run_time="30.00")
+
+    runs = autotiming.all_runs(comp)
+    assert autotiming.barrier_phase(settings, runs)["next_role"] == "start"
+    signal_in(comp, 1, "10:01:00.000", running=2)  # read as a start, not a finish
+    first.refresh_from_db()
+    assert first.finish_signal_id is None
+    assert TimedRun.objects.count() == 2
+
+
+def test_a_row_settled_by_hand_stops_floating_above_the_times(client):
+    """A pre-entered row rides on top *while it waits for a starter*. Once the
+    operator has typed its run time it is a recorded outcome, not a placeholder,
+    so it takes its place among the times instead of staying pinned above every
+    one that arrives after it for the rest of the event."""
+    comp = make_active_competition()
+    post_json(client, "timing:run-add")
+    pre_entered = TimedRun.objects.get()
+    assert serialize_arrangement(comp)["rows"][0]["id"] == pre_entered.id  # waiting: on top
+    post_json(client, "timing:set-runtime", run_id=pre_entered.id, run_time="30.00")
+
+    later = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    rows = serialize_arrangement(comp)["rows"]
+    assert [row["id"] for row in rows] == [later.id, pre_entered.id]
+    assert rows[1]["placeholder"] is False
+
+
+def test_a_row_closed_with_a_state_code_stops_floating_above_the_times(client):
+    """Same for a DNS: the competitor's event is recorded, so the row sits where
+    it was made rather than above the runs that follow."""
+    comp = make_active_competition()
+    post_json(client, "timing:run-add")
+    pre_entered = TimedRun.objects.get()
+    post_json(client, "timing:run-status", run_id=pre_entered.id, status="dns")
+
+    later = run_of(signal_in(comp, 1, "10:00:00.000", running=1))
+    rows = serialize_arrangement(comp)["rows"]
+    assert [row["id"] for row in rows] == [later.id, pre_entered.id]
+    # A row still genuinely awaiting a starter does keep the top.
+    post_json(client, "timing:run-add")
+    waiting = TimedRun.objects.exclude(pk__in=[pre_entered.pk, later.pk]).get()
+    assert serialize_arrangement(comp)["rows"][0]["id"] == waiting.id
+
+
+def test_the_two_open_run_rules_agree():
+    """``open_runs`` (a queryset, for the arrangement) and ``awaits_finish`` (one
+    run in memory, for the barrier phase) are one rule written twice; a run either
+    is open on both or on neither."""
+    comp = make_active_competition()
+    start = signal_in(comp, 1, "10:00:00.000", running=1)
+    run = run_of(start)
+    variants = [
+        {},                                          # plain open run
+        {"manual_run_time": Decimal("30.000")},      # typed run time → settled
+        {"status": TimedRun.Status.DNF},             # state code → settled
+        {"status": TimedRun.Status.DNS, "manual_run_time": Decimal("1.000")},
+    ]
+    for fields in variants:
+        TimedRun.objects.filter(pk=run.pk).update(
+            manual_run_time=fields.get("manual_run_time"), status=fields.get("status", "")
+        )
+        run.refresh_from_db()
+        by_query = arrangement.open_runs(comp).filter(pk=run.pk).exists()
+        assert by_query == arrangement.awaits_finish(run), fields
+    # And a finished run is open by neither.
+    TimedRun.objects.filter(pk=run.pk).update(manual_run_time=None, status="")
+    finish = signal_in(comp, 2, "10:00:30.000", running=2)
+    run.refresh_from_db()
+    assert run.finish_signal_id == finish.id
+    assert not arrangement.open_runs(comp).filter(pk=run.pk).exists()
+    assert not arrangement.awaits_finish(run)
+
+
 def test_run_update_rejects_without_active_competition(client):
     comp = make_active_competition()
     run = run_of(signal_in(comp, 1, "10:00:00.000"))
