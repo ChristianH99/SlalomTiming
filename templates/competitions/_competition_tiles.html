@@ -1,0 +1,83 @@
+{% load i18n %}
+{% comment %}The Manage-competitions list itself. A partial because the two
+dialogs an archived tile opens — its frozen settings, and duplicating it —
+render this behind them: a dialog that replaces the page it was opened from
+leaves nothing to go back to.{% endcomment %}
+  <div class="list-toolbar">
+    <form class="search-form" role="search" id="competition-search" data-read-only-allow>
+      <input type="text" id="competition-search-input"
+             placeholder="{% trans 'Search by name or type…' %}" autocomplete="off">
+      <button class="button button--secondary" type="submit">{% trans "Search" %}</button>
+    </form>
+    <a class="button" href="{% url 'competitions:add' %}">{% trans "+ New competition" %}</a>
+  </div>
+  <div class="toolbar-sub">
+    <a class="button button--secondary button--small" href="{% url 'competitions:type-list' %}">{% trans "Manage competition types" %}</a>
+  </div>
+
+  <div class="competition-tiles" id="competitions-body">
+    {% for competition in competitions %}
+      <div class="competition-tile{% if competition.is_active %} competition-tile--active{% endif %}{% if competition.is_archived %} competition-tile--archived{% endif %}"
+           data-search="{{ competition.name|lower }} {{ competition.competition_type.name|lower }}">
+        <div class="tile-body">
+          <div class="tile-head">
+            <h2 class="tile-name">{{ competition.name }}</h2>
+            {% if competition.is_active %}
+              <span class="status-pill status-pill--active">{% trans "Current" %}</span>
+            {% endif %}
+            {% if competition.is_archived %}
+              <span class="status-pill status-pill--archived"
+                    title="{% blocktrans with when=competition.archived_at|date:'d.m.Y' %}Signed off on {{ when }}. Evaluated by the settings it was run under.{% endblocktrans %}">{% trans "Archived" %}</span>
+            {% endif %}
+          </div>
+          <div class="tile-meta">
+            <span>{{ competition.competition_type.name }}</span>
+            <span class="tile-dot">·</span>
+            <span>{{ competition.date|date:"d.m.Y" }}</span>
+          </div>
+          <div class="tile-classes">
+            {% for label in competition.active_classes %}
+              <span class="status-pill">{{ label }}</span>
+            {% empty %}
+              <span class="tile-muted">{% trans "No classes running" %}</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="tile-actions">
+          {% if competition.is_active %}
+            <a class="button button--secondary button--small" href="{% url 'competitions:general' %}">{% trans "Configure" %}</a>
+          {% else %}
+            <form method="post" action="{% url 'competitions:select' competition.pk %}">
+              {% csrf_token %}
+              <button class="button button--secondary button--small" type="submit">{% trans "Set as current" %}</button>
+            </form>
+          {% endif %}
+          {% comment %}Duplicating an *archived* event is how it gets edited, so
+          that one asks what the copy should carry first (the view renders the
+          dialog). A live one copies straight away, as it always has.{% endcomment %}
+          <form method="post" action="{% url 'competitions:duplicate' competition.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="link-button">{% trans "Duplicate" %}</button>
+          </form>
+          {% comment %}Archiving is one-way and there is no control that undoes
+          it, so the dialog says so in as many words — data-confirm hands it to
+          the app's own dialog (shell.js), never the browser's. An archived tile
+          shows what it is instead of an action it cannot offer, with the
+          settings it kept one click away.{% endcomment %}
+          {% if competition.is_archived %}
+            <a class="link-button" href="{% url 'competitions:archived-rules' competition.pk %}">{% trans "Archived settings" %}</a>
+          {% else %}
+            <form method="post" action="{% url 'competitions:archive' competition.pk %}"
+                  data-confirm="{% blocktrans with name=competition.name %}Archive “{{ name }}”? It will keep the settings and competitors it was run with, so later changes cannot alter its results — and it becomes read-only: no more times, no more edits. This cannot be undone; an editable copy is made by duplicating it.{% endblocktrans %}">
+              {% csrf_token %}
+              <button type="submit" class="link-button">{% trans "Archive" %}</button>
+            </form>
+          {% endif %}
+          <a class="link-button link-button--danger" href="{% url 'competitions:delete' competition.pk %}">{% trans "Delete" %}</a>
+        </div>
+      </div>
+    {% empty %}
+      <p class="empty-state">{% trans "No competitions yet." %} <a href="{% url 'competitions:add' %}">{% trans "Create your first one." %}</a></p>
+    {% endfor %}
+    <p class="empty-state no-results-row" hidden>{% trans "No competitions match your search." %}</p>
+  </div>

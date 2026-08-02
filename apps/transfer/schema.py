@@ -165,6 +165,14 @@ PDF_LAYOUT_FIELDS = [
 # key and the row imports without one, which reads as "needs deciding again".
 TIE_RESOLUTION_FIELDS = ["scope", "members", "score"]
 
+# An archived event's frozen field (apps/competitions/ArchivedStarter). It has to
+# travel, and it has to travel *whole*: an archived competition is rendered from
+# these rows and not from the live participant tables, so a document that carried
+# the archive flag without them would arrive as an event with results, settings
+# and nobody in it. The three id columns name rows in this same document and are
+# remapped on import like every other pk.
+ARCHIVED_STARTER_FIELDS = ["bib_number", "status", "details", "class_pks"]
+
 
 class TransferError(Exception):
     """An archive that can't be read, or a document this version can't import."""

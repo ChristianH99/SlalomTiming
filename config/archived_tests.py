@@ -38,9 +38,11 @@ STILL_WRITABLE = {
     # operator Lock. Both outlive any one competition.
     'timing:settings': 'the device configuration belongs to the installation',
     'timing:input-lock': 'the operator Lock belongs to the installation',
-    # The device door never refuses a time — it stores it ignored instead (see
-    # ingest._context). A refusal here would lose it.
-    'timing:signal': 'a time is captured, never turned away',
+    # The device door answers every post the same way whoever is listening.
+    # What happens to the time is decided inside (ingest.record_signal drops it
+    # for a signed-off event); refusing at the door would make a live rig look
+    # broken instead.
+    'timing:signal': 'the device door always answers; ingest decides',
     # A phone letting go of a post writes a device lock, not the race. A marshal
     # that cannot release is a post held until the claim goes stale.
     'timing:marshal-release': 'releasing a claim is device state, not race data',
@@ -94,8 +96,8 @@ def _post_endpoints():
 
     Argument-free only: an endpoint with a pk in its route needs a plausible pk
     to reach its own body at all, and the ones this app has (select, delete,
-    duplicate, archive, reopen) are all deliberately *about* an archived
-    competition rather than writes into one.
+    duplicate, archive, archived-rules) are all deliberately *about* an
+    archived competition rather than writes into one.
 
     Two namespaces are left out whole — see UNCOVERED_NAMESPACES.
     """

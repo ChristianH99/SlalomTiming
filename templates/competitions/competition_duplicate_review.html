@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% load static i18n %}
+{% block title %}{% trans "Duplicate competition" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Competition Setup" %}{% endblock %}
+{% block content %}
+  {% comment %}Step two of a full copy, and the same question the import wizard's
+  review step asks — the form field names are the ones merge.read_resolutions
+  reads, because both screens resolve the same Match objects.
+
+  A full page rather than a pop-up: the first step is a choice between two
+  options and fits in a dialog, this one is a list that can run to dozens of
+  people and has to scroll.{% endcomment %}
+  <a class="back-link" href="{% url 'competitions:list' %}">{% trans "← Back to Manage competitions" %}</a>
+  <h1 class="page-heading">{% blocktrans with name=object.name %}Duplicate “{{ name }}”{% endblocktrans %}</h1>
+  <p class="hint">
+    {% blocktrans trimmed %}
+      The copy brings this event's competitors with it. Most of them are still on
+      file exactly as they raced; the ones below are not, so they need a decision
+      before anything is written.
+    {% endblocktrans %}
+  </p>
+
+  <div class="settings-section">
+    <div class="tile-classes">
+    <span class="status-pill">{% blocktrans count counter=summary.total %}{{ counter }} competitor{% plural %}{{ counter }} competitors{% endblocktrans %}</span>
+    {% if summary.identical %}
+      <span class="status-pill">{% blocktrans count counter=summary.identical %}{{ counter }} unchanged{% plural %}{{ counter }} unchanged{% endblocktrans %}</span>
+    {% endif %}
+    {% if summary.new %}
+      <span class="status-pill">{% blocktrans count counter=summary.new %}{{ counter }} to re-create{% plural %}{{ counter }} to re-create{% endblocktrans %}</span>
+    {% endif %}
+      <span class="status-pill status-pill--active">{% blocktrans count counter=summary.conflict %}{{ counter }} to review{% plural %}{{ counter }} to review{% endblocktrans %}</span>
+    </div>
+  </div>
+
+  <form method="post" action="{% url 'competitions:duplicate' object.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="mode" value="full">
+    <input type="hidden" name="step" value="review">
+    {% comment %}The settings answers from step one, so the operator is not asked
+    the same question twice.{% endcomment %}
+    {% for field, value in settings_kept %}
+      <input type="hidden" name="setting-{{ field }}" value="{{ value }}">
+    {% endfor %}
+
+    {% for match in conflicts %}
+      <div class="settings-section transfer-conflict">
+        <div class="transfer-conflict-head">
+          <h3 class="transfer-conflict-name">{{ match.name }}</h3>
+          <span class="hint">{{ match.values.date_of_birth }}</span>
+        </div>
+
+        {% for candidate in match.candidates %}
+          <label class="pdf-radio transfer-option">
+            <input type="radio" name="choice-{{ match.ref }}" value="merge:{{ candidate.pk }}"
+                   {% if forloop.first %}checked{% endif %}>
+            <span>
+              {% blocktrans with name=candidate.participant %}Same person as <strong>{{ name }}</strong>{% endblocktrans %}
+              <span class="hint">({{ candidate.reason_label }})</span>
+            </span>
+          </label>
+          <table class="results-table transfer-diff">
+            <thead>
+              <tr>
+                <th>{% trans "Detail" %}</th>
+                <th>{% trans "On file now" %}</th>
+                <th>{% trans "As they raced" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for diff in candidate.diffs %}
+                <tr>
+                  <th scope="row">{{ diff.label }}</th>
+                  <td>
+                    <label class="transfer-pick">
+                      <input type="radio" name="field-{{ match.ref }}-{{ candidate.pk }}-{{ diff.field }}" value="existing" checked>
+                      <span>{{ diff.existing|default:"—" }}</span>
+                    </label>
+                  </td>
+                  <td>
+                    <label class="transfer-pick">
+                      <input type="radio" name="field-{{ match.ref }}-{{ candidate.pk }}-{{ diff.field }}" value="imported">
+                      <span>{{ diff.imported|default:"—" }}</span>
+                    </label>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endfor %}
+
+        <label class="pdf-radio transfer-option">
+          <input type="radio" name="choice-{{ match.ref }}" value="create">
+          <span>{% trans "A different person — register them separately" %}</span>
+        </label>
+      </div>
+    {% endfor %}
+
+    <div class="actions">
+      <button type="submit" class="button">{% trans "Duplicate" %}</button>
+      <a class="button button--secondary" href="{% url 'competitions:list' %}">{% trans "Cancel" %}</a>
+    </div>
+  </form>
+{% endblock %}

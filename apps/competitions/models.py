@@ -58,32 +58,43 @@ class CompetitionType(models.Model):
 
     _penalty_amount = {"null": True, "blank": True}
 
-    name = models.CharField(max_length=100, unique=True)
+    # Every field here carries a verbose_name, and they are load-bearing rather
+    # than decoration: this is what the settings page labels each control with,
+    # and what an archived event's read-only settings pop-up lists. Without one
+    # Django derives an English string from the attribute name that no catalogue
+    # has ever seen — which is why "Timing precision" used to sit in the middle
+    # of an otherwise German page.
+    name = models.CharField(_("Name"), max_length=100, unique=True)
 
     penalties_enabled = models.BooleanField(
+        _("Enter penalties during the race"),
         default=True,
         help_text=_("Show the penalties screen during timing so penalties can be entered per run."),
     )
     pylon_penalty = models.PositiveSmallIntegerField(
-        **_penalty_amount, help_text=_("Seconds added per pylon hit."),
+        _("Pylon"), **_penalty_amount, help_text=_("Seconds added per pylon hit."),
     )
     task_penalty = models.PositiveSmallIntegerField(
-        **_penalty_amount, help_text=_("Seconds added for a failed task."),
+        _("Task"), **_penalty_amount, help_text=_("Seconds added for a failed task."),
     )
     stop_line_penalty = models.PositiveSmallIntegerField(
-        **_penalty_amount, help_text=_("Seconds added for missing the stop line."),
+        _("Stop line"), **_penalty_amount,
+        help_text=_("Seconds added for missing the stop line."),
     )
     max_penalty_per_task = models.PositiveSmallIntegerField(
-        **_penalty_amount, help_text=_("Upper bound on the seconds a single task can add."),
+        _("Max per task"), **_penalty_amount,
+        help_text=_("Upper bound on the seconds a single task can add."),
     )
 
     tie_break = models.CharField(
+        _("Tie-break"),
         max_length=20,
         choices=TieBreak.choices,
         default=TieBreak.FASTEST_RUN,
         help_text=_("How equal results are separated."),
     )
     timing_precision = models.PositiveSmallIntegerField(
+        _("Timing precision"),
         choices=Precision.choices,
         default=Precision.HUNDREDTHS,
         help_text=_("Resolution of the timing device."),
@@ -91,13 +102,13 @@ class CompetitionType(models.Model):
 
     # Which optional participant details this discipline collects. Whether a collected
     # field is mandatory is fixed per setting (see PARTICIPANT_INFO), not chosen here.
-    requires_co_driver = models.BooleanField(default=False)
-    requires_vehicle = models.BooleanField(default=False)
-    requires_address = models.BooleanField(default=True)
-    requires_club = models.BooleanField(default=True)
-    requires_license = models.BooleanField(default=True)
-    requires_email = models.BooleanField(default=True)
-    requires_phone = models.BooleanField(default=True)
+    requires_co_driver = models.BooleanField(_("Co-driver"), default=False)
+    requires_vehicle = models.BooleanField(_("Vehicle"), default=False)
+    requires_address = models.BooleanField(_("Address"), default=True)
+    requires_club = models.BooleanField(_("Club"), default=True)
+    requires_license = models.BooleanField(_("Licence number"), default=True)
+    requires_email = models.BooleanField(_("E-Mail"), default=True)
+    requires_phone = models.BooleanField(_("Phone"), default=True)
 
     # setting name -> (label, mandatory, the Participant fields it controls). The
     # participant form builds itself from this: a setting that's off hides its
@@ -263,17 +274,23 @@ class Competition(models.Model):
             )
 
     def refresh_from_db(self, *args, **kwargs):
-        # `rules` is cached, and re-reading the row is exactly when it can have
+        # These are cached, and re-reading the row is exactly when they can have
         # stopped being true — somebody else archived the event. Django clears
         # cached *relations* here and knows nothing about ours.
         super().refresh_from_db(*args, **kwargs)
-        self.__dict__.pop("rules", None)
+        self.forget_archive_caches()
+
+    def forget_archive_caches(self):
+        for name in ("rules", "_archived_class_map"):
+            self.__dict__.pop(name, None)
 
     @property
     def is_archived(self):
         """Whether this event has been signed off. An archived competition is
-        read-only: every door that would write it refuses (see
-        apps/competitions/archiving.py), and it is evaluated from ``rules``."""
+        read-only — every door that would write it refuses, its screens disable
+        their own controls, and it is rendered entirely from what was frozen onto
+        it (see apps/competitions/archiving.py). There is no way back; an
+        editable copy is made by duplicating it."""
         return self.archived_at is not None
 
     @cached_property
@@ -294,6 +311,30 @@ class Competition(models.Model):
         if self.archived_rules:
             return archiving.frozen_rules(self.archived_rules)
         return self.competition_type
+
+    def entry_rows(self):
+        """The competitors this event has, as ``EventEntry`` objects carrying
+        their ``Participant``.
+
+        **Every read of the field goes through this**, for the same reason every
+        evaluation goes through ``rules``: for an archived event these come from
+        the snapshot rather than from the live tables, so correcting somebody's
+        club — or deleting them under a retention sweep — cannot rewrite a result
+        that was printed last summer. A caller that is about to *write* an entry
+        wants ``self.entries``; there is exactly one of those and it is refused
+        on an archived event anyway.
+        """
+        from . import archiving
+
+        if self.is_archived:
+            return archiving.entry_rows(self)
+        return list(self.entries.select_related("participant").all())
+
+    @cached_property
+    def _archived_class_map(self):
+        from . import archiving
+
+        return archiving.class_map(self)
 
     def active_classes(self):
         return [cc.name for cc in self._running_classes_ordered()]
@@ -342,11 +383,14 @@ class Competition(models.Model):
         two classes) yields a Starter each time.
 
         ``running`` for a caller that has already read the running classes."""
-        entries = (
-            self.entries.select_related("participant")
-            .prefetch_related("participant__class_assignments__competition_class")
-            .order_by("bib_number")
-        )
+        if self.is_archived:
+            entries = self.entry_rows()
+        else:
+            entries = (
+                self.entries.select_related("participant")
+                .prefetch_related("participant__class_assignments__competition_class")
+                .order_by("bib_number")
+            )
         # Read once, not once per entry. Age-based assignment resolves a
         # participant's class by walking these, so asking inside the loop cost one
         # query per starter — 114 at 100 starters, on an endpoint every open
@@ -486,7 +530,16 @@ class Competition(models.Model):
         assignment method (may repeat for manual multi-entry).
 
         ``running`` is the running classes, for a caller resolving a whole field:
-        without it an age-based competition re-reads them once per participant."""
+        without it an age-based competition re-reads them once per participant.
+
+        An archived event answers from its own snapshot instead of asking the
+        method. Both methods read something that outlives the event — the manual
+        one reads ``ClassAssignment`` rows, the age one the participant's date of
+        birth against today's class ranges — so a signed-off event that kept
+        asking would re-sort its own field the first time somebody edited either.
+        """
+        if self.is_archived:
+            return list(self._archived_class_map.get(participant.pk, []))
         return self.assignment().classes_for(self, participant, running=running)
 
     def assigned_task_numbers(self):
@@ -513,6 +566,64 @@ def _class_words():
         with translation.override(code):
             words.add(gettext("Class").lower())
     return frozenset(words)
+
+
+class ArchivedStarter(models.Model):
+    """One competitor of a signed-off event, as they stood on the day.
+
+    A ``Participant`` belongs to a *discipline*, not to an event, and is edited
+    (and deleted) for years afterwards: somebody moves house, a club is
+    corrected, a retention sweep removes a person who has stopped racing. Every
+    one of those quietly rewrote the printed result of an event that had already
+    happened — the times were frozen by ``Competition.archived_rules``, the names
+    over them were not.
+
+    So archiving copies the competitors too. ``details`` is the participant's
+    fields as they read on the day, ``class_pks`` the classes they were entered
+    in (repeats included, in order), and both ``entry_pk`` and ``participant_pk``
+    keep the ids the live rows had — because everything downstream is keyed by
+    them (``ManualTieResolution.members``, the start-order slot keys stored in
+    ``Competition.auto_timing_order``), and a snapshot that renumbered its
+    competitors would silently invalidate all of it.
+
+    Only competitors with a bib are here: an entry *is* a bib, and a participant
+    of the discipline who never entered this event was never part of it.
+    """
+
+    competition = models.ForeignKey(
+        Competition, on_delete=models.CASCADE, related_name="archived_starters"
+    )
+    entry_pk = models.PositiveIntegerField(
+        help_text="The EventEntry id this competitor had while the event was live."
+    )
+    participant_pk = models.PositiveIntegerField(
+        help_text="The Participant id, kept so stored slot keys and tie resolutions "
+        "still name the same person."
+    )
+    bib_number = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, blank=True)
+    details = models.JSONField(
+        default=dict,
+        help_text="The participant's own fields as they read on the day (see "
+        "apps/competitions/archiving.py).",
+    )
+    class_pks = models.JSONField(
+        default=list,
+        help_text="CompetitionClass ids this competitor was entered in, in order, "
+        "with repeats — a class entered twice appears twice.",
+    )
+
+    class Meta:
+        ordering = ["bib_number", "entry_pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["competition", "entry_pk"], name="one_archived_row_per_entry"
+            ),
+        ]
+
+    def __str__(self):
+        name = f"{self.details.get('first_name', '')} {self.details.get('last_name', '')}".strip()
+        return f"{self.bib_number} {name}".strip()
 
 
 class CompetitionClass(models.Model):

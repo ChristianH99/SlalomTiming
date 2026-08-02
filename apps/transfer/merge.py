@@ -249,6 +249,72 @@ def apply(match, resolution, competition_type):
     return Participant.objects.create(competition_type=competition_type, **match.values)
 
 
+def read_resolutions(post, matches, leads=KEEP_IMPORTED):
+    """The operator's per-participant decisions, read off a review form.
+
+    Each conflict renders one radio group ``choice-<ref>`` — "create", or
+    "merge:<pk>" naming the existing participant — plus, per candidate, a
+    per-field group ``field-<ref>-<pk>-<name>`` choosing which side wins. The
+    field groups are keyed by candidate so picking a different candidate cannot
+    inherit the previous one's choices.
+
+    Only conflicts render inputs, so anything absent keeps that match's default —
+    which is exactly what an untouched review screen should mean.
+
+    ``leads`` is which side a *missing* field answer falls back to, and the two
+    callers genuinely differ. An **import** leads with the incoming values: the
+    operator went and fetched that file, so it is the newer truth. **Duplicating
+    an archived competition** leads with what is on file: those incoming values
+    are however many years old, the record here is the current truth about a
+    living person, and the archived event keeps its own copy either way. A shared
+    reader with one hardcoded default would silently rewrite somebody's address
+    from a 2019 event.
+
+    It lives here rather than beside either screen because there are two screens
+    now: the import wizard, and duplicating an archived competition
+    (apps/competitions/duplication.py). They ask the same question about the same
+    ``Match`` objects, and two readers of one form would be two chances to read
+    it differently.
+    """
+    resolutions = {}
+    for match in matches:
+        if not match.needs_decision:
+            continue
+
+        choice = post.get(f"choice-{match.ref}") or ""
+        if choice == ACTION_CREATE:
+            resolutions[match.ref] = {"action": ACTION_CREATE, "target": None, "fields": {}}
+            continue
+
+        candidate = match.candidate(_as_int(choice.split(":", 1)[1])) if ":" in choice else None
+        if candidate is None:
+            continue  # unreadable choice: fall back to this match's default
+
+        resolutions[match.ref] = {
+            "action": ACTION_MERGE,
+            "target": candidate.pk,
+            "fields": {
+                diff.field: _side(
+                    post.get(f"field-{match.ref}-{candidate.pk}-{diff.field}"), leads
+                )
+                for diff in candidate.diffs
+            },
+        }
+    return resolutions
+
+
+def _side(answer, leads):
+    """Which side one field answer picks; anything unreadable takes ``leads``."""
+    return answer if answer in (KEEP_EXISTING, KEEP_IMPORTED) else leads
+
+
+def _as_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def summarize(matches):
     return {
         "total": len(matches),

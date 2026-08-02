@@ -30,7 +30,8 @@ ITEMS = {
     "setup.manage": {
         ("competitions", name)
         for name in (
-            "list", "add", "delete", "select", "duplicate",
+            "list", "add", "delete", "select", "duplicate", "archive",
+            "archived-rules",
             "type-list", "type-add", "type-settings", "type-delete",
         )
     },
@@ -92,7 +93,36 @@ def current(match):
     return frozenset(active)
 
 
+# The entries whose page operates on the *active* competition, as opposed to on
+# the installation.
+#
+# One thing reads this: whether an archived event's read-only lock applies to the
+# page being rendered (base.html, static/js/read_only.js). It has to, because
+# "the current event is signed off" says nothing about the screen that *manages*
+# competitions — and a blanket lock turned the list you archive from, the
+# duplicate dialog and the device settings into dead pages the moment it worked.
+#
+# Absent means live, which is the safe direction here: the server-side refusal is
+# what actually protects the event (apps/competitions/archiving.py), so a page
+# missing from this set shows a control that gets turned away — the behaviour
+# before any of this existed — rather than one nobody can use.
+EVENT_SCOPED = frozenset({
+    "dashboard",
+    "setup.general", "setup.classes", "setup.runorder", "setup.penalties",
+    "setup.results",
+    "participants",
+    "timing.manual", "timing.auto",
+    "marshal_posts",
+    "results.index", "results.overall", "results.class",
+})
+
+
 def context(request):
     """Template context processor: `nav_current`, which base.html asks with
-    `{% if 'timing.settings' in nav_current %}`."""
-    return {"nav_current": current(getattr(request, "resolver_match", None))}
+    `{% if 'timing.settings' in nav_current %}`, and `nav_event_scoped` — whether
+    this page is about the active competition (see EVENT_SCOPED)."""
+    active = current(getattr(request, "resolver_match", None))
+    return {
+        "nav_current": active,
+        "nav_event_scoped": bool(active & EVENT_SCOPED),
+    }

@@ -129,6 +129,12 @@ def _own_query(competition):
 
 
 def _entries_by_bib(competition, bibs):
+    if competition.is_archived:
+        return {
+            entry.bib_number: entry
+            for entry in competition.entry_rows()
+            if entry.bib_number in bibs
+        }
     return {
         entry.bib_number: entry
         for entry in EventEntry.objects.filter(competition=competition, bib_number__in=bibs)

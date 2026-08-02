@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load static i18n %}
+{% block title %}{% trans "Archived settings" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Competition Setup" %}{% endblock %}
+{% block content %}
+  {% comment %}The list itself, so this reads as a pop-up over the page it was
+  opened from rather than as a different page with a box on it — closing it puts
+  the operator back on the tile they pressed.{% endcomment %}
+  {% include "competitions/_competition_tiles.html" %}
+
+  {% comment %}Read-only, and rendered already open by the server. It exists
+  because a signed-off event's own General page can no longer show its settings:
+  that page edits the *live* competition type, which is exactly the row an
+  archived event has stopped following. Without this there was no screen in the
+  app that could answer "what was this event actually run under?", which made the
+  freeze something to take on trust.{% endcomment %}
+  <div class="modal-overlay" data-modal-open>
+    <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="archived-rules-title">
+      <h2 class="modal-title" id="archived-rules-title">{% trans "Settings this event was run under" %}</h2>
+      <div class="modal-body">
+        <p class="hint">
+          {% blocktrans with when=object.archived_at|date:"d.m.Y" type=object.competition_type.name trimmed %}
+            Frozen when the event was archived on {{ when }}. Its results are
+            evaluated by these values and no longer by “{{ type }}”, however that
+            is changed from now on.
+          {% endblocktrans %}
+        </p>
+        <table class="archived-rules">
+          <tbody>
+            {% for row in rules %}
+              <tr>
+                <th scope="row">{{ row.label }}</th>
+                <td>{{ row.value }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if differences %}
+          <p class="hint">
+            {% blocktrans count count=differences|length with type=object.competition_type.name trimmed %}
+              {{ count }} of these now differs from “{{ type }}”, which is what a new competition of this discipline would use.
+            {% plural %}
+              {{ count }} of these now differ from “{{ type }}”, which is what a new competition of this discipline would use.
+            {% endblocktrans %}
+          </p>
+        {% endif %}
+      </div>
+      <div class="modal-actions">
+        <a class="button" href="{% url 'competitions:list' %}">{% trans "Close" %}</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/competition_list.js' %}"></script>
+  <script src="{% static 'js/archived_rules.js' %}"></script>
+{% endblock %}

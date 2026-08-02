@@ -106,7 +106,7 @@ def _retired(competition):
     Their unrecorded runs are not outstanding work; see ``_expected_ids``."""
     return {
         entry.pk
-        for entry in competition.entries.all()
+        for entry in competition.entry_rows()
         if entry.status in DNX_STATUSES
     }
 
@@ -207,6 +207,11 @@ def _run_label(run):
 def _entry(competition, bib):
     if not bib:
         return None
+    if competition.is_archived:
+        # The snapshot, not the live table — see Competition.entry_rows.
+        return next(
+            (e for e in competition.entry_rows() if e.bib_number == bib), None
+        )
     return (
         EventEntry.objects.select_related("participant")
         .filter(competition=competition, bib_number=bib)
@@ -216,7 +221,7 @@ def _entry(competition, bib):
 
 def _stats(competition, classes, expected, finished, ctype):
     """Headline counts for the tile row."""
-    entries = list(competition.entries.all())
+    entries = competition.entry_rows()
     dnx = sum(1 for e in entries if e.status in DNX_STATUSES)
     classes_done = sum(1 for c in classes if c["status"] == "done")
     marshal_posts = competition.marshal_posts.count() if (

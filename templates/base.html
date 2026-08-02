@@ -15,7 +15,7 @@
   multi-line attempt renders verbatim onto the page.{% endcomment %}
   <script src="{% url 'javascript-catalog' %}"></script>
 </head>
-<body>
+<body{% if active_competition.is_archived and nav_event_scoped %} data-read-only{% endif %}>
   <a href="#main-content" class="skip-link">{% trans "Skip to content" %}</a>
   <div class="shell">
     <aside class="shell-sidebar" id="shell-sidebar">
@@ -115,8 +115,14 @@
           <span class="topbar-sub">
             {% if active_competition %}
               {{ active_competition.name }} · {{ active_competition.date|date:"d.m.Y" }}
+              {% comment %}The only place a signed-off event says so. It used to
+              say it again in a banner over every page, which on the results and
+              timing screens pushed the thing the operator came to read down by a
+              block — for a state that does not change while they are looking at
+              it. The label carries the whole explanation in its tooltip.{% endcomment %}
               {% if active_competition.is_archived %}
-                <span class="topbar-archived">{% trans "Archived" %}</span>
+                <span class="topbar-archived"
+                      title="{% blocktrans with when=active_competition.archived_at|date:'d.m.Y' %}Archived on {{ when }}. Everything here is read-only: this event keeps the settings and competitors it was run with, no longer records times, and cannot be changed. Duplicate it from Competition Setup if you need an editable copy.{% endblocktrans %}">{% trans "Archived · read-only" %}</span>
               {% endif %}
             {% else %}
               <span class="topbar-sub--none">{% trans "No event selected" %}</span> · <a href="{% url 'competitions:list' %}">{% trans "choose one" %}</a>
@@ -134,13 +140,12 @@
         answer to something the operator just did. shell.js adds each one a
         dismiss button.{% endcomment %}
         {% if messages %}
-          <ul class="messages" role="status">
+          <ul class="messages" role="status" data-read-only-allow>
             {% for message in messages %}
               <li class="notice notice--{{ message.tags|default:'info' }}">{{ message }}</li>
             {% endfor %}
           </ul>
         {% endif %}
-        {% if active_competition.is_archived %}{% include "competitions/_archived_banner.html" %}{% endif %}
         {% block content %}{% endblock %}
       </main>
     </div>
@@ -187,6 +192,10 @@
   cannot tell our inline script from injected inline script.{% endcomment %}
   <script src="{% static 'js/shell.js' %}"></script>
   {% block scripts %}{% endblock %}
+  {% comment %}Last, after every page script has wired its controls up: a
+  signed-off event's page turns its own controls off, and the observer inside
+  keeps them off through each live re-render.{% endcomment %}
+  {% if active_competition.is_archived and nav_event_scoped %}<script src="{% static 'js/read_only.js' %}"></script>{% endif %}
 
 
 

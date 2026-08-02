@@ -225,6 +225,7 @@ def _import_event(document, result, participants, media, activate):
     runs = _import_timing(document, competition, classes, result)
     _import_marshal_penalties(document, runs, posts)
     _import_results(document, competition, classes, entries, media)
+    _import_archived_starters(document, competition, participants, entries, classes)
 
     _remap_auto_order(document, competition, entries, classes)
 
@@ -421,6 +422,37 @@ def _import_tie_resolutions(results, competition, classes, entries):
         else:
             values["members"] = members
             ManualTieResolution.objects.create(competition=competition, **values)
+
+
+def _import_archived_starters(document, competition, participants, entries, classes):
+    """The frozen field of an archived event.
+
+    Three ids inside these rows name rows elsewhere in the same document and are
+    remapped like any other pk — the entry and participant they stand for, and
+    the classes they were entered in. That matters more here than anywhere else:
+    an archived event is rendered *only* from these rows, so a stale pk is not a
+    broken link somebody notices, it is a competitor who silently vanishes from a
+    result that has already been printed.
+    """
+    from apps.competitions.models import ArchivedStarter
+
+    rows = []
+    for row in document.get("archived_starters") or []:
+        entry = entries.get(row.get("entry"))
+        participant = participants.get(row.get("participant"))
+        if entry is None or participant is None:
+            continue
+        values = load(ArchivedStarter, row, schema.ARCHIVED_STARTER_FIELDS)
+        values["class_pks"] = [
+            classes[pk].pk for pk in (row.get("class_pks") or []) if pk in classes
+        ]
+        rows.append(ArchivedStarter(
+            competition=competition,
+            entry_pk=entry.pk,
+            participant_pk=participant.pk,
+            **values,
+        ))
+    ArchivedStarter.objects.bulk_create(rows)
 
 
 def _remap_auto_order(document, competition, entries, classes):

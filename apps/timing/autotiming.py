@@ -322,6 +322,8 @@ def serialize(competition):
         "penalties_enabled": ctype.penalties_enabled,
         # The red operator lock: incoming times go straight to the ignore list.
         "input_locked": settings.ignore_incoming,
+        # See serialize_arrangement: the page turns its own controls off.
+        "read_only": competition.is_archived,
         # The device link, so a reader that has lost the CP540 raises its alarm
         # here rather than only on the settings page.
         "device_link": cp540.link_state(settings),
@@ -625,11 +627,16 @@ def marshal_state(competition, post_number):
     if run is None or slot is None:
         return {"run_id": None}
     club = ""
-    entry = (
-        EventEntry.objects.select_related("participant")
-        .filter(competition=competition, pk=slot["entry_pk"])
-        .first()
-    )
+    if competition.is_archived:
+        entry = next(
+            (e for e in competition.entry_rows() if e.pk == slot["entry_pk"]), None
+        )
+    else:
+        entry = (
+            EventEntry.objects.select_related("participant")
+            .filter(competition=competition, pk=slot["entry_pk"])
+            .first()
+        )
     if entry is not None:
         club = entry.participant.club or ""
     # detail lets the marshal's board resume its exact per-task state after an

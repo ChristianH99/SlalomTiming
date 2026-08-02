@@ -73,7 +73,8 @@ def _writable_competition():
     (apps/competitions/archiving.py). The read endpoints — the arrangement, the
     auto state, the dashboard — deliberately do *not* call this: an archived
     event is exactly what somebody opens these screens to look at, and the page
-    already says it is read-only (base.html's banner) rather than going blank.
+    renders it read-only (`read_only` in the payload, static/js/read_only.js)
+    rather than going blank.
     """
     competition = Competition.get_current()
     if competition is None:
@@ -706,9 +707,18 @@ def timing_signal(request):
         running_number, port, bool(payload.get("is_manual")), device_time,
         source=str(payload.get("source", "simulator")),
     )
-    # signal is None when the DB was busy and the time went to the recovery file;
-    # it wasn't lost, so still report success.
-    return JsonResponse({"ok": True, "id": signal.id if signal else None, "captured": signal is None})
+    if signal is not None:
+        return JsonResponse({"ok": True, "id": signal.id, "captured": False})
+    # No row, for one of two reasons that must not be reported as the same thing.
+    # Either the database was busy and the time went to the recovery file — not
+    # lost, just not placed yet, which is still a success — or the event has been
+    # signed off and the time was deliberately let go (ingest.record_signal). The
+    # simulator's log would otherwise say "captured" about a time that is gone.
+    competition = Competition.get_current()
+    archived = competition is not None and competition.is_archived
+    return JsonResponse({
+        "ok": True, "id": None, "archived": archived, "captured": not archived,
+    })
 
 
 class _CsrfCheck(CsrfViewMiddleware):
@@ -1120,11 +1130,16 @@ class _RowContext:
         self.precision = self.ctype.timing_precision
         self._entries = {
             entry.bib_number: entry
-            for entry in EventEntry.objects.filter(competition=competition)
-            .select_related("participant")
-            # ManualAssignment.classes_for walks these in Python, so prefetching
-            # them makes participant_slots() free.
-            .prefetch_related("participant__class_assignments__competition_class")
+            for entry in (
+                # An archived event's competitors come from its snapshot, which is
+                # already one read and already carries its participants.
+                competition.entry_rows() if competition.is_archived else
+                EventEntry.objects.filter(competition=competition)
+                .select_related("participant")
+                # ManualAssignment.classes_for walks these in Python, so prefetching
+                # them makes participant_slots() free.
+                .prefetch_related("participant__class_assignments__competition_class")
+            )
         }
         # Materialised once: ``runs`` may be a queryset, and it is walked twice
         # below (and again by runs_recorded_for_bib) — a second pass over a lazy
@@ -1232,6 +1247,10 @@ def serialize_arrangement(competition):
         "precision": ctype.timing_precision,
         # The red operator lock: incoming times go straight to the ignore list.
         "input_locked": settings.ignore_incoming,
+        # A signed-off event is looked at, not driven: the page disables every
+        # control it renders rather than leaving steppers and dropdowns that take
+        # a value and have it refused (see static/js/read_only.js).
+        "read_only": competition.is_archived,
         # The device link, so a reader that has lost the CP540 raises its alarm
         # here rather than only on the settings page.
         "device_link": cp540.link_state(settings),

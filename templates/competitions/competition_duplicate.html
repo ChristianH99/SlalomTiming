@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% load static i18n %}
+{% block title %}{% trans "Duplicate competition" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Competition Setup" %}{% endblock %}
+{% block content %}
+  {% comment %}Rendered by the server already open, like the type-change and
+  penalty-loss confirmations — shell.js's modalController takes it from there
+  (focus in, Tab wrapped, Escape and backdrop handled). The list renders behind
+  it, so dismissing the question leaves the operator on the page they pressed
+  Duplicate from rather than on a page they never asked for.{% endcomment %}
+  {% include "competitions/_competition_tiles.html" %}
+
+  <div class="modal-overlay" data-modal-open>
+    <form class="modal modal--wide" method="post" action="{% url 'competitions:duplicate' object.pk %}"
+          role="dialog" aria-modal="true" aria-labelledby="duplicate-title">
+      {% csrf_token %}
+      <h2 class="modal-title" id="duplicate-title">{% blocktrans with name=object.name %}Duplicate “{{ name }}”{% endblocktrans %}</h2>
+      <div class="modal-body">
+        <p>{% blocktrans %}This event is archived, so it can no longer be changed. A copy can be — choose what it should carry.{% endblocktrans %}</p>
+
+        <label class="dup-choice">
+          <input type="radio" name="mode" value="setup" checked data-dup-mode>
+          <span class="dup-choice-body">
+            <span class="dup-choice-name">{% trans "Copy the setup only" %}</span>
+            <span class="dup-choice-hint">{% trans "Classes, run order, start pattern and marshal posts, with everyone kept in the classes they were in — but no bibs and no times. For setting up the next event from this one." %}</span>
+          </span>
+        </label>
+
+        <label class="dup-choice">
+          <input type="radio" name="mode" value="full" data-dup-mode>
+          <span class="dup-choice-body">
+            <span class="dup-choice-name">{% trans "Copy everything, to make edits" %}</span>
+            <span class="dup-choice-hint">
+              {% blocktrans count starters=starter_count trimmed %}
+                Everything above plus {{ starters }} competitor with their bib, and every time recorded.
+              {% plural %}
+                Everything above plus {{ starters }} competitors with their bibs, and every time recorded.
+              {% endblocktrans %}
+              {% blocktrans count runs=run_count trimmed %}
+                {{ runs }} run comes with it. The archived event itself stays exactly as it is.
+              {% plural %}
+                {{ runs }} runs come with it. The archived event itself stays exactly as it is.
+              {% endblocktrans %}
+            </span>
+          </span>
+        </label>
+
+        {% if differences %}
+          {% comment %}Only shown for the full copy: a setup-only copy is next
+          year's event and should run under this year's rules. data-dup-settings
+          is toggled by static/js/duplicate_dialog.js.{% endcomment %}
+          <div class="dup-settings" data-dup-settings hidden>
+            <h3 class="dup-settings-title">{% trans "Settings to run the copy under" %}</h3>
+            <p class="hint">
+              {% blocktrans with type=object.competition_type.name trimmed %}
+                “{{ type }}” has been changed since this event was archived. A live
+                competition follows its competition type, so choose which value each
+                setting should have.
+              {% endblocktrans %}
+            </p>
+            <table class="dup-diff">
+              <thead>
+                <tr>
+                  <th>{% trans "Setting" %}</th>
+                  <th>{% trans "As archived" %}</th>
+                  <th>{% trans "Current" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in differences %}
+                  <tr>
+                    <th scope="row">{{ row.label }}</th>
+                    <td>
+                      <label class="dup-diff-option">
+                        <input type="radio" name="setting-{{ row.field }}" value="archived" checked>
+                        <span>{{ row.archived_display }}</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label class="dup-diff-option">
+                        <input type="radio" name="setting-{{ row.field }}" value="current">
+                        <span>{{ row.current_display }}</span>
+                      </label>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% if shared_with %}
+              <p class="dup-warning">
+                {% blocktrans count others=shared_with with type=object.competition_type.name trimmed %}
+                  What you keep is saved to “{{ type }}”, which {{ others }} other competition also uses — its results are evaluated by these settings too.
+                {% plural %}
+                  What you keep is saved to “{{ type }}”, which {{ others }} other competitions also use — their results are evaluated by these settings too.
+                {% endblocktrans %}
+              </p>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+      <div class="modal-actions">
+        <button type="submit" class="button">{% trans "Duplicate" %}</button>
+        <a class="button button--secondary" href="{% url 'competitions:list' %}">{% trans "Cancel" %}</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/competition_list.js' %}"></script>
+  <script src="{% static 'js/duplicate_dialog.js' %}"></script>
+{% endblock %}

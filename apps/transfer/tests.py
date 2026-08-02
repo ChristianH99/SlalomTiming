@@ -1893,6 +1893,13 @@ def test_an_archived_event_arrives_archived_with_the_settings_it_was_run_under()
     assert imported.archived_at is not None
     assert imported.rules.pylon_penalty == 5      # the day's, not the 99 above
     assert imported.competition_type.pylon_penalty == 99
+    # And the frozen field with it: an archived event renders from these rows and
+    # not from the participant tables, so a document carrying the flag without
+    # them would arrive as an event with results, settings and nobody in it.
+    rows = imported.entry_rows()
+    assert [e.bib_number for e in rows] == [7]
+    assert rows[0].participant.last_name == "Lovelace"
+    assert imported.starters_by_class()
 
 
 def test_a_live_event_arrives_live():

@@ -526,10 +526,10 @@ def event_data(competition):
     six, on an event whose runs are a single query. A caller rendering more than
     one table reads this once and hands it to each.
     """
-    entries = {
-        entry.pk: entry
-        for entry in competition.entries.select_related("participant").all()
-    }
+    # entry_rows, not competition.entries: an archived event's competitors come
+    # from its own snapshot, so a name corrected (or a person deleted) next winter
+    # cannot rewrite a result that was printed last summer.
+    entries = {entry.pk: entry for entry in competition.entry_rows()}
     return {
         "entries": entries,
         # participant pk -> Participant, for the row builder (apps/results/views.py).

@@ -359,44 +359,9 @@ def _discard_staged(request):
 
 
 def _resolutions(post, plan):
-    """The operator's per-participant decisions, read off the review form.
-
-    Each conflict renders one radio group ``choice-<ref>`` — "create", or
-    "merge:<pk>" naming the existing participant — plus, per candidate, a
-    per-field group ``field-<ref>-<pk>-<name>`` choosing which side wins. The
-    field groups are keyed by candidate so picking a different candidate can't
-    inherit the previous one's choices.
-
-    Only conflicts render inputs, so anything absent keeps that match's default —
-    which is exactly what an untouched review screen should mean.
-    """
-    resolutions = {}
-    for match in plan.matches:
-        if not match.needs_decision:
-            continue
-
-        choice = post.get(f"choice-{match.ref}") or ""
-        if choice == merge.ACTION_CREATE:
-            resolutions[match.ref] = {"action": merge.ACTION_CREATE, "target": None, "fields": {}}
-            continue
-
-        candidate = match.candidate(_int(choice.split(":", 1)[1])) if ":" in choice else None
-        if candidate is None:
-            continue  # unreadable choice: fall back to this match's default
-
-        resolutions[match.ref] = {
-            "action": merge.ACTION_MERGE,
-            "target": candidate.pk,
-            "fields": {
-                diff.field: (
-                    merge.KEEP_EXISTING
-                    if post.get(f"field-{match.ref}-{candidate.pk}-{diff.field}") == merge.KEEP_EXISTING
-                    else merge.KEEP_IMPORTED
-                )
-                for diff in candidate.diffs
-            },
-        }
-    return resolutions
+    """The operator's decisions off the review form — shared with the archived
+    competition's duplicate review, which asks the same question."""
+    return merge.read_resolutions(post, plan.matches)
 
 
 def _int(value):

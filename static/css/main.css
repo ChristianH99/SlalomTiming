@@ -376,19 +376,33 @@ a:hover { color: var(--flame-hover); }
   text-overflow: ellipsis;
 }
 .topbar-sub--none { font-style: italic; }
-/* The event named in the topbar is signed off. A micro-cap, not a label, so it
-   takes the uppercase treatment (see the design-system note on case). */
+/* The event named in the topbar is signed off — the *only* place the app says
+   so, which is why it says "read-only" rather than just "archived" and carries
+   the whole explanation in its title. A micro-cap, not a label, so it takes the
+   uppercase treatment (see the design-system note on case). It is filled rather
+   than outlined because it has to hold its own beside the event name at 11px.
+   `help` as the cursor is the standing signal that hovering says more. */
 .topbar-archived {
   margin-left: var(--space-3);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--glacier);
+  padding: var(--space-1) var(--space-4);
   border-radius: var(--radius-pill);
-  background: var(--frost-bg);
-  color: var(--ink);
+  background: var(--glacier);
+  color: var(--white);
+  font-family: 'Manrope', sans-serif;
   font-size: var(--text-2xs);
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Every control on a signed-off event's page is disabled (static/js/read_only.js).
+   Without this they keep their live colours and only differ by not responding,
+   which reads as a broken page rather than a finished event. */
+[data-read-only] #main-content :disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* Right-aligned topbar controls (currently just the page Help "?"). */
@@ -1040,6 +1054,85 @@ body.modal-open { overflow: hidden; }
   max-width: 420px;
   width: 100%;
 }
+/* A dialog that holds a table or a set of choices rather than one question.
+   The default 420px is right for "are you sure?" and far too narrow for a
+   three-column settings diff. */
+.modal--wide { max-width: 40rem; }
+
+/* ---------------------------------------------------------------------------
+   Duplicating an archived event (templates/competitions/competition_duplicate.html)
+
+   Two things a copy has to be told: what to carry, and — for a copy made to
+   edit a signed-off event — which of the settings it should run under, since
+   the discipline may have moved on since. Laid out as choices with their
+   consequence written under them rather than as a pair of buttons: the two
+   options do very different things and neither is the obvious default.
+   --------------------------------------------------------------------------- */
+.dup-choice {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+  margin-top: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.dup-choice:has(input:checked) { border-color: var(--glacier); background: var(--frost-bg); }
+.dup-choice-body { display: flex; flex-direction: column; gap: var(--space-2); }
+.dup-choice-name { font-weight: 700; color: var(--text-dark); }
+.dup-choice-hint { font-size: var(--text-sm); color: var(--text-mid); }
+
+.dup-settings { margin-top: var(--space-7); border-top: 1px solid var(--border); padding-top: var(--space-6); }
+.dup-settings-title {
+  font-family: 'Manrope', sans-serif;
+  font-size: var(--text-md);
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0 0 var(--space-3);
+}
+.dup-diff { width: 100%; border-collapse: collapse; margin-top: var(--space-5); }
+.dup-diff th, .dup-diff td {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-light);
+  text-align: left;
+  font-size: var(--text-sm);
+}
+.dup-diff thead th {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-light);
+}
+/* A field label, not a column heading, so it keeps its case — the app's tables
+   uppercase their `th` by default (see the design-system note on case). */
+.dup-diff tbody th { font-weight: 600; color: var(--text-dark); text-transform: none; letter-spacing: normal; }
+.dup-diff-option { display: flex; align-items: center; gap: var(--space-3); cursor: pointer; }
+/* Flame, because this is the one line on the dialog that says a *different*
+   event's results will move. */
+.dup-warning {
+  margin: var(--space-5) 0 0;
+  padding: var(--space-4) var(--space-5);
+  border-left: 3px solid var(--flame);
+  background: var(--flame-bg);
+  color: var(--flame-hover);
+  font-size: var(--text-sm);
+}
+
+/* The read-only settings pop-up (competition_archived_rules.html). */
+.archived-rules { width: 100%; border-collapse: collapse; margin-top: var(--space-5); }
+.archived-rules th, .archived-rules td {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-light);
+  text-align: left;
+  font-size: var(--text-sm);
+}
+.archived-rules th {
+  font-weight: 600; color: var(--text-mid); width: 55%;
+  text-transform: none; letter-spacing: normal;
+}
+.archived-rules td { color: var(--text-dark); font-weight: 600; }
+
 .modal-title {
   font-family: 'Manrope', sans-serif;
   font-size: var(--text-xl);
@@ -3884,42 +3977,6 @@ textarea:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .device-alarm-dot { animation: none; }
 }
-
-/* ---------------------------------------------------------------------------
-   Archived-event banner (templates/competitions/_archived_banner.html)
-
-   Shown on every page while the active competition is signed off. Deliberately
-   in the frost family and not the flame one: nothing is going wrong, the event
-   is simply finished — and flame in this app means "seconds added", so a page
-   wearing it for any other reason reads as penalised.
-   --------------------------------------------------------------------------- */
-.archived-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  flex-wrap: wrap;
-  margin: 0 0 var(--space-6);
-  padding: var(--space-5) var(--space-6);
-  border: 1.5px solid var(--glacier);
-  border-radius: var(--radius-md);
-  background: var(--frost-bg);
-  color: var(--ink);
-  font-size: var(--text-base);
-}
-.archived-banner-label {
-  flex: none;
-  padding: var(--space-1) var(--space-4);
-  border-radius: var(--radius-pill);
-  background: var(--glacier);
-  color: var(--white);
-  font-family: 'Manrope', sans-serif;
-  font-size: var(--text-2xs);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.archived-banner-text { flex: 1 1 16rem; }
-.archived-banner-link { flex: none; color: var(--ink); font-weight: 700; white-space: nowrap; }
 
 /* ---------------------------------------------------------------------------
    Live-connection indicator (templates/timing/_live_connection.html)

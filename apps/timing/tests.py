@@ -2977,39 +2977,33 @@ def test_a_participants_only_role_cannot_inject_a_timing_signal():
 
 # ----- a signed-off event takes no more times (issue #8) -----
 
-def test_a_time_arriving_at_an_archived_event_is_kept_but_not_placed(client):
-    """The same treatment the operator's Lock switch gives: an archived event is
-    not taking times, but "not taking" must never mean "losing" — the signal is
-    written, lands on the ignore list, and is still there if the event is
-    reopened. Refusing it at the door would be the one thing apps/timing/ingest.py
-    promises cannot happen."""
+def test_a_time_arriving_at_an_archived_event_is_dropped(client):
+    """The one place in this app where a time is deliberately let go.
+
+    Everything else in apps/timing/ingest.py exists to make sure a signal is
+    never lost, down to a recovery file for one the database refused — and this
+    is the exception that says what the rest is for. An archived event is
+    *finished*: a pulse arriving at it is the rig being packed away or the next
+    club setting up, not a run nobody recorded. Keeping it would mean an ignore
+    list growing for ever on an event that can never use it.
+    """
     from apps.competitions import archiving
 
     comp = make_active_competition()
     TimingSettings.objects.create(device="simulator")
     archiving.archive(comp)
 
-    _post_signal(client, running_number=1, port=1, is_manual=False, time="10:00:00.000")
+    response = _post_signal(
+        client, running_number=1, port=1, is_manual=False, time="10:00:00.000")
 
-    signal = TimingSignal.objects.get()
-    assert signal.competition_id == comp.pk
-    assert signal.ignored is True
-    assert not TimedRun.objects.filter(start_signal=signal).exists()
-
-
-def test_reopening_lets_times_be_recorded_again(client):
-    from apps.competitions import archiving
-
-    comp = make_active_competition()
-    TimingSettings.objects.create(device="simulator")
-    archiving.archive(comp)
-    archiving.reopen(comp)
-
-    _post_signal(client, running_number=1, port=1, is_manual=False, time="10:00:00.000")
-
-    signal = TimingSignal.objects.get()
-    assert signal.ignored is False
-    assert TimedRun.objects.filter(start_signal=signal).exists()
+    assert not TimingSignal.objects.exists()
+    assert not TimedRun.objects.exists()
+    # And the device is told which of the two "no row" answers this is. The other
+    # one — the database was busy and the time went to the recovery file — is
+    # still a captured time, and the simulator's log must not call them the same
+    # thing.
+    body = response.json()
+    assert body["archived"] is True and body["captured"] is False
 
 
 def test_the_timing_views_still_render_for_an_archived_event(client):

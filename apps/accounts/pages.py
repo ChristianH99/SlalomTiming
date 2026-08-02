@@ -53,7 +53,7 @@ PAGE_URLS = {
         ("competitions", name)
         for name in (
             "list", "add", "general", "classes", "runorder", "penalties",
-            "delete", "select", "duplicate", "archive", "reopen",
+            "delete", "select", "duplicate", "archive", "archived-rules",
             "type-list", "type-add", "type-settings", "type-delete",
         )
     } | {("results", "settings")},

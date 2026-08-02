@@ -244,7 +244,7 @@ def build_table(competition, enabled, ranked, status_rows, unranked, precision,
     if participants is None:
         participants = {
             entry.participant_id: entry.participant
-            for entry in competition.entries.select_related("participant").all()
+            for entry in competition.entry_rows()
         }
 
     def rows(competitors, kind):
