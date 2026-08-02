@@ -44,6 +44,12 @@
         {% endif %}
         {% if 'participants' in nav_pages %}
         <a class="shell-nav-item{% if 'participants' in nav_current %} active{% endif %}" href="{% url 'participants:list' %}">{% trans "Participants" %}</a>
+        {% comment %}Only while the event actually draws numbers: with the
+        setting off there is no draw to close and the page redirects, so
+        offering it would be a link to nowhere (issue #11).{% endcomment %}
+        {% if active_competition.uses_draw_numbers %}
+        <a class="shell-nav-item{% if 'bib_assignment' in nav_current %} active{% endif %}" href="{% url 'participants:bib-assignment' %}">{% trans "Bib assignment" %}</a>
+        {% endif %}
         {% endif %}
         {% comment %}Timing sub-pages will grow; Settings is kept last (future
         pages go above it).{% endcomment %}

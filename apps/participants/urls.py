@@ -9,6 +9,7 @@ urlpatterns = [
     path("check/", views.participant_check, name="check"),
     path("set-bib/", views.participant_set_bib, name="set-bib"),
     path("set-dsq/", views.participant_set_dsq, name="set-dsq"),
+    path("bib-assignment/", views.BibAssignmentView.as_view(), name="bib-assignment"),
     path("add/", views.ParticipantCreateView.as_view(), name="add"),
     path("<int:pk>/edit/", views.ParticipantUpdateView.as_view(), name="edit"),
     path("<int:pk>/delete/", views.ParticipantDeleteView.as_view(), name="delete"),

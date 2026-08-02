@@ -1,3 +1,4 @@
+from django.contrib import messages
 from django.db import IntegrityError
 from django.db.models import F, OuterRef, Q, Subquery
 from django.http import JsonResponse
@@ -5,15 +6,18 @@ from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext, ngettext, gettext_lazy as _
 from django.views.decorators.http import require_POST
+from django.shortcuts import render
+from django.views import View
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.common import json_body, safe_next
 from apps.competitions import archiving
-from apps.competitions.models import Competition, CompetitionType
+from apps.competitions.models import Competition, CompetitionClass, CompetitionType
 
+from . import draw
 from .bibs import bib_change_effect
 from .forms import ParticipantCreateForm, ParticipantUpdateForm
-from .models import ClassAssignment, EventEntry, Participant
+from .models import ClassAssignment, DrawNumber, EventEntry, Participant
 
 
 def _as_pk(value):
@@ -45,6 +49,19 @@ def save_class_assignments(participant, competition, form):
         ClassAssignment(participant=participant, competition_class=cc)
         for cc in form.selected_classes
     )
+
+
+def save_draw_number(participant, competition, form):
+    """Persist the number this participant drew at registration.
+
+    Only when the competition is actually drawing numbers: with the toggle off
+    the form has no such field at all (see forms.setup_draw_number), so an empty
+    value here would otherwise delete a number recorded before somebody switched
+    the toggle off to look at something.
+    """
+    if competition is None or not getattr(form, "uses_draw_numbers", False):
+        return
+    draw.set_draw_number(competition, participant, form.cleaned_data.get("draw_number"))
 
 # Common consumer email domains, offered as completions once the user types "@".
 COMMON_EMAIL_DOMAINS = [
@@ -182,11 +199,17 @@ class ParticipantListView(ListView):
         entry_here = EventEntry.objects.filter(
             competition=self.competition, participant=OuterRef("pk")
         )
+        draw_here = DrawNumber.objects.filter(
+            competition=self.competition, participant=OuterRef("pk")
+        )
         qs = qs.annotate(
             current_bib=Subquery(entry_here.values("bib_number")[:1]),
             # Whether this participant is out of the whole event (the detail
             # panel's disqualification switch), not of a single run.
             current_status=Subquery(entry_here.values("status")[:1]),
+            # Annotated whether or not the competition draws numbers: one
+            # subquery costs nothing and the column is a template decision.
+            current_draw=Subquery(draw_here.values("number")[:1]),
         )
         if self.active_only:
             qs = qs.filter(entries__competition=self.competition)
@@ -227,6 +250,12 @@ class ParticipantListView(ListView):
             # the template cannot tell the difference.
             person.current_bib = entry.bib_number
             person.current_status = entry.status
+            # An archived event's competitors all have bibs, and the drawn
+            # numbers that decided them are a registration artefact the archive
+            # does not keep. Set rather than left missing, so the column reads
+            # as empty instead of as a template lookup that silently found
+            # nothing.
+            person.current_draw = None
             rows.append(person)
 
         if self.query:
@@ -263,8 +292,15 @@ class ParticipantListView(ListView):
                 if getattr(ctype, setting)
             }
         context["collected_info"] = collected
+        # The drawn-number column only exists while the event is drawing them —
+        # off, it is a column of dashes on every screen (see issue #11).
+        show_draw = bool(self.competition and self.competition.uses_draw_numbers)
+        context["show_draw_numbers"] = show_draw
         # Fixed columns (bib, name, dob, class, actions) plus the shown optional ones.
-        context["column_count"] = 5 + ("requires_club" in collected) + ("requires_license" in collected)
+        context["column_count"] = (
+            5 + show_draw
+            + ("requires_club" in collected) + ("requires_license" in collected)
+        )
         # Attach each participant's detail-panel rows for the expandable view.
         for participant in context["participants"]:
             participant.detail_rows = participant_detail_rows(participant, collected)
@@ -319,6 +355,7 @@ class ParticipantCreateView(RefuseWhenArchived, ParticipantFormContextMixin, Cre
             form.add_error("bib_number", _(
                 "This bib number was just taken by somebody else."))
             return self.form_invalid(form)
+        save_draw_number(self.object, competition, form)
         save_class_assignments(self.object, competition, form)
         return response
 
@@ -358,6 +395,7 @@ class ParticipantUpdateView(RefuseWhenArchived, ParticipantFormContextMixin, Upd
                     entry.save(update_fields=["bib_number"])
             elif form.entry is not None:
                 form.entry.delete()
+            save_draw_number(self.object, form.competition, form)
         save_class_assignments(self.object, form.competition, form)
         return response
 
@@ -368,6 +406,113 @@ class ParticipantUpdateView(RefuseWhenArchived, ParticipantFormContextMixin, Upd
             return None
         old_bib = form.entry.bib_number if form.entry is not None else None
         return bib_change_effect(form.competition, old_bib, form.cleaned_data.get("bib_number"))
+
+
+class BibAssignmentView(View):
+    """Bib assignment: closing a class's registration and handing out its bibs.
+
+    Only reachable while the competition draws numbers — with the toggle off
+    there is nothing here to do, so the sidebar does not offer it and this
+    redirects rather than rendering an explanation of a feature that is switched
+    off (see apps/competitions/models.Competition.uses_draw_numbers).
+
+    Two POSTs, deliberately. The first builds a plan and shows exactly which bib
+    each competitor would get; the second, carrying ``confirm``, writes it. This
+    is the app's usual shape for something that cannot be undone from the screen
+    that did it — count, ask, then save — and it is the only place the operator
+    can see the competitors the draw would *miss*: somebody with neither a drawn
+    number nor a bib is invisible on the class card and would simply be absent
+    from the start list afterwards.
+    """
+
+    template_name = "participants/bib_assignment.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.competition = Competition.get_current()
+        # The archived refusal comes *first*, before the draw-numbers check.
+        # Both end in a redirect to the list, but only one of them says why, and
+        # "that event is signed off" is the true answer whichever other reason
+        # this page is unavailable for. It is also what config/archived_tests.py
+        # asks every write door in the app.
+        if request.method == "POST" and archiving.refuse_page(
+            request, self.competition
+        ):
+            return redirect("participants:list")
+        if self.competition is None or not self.competition.uses_draw_numbers:
+            return redirect("participants:list")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request):
+        return render(request, self.template_name, self._context())
+
+    def post(self, request):
+        competition_class = CompetitionClass.objects.filter(
+            pk=_as_pk(request.POST.get("competition_class")),
+            competition=self.competition,
+        ).first()
+        if competition_class is None:
+            messages.error(request, gettext("Choose a class to assign bibs for."))
+            return redirect("participants:bib-assignment")
+        if competition_class.registration_closed:
+            messages.error(request, gettext(
+                "%(name)s has already been assigned its bibs.")
+                % {"name": competition_class.display_name()})
+            return redirect("participants:bib-assignment")
+
+        order = (request.POST.get("order") or draw.ASCENDING)
+        if order not in dict(draw.ORDER_CHOICES):
+            order = draw.ASCENDING
+        start = _as_pk(request.POST.get("start")) if request.POST.get("start") else None
+        plan = draw.plan(self.competition, competition_class, order=order, start=start)
+
+        if not request.POST.get("confirm"):
+            return render(request, self.template_name,
+                          self._context(plan=plan, order=order, start=start))
+
+        created = draw.commit(self.competition, competition_class, plan)
+        messages.success(request, ngettext(
+            "%(count)s bib was assigned and %(name)s is closed.",
+            "%(count)s bibs were assigned and %(name)s is closed.",
+            created,
+        ) % {"count": created, "name": competition_class.display_name()})
+        return redirect("participants:bib-assignment")
+
+    def _context(self, plan=None, order=None, start=None):
+        competition = self.competition
+        running = competition._running_classes_ordered()
+        taken = draw.taken_bibs(competition)
+        return {
+            "competition": competition,
+            "classes": [
+                self._class_row(competition, cc, running) for cc in running
+            ],
+            "next_bib": draw.next_free_bib(competition, taken),
+            "order_choices": draw.ORDER_CHOICES,
+            # Set only while a preview is on screen; the template renders the
+            # confirmation over the list when it is.
+            "plan": plan,
+            "chosen_order": order,
+            "chosen_start": start,
+        }
+
+    @staticmethod
+    def _class_row(competition, competition_class, running):
+        """One class's card: how far its registration has got.
+
+        The three counts are what somebody deciding whether to close it is
+        actually asking — is everybody in, has everybody drawn, and how many
+        already hold a bib somebody typed in by hand.
+        """
+        people = draw._class_participants(competition, competition_class, running=running)
+        pks = [person.pk for person in people]
+        return {
+            "competition_class": competition_class,
+            "total": len(people),
+            "drawn": DrawNumber.objects.filter(
+                competition=competition, participant_id__in=pks).count(),
+            "with_bib": EventEntry.objects.filter(
+                competition=competition, participant_id__in=pks).count(),
+        }
 
 
 class ParticipantDeleteView(RefuseWhenArchived, DeleteView):

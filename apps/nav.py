@@ -47,6 +47,11 @@ ITEMS = {
         ("participants", name)
         for name in ("list", "add", "edit", "delete", "check", "set-bib", "set-dsq")
     },
+    # Its own entry rather than a Participants sub-page: it only exists while the
+    # competition draws numbers (Competition.uses_draw_numbers), and a parent
+    # that grows and loses a child depending on a setting reads as a broken
+    # sidebar rather than as a feature being off.
+    "bib_assignment": {("participants", "bib-assignment")},
 
     "timing.manual": {("timing", "manual")},
     "timing.auto": {("timing", "auto")},
@@ -110,7 +115,7 @@ EVENT_SCOPED = frozenset({
     "dashboard",
     "setup.general", "setup.classes", "setup.runorder", "setup.penalties",
     "setup.results",
-    "participants",
+    "participants", "bib_assignment",
     "timing.manual", "timing.auto",
     "marshal_posts",
     "results.index", "results.overall", "results.class",

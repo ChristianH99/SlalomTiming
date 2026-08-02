@@ -269,6 +269,7 @@ def _import_event(document, result, participants, media, activate):
     posts = _import_marshal_posts(document, competition)
     entries = _import_entries(document, competition, participants, result)
     _import_class_assignments(document, participants, classes)
+    _import_draw_numbers(document, competition, participants)
 
     runs = _import_timing(document, competition, classes, result)
     _import_marshal_penalties(document, runs, posts)
@@ -353,6 +354,30 @@ def _import_class_assignments(document, participants, classes):
         ClassAssignment.objects.create(
             participant=participant, competition_class=competition_class
         )
+
+
+def _import_draw_numbers(document, competition, participants):
+    """The numbers competitors drew at registration (apps/participants/draw.py).
+
+    Two incoming competitors merged onto one participant would collide on the
+    one-number-per-participant rule, exactly as they do on entries — the first
+    keeps their number and the second is dropped, since a merged person cannot
+    have drawn twice.
+    """
+    from apps.participants.models import DrawNumber
+
+    seen = set()
+    rows = []
+    for row in document.get("draw_numbers") or []:
+        participant = participants.get(row.get("participant"))
+        if participant is None or participant.pk in seen:
+            continue
+        seen.add(participant.pk)
+        rows.append(DrawNumber(
+            competition=competition, participant=participant,
+            **load(DrawNumber, row, schema.DRAW_NUMBER_FIELDS),
+        ))
+    DrawNumber.objects.bulk_create(rows)
 
 
 def _import_timing(document, competition, classes, result):

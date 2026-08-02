@@ -14,10 +14,15 @@ class CompetitionForm(forms.ModelForm):
 
     class Meta:
         model = Competition
-        fields = ["competition_type", "name", "date"]
+        # uses_draw_numbers is here, on the *event's* General page, and not on
+        # the competition type's settings: a club runs its championship on drawn
+        # numbers and its training day on whoever turns up, out of one
+        # discipline. See Competition.uses_draw_numbers.
+        fields = ["competition_type", "name", "date", "uses_draw_numbers"]
         # apps.common.DateInput — see there; a localised value never reaches the
         # native picker, so the event's own date read as empty on the General page.
         widgets = {"date": DateInput()}
+        labels = {"uses_draw_numbers": _("Assign bibs from drawn numbers")}
 
 
 class CompetitionTypeForm(forms.ModelForm):

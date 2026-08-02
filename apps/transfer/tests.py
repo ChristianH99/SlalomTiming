@@ -2048,3 +2048,98 @@ def test_a_live_event_arrives_live():
 
     assert not result.competition.is_archived
     assert result.competition.archived_rules == {}
+
+
+# --- drawn numbers travel with the event (issue #11) -------------------------
+#
+# An event exported mid-registration is the case these exist for: its bibs have
+# not been handed out yet, so the *only* record of the draw is the DrawNumber
+# rows and the per-class closed flag. A file that dropped them would arrive
+# looking like an event nobody had registered for.
+
+
+def _drawn_event():
+    """An event still drawing: one class closed and drawn, one still open with
+    a competitor holding a number and no bib."""
+    from apps.participants.models import DrawNumber
+
+    competition = make_event()
+    competition.uses_draw_numbers = True
+    competition.save(update_fields=["uses_draw_numbers"])
+
+    waiting = make_participant(
+        competition.competition_type, first="Wait", last="Ing")
+    DrawNumber.objects.create(
+        competition=competition, participant=waiting, number=12)
+
+    closed = competition.classes.first()
+    closed.registration_closed_at = timezone.now()
+    closed.save(update_fields=["registration_closed_at"])
+    return competition, waiting, closed
+
+
+def test_an_export_carries_the_draw_setting_and_the_closed_classes():
+    competition, _waiting, closed = _drawn_event()
+
+    document, _media = archive.read(exporters.export(competition=competition))
+
+    assert document["competition"]["uses_draw_numbers"] is True
+    by_name = {row["name"]: row for row in document["classes"]}
+    assert by_name[closed.name]["registration_closed_at"] is not None
+
+
+def test_an_export_carries_the_numbers_people_drew():
+    competition, waiting, _closed = _drawn_event()
+
+    document, _media = archive.read(exporters.export(competition=competition))
+
+    assert [row["number"] for row in document["draw_numbers"]] == [12]
+    # The competitor holding it travels too, even though they have no bib and —
+    # under age assignment — no class assignment either.
+    carried = {row["ref"] for row in document["participants"]}
+    assert document["draw_numbers"][0]["participant"] in carried
+    assert waiting.pk in carried
+
+
+def test_an_imported_event_arrives_still_drawing():
+    from apps.participants.models import DrawNumber
+
+    competition, _waiting, closed = _drawn_event()
+    payload = exporters.export(competition=competition)
+    wipe()
+
+    _plan, result = import_archive(payload)
+    imported = result.competition
+
+    assert imported.uses_draw_numbers is True
+    assert imported.classes.get(name=closed.name).registration_closed
+    assert [row.number for row in DrawNumber.objects.filter(competition=imported)] == [12]
+
+
+def test_a_setup_only_duplicate_starts_with_its_classes_open():
+    """The trap in carrying the flag: next year's event copied from this one
+    must not refuse every registration before anybody has drawn a number."""
+    from apps.competitions import duplication
+
+    competition, _waiting, closed = _drawn_event()
+
+    copy = duplication.copy(competition, with_data=False)
+
+    assert copy.uses_draw_numbers is True
+    assert not copy.classes.get(name=closed.name).registration_closed
+
+
+def test_a_full_duplicate_keeps_the_draw_it_was_run_with():
+    from apps.competitions import archiving, duplication
+    from apps.participants.models import DrawNumber
+
+    competition, _waiting, closed = _drawn_event()
+    # The full copy is the way back into a signed-off event.
+    archiving.archive(competition)
+
+    copy = duplication.copy(competition, with_data=True)
+
+    assert copy.classes.get(name=closed.name).registration_closed
+    # Only competitors the copy took over — the one still waiting for a bib was
+    # never a starter, so the archived event does not carry them.
+    assert DrawNumber.objects.filter(competition=copy).count() == 0

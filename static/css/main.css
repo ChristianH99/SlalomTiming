@@ -564,6 +564,12 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
 }
 
 /* ===== BIB BOX ===== */
+/* The drawn number and the bib stand side by side on the participant form —
+   the desk fills the first in and the second is what it turns into. Wraps
+   rather than shrinking, because both are number fields and a squeezed one is
+   unreadable. Only one box when the event doesn't draw numbers, which is the
+   layout this started as. */
+.bib-row { display: flex; flex-wrap: wrap; gap: var(--space-6); }
 .bib-box {
   background: var(--frost-bg);
   border: 1px solid rgba(62,142,222,0.3);
@@ -862,6 +868,36 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
 .switch input:focus-visible + .switch-track { box-shadow: 0 0 0 3px rgba(232,73,29,0.25); }
 .switch--disabled { opacity: 0.45; cursor: not-allowed; }
 .switch--disabled .switch-track { background: var(--border); }
+
+/* ===== BIB ASSIGNMENT (drawn numbers -> bibs, per class) ===== */
+/* One card per running class. Same tile furniture as the competition list
+   (.tile-head / .tile-name / .tile-classes) so the two read as one app; a
+   closed class wears the frost leading edge for the same reason an archived
+   competition does — nothing is wrong, that part is finished. */
+.bib-classes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+}
+.bib-class {
+  padding: var(--space-6) var(--space-7);
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.bib-class--closed { border-left-color: var(--glacier); }
+.assign-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+.assign-form p { margin: 0; }
+.assign-form .actions { margin: 0; }
 
 /* ===== CLASSES PAGE (assignment bar + class tiles) ===== */
 .assignment-bar {
@@ -1335,6 +1371,7 @@ body.modal-open { overflow: hidden; }
   max-width: 0;
 }
 /* Percentages summing to 100% so table-layout: fixed lays out exactly. */
+.participants-table .col-draw { width: 7%; }
 .participants-table .col-bib { width: 7%; }
 .participants-table .col-name { width: 26%; }
 .participants-table .col-dob { width: 13%; }

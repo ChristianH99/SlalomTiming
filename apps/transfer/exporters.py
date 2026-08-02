@@ -95,10 +95,17 @@ def _event_document(competition, include_timing=True):
         ClassAssignment.objects.filter(competition_class__competition=competition).order_by("pk")
     )
 
-    # Everyone the event touches: entered competitors plus anyone assigned to one
-    # of its classes without a bib yet.
+    draw_numbers = list(competition.draw_numbers.order_by("pk"))
+
+    # Everyone the event touches: entered competitors, anyone assigned to one of
+    # its classes without a bib yet, and — in an event still drawing numbers —
+    # anyone holding a drawn number. The last of those is not implied by the
+    # other two: an age-assigned event has no ClassAssignment rows at all, so a
+    # competitor who has drawn a number and is waiting for a bib would otherwise
+    # be a draw row pointing at a participant the file does not carry.
     participant_pks = {entry.participant_id for entry in entries}
     participant_pks.update(a.participant_id for a in assignments)
+    participant_pks.update(row.participant_id for row in draw_numbers)
     document["participants"] = _participants(
         Participant.objects.filter(pk__in=participant_pks)
     )
@@ -114,6 +121,10 @@ def _event_document(competition, include_timing=True):
             "competition_class": a.competition_class_id,
         }
         for a in assignments
+    ]
+    document["draw_numbers"] = [
+        dict(dump(row, schema.DRAW_NUMBER_FIELDS), participant=row.participant_id)
+        for row in draw_numbers
     ]
 
     # An archived event is rendered from its own frozen field rather than from

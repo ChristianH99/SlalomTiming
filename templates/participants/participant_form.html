@@ -14,11 +14,26 @@
     <input type="hidden" name="next" value="">
     {{ form.non_field_errors }}
 
-    <div class="bib-box">
-      <h2>{% trans "Bib" %}</h2>
-      {{ form.bib_number }}
-      {{ form.bib_number.errors }}
-      {% if form.bib_number.help_text %}<span class="hint">{{ form.bib_number.help_text }}</span>{% endif %}
+    {% comment %}The drawn number sits to the *left* of the bib: it is what the
+    registration desk fills in, and the bib beside it is what that number will
+    turn into (or the operator's override of it). The whole pair disappears when
+    the event does not draw numbers — the field is removed from the form, not
+    merely hidden, so nothing can post one. See issue #11.{% endcomment %}
+    <div class="bib-row">
+      {% if form.draw_number %}
+        <div class="bib-box">
+          <h2>{% trans "Draw number" %}</h2>
+          {{ form.draw_number }}
+          {{ form.draw_number.errors }}
+          {% if form.draw_number.help_text %}<span class="hint">{{ form.draw_number.help_text }}</span>{% endif %}
+        </div>
+      {% endif %}
+      <div class="bib-box">
+        <h2>{% trans "Bib" %}</h2>
+        {{ form.bib_number }}
+        {{ form.bib_number.errors }}
+        {% if form.bib_number.help_text %}<span class="hint">{{ form.bib_number.help_text }}</span>{% endif %}
+      </div>
     </div>
 
     {% include "participants/_form_field.html" with field=form.first_name mandatory=True %}

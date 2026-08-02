@@ -57,9 +57,13 @@ PAGE_URLS = {
             "type-list", "type-add", "type-settings", "type-delete",
         )
     } | {("results", "settings")},
+    # Bib assignment is part of registration — the same desk, the same people —
+    # so it rides on the Participants key rather than becoming a seventh page
+    # that every role would have to be granted separately.
     "participants": {
         ("participants", name)
-        for name in ("list", "check", "set-bib", "set-dsq", "add", "edit", "delete")
+        for name in ("list", "check", "set-bib", "set-dsq", "add", "edit", "delete",
+                     "bib-assignment")
     },
     "timing": {
         ("timing", name)

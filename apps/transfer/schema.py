@@ -68,6 +68,7 @@ COMPETITION_FIELDS = [
     "penalties_by_marshal_posts",
     "start_pattern",
     "auto_timing_order",
+    "uses_draw_numbers",
     # An archived event arrives archived, carrying the settings it was run
     # under — which is the whole point of having archived it. The type row this
     # document also carries is the *current* one on the source machine and may
@@ -88,9 +89,21 @@ CLASS_FIELDS = [
     "scoring_method",
     "allow_multiple_entries",
     "run_position",
+    # Whether this class's bibs have already been drawn. Carried, because a
+    # half-registered event moved between machines has to arrive knowing which
+    # of its classes are still open — see apps/participants/draw.py. (A
+    # *setup-only* duplicate deliberately clears it; next year's event starts
+    # open. See apps/competitions/duplication._classes.)
+    "registration_closed_at",
 ]
 
 MARSHAL_POST_FIELDS = ["number", "tasks", "handles_stop_line"]
+
+# The number a competitor drew at registration, before the bibs were handed out
+# (apps/participants/models.DrawNumber). An event exported mid-registration is
+# exactly the case this exists for: without it the file would arrive with the
+# draw thrown away and no way to reconstruct the order.
+DRAW_NUMBER_FIELDS = ["number"]
 
 # The identity a participant is matched on when importing, and the details a
 # merge lets the operator choose between. Together they are every Participant
