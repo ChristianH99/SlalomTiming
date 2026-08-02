@@ -170,6 +170,17 @@ def match_participants(rows, competition_type):
     registered under *competition_type* (None — the type doesn't exist here yet —
     means everyone is new).
 
+    Each row is ``{"ref": …}`` plus **already-typed** Participant values — a
+    ``date`` for a date, not the string a JSON document carries. Decoding is the
+    caller's job, and deliberately so: ``schema.load`` decodes *and validates*,
+    which is right for a file arriving from outside (a damaged document must be
+    refused rather than written) and wrong for rows this system already holds.
+    Duplicating an archived event matches its own frozen competitors, and one of
+    them had a date of birth older than the validator allows — already stored,
+    unreachable behind a read-only event, and re-validating it turned a working
+    page into a 500. The check has not gone; it sits where the untrusted input
+    is (``importers._participant_rows``).
+
     Rows are matched against each other's outcomes too: two identical rows in one
     file both resolve to the same existing person rather than to two copies.
     """
@@ -190,7 +201,9 @@ def match_participants(rows, competition_type):
 
     matches = []
     for row in rows:
-        values = schema.load(Participant, row, schema.PARTICIPANT_FIELDS)
+        values = {
+            name: row[name] for name in schema.PARTICIPANT_FIELDS if name in row
+        }
         candidates = []
         seen = set()
 

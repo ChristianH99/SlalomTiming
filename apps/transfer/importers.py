@@ -21,7 +21,7 @@ from django.db import IntegrityError, transaction
 from django.utils.translation import gettext as _
 
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
-from apps.participants.models import ClassAssignment, EventEntry
+from apps.participants.models import ClassAssignment, EventEntry, Participant
 from apps.results import logos, pdfmarkup
 from apps.results.models import ManualTieResolution, ResultColumnSettings, ResultsPdfLayout
 from apps.timing.autotiming import slot_key
@@ -100,7 +100,9 @@ def plan(document):
         scope=scope,
         type_name=type_name,
         existing_type=existing_type,
-        matches=merge.match_participants(participants, existing_type),
+        matches=merge.match_participants(
+            _participant_rows(participants), existing_type
+        ),
         counts=_counts(document),
     )
 
@@ -422,6 +424,22 @@ def _import_tie_resolutions(results, competition, classes, entries):
         else:
             values["members"] = members
             ManualTieResolution.objects.create(competition=competition, **values)
+
+
+def _participant_rows(rows):
+    """A document's participant rows decoded into typed values.
+
+    This is where the file stops being text and starts being data, so it is
+    where it is checked: ``schema.load`` puts every value back through its own
+    field's ``to_python`` and then its validators, turning a damaged export into
+    one sentence rather than a row every later read chokes on. Callers holding
+    rows that came out of this database hand ``match_participants`` their values
+    directly and skip all of it — see that function.
+    """
+    return [
+        {"ref": row["ref"], **load(Participant, row, schema.PARTICIPANT_FIELDS)}
+        for row in rows
+    ]
 
 
 def _import_archived_starters(document, competition, participants, entries, classes):

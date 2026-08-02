@@ -2428,3 +2428,198 @@ def test_a_bib_cleared_before_archiving_takes_them_out_of_it():
 
     frozen = {row.participant_pk for row in competition.archived_starters.all()}
     assert frozen == {staying.pk}
+
+
+# ----- the frozen settings, beside what the type says today -----
+
+def test_the_settings_summary_carries_the_live_value_and_whether_it_moved():
+    competition = make_competition()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+    competition.competition_type.pylon_penalty = 9
+    competition.competition_type.save()
+    competition.refresh_from_db()
+
+    rows = {r["label"]: r
+            for g in archiving.rule_summary(competition) for r in g["rows"]}
+
+    moved = rows["Pylon"]
+    assert (moved["value"], moved["current"], moved["changed"]) == (5, 9, True)
+    # Everything else is untouched, and says so rather than being left blank.
+    steady = rows["Task"]
+    assert steady["changed"] is False
+    assert steady["current"] == steady["value"]
+
+
+def test_the_settings_popup_shows_both_columns_and_marks_what_changed(client):
+    competition = make_active_competition()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+    competition.competition_type.pylon_penalty = 9
+    competition.competition_type.save()
+
+    page = client.get(
+        reverse("competitions:archived-rules", args=[competition.pk])
+    ).content.decode()
+
+    assert "As archived" in page and "Type today" in page
+    assert ">5<" in page and ">\n                    9" in page.replace("\r", "") or "9" in page
+    # The marker is not colour alone: the state is a word too.
+    assert "archived-rules-now--changed" in page
+    assert "changed:" in page and "unchanged:" in page
+
+
+def test_the_settings_popup_says_so_when_nothing_has_moved(client):
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    page = client.get(
+        reverse("competitions:archived-rules", args=[competition.pk])
+    ).content.decode()
+
+    assert "Nothing has changed" in page
+    assert "archived-rules-now--changed" not in page
+
+
+# ----- an archived event has nothing to configure -----
+
+def test_an_archived_current_event_offers_no_configure_button(client):
+    """The setup sub-pages edit the active competition, and an archived one has
+    nothing for them to change — every setting it does have is under "Archived
+    settings". A button onto a page of disabled fields is worse than no button."""
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    page = client.get(reverse("competitions:list")).content.decode()
+
+    assert "Configure" not in page
+    assert reverse("competitions:archived-rules", args=[competition.pk]) in page
+
+
+def test_a_live_current_event_still_offers_configure(client):
+    make_active_competition()
+
+    page = client.get(reverse("competitions:list")).content.decode()
+
+    assert "Configure" in page
+
+
+def test_an_archived_event_that_is_not_current_can_still_be_selected(client):
+    """Selecting it is how its results are opened at all, so that stays."""
+    competition = make_competition()
+    archiving.archive(competition)
+
+    page = client.get(reverse("competitions:list")).content.decode()
+
+    assert reverse("competitions:select", args=[competition.pk]) in page
+
+
+def test_every_frozen_setting_is_in_exactly_one_group():
+    """The pop-up's groups mirror the settings page's sections, and the mapping
+    is spelled out by hand — so a field added to CompetitionType later has to be
+    given a home. It falls into the last group rather than disappearing, and this
+    fails so that placement is a decision instead of an accident."""
+    claimed = [name for _title, names in archiving.RULE_GROUPS for name in names]
+
+    assert len(claimed) == len(set(claimed)), "a setting is in two groups"
+    unclaimed = sorted(set(archiving.FROZEN_FIELDS) - set(claimed))
+    assert not unclaimed, f"settings in no group (they land in the last one): {unclaimed}"
+    stale = sorted(set(claimed) - set(archiving.FROZEN_FIELDS))
+    assert not stale, f"groups name settings that no longer exist: {stale}"
+
+
+def test_the_settings_summary_groups_the_way_the_settings_page_does():
+    competition = make_competition()
+    archiving.archive(competition)
+
+    titles = [group["title"] for group in archiving.rule_summary(competition)]
+
+    assert titles == ["", "Penalties", "Evaluation", "Required participant info"]
+
+
+def test_a_penalty_amount_carries_its_unit():
+    competition = make_competition()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+
+    rows = {r["label"]: r
+            for g in archiving.rule_summary(competition) for r in g["rows"]}
+
+    assert rows["Pylon"]["value"] == 5
+    assert rows["Pylon"]["value_unit"] == "s"
+    # A word or a switch has no unit to carry.
+    assert rows["Tie-break"]["value_unit"] == ""
+    # …and neither does the precision, whose own label already says "1/100 s".
+    assert rows["Timing precision"]["value_unit"] == ""
+
+
+def test_a_penalty_that_was_never_set_shows_no_unit():
+    """"— s" is not a reading of an amount that does not exist."""
+    competition = make_competition()
+    competition.competition_type.pylon_penalty = None
+    competition.competition_type.save()
+    archiving.archive(competition)
+
+    rows = {r["label"]: r
+            for g in archiving.rule_summary(competition) for r in g["rows"]}
+
+    assert rows["Pylon"]["value"] == "—"
+    assert rows["Pylon"]["value_unit"] == ""
+
+
+def test_the_popup_renders_the_groups_and_the_units(client):
+    competition = make_active_competition()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+
+    page = client.get(
+        reverse("competitions:archived-rules", args=[competition.pk])
+    ).content.decode()
+
+    assert "archived-rules-group" in page
+    assert "Penalties" in page and "Evaluation" in page
+    assert 'class="settings-unit">s<' in page
+
+
+def test_duplicating_survives_a_competitor_the_form_would_now_refuse():
+    """A value already in the database is not a value arriving from outside.
+
+    Participant.date_of_birth carries a validator (nothing before 1900 — a
+    slipped keystroke used to give age-based classes a nonsense age), and
+    apps/transfer/schema.load runs it, which is exactly right for a *document*:
+    a damaged file has to be refused rather than written. But a row this
+    database already holds got in some other way, and re-validating it on the
+    way out can only fail for data the operator cannot reach — an archived
+    event is read-only. It crashed the duplicate of a real event.
+    """
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+    # update(), like whatever put it there: Model.save() does not validate.
+    Participant.objects.filter(pk=person.pk).update(
+        date_of_birth=datetime.date(1512, 2, 21))
+    archiving.archive(competition)
+
+    copy = duplication.copy(competition, with_data=True)
+
+    rows = copy.entry_rows()
+    assert [e.bib_number for e in rows] == [7]
+    assert rows[0].participant.date_of_birth == datetime.date(1512, 2, 21)
+
+
+def test_an_import_still_refuses_such_a_value_in_a_file():
+    """The mirror, and the reason the validation exists: a *document* is hostile
+    until checked, so a damaged one is still a sentence rather than a row every
+    later read chokes on."""
+    from apps.participants.models import Participant
+    from apps.transfer import schema
+
+    with pytest.raises(schema.TransferError):
+        schema.load(
+            Participant,
+            {"first_name": "A", "last_name": "B", "date_of_birth": "1512-02-21"},
+            schema.PARTICIPANT_FIELDS,
+        )

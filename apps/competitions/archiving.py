@@ -65,6 +65,27 @@ FROZEN_FIELDS = tuple(
 READ_ONLY = _("This competition is archived, so it cannot be changed. "
               "Duplicate it if you need an editable copy.")
 
+# How the settings pop-up lays the frozen values out: the same groups, in the
+# same order, under the same headings as the competition-type settings page.
+# Somebody reading "what was this run under?" is comparing it against that page
+# from memory, and a flat list of fifteen rows makes them do the sorting.
+#
+# Not a closed list: anything a later field adds that is named in no group falls
+# into the last one rather than vanishing off the screen, and
+# `test_every_frozen_setting_is_in_exactly_one_group` fails so it can be given a
+# home deliberately.
+RULE_GROUPS = (
+    ("", ("name",)),
+    (_("Penalties"), ("penalties_enabled", *CompetitionType.PENALTY_FIELDS)),
+    (_("Evaluation"), ("tie_break", "timing_precision")),
+    (_("Required participant info"), tuple(CompetitionType.PARTICIPANT_INFO)),
+)
+
+# Settings whose number means nothing without its unit. The penalty amounts are
+# whole seconds; the timing precision carries its own unit in its choice label
+# ("1/100 s"), and everything else is a word or a switch.
+RULE_UNITS = {name: _("s") for name in CompetitionType.PENALTY_FIELDS}
+
 
 # --- the rules --------------------------------------------------------------
 
@@ -135,20 +156,53 @@ def rule_differences(competition):
 
 
 def rule_summary(competition):
-    """``[{label, value}]`` — every frozen setting as the operator reads it on
-    the settings page, for the read-only pop-up. In the model's own field order,
-    which is the order that page groups them in."""
+    """``[{title, rows: [{label, value, value_unit, current, current_unit,
+    changed}]}]`` — every frozen setting as the operator reads it on the settings
+    page, beside what the live type says now, in that page's own groups.
+
+    The pop-up showed the frozen column alone at first, which answers "what was
+    this run under?" but not the question somebody actually opens it with, which
+    is "and what would be different if I ran it today?". Both columns and a
+    marker per row answer that at a glance; the count below is the same fact
+    summed up.
+
+    """
     if not competition.archived_rules:
         return []
     labels = _labels()
-    rows = []
-    for name in FROZEN_FIELDS:
-        field = CompetitionType._meta.get_field(name)
-        rows.append({
-            "label": labels.get(name, name),
-            "value": _display(field, competition.archived_rules.get(name)),
-        })
-    return rows
+    live = competition.competition_type
+    grouped = []
+    for title, names in RULE_GROUPS:
+        grouped.append({"title": title, "rows": [
+            _rule_row(competition, live, labels, name)
+            for name in names if name in FROZEN_FIELDS
+        ]})
+    # Whatever no group claimed, so a field added to the model later is visible
+    # (in the last group) rather than silently missing from the pop-up.
+    claimed = {name for _title, names in RULE_GROUPS for name in names}
+    grouped[-1]["rows"].extend(
+        _rule_row(competition, live, labels, name)
+        for name in FROZEN_FIELDS if name not in claimed
+    )
+    return [group for group in grouped if group["rows"]]
+
+
+def _rule_row(competition, live, labels, name):
+    field = CompetitionType._meta.get_field(name)
+    archived = competition.archived_rules.get(name)
+    current = getattr(live, name)
+    unit = RULE_UNITS.get(name, "")
+    return {
+        "label": labels.get(name, name),
+        "value": _display(field, archived),
+        # The unit rides beside the number, not in the label — the settings page
+        # does the same — and only when there *is* a number: "— s" is not a
+        # reading of a penalty that was never set.
+        "value_unit": unit if archived is not None else "",
+        "current": _display(field, current),
+        "current_unit": unit if current is not None else "",
+        "changed": archived != current,
+    }
 
 
 def _display(field, value):

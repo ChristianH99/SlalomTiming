@@ -1010,6 +1010,13 @@ apps/transfer/          Getting the data out: the **automatic backup** (the sect
                          MAX_UPLOAD_BYTES caps the file itself at the view; deploy/Caddyfile's
                          request_body sits just above it so the app's message wins over a bare 413.
   merge.py               Deciding what an imported participant means here (the novel part).
+                         Its rows carry **already-typed** values and it validates nothing:
+                         decoding is the caller's, because the two callers differ in whether
+                         they are holding a file (see the Security note on where validation
+                         belongs). read_resolutions() is the shared reader for both review
+                         screens, with `leads` naming which side a missing field answer falls
+                         back to — the import leads with the file, a duplicate with the record
+                         on file.
                          Each incoming row is matched against the participants already registered
                          under the same type on two rules — same name + date of birth, or same
                          licence number — and classified NEW / IDENTICAL (reuse the row untouched)
@@ -1521,6 +1528,16 @@ Four rules to keep in mind when adding anything to this app:
   `_signal_authorized` and `_timekeeper_required` / `_marshal_may_write` in `apps/timing/views.py`.
   A new open or shared endpoint needs the same treatment, and a test that a *scoped* role is
   refused (the shared `client` fixture is a superuser, so it proves nothing here).
+- **Validation belongs to the door the untrusted value comes through, not to the code
+  downstream of it.** `schema.load` decodes *and* runs each field's validators, which is what
+  turns a damaged export into a sentence instead of a row every later read chokes on — so it
+  is called by `importers._participant_rows`, where a file stops being text. It used to sit
+  inside `merge.match_participants`, which two callers share: the import, and duplicating an
+  archived competition. The second hands it rows out of *this* database, where re-validating
+  can only fail for data that is already stored and that nobody can reach (an archived event
+  is read-only). A competitor whose date of birth predates the 1900 bound — legal to store,
+  since `Model.save()` does not validate — turned Duplicate into a 500. Shared code that
+  validates has to be told which of its callers is holding a file.
 - **Every value that arrives in a file is hostile until checked**, and it gets checked on the way
   in *and* on the way out. The stored-XSS hole came from sanitising the PDF header only in the
   editor's save path while an import wrote the same column raw. Uploads are size-capped at the

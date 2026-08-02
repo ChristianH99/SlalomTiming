@@ -216,6 +216,21 @@ a:hover { color: var(--flame-hover); }
   white-space: nowrap;
 }
 
+/* Text for a screen reader only. The skip link above has always carried its own
+   copy of this, coupled to :focus; this is the same technique as a utility, for
+   the places where a *visual* marker (a dot, a colour) is the whole signal —
+   which is a signal only some of the room receives. `clip` rather than
+   display:none or visibility:hidden, both of which take the text out of the
+   accessibility tree along with the pixels. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 /* ===== SHELL LAYOUT ===== */
 .shell {
   display: flex;
@@ -1119,7 +1134,15 @@ body.modal-open { overflow: hidden; }
   font-size: var(--text-sm);
 }
 
-/* The read-only settings pop-up (competition_archived_rules.html). */
+/* The read-only settings pop-up (competition_archived_rules.html): what the
+   event was run under, beside what its type says today.
+
+   The frozen column is the answer, so it is the emphasised one — the right-hand
+   column is context, and on most rows it says the same thing. Only the rows that
+   *moved* are marked, and marked on the leading edge rather than filled: a
+   discipline that has been reworked has a dozen of them, and a dozen tinted rows
+   is a table with no signal in it. Glacier, not flame: nothing is wrong, and
+   flame in this app means "seconds added". */
 .archived-rules { width: 100%; border-collapse: collapse; margin-top: var(--space-5); }
 .archived-rules th, .archived-rules td {
   padding: var(--space-4);
@@ -1127,11 +1150,59 @@ body.modal-open { overflow: hidden; }
   text-align: left;
   font-size: var(--text-sm);
 }
-.archived-rules th {
-  font-weight: 600; color: var(--text-mid); width: 55%;
+.archived-rules thead th {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-light);
+  font-weight: 700;
+}
+.archived-rules tbody th {
+  font-weight: 600; color: var(--text-mid); width: 40%;
   text-transform: none; letter-spacing: normal;
 }
-.archived-rules td { color: var(--text-dark); font-weight: 600; }
+.archived-rules td { color: var(--text-dark); }
+.archived-rules-was { font-weight: 600; }
+.archived-rules-row--changed th[scope="row"] { box-shadow: inset 3px 0 0 var(--glacier); }
+
+/* A group heading inside the table, so the columns still line up down the page
+   — the same headings, in the same order, as the settings page's sections. */
+.archived-rules-group th {
+  padding-top: var(--space-7);
+  border-bottom: 1px solid var(--border);
+  font-family: 'Manrope', sans-serif;
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-mid);
+  width: auto;
+}
+.archived-rules tbody:first-of-type .archived-rules-group th { padding-top: 0; }
+/* The unit sits beside the number rather than in the label, as on the settings
+   page — and takes that page's own muted treatment. */
+.archived-rules .settings-unit { margin-left: var(--space-2); font-size: var(--text-sm); }
+
+.archived-rules-now {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  color: var(--text-light);
+}
+.archived-rules-now--changed { color: var(--text-dark); font-weight: 600; }
+/* A hollow dot for "same as archived", filled for "moved since". The word beside
+   it is .sr-only — see the utility above. */
+.archived-rules-dot {
+  flex: none;
+  align-self: center;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+}
+.archived-rules-now--changed .archived-rules-dot {
+  border-color: var(--glacier);
+  background: var(--glacier);
+}
 
 .modal-title {
   font-family: 'Manrope', sans-serif;

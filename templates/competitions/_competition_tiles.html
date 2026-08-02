@@ -44,9 +44,14 @@ leaves nothing to go back to.{% endcomment %}
           </div>
         </div>
         <div class="tile-actions">
-          {% if competition.is_active %}
+          {% comment %}Configure opens the setup sub-pages, which edit the *active*
+          competition — an archived one has nothing for them to change, and every
+          setting it does have is one click away under "Archived settings". A
+          button that leads to a page of disabled fields is worse than no button,
+          so the current-event slot is left empty for it.{% endcomment %}
+          {% if competition.is_active and not competition.is_archived %}
             <a class="button button--secondary button--small" href="{% url 'competitions:general' %}">{% trans "Configure" %}</a>
-          {% else %}
+          {% elif not competition.is_active %}
             <form method="post" action="{% url 'competitions:select' competition.pk %}">
               {% csrf_token %}
               <button class="button button--secondary button--small" type="submit">{% trans "Set as current" %}</button>
