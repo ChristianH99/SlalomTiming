@@ -26,7 +26,9 @@ end of a morning of practice runs it is otherwise dozens of chips deep.
         <div class="ignored-col-list"></div>
       </div>
     </div>
-    <button type="button" class="link-button ignored-more" id="ignored-more" hidden></button>
+    {% comment %}"Show all" only reveals more of the list — a read, so it stays
+    live on a signed-off event.{% endcomment %}
+    <button type="button" class="link-button ignored-more" id="ignored-more" data-read-only-allow hidden></button>
     <p class="ignored-hint hint">{% trans "Drag a chip back onto a run's slot to use it, or double-click it." %}</p>
   </div>
 </div>

@@ -68,6 +68,13 @@ COMPETITION_FIELDS = [
     "penalties_by_marshal_posts",
     "start_pattern",
     "auto_timing_order",
+    # An archived event arrives archived, carrying the settings it was run
+    # under — which is the whole point of having archived it. The type row this
+    # document also carries is the *current* one on the source machine and may
+    # already have moved on; a signed-off event must not be re-ranked by
+    # whichever of the two machines happens to hold it.
+    "archived_at",
+    "archived_rules",
 ]
 
 CLASS_FIELDS = [
@@ -157,6 +164,14 @@ PDF_LAYOUT_FIELDS = [
 # (see ManualTieResolution); a document written before it existed simply lacks the
 # key and the row imports without one, which reads as "needs deciding again".
 TIE_RESOLUTION_FIELDS = ["scope", "members", "score"]
+
+# An archived event's frozen field (apps/competitions/ArchivedStarter). It has to
+# travel, and it has to travel *whole*: an archived competition is rendered from
+# these rows and not from the live participant tables, so a document that carried
+# the archive flag without them would arrive as an event with results, settings
+# and nobody in it. The three id columns name rows in this same document and are
+# remapped on import like every other pk.
+ARCHIVED_STARTER_FIELDS = ["bib_number", "status", "details", "class_pks"]
 
 
 class TransferError(Exception):

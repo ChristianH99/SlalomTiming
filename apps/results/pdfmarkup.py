@@ -67,13 +67,23 @@ def wildcard_values(competition, layout, class_label=""):
         "#event_date_long": _long_date(date) if date else "",
         "#year": str(date.year) if date else "",
         "#increment": increment,
-        "#discipline": competition.competition_type.name if competition.competition_type_id else "",
+        # `rules`, not `competition_type`: an archived event prints the discipline
+        # it was run under, even if that type has since been renamed.
+        "#discipline": _discipline(competition),
         "#class": class_label or "",
     }
     return [
         {"token": token, "label": label, "value": resolved[token]}
         for token, label in WILDCARDS
     ]
+
+
+def _discipline(competition):
+    """The competition's discipline name, or "" when it has no type yet (a
+    transient competition built for the settings page's sample PDF has none)."""
+    if competition.archived_rules:
+        return competition.rules.name or ""
+    return competition.competition_type.name if competition.competition_type_id else ""
 
 
 def resolve_wildcards(text, competition, layout, class_label=""):

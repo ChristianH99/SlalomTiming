@@ -293,7 +293,7 @@ def serialize(competition):
     from .models import TimingSettings
 
     settings = TimingSettings.load()
-    ctype = competition.competition_type
+    ctype = competition.rules
     precision = ctype.timing_precision
     marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
     # One read, one bind: the start order used to be replayed three times per
@@ -322,6 +322,8 @@ def serialize(competition):
         "penalties_enabled": ctype.penalties_enabled,
         # The red operator lock: incoming times go straight to the ignore list.
         "input_locked": settings.ignore_incoming,
+        # See serialize_arrangement: the page turns its own controls off.
+        "read_only": competition.is_archived,
         # The device link, so a reader that has lost the CP540 raises its alarm
         # here rather than only on the settings page.
         "device_link": cp540.link_state(settings),
@@ -470,7 +472,7 @@ def penalty_seconds(run, competition):
     """The whole penalty seconds a run adds, resolved the one canonical way (marshal
     posts + adjust for a marshal-driven run, else the run's own counts). Shared by
     the Auto view, the Manual view total and the results engine."""
-    ctype = competition.competition_type
+    ctype = competition.rules
     marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
     return _penalty_seconds(_penalty_lines(run, marshal_mode), ctype)
 
@@ -485,7 +487,7 @@ def own_counts_apply(run, competition):
     the operator could see a count they typed sitting there with no effect on the
     total, with no cue and no disabled state.
     """
-    ctype = competition.competition_type
+    ctype = competition.rules
     marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
     return not marshal_mode or bool(run.manual_entry)
 
@@ -494,7 +496,7 @@ def penalty_counts(run, competition):
     """The run's grand ``(pylons, tasks, stop_line)`` penalty counts, resolved the
     same canonical way as ``penalty_seconds`` — for callers that show the tallies
     rather than the seconds (e.g. the Dashboard's current-competitor chips)."""
-    ctype = competition.competition_type
+    ctype = competition.rules
     marshal_mode = ctype.penalties_enabled and competition.penalties_by_marshal_posts
     lines = _penalty_lines(run, marshal_mode)
     return lines[0]["total"], lines[1]["total"], lines[2]["total"]
@@ -625,11 +627,16 @@ def marshal_state(competition, post_number):
     if run is None or slot is None:
         return {"run_id": None}
     club = ""
-    entry = (
-        EventEntry.objects.select_related("participant")
-        .filter(competition=competition, pk=slot["entry_pk"])
-        .first()
-    )
+    if competition.is_archived:
+        entry = next(
+            (e for e in competition.entry_rows() if e.pk == slot["entry_pk"]), None
+        )
+    else:
+        entry = (
+            EventEntry.objects.select_related("participant")
+            .filter(competition=competition, pk=slot["entry_pk"])
+            .first()
+        )
     if entry is not None:
         club = entry.participant.club or ""
     # detail lets the marshal's board resume its exact per-task state after an

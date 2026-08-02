@@ -7,6 +7,18 @@
 
   <h1 class="page-heading">{{ competition_type.name }}</h1>
   <p class="hint">{% trans "Rules every competition of this type is run and evaluated under." %}</p>
+  {% comment %}This is where somebody changes a penalty amount for next season and
+  then wonders why last season's table did not move. The answer belongs here, on
+  the page that made the change, rather than on the results that stayed put.{% endcomment %}
+  {% if archived_count %}
+    <p class="hint">
+      {% blocktrans count count=archived_count trimmed %}
+        {{ count }} archived competition of this type is unaffected: it keeps the settings it was run under.
+      {% plural %}
+        {{ count }} archived competitions of this type are unaffected: they keep the settings they were run under.
+      {% endblocktrans %}
+    </p>
+  {% endif %}
 
   <form method="post" class="settings-form" data-unsaved-guard>
     {% csrf_token %}

@@ -3,63 +3,7 @@
 {% block title %}{% trans "Competition Setup" %} – Slalom Timing{% endblock %}
 {% block topbar_title %}{% trans "Competition Setup" %}{% endblock %}
 {% block content %}
-  <div class="list-toolbar">
-    <form class="search-form" role="search" id="competition-search">
-      <input type="text" id="competition-search-input"
-             placeholder="{% trans 'Search by name or type…' %}" autocomplete="off">
-      <button class="button button--secondary" type="submit">{% trans "Search" %}</button>
-    </form>
-    <a class="button" href="{% url 'competitions:add' %}">{% trans "+ New competition" %}</a>
-  </div>
-  <div class="toolbar-sub">
-    <a class="button button--secondary button--small" href="{% url 'competitions:type-list' %}">{% trans "Manage competition types" %}</a>
-  </div>
-
-  <div class="competition-tiles" id="competitions-body">
-    {% for competition in competitions %}
-      <div class="competition-tile{% if competition.is_active %} competition-tile--active{% endif %}"
-           data-search="{{ competition.name|lower }} {{ competition.competition_type.name|lower }}">
-        <div class="tile-body">
-          <div class="tile-head">
-            <h2 class="tile-name">{{ competition.name }}</h2>
-            {% if competition.is_active %}
-              <span class="status-pill status-pill--active">{% trans "Current" %}</span>
-            {% endif %}
-          </div>
-          <div class="tile-meta">
-            <span>{{ competition.competition_type.name }}</span>
-            <span class="tile-dot">·</span>
-            <span>{{ competition.date|date:"d.m.Y" }}</span>
-          </div>
-          <div class="tile-classes">
-            {% for label in competition.active_classes %}
-              <span class="status-pill">{{ label }}</span>
-            {% empty %}
-              <span class="tile-muted">{% trans "No classes running" %}</span>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="tile-actions">
-          {% if competition.is_active %}
-            <a class="button button--secondary button--small" href="{% url 'competitions:general' %}">{% trans "Configure" %}</a>
-          {% else %}
-            <form method="post" action="{% url 'competitions:select' competition.pk %}">
-              {% csrf_token %}
-              <button class="button button--secondary button--small" type="submit">{% trans "Set as current" %}</button>
-            </form>
-          {% endif %}
-          <form method="post" action="{% url 'competitions:duplicate' competition.pk %}">
-            {% csrf_token %}
-            <button type="submit" class="link-button">{% trans "Duplicate" %}</button>
-          </form>
-          <a class="link-button link-button--danger" href="{% url 'competitions:delete' competition.pk %}">{% trans "Delete" %}</a>
-        </div>
-      </div>
-    {% empty %}
-      <p class="empty-state">{% trans "No competitions yet." %} <a href="{% url 'competitions:add' %}">{% trans "Create your first one." %}</a></p>
-    {% endfor %}
-    <p class="empty-state no-results-row" hidden>{% trans "No competitions match your search." %}</p>
-  </div>
+  {% include "competitions/_competition_tiles.html" %}
 
 {% endblock %}
 

@@ -116,6 +116,17 @@ def _event_document(competition, include_timing=True):
         for a in assignments
     ]
 
+    # An archived event is rendered from its own frozen field rather than from
+    # the tables above, so those rows travel too — see schema.
+    document["archived_starters"] = [
+        dict(
+            dump(row, schema.ARCHIVED_STARTER_FIELDS),
+            entry=row.entry_pk,
+            participant=row.participant_pk,
+        )
+        for row in competition.archived_starters.order_by("pk")
+    ]
+
     document["timing"] = _timing(competition) if include_timing else _empty_timing()
     document["results"], media = _results(competition)
     return document, media

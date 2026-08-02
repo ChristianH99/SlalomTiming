@@ -12,7 +12,7 @@ from django.views import View
 from apps.common import safe_next
 from apps.competitions.models import CompetitionClass
 from apps.competitions.views import ActiveCompetitionMixin
-from apps.competitions import startpattern
+from apps.competitions import archiving, startpattern
 from apps.timing import autotiming, calc, unassigned
 from apps.timing.models import TimedRun
 
@@ -244,7 +244,7 @@ def build_table(competition, enabled, ranked, status_rows, unranked, precision,
     if participants is None:
         participants = {
             entry.participant_id: entry.participant
-            for entry in competition.entries.select_related("participant").all()
+            for entry in competition.entry_rows()
         }
 
     def rows(competitors, kind):
@@ -265,7 +265,7 @@ def class_section(competition, cclass, data=None):
     than one table — "export everything" otherwise re-read the whole event per
     class."""
     results = resultscalc.compute_class_results(competition, cclass, data=data)
-    precision = competition.competition_type.timing_precision
+    precision = competition.rules.timing_precision
     enabled = ResultColumnSettings.columns_for(
         competition, cclass, running=data["running"] if data else None)
     layout, ranked, status_rows, unranked = build_table(
@@ -295,7 +295,7 @@ def overall_section(competition, method, runs, data=None):
     """The full render payload for one Overall results table. Shared by the
     on-screen view and the PDF export. ``data`` as in ``class_section``."""
     results = resultscalc.compute_overall_results(competition, method, runs, data=data)
-    precision = competition.competition_type.timing_precision
+    precision = competition.rules.timing_precision
     enabled = ResultColumnSettings.general_columns(
         competition, running=data["running"] if data else None)
     layout, ranked, status_rows, unranked = build_table(
@@ -524,6 +524,9 @@ class ResultsPdfLogoRemoveView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return JsonResponse({"ok": False, "error": _("No active competition.")}, status=400)
+        refusal = archiving.refuse_json(competition)
+        if refusal is not None:
+            return refusal
         side = request.POST.get("side")
         field = {"left": "image_left", "right": "image_right"}.get(side)
         if field is None:
@@ -544,7 +547,7 @@ def unregistered_bibs(competition):
     event complete?", and these are precisely the times that are not in it — a
     class table cannot show them, since without a competitor there is no class to
     show them under. See apps/timing/unassigned.py."""
-    precision = competition.competition_type.timing_precision
+    precision = competition.rules.timing_precision
     rows = []
     for group in unassigned.unregistered(competition):
         runs = []
@@ -657,6 +660,11 @@ class ResultsTieResolveView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return JsonResponse({"ok": False, "error": _("No active competition.")}, status=400)
+        # A tie resolution is part of the result, so an archived event keeps the
+        # one it was signed off with.
+        refusal = archiving.refuse_json(competition)
+        if refusal is not None:
+            return refusal
         try:
             payload = json.loads(request.body or b"{}")
             scope = payload["scope"]
@@ -742,6 +750,9 @@ class ResultsSettingsView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        archived = self.refuse_archived(request, competition)
+        if archived is not None:
+            return archived
         available = ResultColumnSettings.available_keys(competition)
         with transaction.atomic():
             general_cols = [k for k in available if request.POST.get(f"general-{k}")]

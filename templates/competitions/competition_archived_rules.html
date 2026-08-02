@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% load static i18n %}
+{% block title %}{% trans "Archived settings" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Competition Setup" %}{% endblock %}
+{% block content %}
+  {% comment %}The list itself, so this reads as a pop-up over the page it was
+  opened from rather than as a different page with a box on it — closing it puts
+  the operator back on the tile they pressed.{% endcomment %}
+  {% include "competitions/_competition_tiles.html" %}
+
+  {% comment %}Read-only, and rendered already open by the server. It exists
+  because a signed-off event's own General page can no longer show its settings:
+  that page edits the *live* competition type, which is exactly the row an
+  archived event has stopped following. Without this there was no screen in the
+  app that could answer "what was this event actually run under?", which made the
+  freeze something to take on trust.{% endcomment %}
+  <div class="modal-overlay" data-modal-open>
+    <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="archived-rules-title">
+      <h2 class="modal-title" id="archived-rules-title">{% trans "Settings this event was run under" %}</h2>
+      <div class="modal-body">
+        <p class="hint">
+          {% blocktrans with when=object.archived_at|date:"d.m.Y" type=object.competition_type.name trimmed %}
+            Frozen when the event was archived on {{ when }}. Its results are
+            evaluated by these values and no longer by “{{ type }}”, however that
+            is changed from now on.
+          {% endblocktrans %}
+        </p>
+        {% comment %}Two value columns, because the question somebody opens this
+        with is not only "what was it run under" but "what would be different
+        today". The marker is a dot plus a word the eye skips and a screen reader
+        does not — the colour alone would say it to only some of the room.{% endcomment %}
+        <table class="archived-rules">
+          <thead>
+            <tr>
+              <th>{% trans "Setting" %}</th>
+              <th>{% trans "As archived" %}</th>
+              <th>{% trans "Type today" %}</th>
+            </tr>
+          </thead>
+          {% comment %}One tbody per group, rather than a table each: separate
+          tables would size their columns independently and the two value columns
+          would stop lining up down the page.{% endcomment %}
+          {% for group in rules %}
+            <tbody>
+              {% if group.title %}
+                <tr class="archived-rules-group">
+                  <th colspan="3" scope="colgroup">{{ group.title }}</th>
+                </tr>
+              {% endif %}
+              {% for row in group.rows %}
+                <tr{% if row.changed %} class="archived-rules-row--changed"{% endif %}>
+                  <th scope="row">{{ row.label }}</th>
+                  <td class="archived-rules-was">{{ row.value }}{% if row.value_unit %}<span class="settings-unit">{{ row.value_unit }}</span>{% endif %}</td>
+                  <td>
+                    <span class="archived-rules-now{% if row.changed %} archived-rules-now--changed{% endif %}">
+                      <span class="archived-rules-dot" aria-hidden="true"></span>
+                      <span class="sr-only">{% if row.changed %}{% trans "changed:" %}{% else %}{% trans "unchanged:" %}{% endif %}</span>
+                      <span>{{ row.current }}{% if row.current_unit %}<span class="settings-unit">{{ row.current_unit }}</span>{% endif %}</span>
+                    </span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          {% endfor %}
+        </table>
+        <p class="hint">
+          {% if differences %}
+            {% blocktrans count count=differences|length with type=object.competition_type.name trimmed %}
+              {{ count }} of these has changed in “{{ type }}” since — this event is unaffected, but a new competition of the discipline would use the right-hand column.
+            {% plural %}
+              {{ count }} of these have changed in “{{ type }}” since — this event is unaffected, but a new competition of the discipline would use the right-hand column.
+            {% endblocktrans %}
+          {% else %}
+            {% blocktrans with type=object.competition_type.name trimmed %}
+              Nothing has changed in “{{ type }}” since, so a new competition of the discipline would run under the same settings.
+            {% endblocktrans %}
+          {% endif %}
+        </p>
+      </div>
+      <div class="modal-actions">
+        <a class="button" href="{% url 'competitions:list' %}">{% trans "Close" %}</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/competition_list.js' %}"></script>
+  <script src="{% static 'js/archived_rules.js' %}"></script>
+{% endblock %}

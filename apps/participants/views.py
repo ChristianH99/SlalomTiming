@@ -8,6 +8,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.common import json_body, safe_next
+from apps.competitions import archiving
 from apps.competitions.models import Competition, CompetitionType
 
 from .bibs import bib_change_effect
@@ -136,6 +137,27 @@ def participant_detail_rows(participant, collected_info):
     return rows
 
 
+class RefuseWhenArchived:
+    """The participants section stops taking writes while the active competition
+    is archived.
+
+    The whole section, not only the bib field, even though a Participant belongs
+    to a *discipline* rather than to one event: the list is scoped to the active
+    competition, every form on it saves a registration (bib, class assignment,
+    whole-event DSQ) alongside the personal data, and the row for "which of these
+    edits could reach a signed-off event" is not one an operator should have to
+    reason about mid-task. Registering for the *next* event is unaffected —
+    selecting it is what un-archives the screen.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.method == "POST" and archiving.refuse_page(
+            request, Competition.get_current()
+        ):
+            return redirect("participants:list")
+        return super().dispatch(request, *args, **kwargs)
+
+
 class ParticipantListView(ListView):
     model = Participant
     context_object_name = "participants"
@@ -152,6 +174,9 @@ class ParticipantListView(ListView):
         # the user to pick one.
         if self.competition is None:
             return Participant.objects.none()
+
+        if self.competition.is_archived:
+            return self._frozen()
 
         qs = Participant.objects.filter(competition_type=self.competition.competition_type)
         entry_here = EventEntry.objects.filter(
@@ -181,16 +206,57 @@ class ParticipantListView(ListView):
             qs = qs.prefetch_related("class_assignments__competition_class")
         return qs.distinct()
 
+    def _frozen(self):
+        """The competitors of a signed-off event, as it froze them.
+
+        The live table is the wrong answer here even though this page normally
+        reads it: a Participant belongs to the *discipline*, so somebody
+        correcting a vehicle or a club for next season would otherwise change
+        what a finished event says its competitors drove. This is the same rule
+        the results, the timing views and the dashboard already follow — see
+        Competition.entry_rows.
+
+        A list rather than a queryset, so the filtering and ordering the live
+        path leaves to the database happen here. Both are cheap: an archived
+        event's field is one read and never grows again.
+        """
+        rows = []
+        for entry in self.competition.entry_rows():
+            person = entry.participant
+            # The two annotations the live query adds, attached the same way so
+            # the template cannot tell the difference.
+            person.current_bib = entry.bib_number
+            person.current_status = entry.status
+            rows.append(person)
+
+        if self.query:
+            needle = self.query.casefold()
+            rows = [
+                person for person in rows
+                if needle in f"{person.first_name} {person.last_name} {person.club}".casefold()
+                or needle in str(person.current_bib or "")
+            ]
+        # No "unassigned last" branch, unlike the live query: every archived
+        # starter has a bib, because an entry *is* a bib (EventEntry.bib_number
+        # is not nullable, and clearing one deletes the row). Which is also why
+        # "active only" has nothing to filter here — see the template.
+        rows.sort(key=lambda person: (
+            person.current_bib,
+            person.last_name.casefold(), person.first_name.casefold(),
+        ))
+        return rows
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["competition"] = self.competition
         context["active_only"] = self.active_only
         context["query"] = self.query
         # Which type-optional columns (club, licence) to show — only the details
-        # the active competition's type actually collects.
+        # the active competition's type actually collects. `rules`, so a
+        # signed-off event shows the columns it collected on the day.
         collected = set()
         if self.competition:
-            ctype = self.competition.competition_type
+            ctype = self.competition.rules
             collected = {
                 setting
                 for setting in CompetitionType.PARTICIPANT_INFO
@@ -213,7 +279,7 @@ class ParticipantListView(ListView):
         return context
 
 
-class ParticipantCreateView(ParticipantFormContextMixin, CreateView):
+class ParticipantCreateView(RefuseWhenArchived, ParticipantFormContextMixin, CreateView):
     model = Participant
     form_class = ParticipantCreateForm
     template_name = "participants/participant_form.html"
@@ -257,7 +323,7 @@ class ParticipantCreateView(ParticipantFormContextMixin, CreateView):
         return response
 
 
-class ParticipantUpdateView(ParticipantFormContextMixin, UpdateView):
+class ParticipantUpdateView(RefuseWhenArchived, ParticipantFormContextMixin, UpdateView):
     model = Participant
     form_class = ParticipantUpdateForm
     template_name = "participants/participant_form.html"
@@ -304,7 +370,7 @@ class ParticipantUpdateView(ParticipantFormContextMixin, UpdateView):
         return bib_change_effect(form.competition, old_bib, form.cleaned_data.get("bib_number"))
 
 
-class ParticipantDeleteView(DeleteView):
+class ParticipantDeleteView(RefuseWhenArchived, DeleteView):
     model = Participant
     template_name = "participants/participant_confirm_delete.html"
     success_url = reverse_lazy("participants:list")
@@ -342,6 +408,9 @@ def participant_set_bib(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
+    refusal = archiving.refuse_json(competition)
+    if refusal is not None:
+        return refusal
     payload = json_body(request)
     if not payload:
         return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
@@ -417,6 +486,9 @@ def participant_set_dsq(request):
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
+    refusal = archiving.refuse_json(competition)
+    if refusal is not None:
+        return refusal
     payload = json_body(request)
     if not payload:
         return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)

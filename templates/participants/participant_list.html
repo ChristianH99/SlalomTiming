@@ -9,7 +9,9 @@
     </div>
   {% else %}
   <div class="list-toolbar">
-    <form method="get" class="search-form" role="search" id="participant-search">
+    {% comment %}Searching and expanding a row are reads: they stay live on a
+    signed-off event, which is the one thing somebody still does with it.{% endcomment %}
+    <form method="get" class="search-form" role="search" id="participant-search" data-read-only-allow>
       <span class="search-input-wrap">
         <input type="text" name="q" value="{{ query }}" id="participant-search-input"
                placeholder="{% trans 'Search by name, club or bib…' %}" autocomplete="off">
@@ -19,12 +21,25 @@
       {% if active_only %}<input type="hidden" name="active" value="1">{% endif %}
       <button class="button button--secondary" type="submit">{% trans "Search" %}</button>
     </form>
-    <a class="button" href="{% url 'participants:add' %}">{% trans "+ Add participant" %}</a>
+    {% comment %}Nothing can be registered into a signed-off event, so the button
+    that opens a registration form isn't offered. The server refuses either way
+    (apps/participants/views.RefuseWhenArchived); this is so the operator finds
+    that out before filling the form in rather than after.{% endcomment %}
+    {% if not competition.is_archived %}
+      <a class="button" href="{% url 'participants:add' %}">{% trans "+ Add participant" %}</a>
+    {% endif %}
   </div>
 
+  {% comment %}"All registered" versus "active only" is a distinction the
+  *discipline's* address book has: people are on file for years without entering
+  anything. A signed-off event has no such distinction — it froze its starters,
+  and nobody else was ever part of it — so the toggle would be a filter that
+  cannot change the list, and the line says what is being shown instead.{% endcomment %}
   <p class="hint">
-    {{ competition.competition_type.name }} · {{ competition.name }} —
-    {% if active_only %}
+    {{ competition.rules.name }} · {{ competition.name }} —
+    {% if competition.is_archived %}
+      {% trans "showing the competitors this event was archived with." %}
+    {% elif active_only %}
       {% trans "showing active participants only." %} <a href="?q={{ query }}">{% trans "Show all" %}</a>
     {% else %}
       {% trans "showing all registered participants." %} <a href="?active=1&q={{ query }}">{% trans "Show active only" %}</a>
@@ -75,7 +90,7 @@
           {% if "requires_club" in collected_info %}<td class="col-club" title="{{ participant.club }}">{{ participant.club }}</td>{% endif %}
           {% if "requires_license" in collected_info %}<td class="col-licence" title="{{ participant.license_number }}">{{ participant.license_number }}</td>{% endif %}
           <td class="col-actions">
-            <button type="button" class="pr-toggle" data-row-toggle
+            <button type="button" class="pr-toggle" data-row-toggle data-read-only-allow
                     aria-expanded="false" aria-controls="detail-{{ participant.pk }}"
                     aria-label="{% blocktrans with first=participant.first_name last=participant.last_name %}Details for {{ first }} {{ last }}{% endblocktrans %}">
               <span class="pr-chevron" aria-hidden="true"></span>
@@ -104,8 +119,15 @@
               entered on the timing views. It sits in the action row rather than
               in a band of its own: it is a rare action, not a field of the
               record, so its explanation lives in the tooltip.{% endcomment %}
+              {% comment %}Nothing here is offered on a signed-off event. The two
+              that matter are *links*, and static/js/read_only.js disables form
+              controls — a link is not one, which is deliberate (every PDF export
+              is a link) and is why these have to go from the template rather than
+              be greyed out by the sweep.{% endcomment %}
               <div class="pd-actions">
-                <a class="button button--secondary pd-edit" href="{% url 'participants:edit' participant.pk %}">{% trans "Edit full details" %}</a>
+                {% if not competition.is_archived %}
+                  <a class="button button--secondary pd-edit" href="{% url 'participants:edit' participant.pk %}">{% trans "Edit full details" %}</a>
+                {% endif %}
                 {% comment %}The disqualification rides at the right-hand end of the
                 row with Delete — Edit stays on the left. Both of the controls over
                 there end something; this one just ends the event rather than the
@@ -118,7 +140,9 @@
                   <span>{% trans "Disqualified from this event" %}</span>
                 </label>
                 <span class="pd-dsq-msg" data-dsq-msg aria-live="polite"></span>
-                <a class="button pd-delete" href="{% url 'participants:delete' participant.pk %}">{% trans "Delete" %}</a>
+                {% if not competition.is_archived %}
+                  <a class="button pd-delete" href="{% url 'participants:delete' participant.pk %}">{% trans "Delete" %}</a>
+                {% endif %}
               </div>
             </div>
           </td>

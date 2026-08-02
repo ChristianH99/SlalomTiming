@@ -73,7 +73,7 @@ class ResultColumnSettings(models.Model):
 
         ``running`` is the running classes when the caller already has them: this is
         asked once per class by ``columns_for``, and each ask was a query."""
-        ctype = competition.competition_type
+        ctype = competition.rules
         if running is None:
             running = competition._running_classes_ordered()
         keys = []

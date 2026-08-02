@@ -6,7 +6,8 @@ import pytest
 from django.db import IntegrityError
 from django.urls import reverse
 
-from . import startpattern
+from . import archiving, duplication, startpattern, urls
+from apps.participants.models import Participant
 from .models import Competition, CompetitionClass, CompetitionType
 
 pytestmark = pytest.mark.django_db
@@ -1629,3 +1630,996 @@ def test_the_general_page_still_shows_the_events_date_in_german(client, settings
     page = client.get(reverse("competitions:general")).content.decode()
 
     assert 'value="2026-05-01"' in page
+
+
+# ----- archiving: a finished event stops following its type (issue #8) -----
+#
+# A CompetitionType is shared by every competition of its discipline and its
+# settings are read live, so editing a penalty amount to set up next month's
+# event re-ranked last month's. Archiving is the answer: the settings are copied
+# onto the competition and it is evaluated from the copy for ever after. These
+# tests are about the copy; config/archived_tests.py is about the other half —
+# that a signed-off event then takes no writes.
+
+def test_archiving_freezes_the_settings_the_event_was_run_under():
+    competition = make_competition()
+    ctype = competition.competition_type
+    ctype.pylon_penalty = 5
+    ctype.timing_precision = CompetitionType.Precision.HUNDREDTHS
+    ctype.save()
+
+    archiving.archive(competition)
+    # …and now somebody sets up next season.
+    ctype.pylon_penalty = 10
+    ctype.timing_precision = CompetitionType.Precision.THOUSANDTHS
+    ctype.save()
+
+    competition.refresh_from_db()
+    assert competition.rules.pylon_penalty == 5
+    assert competition.rules.timing_precision == CompetitionType.Precision.HUNDREDTHS
+    # The discipline it belongs to is a different question and still answers live.
+    assert competition.competition_type.pylon_penalty == 10
+
+
+def test_a_live_competition_still_follows_its_type():
+    """The freeze must be the archived event's alone — an app where every
+    competition quietly reads a snapshot would be one where editing a type does
+    nothing and nobody could say why."""
+    competition = make_competition()
+    competition.competition_type.pylon_penalty = 7
+    competition.competition_type.save()
+
+    assert competition.rules.pylon_penalty == 7
+    assert competition.rules.pk == competition.competition_type.pk
+
+
+def test_there_is_no_way_to_un_archive():
+    """One-way on purpose: an event signed off has had its results printed, and
+    putting it back on settings that have moved on since is the exact failure
+    archiving exists to stop. The way to edit one is to duplicate it."""
+    assert not hasattr(archiving, "reopen")
+    assert "reopen" not in {p.name for p in urls.urlpatterns}
+
+
+def test_archiving_twice_keeps_the_first_snapshot():
+    """A second click must not re-take the snapshot against a type that has
+    moved on since — which is the one way this feature could quietly lose the
+    settings it exists to keep."""
+    competition = make_competition()
+    competition.competition_type.pylon_penalty = 3
+    competition.competition_type.save()
+    archiving.archive(competition)
+    taken_at = competition.archived_at
+
+    competition.competition_type.pylon_penalty = 12
+    competition.competition_type.save()
+    archiving.archive(competition)
+
+    assert competition.archived_at == taken_at
+    assert competition.rules.pylon_penalty == 3
+
+
+def test_the_snapshot_carries_every_setting_of_the_type():
+    """FROZEN_FIELDS is derived from the model, so a field added to
+    CompetitionType is frozen the day it is added rather than the day somebody
+    remembers to add it here."""
+    competition = make_competition()
+    archiving.archive(competition)
+
+    stored = set(competition.archived_rules)
+    model_fields = {
+        f.name for f in CompetitionType._meta.concrete_fields if not f.primary_key
+    }
+    assert stored == model_fields
+
+
+def test_a_frozen_snapshot_cannot_be_saved_back():
+    """It behaves like the type in every way a reader needs; writing it is the
+    one thing it refuses, because a snapshot that can become a row is a snapshot
+    somebody will eventually turn into one."""
+    competition = make_competition()
+    archiving.archive(competition)
+
+    with pytest.raises(RuntimeError):
+        competition.rules.save()
+
+
+def test_the_archive_view_signs_the_event_off(client):
+    competition = make_active_competition()
+
+    response = client.post(reverse("competitions:archive", args=[competition.pk]))
+
+    competition.refresh_from_db()
+    assert response.status_code == 302
+    assert competition.is_archived
+    assert competition.archived_rules
+
+
+def test_archiving_needs_a_post(client):
+    competition = make_active_competition()
+    assert client.get(reverse("competitions:archive", args=[competition.pk])).status_code == 405
+    competition.refresh_from_db()
+    assert not competition.is_archived
+
+
+def test_the_list_offers_archive_and_the_archived_tile_swaps_it_for_its_settings(client):
+    competition = make_active_competition()
+
+    page = client.get(reverse("competitions:list")).content.decode()
+    assert reverse("competitions:archive", args=[competition.pk]) in page
+
+    archiving.archive(competition)
+    page = client.get(reverse("competitions:list")).content.decode()
+    # The action it can no longer offer is replaced by what it is, and by the
+    # one thing there is left to ask of it.
+    assert reverse("competitions:archive", args=[competition.pk]) not in page
+    assert reverse("competitions:archived-rules", args=[competition.pk]) in page
+    assert "Archived" in page
+
+
+def test_the_pages_that_manage_competitions_stay_live(client):
+    """The lock is about the *active* event, not about the app. A blanket one
+    turned the list you archive from — and the duplicate dialog, and the device
+    settings — into dead pages the moment it worked."""
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    for url in (reverse("competitions:list"),
+                reverse("competitions:type-list"),
+                reverse("timing:settings"),
+                reverse("transfer:export"),
+                reverse("competitions:archived-rules", args=[competition.pk])):
+        page = client.get(url).content.decode()
+        assert "<body data-read-only>" not in page, url
+
+
+def test_every_page_says_so_once_in_the_topbar(client):
+    """Once, in the chrome — not a banner over every page. The state does not
+    change while somebody is looking at it, and a block above the results table
+    pushed the thing they came to read down the screen."""
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    for url in (reverse("timing:manual"), reverse("participants:list"),
+                reverse("results:index"), reverse("competitions:general")):
+        page = client.get(url).content.decode()
+        assert "topbar-archived" in page, url
+        # …and the page is one somebody would try to operate, so it is also
+        # turned off rather than merely labelled.
+        assert "<body data-read-only>" in page, url
+
+
+def test_the_archived_settings_are_readable_after_the_type_moves_on(client):
+    competition = make_active_competition()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+    competition.competition_type.pylon_penalty = 11
+    competition.competition_type.save()
+
+    page = client.get(
+        reverse("competitions:archived-rules", args=[competition.pk])
+    ).content.decode()
+
+    # The frozen value, not the live one — this pop-up is the only screen that
+    # can answer what the event was actually run under.
+    assert ">5<" in page
+    assert "archived-rules" in page
+
+
+def test_the_setup_pages_refuse_to_save_and_say_why(client):
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    response = client.post(
+        reverse("competitions:general"),
+        {"competition_type": competition.competition_type.pk,
+         "name": "Renamed", "date": "2026-06-01"},
+        follow=True,
+    )
+
+    competition.refresh_from_db()
+    assert competition.name != "Renamed"
+    assert str(archiving.READ_ONLY) in response.content.decode()
+
+
+def test_duplicating_an_archived_event_asks_what_the_copy_should_carry(client):
+    """A copy is made for two quite different reasons — next season's setup, or
+    an editable version of an event that can no longer be changed — and the app
+    cannot tell them apart. So it asks, and copies nothing until it is answered."""
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    response = client.post(reverse("competitions:duplicate", args=[competition.pk]))
+
+    assert response.status_code == 200
+    assert Competition.objects.count() == 1
+    assert b"data-dup-settings" in response.content or b"dup-choice" in response.content
+
+
+def test_a_duplicate_of_an_archived_event_is_a_live_one(client):
+    """The copy has to be editable — an archived duplicate would be a competition
+    nobody could put starters into, for no reason anyone could see."""
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    client.post(reverse("competitions:duplicate", args=[competition.pk]),
+                {"mode": "setup"})
+
+    copy = Competition.objects.exclude(pk=competition.pk).get()
+    assert not copy.is_archived
+    assert copy.archived_rules == {}
+    assert not copy.archived_starters.exists()
+
+
+# ----- the competitors are frozen too -----
+#
+# A Participant belongs to a *discipline*, not to an event, and is edited (and
+# deleted) for years afterwards. Every one of those edits used to rewrite the
+# printed result of an event that had already happened.
+
+def _entered(competition, bib, first="Ada", last="Lovelace", club="Old Club"):
+    from apps.participants.models import ClassAssignment, EventEntry, Participant
+
+    person = Participant.objects.create(
+        competition_type=competition.competition_type,
+        first_name=first, last_name=last, club=club,
+        date_of_birth=datetime.date(2010, 1, 1),
+    )
+    EventEntry.objects.create(
+        participant=person, competition=competition, bib_number=bib)
+    cclass = competition.classes.filter(is_running=True).first()
+    if cclass is not None:
+        ClassAssignment.objects.create(participant=person, competition_class=cclass)
+    return person
+
+
+def _with_a_running_class(**kwargs):
+    competition = make_competition(**kwargs)
+    competition.classes.filter(name="1").update(is_running=True, run_position=0)
+    return competition
+
+
+def test_editing_a_participant_cannot_change_an_archived_event():
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+    archiving.archive(competition)
+
+    person.club = "New Club"
+    person.last_name = "Changed"
+    person.save()
+
+    competition.refresh_from_db()
+    entry = competition.entry_rows()[0]
+    assert entry.participant.club == "Old Club"
+    assert entry.participant.last_name == "Lovelace"
+    assert entry.bib_number == 7
+
+
+def test_deleting_a_participant_cannot_empty_an_archived_event():
+    """The retention case, and the reason this is a copy rather than a pointer:
+    a person removed from the system takes their entry with them, and an event
+    that read the live tables would lose a competitor out of a printed result."""
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+    archiving.archive(competition)
+
+    person.delete()
+
+    competition.refresh_from_db()
+    rows = competition.entry_rows()
+    assert [e.bib_number for e in rows] == [7]
+    assert rows[0].participant.last_name == "Lovelace"
+
+
+def test_a_class_assignment_changed_later_cannot_re_sort_an_archived_field():
+    from apps.participants.models import ClassAssignment
+
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+    cclass = competition.classes.get(name="1")
+    archiving.archive(competition)
+
+    ClassAssignment.objects.filter(participant=person).delete()
+
+    competition.refresh_from_db()
+    assert [cc.pk for cc in competition.classes_for_participant(person)] == [cclass.pk]
+    assert competition.starters_by_class()[cclass.pk]
+
+
+def test_a_live_event_still_follows_its_participants():
+    """The mirror, without which a bug that froze every competition would pass."""
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+
+    person.club = "New Club"
+    person.save()
+
+    assert competition.entry_rows()[0].participant.club == "New Club"
+
+
+# ----- duplicating an archived event, to edit it -----
+
+def test_a_full_duplicate_carries_the_competitors_bibs_and_times():
+    from apps.timing.models import TimedRun, TimingSignal
+
+    competition = _with_a_running_class()
+    _entered(competition, 7)
+    cclass = competition.classes.get(name="1")
+    start = TimingSignal.objects.create(
+        competition=competition, running_number=1, port=1,
+        device_time=datetime.time(10, 0, 0))
+    finish = TimingSignal.objects.create(
+        competition=competition, running_number=1, port=2,
+        device_time=datetime.time(10, 0, 30))
+    TimedRun.objects.create(
+        competition=competition, start_signal=start, finish_signal=finish,
+        bib_number=7, competition_class=cclass, run_type=TimedRun.RunType.COUNTED,
+        run_number=1, manual_entry=True, pylon_count=2)
+    archiving.archive(competition)
+
+    copy = duplication.copy(competition, with_data=True)
+
+    assert not copy.is_archived
+    assert [e.bib_number for e in copy.entry_rows()] == [7]
+    runs = TimedRun.objects.filter(competition=copy)
+    assert runs.count() == 1
+    assert runs.first().pylon_count == 2
+    # Its own signals, not the original's — a run points at them through a
+    # OneToOne, so sharing them would move half the original event.
+    assert TimingSignal.objects.filter(competition=copy).count() == 2
+    assert TimingSignal.objects.filter(competition=competition).count() == 2
+
+
+def test_a_setup_only_duplicate_leaves_the_times_and_bibs_behind():
+    from apps.timing.models import TimedRun
+
+    competition = _with_a_running_class()
+    _entered(competition, 7)
+    archiving.archive(competition)
+
+    copy = duplication.copy(competition, with_data=False)
+
+    assert not copy.entries.exists()
+    assert not TimedRun.objects.filter(competition=copy).exists()
+    # But the classes, and who was in them, are the point of this copy.
+    assert copy.classes.filter(is_running=True).exists()
+
+
+def test_a_full_duplicate_puts_back_a_competitor_who_has_since_been_deleted():
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+    archiving.archive(competition)
+    person.delete()
+
+    copy = duplication.copy(competition, with_data=True)
+
+    rows = copy.entry_rows()
+    assert [e.bib_number for e in rows] == [7]
+    assert rows[0].participant.last_name == "Lovelace"
+
+
+def test_the_original_is_untouched_by_a_full_duplicate():
+    competition = _with_a_running_class()
+    _entered(competition, 7)
+    archiving.archive(competition)
+    before = competition.archived_rules
+
+    duplication.copy(competition, with_data=True)
+
+    competition.refresh_from_db()
+    assert competition.is_archived
+    assert competition.archived_rules == before
+    assert [e.bib_number for e in competition.entry_rows()] == [7]
+
+
+def test_the_dialog_lists_only_the_settings_that_have_actually_moved():
+    competition = _with_a_running_class()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+
+    assert archiving.rule_differences(competition) == []
+
+    competition.competition_type.pylon_penalty = 10
+    competition.competition_type.save()
+    competition.refresh_from_db()
+
+    moved = archiving.rule_differences(competition)
+    assert [row["field"] for row in moved] == ["pylon_penalty"]
+    assert moved[0]["archived"] == 5 and moved[0]["current"] == 10
+
+
+def test_keeping_an_archived_setting_writes_it_back_to_the_live_type(client):
+    competition = _with_a_running_class()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+    competition.competition_type.pylon_penalty = 10
+    competition.competition_type.save()
+
+    client.post(reverse("competitions:duplicate", args=[competition.pk]),
+                {"mode": "full", "setting-pylon_penalty": "archived"})
+
+    competition.competition_type.refresh_from_db()
+    assert competition.competition_type.pylon_penalty == 5
+    # …and the archived event is unmoved either way, which is the whole point.
+    competition.refresh_from_db()
+    assert competition.rules.pylon_penalty == 5
+
+
+def test_keeping_the_current_setting_leaves_the_type_alone(client):
+    competition = _with_a_running_class()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+    competition.competition_type.pylon_penalty = 10
+    competition.competition_type.save()
+
+    client.post(reverse("competitions:duplicate", args=[competition.pk]),
+                {"mode": "full", "setting-pylon_penalty": "current"})
+
+    competition.competition_type.refresh_from_db()
+    assert competition.competition_type.pylon_penalty == 10
+
+
+def test_a_setup_only_duplicate_never_touches_the_type(client):
+    """A copy made to set up next season should run under this season's rules,
+    so the reconciliation is not even asked — and a stale page that posts an
+    answer anyway must not be able to apply one."""
+    competition = _with_a_running_class()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+    competition.competition_type.pylon_penalty = 10
+    competition.competition_type.save()
+
+    client.post(reverse("competitions:duplicate", args=[competition.pk]),
+                {"mode": "setup", "setting-pylon_penalty": "archived"})
+
+    competition.competition_type.refresh_from_db()
+    assert competition.competition_type.pylon_penalty == 10
+
+
+# ----- a full duplicate resolves its competitors like an import -----
+#
+# The three things asked of it: a competitor whose record has changed since is
+# an operator decision, not a silent choice; one who no longer exists is put
+# back; and neither counts as a *use* of the person, so the retention clock
+# (Participant.last_used_at) is not restarted by copying an old event.
+
+def _archived_with(bib=7, **participant):
+    competition = _with_a_running_class()
+    person = _entered(competition, bib, **participant)
+    archiving.archive(competition)
+    return competition, person
+
+
+def test_a_competitor_whose_record_changed_needs_a_decision():
+    competition, person = _archived_with()
+    person.club = "Moved Clubs"
+    person.save()
+
+    plan = duplication.plan(competition)
+
+    assert [m.status for m in plan.matches] == ["conflict"]
+    assert [d.field for d in plan.matches[0].candidates[0].diffs] == ["club"]
+
+
+def test_a_competitor_who_has_not_changed_needs_no_decision():
+    competition, _person = _archived_with()
+
+    plan = duplication.plan(competition)
+
+    assert [m.status for m in plan.matches] == ["identical"]
+    assert not plan.needs_review
+
+
+def test_a_deleted_competitor_is_recreated():
+    competition, person = _archived_with()
+    person.delete()
+
+    plan = duplication.plan(competition)
+    assert [m.status for m in plan.matches] == ["new"]
+
+    copy = duplication.copy(competition, with_data=True, competitor_plan=plan)
+    rows = copy.entry_rows()
+    assert [e.bib_number for e in rows] == [7]
+    assert rows[0].participant.last_name == "Lovelace"
+
+
+def test_duplicating_does_not_restart_the_retention_clock():
+    """Copying a finished event is not somebody racing again. last_used_at is
+    the field a retention sweep ages off (see Participant), so a duplicate that
+    stamped it fresh would keep every competitor of every archived event alive
+    for ever."""
+    competition, person = _archived_with()
+    long_ago = datetime.datetime(2019, 5, 1, 12, 0, tzinfo=datetime.timezone.utc)
+    Participant.objects.filter(pk=person.pk).update(last_used_at=long_ago)
+
+    duplication.copy(competition, with_data=True)
+
+    person.refresh_from_db()
+    assert person.last_used_at == long_ago
+
+
+def test_a_recreated_competitor_keeps_the_last_use_they_had():
+    competition, person = _archived_with()
+    long_ago = datetime.datetime(2019, 5, 1, 12, 0, tzinfo=datetime.timezone.utc)
+    Participant.objects.filter(pk=person.pk).update(last_used_at=long_ago)
+    # Re-archive so the snapshot carries that date, then lose the person.
+    competition.archived_starters.all().delete()
+    competition.archived_at = None
+    competition.save(update_fields=["archived_at"])
+    archiving.archive(competition)
+    person.delete()
+
+    copy = duplication.copy(competition, with_data=True)
+
+    restored = Participant.objects.get(last_name="Lovelace")
+    assert restored.last_used_at == long_ago
+    assert copy.entry_rows()[0].participant.last_name == "Lovelace"
+
+
+def test_a_full_duplicate_stops_at_the_merge_window(client):
+    """Nothing is written until the decisions are made — the review is a step,
+    not a warning you can click past."""
+    competition, person = _archived_with()
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+    person.club = "Moved Clubs"
+    person.save()
+
+    response = client.post(
+        reverse("competitions:duplicate", args=[competition.pk]), {"mode": "full"})
+
+    assert response.status_code == 200
+    assert b"choice-" in response.content
+    assert Competition.objects.count() == 1
+
+
+def test_the_merge_window_keeps_the_record_on_file_by_default(client):
+    """Unlike an import, the copy leads with what is on file *now*: the person
+    moved house since, the copy is a new live event, and the archived original
+    keeps its own version whatever is chosen here."""
+    competition, person = _archived_with()
+    person.club = "Moved Clubs"
+    person.save()
+
+    client.post(reverse("competitions:duplicate", args=[competition.pk]),
+                {"mode": "full", "step": "review",
+                 f"choice-{person.pk}": f"merge:{person.pk}"})
+
+    person.refresh_from_db()
+    assert person.club == "Moved Clubs"
+    copy = Competition.objects.exclude(pk=competition.pk).get()
+    assert copy.entry_rows()[0].participant.club == "Moved Clubs"
+    # The archived event still shows them as they raced.
+    assert competition.entry_rows()[0].participant.club == "Old Club"
+
+
+def test_the_merge_window_can_take_the_archived_value_instead(client):
+    competition, person = _archived_with()
+    person.club = "Typo Clbu"
+    person.save()
+
+    client.post(reverse("competitions:duplicate", args=[competition.pk]),
+                {"mode": "full", "step": "review",
+                 f"choice-{person.pk}": f"merge:{person.pk}",
+                 f"field-{person.pk}-{person.pk}-club": "imported"})
+
+    person.refresh_from_db()
+    assert person.club == "Old Club"
+
+
+def test_the_merge_window_can_keep_them_apart(client):
+    """Two people can share a name and a birthday. Choosing "a different person"
+    registers the competitor separately rather than folding two into one."""
+    competition, person = _archived_with()
+    person.club = "Someone Else"
+    person.save()
+
+    client.post(reverse("competitions:duplicate", args=[competition.pk]),
+                {"mode": "full", "step": "review", f"choice-{person.pk}": "create"})
+
+    assert Participant.objects.filter(last_name="Lovelace").count() == 2
+    copy = Competition.objects.exclude(pk=competition.pk).get()
+    assert copy.entry_rows()[0].participant.pk != person.pk
+
+
+def test_an_unchanged_field_never_reaches_the_merge_window(client):
+    """No decision to make means no screen to click through: a copy of an event
+    whose people are all still on file exactly as they raced goes straight
+    through."""
+    competition, _person = _archived_with()
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+
+    response = client.post(
+        reverse("competitions:duplicate", args=[competition.pk]), {"mode": "full"})
+
+    assert response.status_code == 302
+    assert Competition.objects.count() == 2
+
+
+# ----- the participants screen is part of the freeze too -----
+
+def test_the_participant_list_shows_an_archived_event_as_it_froze_it(client):
+    """The one screen that still read the live table. A Participant belongs to
+    the *discipline*, so editing a vehicle to set up next season changed what a
+    finished event said its competitors drove — and this is the page an operator
+    looks at to check that it didn't."""
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+    Participant.objects.filter(pk=person.pk).update(vehicle="Before archive")
+    competition.competition_type.requires_vehicle = True
+    competition.competition_type.save()
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+    archiving.archive(competition)
+
+    Participant.objects.filter(pk=person.pk).update(vehicle="After archive")
+
+    page = client.get(reverse("participants:list")).content.decode()
+    assert "Before archive" in page
+    assert "After archive" not in page
+
+
+def test_a_live_event_still_shows_the_participant_list_live(client):
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+    Participant.objects.filter(pk=person.pk).update(club="Brand New Club")
+
+    page = client.get(reverse("participants:list")).content.decode()
+    assert "Brand New Club" in page
+
+
+def test_the_participant_list_offers_no_way_to_edit_an_archived_event(client):
+    """Edit and Delete are *links*, and the read-only sweep disables form
+    controls — a link is not one, deliberately, because every PDF export is a
+    link. So these have to go from the template."""
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+    archiving.archive(competition)
+
+    page = client.get(reverse("participants:list")).content.decode()
+
+    assert reverse("participants:edit", args=[person.pk]) not in page
+    assert reverse("participants:delete", args=[person.pk]) not in page
+    assert reverse("participants:add") not in page
+
+
+def test_the_participant_list_still_offers_them_on_a_live_event(client):
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+
+    page = client.get(reverse("participants:list")).content.decode()
+
+    assert reverse("participants:edit", args=[person.pk]) in page
+    assert reverse("participants:delete", args=[person.pk]) in page
+
+
+# ----- a pop-up opens over the page it was opened from -----
+
+def test_the_archived_settings_open_over_the_competition_list(client):
+    """A dialog that replaces the page behind it is a page with a box on it:
+    closing it leaves the operator somewhere they never navigated to, and the
+    tile they pressed is gone."""
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    page = client.get(
+        reverse("competitions:archived-rules", args=[competition.pk])
+    ).content.decode()
+
+    assert "competition-tiles" in page
+    assert competition.name in page
+    assert "data-modal-open" in page
+
+
+def test_the_duplicate_dialog_opens_over_the_competition_list(client):
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    page = client.post(
+        reverse("competitions:duplicate", args=[competition.pk])
+    ).content.decode()
+
+    assert "competition-tiles" in page
+    assert "data-modal-open" in page
+
+
+# ----- an archive is the *starters*, not the address book -----
+#
+# A Participant belongs to the discipline and may be on file for years without
+# entering anything; an EventEntry is a bib (the column is not nullable, and
+# clearing a bib deletes the row). So the line between "was in this event" and
+# "is known to this club" is the entry, and the archive is drawn on it.
+
+def _on_file_only(competition, first="Never", last="Entered"):
+    """Somebody registered under the discipline who never got a bib here."""
+    from apps.participants.models import Participant
+
+    return Participant.objects.create(
+        competition_type=competition.competition_type,
+        first_name=first, last_name=last,
+        date_of_birth=datetime.date(2010, 1, 1),
+    )
+
+
+def test_a_participant_without_a_bib_is_not_archived():
+    competition = _with_a_running_class()
+    _entered(competition, 7)
+    outsider = _on_file_only(competition)
+
+    archiving.archive(competition)
+
+    frozen = {row.participant_pk for row in competition.archived_starters.all()}
+    assert outsider.pk not in frozen
+    assert competition.archived_starters.count() == 1
+
+
+def test_a_class_assignment_without_a_bib_is_not_archived_either():
+    """Assigning somebody to a class is setup, not entry — they have no bib and
+    no start list place, so they were never in the event."""
+    from apps.participants.models import ClassAssignment
+
+    competition = _with_a_running_class()
+    _entered(competition, 7)
+    outsider = _on_file_only(competition)
+    ClassAssignment.objects.create(
+        participant=outsider,
+        competition_class=competition.classes.get(name="1"),
+    )
+
+    archiving.archive(competition)
+
+    assert competition.archived_starters.count() == 1
+    assert [e.bib_number for e in competition.entry_rows()] == [7]
+
+
+def test_the_archived_participant_list_shows_only_who_had_a_bib(client):
+    """The live list is the discipline's address book with an "active only"
+    filter over it. An archived event has no such distinction — it is the
+    starters, and nothing else was ever part of it."""
+    competition = _with_a_running_class()
+    _entered(competition, 7, last="Started")
+    _on_file_only(competition, last="NeverStarted")
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+    archiving.archive(competition)
+
+    page = client.get(reverse("participants:list")).content.decode()
+
+    assert "Started" in page
+    assert "NeverStarted" not in page
+
+
+def test_the_live_participant_list_still_shows_everybody(client):
+    competition = _with_a_running_class()
+    _entered(competition, 7, last="Started")
+    _on_file_only(competition, last="NeverStarted")
+    competition.is_active = True
+    competition.save(update_fields=["is_active"])
+
+    page = client.get(reverse("participants:list")).content.decode()
+
+    assert "Started" in page
+    assert "NeverStarted" in page
+
+
+def test_a_bib_cleared_before_archiving_takes_them_out_of_it():
+    """Clearing a bib deletes the entry (EventEntry.bib_number is not nullable),
+    so somebody withdrawn before the event was signed off is not in it."""
+    from apps.participants.models import EventEntry
+
+    competition = _with_a_running_class()
+    staying = _entered(competition, 7, last="Staying")
+    withdrawn = _entered(competition, 8, last="Withdrawn")
+    EventEntry.objects.filter(competition=competition, participant=withdrawn).delete()
+
+    archiving.archive(competition)
+
+    frozen = {row.participant_pk for row in competition.archived_starters.all()}
+    assert frozen == {staying.pk}
+
+
+# ----- the frozen settings, beside what the type says today -----
+
+def test_the_settings_summary_carries_the_live_value_and_whether_it_moved():
+    competition = make_competition()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+    competition.competition_type.pylon_penalty = 9
+    competition.competition_type.save()
+    competition.refresh_from_db()
+
+    rows = {r["label"]: r
+            for g in archiving.rule_summary(competition) for r in g["rows"]}
+
+    moved = rows["Pylon"]
+    assert (moved["value"], moved["current"], moved["changed"]) == (5, 9, True)
+    # Everything else is untouched, and says so rather than being left blank.
+    steady = rows["Task"]
+    assert steady["changed"] is False
+    assert steady["current"] == steady["value"]
+
+
+def test_the_settings_popup_shows_both_columns_and_marks_what_changed(client):
+    competition = make_active_competition()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+    competition.competition_type.pylon_penalty = 9
+    competition.competition_type.save()
+
+    page = client.get(
+        reverse("competitions:archived-rules", args=[competition.pk])
+    ).content.decode()
+
+    assert "As archived" in page and "Type today" in page
+    assert ">5<" in page and ">\n                    9" in page.replace("\r", "") or "9" in page
+    # The marker is not colour alone: the state is a word too.
+    assert "archived-rules-now--changed" in page
+    assert "changed:" in page and "unchanged:" in page
+
+
+def test_the_settings_popup_says_so_when_nothing_has_moved(client):
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    page = client.get(
+        reverse("competitions:archived-rules", args=[competition.pk])
+    ).content.decode()
+
+    assert "Nothing has changed" in page
+    assert "archived-rules-now--changed" not in page
+
+
+# ----- an archived event has nothing to configure -----
+
+def test_an_archived_current_event_offers_no_configure_button(client):
+    """The setup sub-pages edit the active competition, and an archived one has
+    nothing for them to change — every setting it does have is under "Archived
+    settings". A button onto a page of disabled fields is worse than no button."""
+    competition = make_active_competition()
+    archiving.archive(competition)
+
+    page = client.get(reverse("competitions:list")).content.decode()
+
+    assert "Configure" not in page
+    assert reverse("competitions:archived-rules", args=[competition.pk]) in page
+
+
+def test_a_live_current_event_still_offers_configure(client):
+    make_active_competition()
+
+    page = client.get(reverse("competitions:list")).content.decode()
+
+    assert "Configure" in page
+
+
+def test_an_archived_event_that_is_not_current_can_still_be_selected(client):
+    """Selecting it is how its results are opened at all, so that stays."""
+    competition = make_competition()
+    archiving.archive(competition)
+
+    page = client.get(reverse("competitions:list")).content.decode()
+
+    assert reverse("competitions:select", args=[competition.pk]) in page
+
+
+def test_every_frozen_setting_is_in_exactly_one_group():
+    """The pop-up's groups mirror the settings page's sections, and the mapping
+    is spelled out by hand — so a field added to CompetitionType later has to be
+    given a home. It falls into the last group rather than disappearing, and this
+    fails so that placement is a decision instead of an accident."""
+    claimed = [name for _title, names in archiving.RULE_GROUPS for name in names]
+
+    assert len(claimed) == len(set(claimed)), "a setting is in two groups"
+    unclaimed = sorted(set(archiving.FROZEN_FIELDS) - set(claimed))
+    assert not unclaimed, f"settings in no group (they land in the last one): {unclaimed}"
+    stale = sorted(set(claimed) - set(archiving.FROZEN_FIELDS))
+    assert not stale, f"groups name settings that no longer exist: {stale}"
+
+
+def test_the_settings_summary_groups_the_way_the_settings_page_does():
+    competition = make_competition()
+    archiving.archive(competition)
+
+    titles = [group["title"] for group in archiving.rule_summary(competition)]
+
+    assert titles == ["", "Penalties", "Evaluation", "Required participant info"]
+
+
+def test_a_penalty_amount_carries_its_unit():
+    competition = make_competition()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+
+    rows = {r["label"]: r
+            for g in archiving.rule_summary(competition) for r in g["rows"]}
+
+    assert rows["Pylon"]["value"] == 5
+    assert rows["Pylon"]["value_unit"] == "s"
+    # A word or a switch has no unit to carry.
+    assert rows["Tie-break"]["value_unit"] == ""
+    # …and neither does the precision, whose own label already says "1/100 s".
+    assert rows["Timing precision"]["value_unit"] == ""
+
+
+def test_a_penalty_that_was_never_set_shows_no_unit():
+    """"— s" is not a reading of an amount that does not exist."""
+    competition = make_competition()
+    competition.competition_type.pylon_penalty = None
+    competition.competition_type.save()
+    archiving.archive(competition)
+
+    rows = {r["label"]: r
+            for g in archiving.rule_summary(competition) for r in g["rows"]}
+
+    assert rows["Pylon"]["value"] == "—"
+    assert rows["Pylon"]["value_unit"] == ""
+
+
+def test_the_popup_renders_the_groups_and_the_units(client):
+    competition = make_active_competition()
+    competition.competition_type.pylon_penalty = 5
+    competition.competition_type.save()
+    archiving.archive(competition)
+
+    page = client.get(
+        reverse("competitions:archived-rules", args=[competition.pk])
+    ).content.decode()
+
+    assert "archived-rules-group" in page
+    assert "Penalties" in page and "Evaluation" in page
+    assert 'class="settings-unit">s<' in page
+
+
+def test_duplicating_survives_a_competitor_the_form_would_now_refuse():
+    """A value already in the database is not a value arriving from outside.
+
+    Participant.date_of_birth carries a validator (nothing before 1900 — a
+    slipped keystroke used to give age-based classes a nonsense age), and
+    apps/transfer/schema.load runs it, which is exactly right for a *document*:
+    a damaged file has to be refused rather than written. But a row this
+    database already holds got in some other way, and re-validating it on the
+    way out can only fail for data the operator cannot reach — an archived
+    event is read-only. It crashed the duplicate of a real event.
+    """
+    competition = _with_a_running_class()
+    person = _entered(competition, 7)
+    # update(), like whatever put it there: Model.save() does not validate.
+    Participant.objects.filter(pk=person.pk).update(
+        date_of_birth=datetime.date(1512, 2, 21))
+    archiving.archive(competition)
+
+    copy = duplication.copy(competition, with_data=True)
+
+    rows = copy.entry_rows()
+    assert [e.bib_number for e in rows] == [7]
+    assert rows[0].participant.date_of_birth == datetime.date(1512, 2, 21)
+
+
+def test_an_import_still_refuses_such_a_value_in_a_file():
+    """The mirror, and the reason the validation exists: a *document* is hostile
+    until checked, so a damaged one is still a sentence rather than a row every
+    later read chokes on."""
+    from apps.participants.models import Participant
+    from apps.transfer import schema
+
+    with pytest.raises(schema.TransferError):
+        schema.load(
+            Participant,
+            {"first_name": "A", "last_name": "B", "date_of_birth": "1512-02-21"},
+            schema.PARTICIPANT_FIELDS,
+        )

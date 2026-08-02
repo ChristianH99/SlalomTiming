@@ -83,6 +83,19 @@ def record_signal(running_number, port, is_manual, device_time, source="device")
     # ordinary reads and a lock on them is rare, but "rare" is not the guarantee.
     try:
         competition, locked = _retry(_context)
+        # The one case where a time is deliberately dropped: the event has been
+        # signed off. Everything else here exists to stop a time being lost, and
+        # this is the exception that proves what the rest is for — an archived
+        # event is *finished*, so a pulse arriving at it is the rig being packed
+        # away or the next club setting up, not a run nobody recorded. Keeping it
+        # would mean an ignore list that grows for ever on an event that can
+        # never use it. Logged, because a stream of these means the rig is still
+        # pointed at a closed event.
+        if competition is not None and competition.is_archived:
+            logger.info(
+                "Timing signal discarded: competition %s is archived", competition.pk
+            )
+            return None
         signal = _retry(lambda: TimingSignal.objects.create(
             competition=competition,
             running_number=running_number,

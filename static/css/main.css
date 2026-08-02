@@ -216,6 +216,21 @@ a:hover { color: var(--flame-hover); }
   white-space: nowrap;
 }
 
+/* Text for a screen reader only. The skip link above has always carried its own
+   copy of this, coupled to :focus; this is the same technique as a utility, for
+   the places where a *visual* marker (a dot, a colour) is the whole signal —
+   which is a signal only some of the room receives. `clip` rather than
+   display:none or visibility:hidden, both of which take the text out of the
+   accessibility tree along with the pixels. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 /* ===== SHELL LAYOUT ===== */
 .shell {
   display: flex;
@@ -376,6 +391,34 @@ a:hover { color: var(--flame-hover); }
   text-overflow: ellipsis;
 }
 .topbar-sub--none { font-style: italic; }
+/* The event named in the topbar is signed off — the *only* place the app says
+   so, which is why it says "read-only" rather than just "archived" and carries
+   the whole explanation in its title. A micro-cap, not a label, so it takes the
+   uppercase treatment (see the design-system note on case). It is filled rather
+   than outlined because it has to hold its own beside the event name at 11px.
+   `help` as the cursor is the standing signal that hovering says more. */
+.topbar-archived {
+  margin-left: var(--space-3);
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--glacier);
+  color: var(--white);
+  font-family: 'Manrope', sans-serif;
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Every control on a signed-off event's page is disabled (static/js/read_only.js).
+   Without this they keep their live colours and only differ by not responding,
+   which reads as a broken page rather than a finished event. */
+[data-read-only] #main-content :disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 
 /* Right-aligned topbar controls (currently just the page Help "?"). */
 .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: var(--space-4); flex-shrink: 0; }
@@ -689,6 +732,13 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   flex: 0 0 auto;
 }
 
+/* A signed-off event. Same frost family as the banner it goes with. */
+.status-pill--archived {
+  background: var(--frost-bg);
+  color: var(--ink);
+  flex: 0 0 auto;
+}
+
 /* First pill takes the space that's left and ellipsises; the +N pill never
    shrinks, so it stays readable however long the class name is. */
 .class-cell { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
@@ -721,6 +771,12 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
 }
 .competition-tile:hover { box-shadow: 0 4px 14px rgba(22,35,63,0.08); }
 .competition-tile--active { border-left-color: var(--flame); }
+/* A state is marked, not filled: the leading edge says "signed off" without
+   tinting a whole row that a list of finished seasons would be full of. The
+   active event keeps the flame edge either way — which event is current is the
+   more urgent of the two facts. */
+.competition-tile--archived { border-left-color: var(--glacier); }
+.competition-tile--archived.competition-tile--active { border-left-color: var(--flame); }
 .tile-body { min-width: 0; }
 .tile-head {
   display: flex;
@@ -1013,6 +1069,141 @@ body.modal-open { overflow: hidden; }
   max-width: 420px;
   width: 100%;
 }
+/* A dialog that holds a table or a set of choices rather than one question.
+   The default 420px is right for "are you sure?" and far too narrow for a
+   three-column settings diff. */
+.modal--wide { max-width: 40rem; }
+
+/* ---------------------------------------------------------------------------
+   Duplicating an archived event (templates/competitions/competition_duplicate.html)
+
+   Two things a copy has to be told: what to carry, and — for a copy made to
+   edit a signed-off event — which of the settings it should run under, since
+   the discipline may have moved on since. Laid out as choices with their
+   consequence written under them rather than as a pair of buttons: the two
+   options do very different things and neither is the obvious default.
+   --------------------------------------------------------------------------- */
+.dup-choice {
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+  margin-top: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.dup-choice:has(input:checked) { border-color: var(--glacier); background: var(--frost-bg); }
+.dup-choice-body { display: flex; flex-direction: column; gap: var(--space-2); }
+.dup-choice-name { font-weight: 700; color: var(--text-dark); }
+.dup-choice-hint { font-size: var(--text-sm); color: var(--text-mid); }
+
+.dup-settings { margin-top: var(--space-7); border-top: 1px solid var(--border); padding-top: var(--space-6); }
+.dup-settings-title {
+  font-family: 'Manrope', sans-serif;
+  font-size: var(--text-md);
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0 0 var(--space-3);
+}
+.dup-diff { width: 100%; border-collapse: collapse; margin-top: var(--space-5); }
+.dup-diff th, .dup-diff td {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-light);
+  text-align: left;
+  font-size: var(--text-sm);
+}
+.dup-diff thead th {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-light);
+}
+/* A field label, not a column heading, so it keeps its case — the app's tables
+   uppercase their `th` by default (see the design-system note on case). */
+.dup-diff tbody th { font-weight: 600; color: var(--text-dark); text-transform: none; letter-spacing: normal; }
+.dup-diff-option { display: flex; align-items: center; gap: var(--space-3); cursor: pointer; }
+/* Flame, because this is the one line on the dialog that says a *different*
+   event's results will move. */
+.dup-warning {
+  margin: var(--space-5) 0 0;
+  padding: var(--space-4) var(--space-5);
+  border-left: 3px solid var(--flame);
+  background: var(--flame-bg);
+  color: var(--flame-hover);
+  font-size: var(--text-sm);
+}
+
+/* The read-only settings pop-up (competition_archived_rules.html): what the
+   event was run under, beside what its type says today.
+
+   The frozen column is the answer, so it is the emphasised one — the right-hand
+   column is context, and on most rows it says the same thing. Only the rows that
+   *moved* are marked, and marked on the leading edge rather than filled: a
+   discipline that has been reworked has a dozen of them, and a dozen tinted rows
+   is a table with no signal in it. Glacier, not flame: nothing is wrong, and
+   flame in this app means "seconds added". */
+.archived-rules { width: 100%; border-collapse: collapse; margin-top: var(--space-5); }
+.archived-rules th, .archived-rules td {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border-light);
+  text-align: left;
+  font-size: var(--text-sm);
+}
+.archived-rules thead th {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-light);
+  font-weight: 700;
+}
+.archived-rules tbody th {
+  font-weight: 600; color: var(--text-mid); width: 40%;
+  text-transform: none; letter-spacing: normal;
+}
+.archived-rules td { color: var(--text-dark); }
+.archived-rules-was { font-weight: 600; }
+.archived-rules-row--changed th[scope="row"] { box-shadow: inset 3px 0 0 var(--glacier); }
+
+/* A group heading inside the table, so the columns still line up down the page
+   — the same headings, in the same order, as the settings page's sections. */
+.archived-rules-group th {
+  padding-top: var(--space-7);
+  border-bottom: 1px solid var(--border);
+  font-family: 'Manrope', sans-serif;
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-mid);
+  width: auto;
+}
+.archived-rules tbody:first-of-type .archived-rules-group th { padding-top: 0; }
+/* The unit sits beside the number rather than in the label, as on the settings
+   page — and takes that page's own muted treatment. */
+.archived-rules .settings-unit { margin-left: var(--space-2); font-size: var(--text-sm); }
+
+.archived-rules-now {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  color: var(--text-light);
+}
+.archived-rules-now--changed { color: var(--text-dark); font-weight: 600; }
+/* A hollow dot for "same as archived", filled for "moved since". The word beside
+   it is .sr-only — see the utility above. */
+.archived-rules-dot {
+  flex: none;
+  align-self: center;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+}
+.archived-rules-now--changed .archived-rules-dot {
+  border-color: var(--glacier);
+  background: var(--glacier);
+}
+
 .modal-title {
   font-family: 'Manrope', sans-serif;
   font-size: var(--text-xl);

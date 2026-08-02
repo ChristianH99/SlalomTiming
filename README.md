@@ -78,6 +78,32 @@ Run order, Penalties, Results) in the sidebar. The sub-pages always act on the *
 3. **Manage competitions** — the tile list of all competitions by date. **Set as current**
    picks the one the sub-pages edit; this also drives which participants are "active", the
    class computed on the participant form, and bib matching for timing events.
+   - **Archive** signs a finished event off. A competition normally reads its rules from its
+     *type*, and its competitors from the participant records — both of which are shared and
+     get edited for years afterwards, so a penalty amount changed next winter, or a club
+     corrected, used to rewrite a result that had already been printed. Archiving copies both
+     onto the event: from then on it is evaluated by the settings it was run under and shows
+     the competitors it ran with, whatever happens to those records later. It also becomes
+     **read-only** — every control on its screens is disabled, it records no further times,
+     and its results and PDFs still open exactly as before. **This cannot be undone.**
+   - **Archived settings** on an archived tile shows what was frozen, read-only.
+   - **Duplicate** on an archived tile asks what the copy should carry: the *setup only*
+     (classes, run order, marshal posts — for building next year's event from this one), or
+     *everything*, including the competitors, their bibs and every recorded time. The second
+     is how a signed-off event gets corrected: the copy is live and editable, the original
+     stays as it was. If the type's settings have moved on since, the dialog lists what
+     disagrees and you choose which value the copy runs under — and says how many other
+     competitions that choice moves, since it is saved to the shared type.
+     A full copy then resolves its competitors the way an **import** does: anyone still on
+     file exactly as they raced is reused, anyone no longer on file (deleted, or never here)
+     is re-created, and anyone whose record has changed since opens a merge window where you
+     pick, field by field, whether the copy uses what is on file now or what they raced
+     under. Copying an old event is not somebody racing again, so it does not count as a use
+     of their record.
+   - While an archived event is the current one, **Participants** lists the competitors it
+     was archived with — the people who had a bib on the day, as their records read then —
+     rather than everyone registered under the discipline. Editing or deleting somebody
+     afterwards cannot change it, and there is nothing on the page to edit with.
 4. **General** — the current competition's name, type and date.
 5. **Classes** — pick the **assignment method** (how participants get their class) at the top,
    then edit each class as a tile: rename, Running, practice / counted runs, scoring, delete.

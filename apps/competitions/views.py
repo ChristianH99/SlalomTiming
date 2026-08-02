@@ -7,14 +7,16 @@ from django.db.models import Count, Max, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views import View
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext as _, ngettext
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.common import other_signed_in_users, safe_next
-from apps.timing.models import MarshalPenalty
+from apps.timing.models import MarshalPenalty, TimedRun
 
-from . import startpattern, taskspec
+from apps.transfer import merge
+
+from . import archiving, duplication, startpattern, taskspec
 from .assignment import assignment_methods_meta
 from .forms import (
     AssignmentForm,
@@ -80,6 +82,17 @@ class ActiveCompetitionMixin:
     def render_empty(self, request):
         return render(request, self.empty_template_name, {})
 
+    def refuse_archived(self, request, competition):
+        """A redirect back to this page when the active competition is archived,
+        else ``None``. Every ``post`` on a page that edits the active event calls
+        this first — an archived event is read-only, and the page it posts from
+        already says so (the topbar label, and its own controls being disabled),
+        so the answer is that page again with the reason in a message rather than
+        an error screen."""
+        if not archiving.refuse_page(request, competition):
+            return None
+        return redirect(request.path)
+
 
 class GeneralView(ActiveCompetitionMixin, View):
     template_name = "competitions/competition_general.html"
@@ -107,6 +120,9 @@ class GeneralView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        archived = self.refuse_archived(request, competition)
+        if archived is not None:
+            return archived
         old_type_id = competition.competition_type_id
         form = CompetitionForm(request.POST, instance=competition)
         if form.is_valid():
@@ -231,6 +247,9 @@ class ClassesView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        archived = self.refuse_archived(request, competition)
+        if archived is not None:
+            return archived
         assignment_form = AssignmentForm(request.POST, instance=competition)
         formset = CompetitionClassFormSet(request.POST, queryset=competition.classes.all())
         if assignment_form.is_valid() and formset.is_valid():
@@ -296,6 +315,9 @@ class RunOrderView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        archived = self.refuse_archived(request, competition)
+        if archived is not None:
+            return archived
         with transaction.atomic():
             self._apply_run_order(request, competition)
             self._apply_start_pattern(request, competition)
@@ -391,6 +413,9 @@ class PenaltiesView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
+        archived = self.refuse_archived(request, competition)
+        if archived is not None:
+            return archived
         enabled = bool(request.POST.get("penalties_by_marshal_posts"))
         confirmed = bool(request.POST.get("confirm_penalty_loss"))
 
@@ -586,11 +611,15 @@ class CompetitionDeleteView(DeleteView):
         # Spell out what deleting the competition takes with it: everything below
         # is CASCADE-deleted along with it and cannot be recovered.
         context = super().get_context_data(**kwargs)
-        from apps.participants.models import ClassAssignment, EventEntry
+        from apps.participants.models import ClassAssignment
         from apps.timing.models import TimedRun, TimingSignal
 
         competition = self.object
-        context["entry_count"] = EventEntry.objects.filter(competition=competition).count()
+        # entry_rows, so a signed-off event counts the competitors it *froze*.
+        # Its live EventEntry rows are still there, but a participant deleted
+        # since took theirs with them, and this page's whole job is to say
+        # truthfully what is about to be lost.
+        context["entry_count"] = len(competition.entry_rows())
         context["class_count"] = competition.classes.count()
         context["assignment_count"] = ClassAssignment.objects.filter(
             competition_class__competition=competition
@@ -649,59 +678,152 @@ def select_competition(request, pk):
 
 
 @require_POST
-def duplicate_competition(request, pk):
-    original = get_object_or_404(Competition, pk=pk)
-    from apps.participants.models import ClassAssignment
+def archive_competition(request, pk):
+    """Sign an event off: freeze the settings it was run under onto it and make
+    it read-only.
 
-    with transaction.atomic():
-        copy = Competition.objects.create(
-            competition_type=original.competition_type,
-            name=f"{original.name} (Copy)",
-            date=original.date,
-            assignment_method=original.assignment_method,
-            allow_multiple_classes=original.allow_multiple_classes,
-            penalties_by_marshal_posts=original.penalties_by_marshal_posts,
-            start_pattern=original.start_pattern,
+    One way. There is no view that undoes this — an event signed off has had its
+    results printed and handed out, and putting it back on settings that have
+    moved on since is the exact failure archiving exists to stop. Editing one is
+    done by duplicating it (see duplicate_competition).
+
+    The one thing this view adds to ``archiving.archive`` is telling the live
+    views. Timing is scoped to the active competition, and archiving the active
+    one changes what every open Manual/Auto timing page is allowed to do — a page
+    that finds out by having its next save refused is a page that lost the
+    operator's work. The nudge is the same one a competition switch sends, and it
+    makes every open view re-render (and go read-only) at once.
+    """
+    competition = get_object_or_404(Competition, pk=pk)
+    if not competition.is_archived:
+        archiving.archive(competition)
+        messages.success(
+            request,
+            _("“%(name)s” is archived. It keeps the settings and competitors it "
+              "was run with, and can no longer be changed.")
+            % {"name": competition.name},
         )
-        MarshalPost.objects.bulk_create(
-            MarshalPost(
-                competition=copy,
-                number=post.number,
-                tasks=post.tasks,
-                handles_stop_line=post.handles_stop_line,
-            )
-            for post in original.marshal_posts.all()
+        _announce(competition)
+    return redirect(safe_next(request, reverse("competitions:list")))
+
+
+def archived_rules(request, pk):
+    """The settings a signed-off event is evaluated by, read-only.
+
+    Its own General page can no longer show them — that page edits the *live*
+    type, which is exactly the row an archived event has stopped following. So
+    the question "what was this event actually run under?" had no answer on any
+    screen, which made the freeze something the operator had to take on trust.
+    Rendered as a pop-up over whatever page asked, so it is a glance rather than
+    a place to navigate to.
+    """
+    competition = get_object_or_404(Competition, pk=pk)
+    if not competition.is_archived:
+        return redirect("competitions:list")
+    return render(request, "competitions/competition_archived_rules.html", {
+        "competitions": Competition.objects.all(),
+        "object": competition,
+        "rules": archiving.rule_summary(competition),
+        "differences": archiving.rule_differences(competition),
+    })
+
+
+def _announce(competition):
+    """Nudge every open live view when the *active* event's archived state moved
+    under it. A competition nobody is looking at needs no announcement."""
+    if not competition.is_active:
+        return
+    from apps.timing.services import notify_competition_changed
+
+    notify_competition_changed(competition.name)
+
+
+@require_POST
+def duplicate_competition(request, pk):
+    """Copy a competition — and, for a signed-off one, the only way to edit it.
+
+    A live event duplicates as it always has: the setup, for next season. An
+    *archived* one asks first, because there are two quite different reasons to
+    copy one and the app cannot tell them apart. Setting up next year's event
+    from last year's classes wants none of the times; correcting a mis-recorded
+    run on an event that can no longer be changed wants all of them. That choice
+    (and, when the discipline's settings have moved on since, which of them the
+    copy should run under) is the dialog — see apps/competitions/duplication.py.
+    """
+    original = get_object_or_404(Competition, pk=pk)
+    mode = request.POST.get("mode")
+    if original.is_archived and mode not in ("setup", "full"):
+        return render(request, "competitions/competition_duplicate.html", {
+            # The list renders behind the dialog (see the template).
+            "competitions": Competition.objects.all(),
+            "object": original,
+            "differences": archiving.rule_differences(original),
+            # Reconciling a setting writes it to the shared type, so the dialog
+            # has to name what else that moves before the operator agrees to it.
+            "shared_with": original.competition_type.competitions.exclude(
+                pk=original.pk
+            ).count(),
+            "starter_count": original.archived_starters.count(),
+            "run_count": TimedRun.objects.filter(competition=original).count(),
+        })
+
+    with_data = mode == "full"
+    competitor_plan = duplication.plan(original) if with_data else None
+
+    # A full copy brings the competitors with it, and who they *are* on this
+    # system is the same question an import asks — somebody may have been edited,
+    # deleted or re-registered since. Anything the app cannot settle on its own
+    # is shown before a single row is written, exactly as the import wizard does.
+    if with_data and competitor_plan.needs_review and request.POST.get("step") != "review":
+        return render(request, "competitions/competition_duplicate_review.html", {
+            "object": original,
+            "plan": competitor_plan,
+            "summary": competitor_plan.summary,
+            "conflicts": competitor_plan.conflicts,
+            # Carried through the second step so the answers given on the first
+            # are not asked again.
+            "settings_kept": _settings_kept(request, original),
+        })
+
+    if with_data:
+        differences = archiving.rule_differences(original)
+        chosen = {
+            row["field"]: request.POST.get(f"setting-{row['field']}")
+            for row in differences
+        }
+        moved = duplication.adopt_settings(
+            original.competition_type, differences, chosen
         )
-        # Drop the default classes seeded on create and mirror the original's.
-        copy.classes.all().delete()
-        name_to_copy = {}
-        for oc in original.classes.all():
-            name_to_copy[oc.name] = CompetitionClass.objects.create(
-                competition=copy,
-                name=oc.name,
-                position=oc.position,
-                is_running=oc.is_running,
-                age_from=oc.age_from,
-                age_to=oc.age_to,
-                practice_runs=oc.practice_runs,
-                counted_runs=oc.counted_runs,
-                scoring_method=oc.scoring_method,
-                allow_multiple_entries=oc.allow_multiple_entries,
-                run_position=oc.run_position,
+        if moved:
+            messages.info(request, ngettext(
+                "%(count)s setting of “%(type)s” was set back to the archived event's value.",
+                "%(count)s settings of “%(type)s” were set back to the archived event's values.",
+                len(moved),
+            ) % {"count": len(moved), "type": original.competition_type.name})
+
+    copy = duplication.copy(
+        original,
+        with_data=with_data,
+        competitor_plan=competitor_plan,
+        resolutions=(
+            merge.read_resolutions(
+                request.POST, competitor_plan.matches, leads=merge.KEEP_EXISTING
             )
-        # Copy participant class assignments (incl. repeats) onto the matching
-        # copied classes. Bibs (EventEntry) are deliberately never copied.
-        ClassAssignment.objects.bulk_create(
-            ClassAssignment(
-                participant_id=assignment.participant_id,
-                competition_class=name_to_copy[assignment.competition_class.name],
-            )
-            for assignment in ClassAssignment.objects.filter(
-                competition_class__competition=original
-            ).select_related("competition_class")
-            if assignment.competition_class.name in name_to_copy
-        )
+            if with_data else None
+        ),
+    )
+    messages.success(request, _("“%(name)s” was created.") % {"name": copy.name})
     return redirect("competitions:list")
+
+
+def _settings_kept(request, original):
+    """The settings answers from step one, as ``[(field, value)]`` for the review
+    form's hidden inputs. Only the fields that actually differ, so a stale page
+    cannot smuggle an answer for a setting nobody was asked about."""
+    return [
+        (row["field"], request.POST.get(f"setting-{row['field']}") or "current")
+        for row in archiving.rule_differences(original)
+    ]
 
 
 class CompetitionTypeListView(ListView):
@@ -742,6 +864,13 @@ class CompetitionTypeSettingsView(UpdateView):
             (form[setting], mandatory)
             for setting, (_label, mandatory, _fields) in CompetitionType.PARTICIPANT_INFO.items()
         ]
+        # How many of this discipline's events these settings can no longer reach.
+        # This is the page where somebody edits a penalty amount and then asks why
+        # last season's results didn't move — the answer belongs here rather than
+        # on the results table that didn't change.
+        context["archived_count"] = self.object.competitions.filter(
+            archived_at__isnull=False
+        ).count()
         return context
 
     def form_valid(self, form):
@@ -756,7 +885,8 @@ class MarshalPostsView(ActiveCompetitionMixin, View):
     """Top-level operator surface a marshal uses on their phone: pick your post,
     then tap the task buttons to enter penalties for the current starter. The
     config (which tasks, stop-line) comes from the active competition's setup;
-    penalty amounts come from its type.
+    penalty amounts come from its ``rules`` — the live type, or the snapshot the
+    event was signed off with (apps/competitions/archiving.py).
 
     Submitting is real, and has been for several features: static/js/marshal_posts.js
     posts each tap and the final submit to timing:marshal-submit through a
@@ -773,7 +903,7 @@ class MarshalPostsView(ActiveCompetitionMixin, View):
         competition = self.get_active()
         if competition is None:
             return self.render_empty(request)
-        ctype = competition.competition_type
+        ctype = competition.rules
         posts = list(competition.marshal_posts.all())
         posts_data = [
             {

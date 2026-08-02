@@ -17,7 +17,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView, UpdateView
 
 from apps.accounts import pages
-from apps.competitions import startpattern
+from apps.competitions import archiving, startpattern
 from apps.competitions.models import Competition, CompetitionClass
 from apps.common import json_body as _shared_json_body
 from apps.participants.models import EventEntry
@@ -60,6 +60,26 @@ MAX_DETAIL_TASKS = 200
 # these is what makes the run operator-owned (manual_entry); the penalty counts in
 # the same payload deliberately do not — see timing_run_update.
 IDENTITY_FIELDS = ("bib_number", "class_key", "run_value")
+
+
+def _writable_competition():
+    """``(competition, refusal)`` for an endpoint that is about to *write* the
+    active event. Exactly one of the two is meaningful: a refusal means return it
+    and stop.
+
+    The one door every mutating timing endpoint comes through, so there are two
+    answers to give and not seventeen copies of each: there is no event selected,
+    or the event is archived and no longer takes times or edits
+    (apps/competitions/archiving.py). The read endpoints — the arrangement, the
+    auto state, the dashboard — deliberately do *not* call this: an archived
+    event is exactly what somebody opens these screens to look at, and the page
+    renders it read-only (`read_only` in the payload, static/js/read_only.js)
+    rather than going blank.
+    """
+    competition = Competition.get_current()
+    if competition is None:
+        return None, JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    return competition, archiving.refuse_json(competition)
 
 
 def broadcast_live():
@@ -288,9 +308,9 @@ def auto_arrangement(request):
 def auto_reorder(request):
     """Persist a manual start-order override: a list of slot keys, kept only for
     the keys that currently exist."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     posted = payload.get("order")
     if not isinstance(posted, list):
@@ -322,9 +342,9 @@ def auto_reorder(request):
 @require_POST
 def auto_reset_order(request):
     """Drop the manual override so the order re-derives from run order + pattern."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     competition.auto_timing_order = []
     competition.save(update_fields=["auto_timing_order"])
     autotiming.sync_bindings(competition)
@@ -394,9 +414,9 @@ def marshal_submit(request):
     """A marshal post's penalty for the run it's judging: the aggregate counts, the
     per-task breakdown, and whether it's submitted. Upserts one row per (run,post).
     A submitted (locked) row is refused — only a timekeeper unlock reopens it."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
@@ -436,9 +456,9 @@ def marshal_unlock(request):
     refused = _timekeeper_required(request)
     if refused is not None:
         return refused
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
@@ -459,9 +479,9 @@ def marshal_lock_all(request):
     refused = _timekeeper_required(request)
     if refused is not None:
         return refused
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
@@ -486,9 +506,9 @@ def marshal_lock(request):
     refused = _timekeeper_required(request)
     if refused is not None:
         return refused
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     run, post = _resolve_run_and_post(competition, _json_body(request))
     if run is None or post is None:
         return JsonResponse({"ok": False, "error": "Unknown run or post."}, status=404)
@@ -506,9 +526,9 @@ def marshal_task_edit(request):
     refused = _timekeeper_required(request)
     if refused is not None:
         return refused
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     run, post = _resolve_run_and_post(competition, payload)
     if run is None or post is None:
@@ -552,9 +572,9 @@ def marshal_task_edit(request):
 def marshal_claim(request):
     """Claim a post (or refresh the claim) for a device token. Refused if a
     different, still-live device already holds it."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     token = str(payload.get("token") or "")[:64]
     post = competition.marshal_posts.filter(number=_as_pk(payload.get("post"))).first()
@@ -571,7 +591,12 @@ def marshal_claim(request):
 
 @require_POST
 def marshal_release(request):
-    """Release a post claim (on change-post or when the page closes)."""
+    """Release a post claim (on change-post or when the page closes).
+
+    Deliberately *not* refused on an archived event, unlike claiming one: this
+    writes a device lock rather than the race, and a phone that cannot let go of a
+    post leaves it held until the claim goes stale.
+    """
     competition = Competition.get_current()
     if competition is None:
         return JsonResponse({"ok": True})
@@ -610,9 +635,9 @@ def auto_penalty_adjust(request):
     mode a non-owned run's stepper nudges a signed ``*_adjust`` on top of the post
     totals; otherwise it sets the run's own ``*_count`` directly (shared with the
     Manual view)."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
@@ -682,9 +707,18 @@ def timing_signal(request):
         running_number, port, bool(payload.get("is_manual")), device_time,
         source=str(payload.get("source", "simulator")),
     )
-    # signal is None when the DB was busy and the time went to the recovery file;
-    # it wasn't lost, so still report success.
-    return JsonResponse({"ok": True, "id": signal.id if signal else None, "captured": signal is None})
+    if signal is not None:
+        return JsonResponse({"ok": True, "id": signal.id, "captured": False})
+    # No row, for one of two reasons that must not be reported as the same thing.
+    # Either the database was busy and the time went to the recovery file — not
+    # lost, just not placed yet, which is still a success — or the event has been
+    # signed off and the time was deliberately let go (ingest.record_signal). The
+    # simulator's log would otherwise say "captured" about a time that is gone.
+    competition = Competition.get_current()
+    archived = competition is not None and competition.is_archived
+    return JsonResponse({
+        "ok": True, "id": None, "archived": archived, "captured": not archived,
+    })
 
 
 class _CsrfCheck(CsrfViewMiddleware):
@@ -763,9 +797,9 @@ def timing_arrangement(request):
 @require_POST
 def timing_run_update(request):
     """Set bib / class / run / penalties on a run."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     run = TimedRun.objects.filter(id=_as_pk(payload.get("run_id")), competition=competition).first()
     if run is None:
@@ -824,9 +858,9 @@ def timing_run_status(request):
     recorded). That is why this endpoint belongs to the Results page as well as
     Timing (see apps/accounts/pages.py); both are timekeeper surfaces.
     """
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     status = runstatus.parse(payload.get("status"))
     if status is None:
@@ -852,9 +886,9 @@ def timing_run_status(request):
 def timing_ignore(request):
     """Mark a time as a wrong measurement (or restore it). Ignoring removes it
     from its run; restoring re-inserts it causally."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     signal = TimingSignal.objects.filter(id=_as_pk(payload.get("signal_id")), competition=competition).first()
     if signal is None:
@@ -875,9 +909,9 @@ def timing_pair(request):
     a pairing that would put a start after its finish. Dropping onto an upcoming
     Auto competitor with no run yet (only a slot_key) makes their run first, so a
     time can be moved from the current competitor onto the next one."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     signal = TimingSignal.objects.filter(id=_as_pk(payload.get("signal_id")), competition=competition).first()
     slot = payload.get("slot")
@@ -906,9 +940,9 @@ def timing_add_run(request):
     at the top of the table the moment anything is typed into it — which is why
     the reply names the row: the caller's next request is the edit that goes on
     it (see static/js/timing_live.js, blankLineRun)."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     # An operator-created row: owned from the start so the Auto view treats it as
     # a pre-entry rather than an auto-bound slot.
     run = TimedRun.objects.create(competition=competition, manual_entry=True)
@@ -919,9 +953,9 @@ def timing_add_run(request):
 @require_POST
 def timing_delete_run(request):
     """Remove an empty placeholder row (one with no start and no finish yet)."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     run = TimedRun.objects.filter(
         id=_as_pk(_json_body(request).get("run_id")), competition=competition,
         start_signal__isnull=True, finish_signal__isnull=True,
@@ -940,9 +974,9 @@ def timing_set_time(request):
     with an *entered* signal (kept distinct from a measured one), or clears it when
     blank. A device signal it displaces is ignored (kept on the rail), an entered
     one is removed. Rejected (start after finish) like a drag pairing."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     slot = payload.get("slot")
     if slot not in ("start", "finish"):
@@ -1021,9 +1055,9 @@ def timing_set_runtime(request):
     """Operator types a run time directly, for when the device gave no usable
     start/finish pair. Sets/clears ``TimedRun.manual_run_time`` (seconds, or an
     hh:mm:ss.mmm duration) and marks the run operator-owned."""
-    competition = Competition.get_current()
-    if competition is None:
-        return JsonResponse({"ok": False, "error": "No active competition."}, status=400)
+    competition, refusal = _writable_competition()
+    if refusal is not None:
+        return refusal
     payload = _json_body(request)
     raw = payload.get("run_time")
     clearing = raw is None or str(raw).strip() == ""
@@ -1092,15 +1126,20 @@ class _RowContext:
 
     def __init__(self, competition, runs):
         self.competition = competition
-        self.ctype = competition.competition_type
+        self.ctype = competition.rules
         self.precision = self.ctype.timing_precision
         self._entries = {
             entry.bib_number: entry
-            for entry in EventEntry.objects.filter(competition=competition)
-            .select_related("participant")
-            # ManualAssignment.classes_for walks these in Python, so prefetching
-            # them makes participant_slots() free.
-            .prefetch_related("participant__class_assignments__competition_class")
+            for entry in (
+                # An archived event's competitors come from its snapshot, which is
+                # already one read and already carries its participants.
+                competition.entry_rows() if competition.is_archived else
+                EventEntry.objects.filter(competition=competition)
+                .select_related("participant")
+                # ManualAssignment.classes_for walks these in Python, so prefetching
+                # them makes participant_slots() free.
+                .prefetch_related("participant__class_assignments__competition_class")
+            )
         }
         # Materialised once: ``runs`` may be a queryset, and it is walked twice
         # below (and again by runs_recorded_for_bib) — a second pass over a lazy
@@ -1194,7 +1233,7 @@ class _RowContext:
 
 
 def serialize_arrangement(competition):
-    ctype = competition.competition_type
+    ctype = competition.rules
     settings = TimingSettings.load()
     rows = arrangement.rows(competition)
     # Keep the Manual view in step with the Auto order: bibs/classes/runs (and
@@ -1208,6 +1247,10 @@ def serialize_arrangement(competition):
         "precision": ctype.timing_precision,
         # The red operator lock: incoming times go straight to the ignore list.
         "input_locked": settings.ignore_incoming,
+        # A signed-off event is looked at, not driven: the page disables every
+        # control it renders rather than leaving steppers and dropdowns that take
+        # a value and have it refused (see static/js/read_only.js).
+        "read_only": competition.is_archived,
         # The device link, so a reader that has lost the CP540 raises its alarm
         # here rather than only on the settings page.
         "device_link": cp540.link_state(settings),

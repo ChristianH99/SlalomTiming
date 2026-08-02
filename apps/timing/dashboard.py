@@ -40,7 +40,7 @@ DNX_STATUSES = (EventEntry.Status.DNS, EventEntry.Status.DNF, EventEntry.Status.
 def serialize(competition):
     """The whole organiser overview as a JSON-able dict: headline stats, overall
     run progress, per-class status, and the competitor on course now."""
-    ctype = competition.competition_type
+    ctype = competition.rules
     precision = ctype.timing_precision
     # Fold Auto timing's positional identities onto the runs first, so a
     # pattern-bound run carries the bib/class/run its recorded-run tally is
@@ -106,7 +106,7 @@ def _retired(competition):
     Their unrecorded runs are not outstanding work; see ``_expected_ids``."""
     return {
         entry.pk
-        for entry in competition.entries.all()
+        for entry in competition.entry_rows()
         if entry.status in DNX_STATUSES
     }
 
@@ -207,6 +207,11 @@ def _run_label(run):
 def _entry(competition, bib):
     if not bib:
         return None
+    if competition.is_archived:
+        # The snapshot, not the live table — see Competition.entry_rows.
+        return next(
+            (e for e in competition.entry_rows() if e.bib_number == bib), None
+        )
     return (
         EventEntry.objects.select_related("participant")
         .filter(competition=competition, bib_number=bib)
@@ -216,7 +221,7 @@ def _entry(competition, bib):
 
 def _stats(competition, classes, expected, finished, ctype):
     """Headline counts for the tile row."""
-    entries = list(competition.entries.all())
+    entries = competition.entry_rows()
     dnx = sum(1 for e in entries if e.status in DNX_STATUSES)
     classes_done = sum(1 for c in classes if c["status"] == "done")
     marshal_posts = competition.marshal_posts.count() if (

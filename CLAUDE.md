@@ -56,6 +56,13 @@ config/                  Django project (settings, urls, asgi/wsgi). health.py i
                          `django_db(transaction=True)`: the ordinary fixture wraps a test
                          in a transaction other threads cannot see, so a threaded test
                          written on it is a test of nothing.
+                         archived_tests.py is the third of that family: it discovers every
+                         *write* door in the app (a `post` method or an `@require_POST`,
+                         minus the admin and accounts namespaces) and checks each one
+                         refuses while the active competition is archived — or is named in
+                         STILL_WRITABLE with the reason it doesn't. "An archived event takes
+                         no writes" is a claim about forty endpoints, and the only version of
+                         that test worth having is the one the forty-first fails.
                          settings.py: HTTPS is the default once DEBUG is off and there is exactly
                          ONE way off it — DJANGO_ALLOW_PLAIN_HTTP (the older per-setting hatches
                          DJANGO_SECURE_SSL_REDIRECT/DJANGO_SECURE_COOKIES now *refuse to start*,
@@ -226,7 +233,13 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          table) rather than refused. Setup UI is a section: a tile list
                          ("Manage competitions") + General / Classes / Run order / Penalties /
                          Results sub-pages that all edit the *active* competition (no pk in the
-                         URL; the Results sub-page lives in apps/results).
+                         URL; the Results sub-page lives in apps/results). The tile list is also
+                         where an event is **archived** — one tile action, behind the app's own
+                         confirm dialog, and the only one there that cannot be undone, so the
+                         dialog says so. An archived tile wears a pill and a frost leading edge
+                         and offers "Archived settings" (a read-only pop-up of what was frozen)
+                         where Archive used to be: an action it cannot offer is replaced by
+                         what it is. Its **Duplicate** asks first — see duplication.py.
                          MarshalPost (competition FK, 1-based number, tasks spec, one
                          handles_stop_line per competition, plus claim_token/claim_seen — a
                          heartbeated soft lock so only one device edits a post at a time)
@@ -246,7 +259,86 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
   taskspec.py            parse()/format_ranges()/summary() for the marshal-post task-number
                          specs. Shared by the Penalties page and the Marshal Posts page.
   Competition            also carries auto_timing_order (a saved manual override of the Auto
-                         timing start order; see apps/timing/autotiming.py).
+                         timing start order; see apps/timing/autotiming.py) and the archive
+                         state, archived_at + archived_rules (see archiving.py).
+  archiving.py           Signing an event off, which is what stops a CompetitionType (or a
+                         participant record) edited in November from rewriting July's
+                         printed result (issue #8). **One-way**: there is no un-archive, on
+                         purpose — an event signed off has had its results handed out, and
+                         putting it back on settings that have moved on since is the exact
+                         failure this exists to stop. Editing one means duplicating it (see
+                         duplication.py). Three parts:
+                         **The rules** — archive() copies every setting of the competition's
+                         type onto the competition, and Competition.rules hands out that copy
+                         from then on. The rule for the whole app is that an *evaluation*
+                         reads `competition.rules`, never `competition_type` (which stays the
+                         question "which discipline is this?" — what participants register
+                         under, what an export carries). The copy comes back as a
+                         FrozenCompetitionType, a proxy model that is every inch a
+                         CompetitionType except that saving it raises: a snapshot somebody
+                         *can* turn into a row eventually becomes one.
+                         **The competitors** — ArchivedStarter rows carry each bib's
+                         participant details and class entries as they read on the day, and
+                         `Competition.entry_rows()` hands them back as ordinary
+                         EventEntry/Participant objects, so no reader has to know which kind
+                         of event it is looking at. The second rule beside `rules`: a read of
+                         the field goes through `entry_rows()`, never `competition.entries`.
+                         Without it, correcting somebody's club — or a retention sweep
+                         deleting them — silently rewrote a result printed last summer, and
+                         `classes_for_participant` re-sorted the field the first time a class
+                         assignment changed. **The participants list is one of those readers**,
+                         which is easy to miss because it is the one page whose *subject* is
+                         the live table — it was the last screen still showing a vehicle
+                         edited after the event.
+                         What gets frozen is the **entries**, not the participants: an
+                         EventEntry *is* a bib (the column is not nullable and clearing a bib
+                         deletes the row), so walking them is exactly "everyone who had a
+                         number on the day". Somebody registered under the discipline who
+                         never entered, or merely assigned to a class, was never part of the
+                         event and is not in its archive — which is also why the list's
+                         "active only" filter disappears there: an archived event has no
+                         inactive competitors to hide.
+                         **The lock** — refuse_json/refuse_page are the one door every write
+                         asks, and the *screens* go read-only with it (`read_only` in the live
+                         payloads, static/js/read_only.js). An incoming **time** is dropped
+                         rather than stored: the one place in the app where a time is
+                         deliberately let go, because an archived event is finished and a
+                         pulse arriving at it is the rig being packed away. Not to be
+                         confused with apps/transfer/archive.py, the export .zip — though a
+                         .zip carries this whole state, frozen field included, so a signed-off
+                         event moved between machines arrives signed off.
+  duplication.py         Copying a competition, and for a signed-off one the only way to
+                         edit it. Two modes behind one dialog: **setup only** (classes, run
+                         order, posts — last year's event becomes next year's) and
+                         **everything** (competitors, bibs, signals, runs, marshal penalties,
+                         results config, tie resolutions — a live copy of an archived event,
+                         to correct it). Field lists come from apps/transfer/schema.py rather
+                         than being spelled out again — two answers to "what is a competition
+                         made of" drift the first time a field is added to one of them.
+                         The full copy is **an import in everything but the file**, and reuses
+                         the import's own code to be one. Its competitors are years old: some
+                         have been edited since, some deleted, some re-registered under a new
+                         record. That is exactly merge.match_participants' question, so
+                         `plan()` asks it and a CONFLICT opens the same merge window the import
+                         wizard shows (merge.read_resolutions reads both forms — one reader, so
+                         the two screens cannot drift). Two things differ from an import, both
+                         deliberate and both parameters rather than forks:
+                         **which side leads** — an import leads with the incoming file, a copy
+                         leads with the record on file, because those incoming values are from
+                         a finished event and the live row is the current truth about a living
+                         person (the archived event keeps its own copy either way); and
+                         **last_used_at** — an import *is* a use and stamps it, copying a 2019
+                         event is not, so _restore_clocks puts every touched competitor's clock
+                         back and a re-created one comes back with the date the snapshot froze.
+                         Without that, duplicating old events would quietly keep every
+                         competitor who ever raced alive against the retention sweep the field
+                         exists for.
+                         The other half is the settings: an archived event was run under
+                         settings its type may have moved on from, and a live copy must run
+                         under a *live* type. archiving.rule_differences() lists what disagrees
+                         and the dialog asks per setting; what the operator keeps is written to
+                         the shared type, which is why the dialog also names how many other
+                         competitions that moves.
   assignment.py          Pluggable class-assignment strategies (Manual, Based-on-age) chosen per
                          competition via Competition.assignment_method; add a method in code only
                          (subclass AssignmentMethod + register). Competition.classes_for_participant()
@@ -918,6 +1010,13 @@ apps/transfer/          Getting the data out: the **automatic backup** (the sect
                          MAX_UPLOAD_BYTES caps the file itself at the view; deploy/Caddyfile's
                          request_body sits just above it so the app's message wins over a bare 413.
   merge.py               Deciding what an imported participant means here (the novel part).
+                         Its rows carry **already-typed** values and it validates nothing:
+                         decoding is the caller's, because the two callers differ in whether
+                         they are holding a file (see the Security note on where validation
+                         belongs). read_resolutions() is the shared reader for both review
+                         screens, with `leads` naming which side a missing field answer falls
+                         back to — the import leads with the file, a duplicate with the record
+                         on file.
                          Each incoming row is matched against the participants already registered
                          under the same type on two rules — same name + date of birth, or same
                          licence number — and classified NEW / IDENTICAL (reuse the row untouched)
@@ -1215,10 +1314,11 @@ rather than a dead timing view — but it does mean CI runs `collectstatic` befo
 
 ## Tests
 
-~1400 cases from ~680 functions in nine files, in ~20 minutes. **Do not judge the suite by the case
+~1500 cases from ~710 functions in ten files, in ~20 minutes. **Do not judge the suite by the case
 count**: roughly a third of it is a handful of functions parametrised over a list — the hostile
-payloads × every discovered endpoint, the file checks × every template, one per `.js` file, one per
-sidebar entry. Those are the cheapest tests here and the ones with the best failure story, because
+payloads × every discovered endpoint, the archived refusal × every discovered write door, the file
+checks × every template, one per `.js` file, one per sidebar entry. Those are the cheapest tests
+here and the ones with the best failure story, because
 they catch a *class* of bug rather than an instance. The time is not concentrated anywhere either;
 it is the flat cost of ~900 database-backed tests each setting up a competition, so there is no big
 win available short of `pytest-xdist`.
@@ -1228,6 +1328,10 @@ Where the value is concentrated, and what not to break:
 - **`config/hostility_tests.py` discovers its own targets from the URLconf**, so an endpoint added
   next month is covered the day it is added. The malformed-id 500 was reachable on nine endpoints at
   once precisely because the tests that existed named their targets one at a time.
+- **`config/archived_tests.py` does the same for the archive lock** — it finds every write door in
+  the app and checks each refuses while the active competition is archived, or is listed in
+  `STILL_WRITABLE` with the reason it doesn't. Adding a mutating endpoint without a guard fails
+  this the day it lands, which is the only way "an archived event takes no writes" can stay true.
 - **The file-parametrised checks in `config/tests.py`** — no inline script or style, no `onclick=`,
   no multi-line `{# #}`, every dialog labelled, every `.js` structurally whole, the design-system
   scales closed, focus rings not removed. Each is a rule that is easy to break by accident and
@@ -1369,6 +1473,19 @@ each exist because breaking one is what made the app read as several products st
   is rare: forty closed runs is an ordinary afternoon, and the Manual timing table became a
   wall of amber with the rows that still needed work invisible in it. A stripe down the
   leading edge reads at any density.
+- **A read-only app says so once, in the chrome — and then actually is one.** The archived
+  event is named in the topbar beside the event's name (`.topbar-archived`, the whole
+  explanation in its `title`) and nowhere else. It was a banner over every page first, which
+  on the results and timing screens pushed the thing the operator came to read down by a block
+  — for a state that cannot change while they are looking at it. Saying it is only half:
+  `static/js/read_only.js` disables every control inside `<main>`, blanket-then-allow
+  (`data-read-only-allow` opts a *read* back in — search, expanding a row), and re-disables
+  through each live re-render with a MutationObserver, because a stepper that takes a click
+  and has it refused teaches the operator nothing. **A link is not a control**, and that
+  exemption is deliberate — every PDF export is a link — so a link that opens an editing
+  screen has to go from its own template instead. The participant list's Edit and Delete
+  were live for exactly that reason. Frost, not flame: nothing is going wrong,
+  the event is finished.
 - **"Nothing to operate" is a heading and a centred `.empty-state` card**, the shape Marshal
   Posts uses — never a bare paragraph at the top of a blank page, which reads as a page
   that failed to load. `.empty-state > p` carries its own measure, because the two timing
@@ -1411,6 +1528,16 @@ Four rules to keep in mind when adding anything to this app:
   `_signal_authorized` and `_timekeeper_required` / `_marshal_may_write` in `apps/timing/views.py`.
   A new open or shared endpoint needs the same treatment, and a test that a *scoped* role is
   refused (the shared `client` fixture is a superuser, so it proves nothing here).
+- **Validation belongs to the door the untrusted value comes through, not to the code
+  downstream of it.** `schema.load` decodes *and* runs each field's validators, which is what
+  turns a damaged export into a sentence instead of a row every later read chokes on — so it
+  is called by `importers._participant_rows`, where a file stops being text. It used to sit
+  inside `merge.match_participants`, which two callers share: the import, and duplicating an
+  archived competition. The second hands it rows out of *this* database, where re-validating
+  can only fail for data that is already stored and that nobody can reach (an archived event
+  is read-only). A competitor whose date of birth predates the 1900 bound — legal to store,
+  since `Model.save()` does not validate — turned Duplicate into a 500. Shared code that
+  validates has to be told which of its callers is holding a file.
 - **Every value that arrives in a file is hostile until checked**, and it gets checked on the way
   in *and* on the way out. The stored-XSS hole came from sanitising the PDF header only in the
   editor's save path while an import wrote the same column raw. Uploads are size-capped at the
@@ -1444,11 +1571,22 @@ Things that look like gaps, have been raised, and have an answer. They are liste
 pass recognises them as decided rather than missed — not so they can never be revisited. Where a
 decision has a longer write-up it lives beside the code and is named here.
 
-- **A finished result still depends on a live row.** `CompetitionType`'s precision, penalty
-  amounts and tie-break are read live by `resultscalc`, and the type is shared by every
-  competition of that discipline — so editing a penalty amount in November re-ranks July's event.
-  **Deferred**, because the proper answer is an *archive*: a competition snapshotted when it is
-  signed off. Written up in `apps/competitions/models.py`.
+- **A copy of an archived event is an import.** Both bring competitors from elsewhere onto
+  this system, so both ask `merge.match_participants` who those people are here and both open
+  the same merge window. The two places they differ are parameters, not forks: which side a
+  field disagreement leads with (`read_resolutions(..., leads=)`), and whether the write counts
+  as a *use* of the person — an import does, copying a finished event does not, so
+  `duplication._restore_clocks` puts `last_used_at` back.
+- **A finished result depended on live rows.** `CompetitionType`'s precision, penalty amounts
+  and tie-break are read live and the type is shared by every competition of that discipline;
+  a `Participant` likewise belongs to the discipline and is edited (and deleted) for years
+  after the event they raced in. So editing a penalty amount — or correcting a club — in
+  November rewrote July's printed result. **Done 2026-08-02 (issue #8): archiving**,
+  `apps/competitions/archiving.py`. What is left of it are the two rules that replaced it: an
+  evaluation reads **`Competition.rules`**, never `competition_type`, and a read of the field
+  goes through **`Competition.entry_rows()`**, never `competition.entries`. A *live*
+  competition still follows both live, and deliberately so — the trap is only closed for
+  events somebody has signed off.
 - **No per-competition scoping on the WebSocket consumers** — see the paragraph above. Deliberate;
   there is only ever one active event.
 - **No self-service password change.** **Waived** — accounts are assigned and a reset is a
