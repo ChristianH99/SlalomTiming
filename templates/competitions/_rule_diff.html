@@ -1,0 +1,45 @@
+{% load i18n %}
+{% comment %}The competition-type settings that disagree, one row each, for the
+operator to pick a side.
+
+Shared by the two screens that reconcile a set of rules with the live type:
+duplicating an archived event (its frozen snapshot against the type it has to
+run under from now on) and importing an export (the type inside the file against
+the one this system already has under that name). The question is the same, so
+the table is the same one — and `archiving.adopt_settings` reads the answer from
+either, which is why the radio value is `incoming`/`current` rather than
+something named after whichever screen asked.
+
+Context: `differences` (archiving.setting_differences) and `incoming_label`, the
+heading for the column the values arrived in — "As archived", "In the file".
+{% endcomment %}
+<table class="dup-diff">
+  <thead>
+    <tr>
+      <th>{% trans "Setting" %}</th>
+      <th>{{ incoming_label }}</th>
+      <th>{% trans "Current" %}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in differences %}
+      <tr>
+        <th scope="row">{{ row.label }}</th>
+        <td>
+          <label class="dup-diff-option">
+            <input type="radio" name="setting-{{ row.field }}" value="incoming"
+                   {% if incoming_default %}checked{% endif %}>
+            <span>{{ row.incoming_display }}</span>
+          </label>
+        </td>
+        <td>
+          <label class="dup-diff-option">
+            <input type="radio" name="setting-{{ row.field }}" value="current"
+                   {% if not incoming_default %}checked{% endif %}>
+            <span>{{ row.current_display }}</span>
+          </label>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>

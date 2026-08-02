@@ -281,6 +281,14 @@ class ImportReviewView(View):
             "conflicts": plan.conflicts,
             "type_actions": plan.type_actions(),
             "default_type_action": plan.default_type_action(),
+            "type_settings": plan.type_settings,
+            # Keeping a setting writes it to the shared type, so the screen has
+            # to name what else that moves before the operator agrees to it —
+            # the same warning the archived duplicate dialog carries.
+            "shared_with": (
+                plan.existing_type.competitions.count()
+                if plan.existing_type is not None and plan.type_settings else 0
+            ),
             "identical": [m for m in plan.matches if m.status == merge.IDENTICAL],
             "new_participants": [m for m in plan.matches if m.status == merge.NEW],
         }
@@ -296,6 +304,7 @@ class ImportReviewView(View):
                 plan,
                 resolutions=_resolutions(request.POST, plan),
                 type_action=request.POST.get("type_action"),
+                type_settings=_type_settings(request.POST, plan),
                 media=media,
                 activate=request.POST.get("activate") == "on",
             )
@@ -362,6 +371,20 @@ def _resolutions(post, plan):
     """The operator's decisions off the review form — shared with the archived
     competition's duplicate review, which asks the same question."""
     return merge.read_resolutions(post, plan.matches)
+
+
+def _type_settings(post, plan):
+    """Which value to keep for each competition-type setting the file and this
+    system disagree about — read the same way, and out of the same inputs, as
+    the archived competition's duplicate dialog (``setting-<field>``).
+
+    Only the fields the plan itself says differ are read, so a stale page cannot
+    post an answer for a setting nobody was asked about and move it.
+    """
+    return {
+        row["field"]: post.get(f"setting-{row['field']}")
+        for row in plan.type_settings
+    }
 
 
 def _int(value):

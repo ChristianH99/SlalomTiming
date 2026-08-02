@@ -10,13 +10,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.competitions import archiving
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType, MarshalPost
 from apps.participants.models import ClassAssignment, EventEntry, Participant
 from apps.results.models import ManualTieResolution, ResultColumnSettings, ResultsPdfLayout
 from apps.timing.autotiming import slot_key
 from apps.timing.models import MarshalPenalty, TimedRun, TimingSignal
 
-from . import archive, csvimport, exporters, importers, merge, staging
+from . import archive, csvimport, exporters, importers, merge, schema, staging
 from .schema import SCOPE_EVENT, SCOPE_TYPE, TransferError
 
 pytestmark = pytest.mark.django_db
@@ -487,31 +488,167 @@ def test_type_action_create_registers_a_separate_type():
     assert "imported" in result.competition_type.name
 
 
-def test_type_action_update_overwrites_the_local_settings():
+# --- competition-type settings (issue #10) -----------------------------------
+#
+# An export has always carried the competition type's parameters; what it did
+# not do was *say* when they disagreed with the ones already on this system. The
+# type is shared by every competition of the discipline, so importing one club's
+# file used to be a choice between ignoring their rules entirely and overwriting
+# this system's — including for the fourteen settings both agreed about.
+
+
+def test_the_export_carries_every_competition_type_parameter():
+    """The structural half: a setting the export forgets is one an import can
+    never reconcile, and the failure is silent — the file simply says nothing
+    about it and the type keeps whatever it had.
+
+    Pinned against archiving.FROZEN_FIELDS (every concrete field of the model)
+    rather than against a list written out here, so adding a parameter to
+    CompetitionType fails this until the export carries it too.
+    """
+    assert set(schema.COMPETITION_TYPE_FIELDS) == set(archiving.FROZEN_FIELDS)
+
+
+def test_a_type_that_agrees_asks_nothing():
     ctype = make_type(pylon_penalty=5)
     payload = exporters.export(competition_type=ctype)
-    CompetitionType.objects.filter(pk=ctype.pk).update(pylon_penalty=99, requires_phone=True)
 
-    document, media = archive.read(payload)
-    plan = importers.plan(document)
-    importers.commit(plan, resolutions={}, type_action=importers.TYPE_UPDATE, media=media)
-
-    ctype.refresh_from_db()
-    assert ctype.pylon_penalty == 5
-    assert ctype.requires_phone is False
+    document, _media = archive.read(payload)
+    assert importers.plan(document).type_settings == []
 
 
-def test_type_action_reuse_keeps_the_local_settings():
+def test_the_plan_lists_only_the_parameters_that_differ():
+    ctype = make_type(pylon_penalty=5)
+    payload = exporters.export(competition_type=ctype)
+    CompetitionType.objects.filter(pk=ctype.pk).update(pylon_penalty=99)
+
+    document, _media = archive.read(payload)
+    rows = importers.plan(document).type_settings
+
+    assert [row["field"] for row in rows] == ["pylon_penalty"]
+    assert rows[0]["incoming"] == 5 and rows[0]["current"] == 99
+
+
+def test_the_type_name_is_never_offered_as_a_difference():
+    """It is what matched the two types in the first place. Another club's
+    capitalisation is not a rule this system should be asked to adopt."""
+    ctype = make_type()
+    payload = exporters.export(competition_type=ctype)
+    CompetitionType.objects.filter(pk=ctype.pk).update(name="motorcycle")
+
+    document, _media = archive.read(payload)
+    assert importers.plan(document).type_settings == []
+
+
+def test_an_undecided_parameter_keeps_this_systems_value():
+    """The default, and the one that matters: an import is about the event in
+    the file, and must not re-rank finished events by moving a shared rule."""
     ctype = make_type(pylon_penalty=5)
     payload = exporters.export(competition_type=ctype)
     CompetitionType.objects.filter(pk=ctype.pk).update(pylon_penalty=99)
 
     document, media = archive.read(payload)
     plan = importers.plan(document)
-    importers.commit(plan, resolutions={}, type_action=importers.TYPE_REUSE, media=media)
+    importers.commit(plan, resolutions={}, media=media)
 
     ctype.refresh_from_db()
     assert ctype.pylon_penalty == 99
+
+
+def test_keeping_the_files_parameter_writes_it_to_the_shared_type():
+    ctype = make_type(pylon_penalty=5)
+    payload = exporters.export(competition_type=ctype)
+    CompetitionType.objects.filter(pk=ctype.pk).update(pylon_penalty=99, requires_phone=True)
+
+    document, media = archive.read(payload)
+    plan = importers.plan(document)
+    importers.commit(
+        plan,
+        resolutions={},
+        type_settings={"pylon_penalty": "incoming", "requires_phone": "current"},
+        media=media,
+    )
+
+    ctype.refresh_from_db()
+    # Answered "from the file" — taken; answered "current" — left alone, even
+    # though the file disagrees about it too.
+    assert ctype.pylon_penalty == 5
+    assert ctype.requires_phone is True
+
+
+def test_a_parameter_nobody_was_asked_about_cannot_be_moved():
+    """A stale page posting an answer for a setting the two types agree about
+    must not write it: the plan is what decides which rows exist."""
+    ctype = make_type(pylon_penalty=5, task_penalty=10)
+    payload = exporters.export(competition_type=ctype)
+    CompetitionType.objects.filter(pk=ctype.pk).update(pylon_penalty=99)
+
+    document, media = archive.read(payload)
+    plan = importers.plan(document)
+    importers.commit(
+        plan,
+        resolutions={},
+        type_settings={"task_penalty": "incoming", "pylon_penalty": "incoming"},
+        media=media,
+    )
+
+    ctype.refresh_from_db()
+    assert ctype.pylon_penalty == 5     # a real difference, answered
+    assert ctype.task_penalty == 10     # never differed, so never touched
+
+
+def test_an_event_import_reconciles_the_type_it_lands_in():
+    """The event scope is the case the issue is really about: a club's event
+    file arrives, and its discipline's settings have moved here since."""
+    competition = make_event()
+    ctype = competition.competition_type
+    payload = exporters.export(competition=competition)
+    CompetitionType.objects.filter(pk=ctype.pk).update(timing_precision=2)
+
+    document, media = archive.read(payload)
+    plan = importers.plan(document)
+    assert [row["field"] for row in plan.type_settings] == ["timing_precision"]
+
+    importers.commit(
+        plan, resolutions={},
+        type_settings={"timing_precision": "incoming"}, media=media,
+    )
+    ctype.refresh_from_db()
+    assert ctype.timing_precision == 3
+
+
+def test_the_review_screen_shows_the_differences(client):
+    ctype = make_type(pylon_penalty=5)
+    payload = exporters.export(competition_type=ctype)
+    CompetitionType.objects.filter(pk=ctype.pk).update(pylon_penalty=99)
+
+    upload(client, payload)
+    page = client.get(reverse("transfer:review")).content.decode()
+
+    assert 'name="setting-pylon_penalty"' in page
+    assert 'value="incoming"' in page
+    # This system's value is the one pre-selected.
+    assert 'value="current"\n                   checked' in page or 'value="current" checked' in page
+
+
+def test_the_review_screen_asks_nothing_when_the_type_agrees(client):
+    ctype = make_type(pylon_penalty=5)
+    upload(client, exporters.export(competition_type=ctype))
+
+    page = client.get(reverse("transfer:review")).content.decode()
+    assert "setting-pylon_penalty" not in page
+
+
+def test_the_review_form_moves_the_setting_it_was_told_to(client):
+    ctype = make_type(pylon_penalty=5)
+    payload = exporters.export(competition_type=ctype)
+    CompetitionType.objects.filter(pk=ctype.pk).update(pylon_penalty=99)
+
+    upload(client, payload)
+    client.post(reverse("transfer:review"), {"setting-pylon_penalty": "incoming"})
+
+    ctype.refresh_from_db()
+    assert ctype.pylon_penalty == 5
 
 
 # --- participant matching ----------------------------------------------------

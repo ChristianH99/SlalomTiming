@@ -393,19 +393,7 @@ def _remap_scope(scope, classes):
     return f"class:{cclass.pk}" if cclass else None
 
 
-def adopt_settings(competition_type, differences, chosen):
-    """Write the settings the operator kept back onto the live type.
-
-    ``chosen`` is ``{field: "archived" | "current"}`` from the dialog; anything
-    absent keeps the current value, so a form that never rendered a row cannot
-    quietly change one. Returns the field names that actually moved.
-    """
-    moved = []
-    for row in differences:
-        if chosen.get(row["field"]) != "archived":
-            continue
-        setattr(competition_type, row["field"], row["archived"])
-        moved.append(row["field"])
-    if moved:
-        competition_type.save(update_fields=moved)
-    return moved
+# Reconciling the frozen settings with the live type's is `archiving`'s job, not
+# this module's — the import wizard asks the same question of a competition type
+# that arrived in a file, and both write the answer back the same way. See
+# archiving.setting_differences / archiving.adopt_settings.
