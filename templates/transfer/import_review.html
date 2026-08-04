@@ -34,7 +34,7 @@
 
     <h2 class="form-section">{% trans "Competition type" context "transfer" %}</h2>
     <div class="settings-section">
-      {% if type_actions %}
+      {% if plan.existing_type %}
         <p class="hint">
           {% blocktrans with name=plan.existing_type.name %}This system already has a competition type called <strong>{{ name }}</strong>.{% endblocktrans %}
         </p>
@@ -51,6 +51,39 @@
         </p>
       {% endif %}
     </div>
+
+    {% if type_settings %}
+      {% comment %}The same question, and the same table, as duplicating an
+      archived event: a competition type is shared by every competition of its
+      discipline, so which value each setting ends up with is a decision only the
+      operator can make. Defaults to this system's value throughout — an import
+      is about the event in the file, and must not re-rank finished events that
+      have nothing to do with it just by being run.{% endcomment %}
+      <h2 class="form-section">{% trans "Settings that differ" %}</h2>
+      <div class="settings-section">
+        <p class="hint">
+          {% blocktrans with name=plan.existing_type.name count counter=type_settings|length trimmed %}
+            The file was run under a different value for {{ counter }} setting. Choose which one “{{ name }}” should have from now on.
+          {% plural %}
+            The file was run under different values for {{ counter }} settings. Choose which one “{{ name }}” should have from now on.
+          {% endblocktrans %}
+        </p>
+        {% trans "In the file" as incoming_label %}
+        {% include "competitions/_rule_diff.html" with differences=type_settings incoming_label=incoming_label incoming_default=False %}
+        {% if shared_with %}
+          {% comment %}Word for word the duplicate dialog's warning, variable name
+          included, so the two screens share one msgid rather than shipping two
+          translations of the same sentence that can drift apart.{% endcomment %}
+          <p class="dup-warning">
+            {% blocktrans count others=shared_with with type=plan.existing_type.name trimmed %}
+              What you keep is saved to “{{ type }}”, which {{ others }} other competition also uses — its results are evaluated by these settings too.
+            {% plural %}
+              What you keep is saved to “{{ type }}”, which {{ others }} other competitions also use — their results are evaluated by these settings too.
+            {% endblocktrans %}
+          </p>
+        {% endif %}
+      </div>
+    {% endif %}
 
     {% if plan.is_event %}
       <div class="settings-section">

@@ -124,35 +124,89 @@ def _labels():
     return {name: field.label for name, field in form.fields.items()}
 
 
-def rule_differences(competition):
-    """``[{field, label, archived, current, archived_display, current_display}]``
-    for every frozen setting whose value the live type no longer agrees with.
+def setting_differences(values, competition_type, *, skip=()):
+    """``[{field, label, incoming, current, incoming_display, current_display}]``
+    for every setting in *values* the live *competition_type* no longer agrees
+    with. Empty means nothing has moved and there is nothing to ask.
 
-    What the duplicate-for-editing dialog is built from: a copy of a signed-off
-    event has to be run under *some* live type, and the operator is the only one
-    who can say whether this year's discipline should keep the old number or the
-    new one. Empty means the type has not moved and there is nothing to ask.
+    Two callers, and they are the same question asked of settings that arrived
+    from two different places: a snapshot frozen onto an archived event
+    (``rule_differences`` below), and the competition type carried inside an
+    import file (``apps/transfer/importers.plan``). Both then face the same
+    problem — the live type is shared by every competition of the discipline, so
+    only the operator can say which value this year's discipline should hold —
+    and both put the answer in front of them with the same table
+    (``templates/competitions/_rule_diff.html``). One comparison rather than two:
+    a second one would start agreeing about fifteen settings and then quietly
+    stop the first time a sixteenth was added to only one of them.
+
+    ``skip`` names settings not to compare. The import passes ``name``: that is
+    what matched the two types in the first place, not a rule, and offering to
+    rewrite an in-use type's name because another club spells it with a capital
+    is a question with no right answer.
+
+    A key *missing* from ``values`` is skipped rather than read as ``None`` — an
+    export written before a field existed says nothing about it, which is not the
+    same as saying it was off.
     """
-    if not competition.archived_rules:
+    if not values:
         return []
-    live = competition.competition_type
     labels = _labels()
     rows = []
     for name in FROZEN_FIELDS:
-        archived = competition.archived_rules.get(name)
-        current = getattr(live, name)
-        if archived == current:
+        if name in skip or name not in values:
+            continue
+        incoming = values[name]
+        current = getattr(competition_type, name)
+        if incoming == current:
             continue
         field = CompetitionType._meta.get_field(name)
         rows.append({
             "field": name,
             "label": labels.get(name, name),
-            "archived": archived,
+            "incoming": incoming,
             "current": current,
-            "archived_display": _display(field, archived),
+            "incoming_display": _display(field, incoming),
             "current_display": _display(field, current),
         })
     return rows
+
+
+def rule_differences(competition):
+    """What a signed-off event was run under, where the live type has moved on.
+
+    What the duplicate-for-editing dialog is built from: a copy of a signed-off
+    event has to be run under *some* live type, and the operator is the only one
+    who can say whether this year's discipline should keep the old number or the
+    new one.
+    """
+    return setting_differences(
+        competition.archived_rules or {}, competition.competition_type
+    )
+
+
+def adopt_settings(competition_type, differences, chosen):
+    """Write the settings the operator kept back onto the live type.
+
+    ``chosen`` is ``{field: "incoming" | "current"}`` from the dialog; anything
+    absent keeps the current value, so a form that never rendered a row cannot
+    quietly change one — which is the safe default in both directions this is
+    used from. Returns the field names that actually moved.
+
+    Lives here rather than beside either caller because it is the other half of
+    ``setting_differences``: the rows it writes back are the rows that produced
+    the question, and splitting the two is how the radio value and the value the
+    save looks for drift apart.
+    """
+    moved = []
+    for row in differences:
+        if chosen.get(row["field"]) != "incoming":
+            continue
+        setattr(competition_type, row["field"], row["incoming"])
+        moved.append(row["field"])
+    if moved:
+        competition_type.save(update_fields=moved)
+    return moved
 
 
 def rule_summary(competition):

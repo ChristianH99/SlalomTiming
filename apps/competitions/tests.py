@@ -2027,7 +2027,7 @@ def test_the_dialog_lists_only_the_settings_that_have_actually_moved():
 
     moved = archiving.rule_differences(competition)
     assert [row["field"] for row in moved] == ["pylon_penalty"]
-    assert moved[0]["archived"] == 5 and moved[0]["current"] == 10
+    assert moved[0]["incoming"] == 5 and moved[0]["current"] == 10
 
 
 def test_keeping_an_archived_setting_writes_it_back_to_the_live_type(client):
@@ -2039,7 +2039,7 @@ def test_keeping_an_archived_setting_writes_it_back_to_the_live_type(client):
     competition.competition_type.save()
 
     client.post(reverse("competitions:duplicate", args=[competition.pk]),
-                {"mode": "full", "setting-pylon_penalty": "archived"})
+                {"mode": "full", "setting-pylon_penalty": "incoming"})
 
     competition.competition_type.refresh_from_db()
     assert competition.competition_type.pylon_penalty == 5
@@ -2075,7 +2075,7 @@ def test_a_setup_only_duplicate_never_touches_the_type(client):
     competition.competition_type.save()
 
     client.post(reverse("competitions:duplicate", args=[competition.pk]),
-                {"mode": "setup", "setting-pylon_penalty": "archived"})
+                {"mode": "setup", "setting-pylon_penalty": "incoming"})
 
     competition.competition_type.refresh_from_db()
     assert competition.competition_type.pylon_penalty == 10

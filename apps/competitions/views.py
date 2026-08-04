@@ -791,7 +791,7 @@ def duplicate_competition(request, pk):
             row["field"]: request.POST.get(f"setting-{row['field']}")
             for row in differences
         }
-        moved = duplication.adopt_settings(
+        moved = archiving.adopt_settings(
             original.competition_type, differences, chosen
         )
         if moved:

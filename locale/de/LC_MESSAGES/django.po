@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-02 16:44+0200\n"
+"POT-Creation-Date: 2026-08-02 20:39+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -34,7 +34,7 @@ msgstr "Wettbewerb einrichten"
 #: .\apps\accounts\pages.py:20 .\templates\base.html:49
 #: .\templates\participants\participant_list.html:3
 #: .\templates\participants\participant_list.html:4
-#: .\templates\transfer\import_review.html:78
+#: .\templates\transfer\import_review.html:113
 msgid "Participants"
 msgstr "Teilnehmer"
 
@@ -175,11 +175,11 @@ msgstr "Erforderliche Teilnehmerangaben"
 msgid "s"
 msgstr "s"
 
-#: .\apps\competitions\archiving.py:214
+#: .\apps\competitions\archiving.py:268
 msgid "Yes"
 msgstr "Ja"
 
-#: .\apps\competitions\archiving.py:214
+#: .\apps\competitions\archiving.py:268
 msgid "No"
 msgstr "Nein"
 
@@ -1165,34 +1165,28 @@ msgstr "Dieser Rechner"
 msgid "Where should the copies go?"
 msgstr "Wohin sollen die Kopien?"
 
-#: .\apps\transfer\importers.py:74
-msgid "Use the existing type and keep its current settings"
-msgstr "Vorhandenen Typ verwenden und dessen Einstellungen behalten"
+#: .\apps\transfer\importers.py:94
+msgid "Use the existing competition type"
+msgstr "Den vorhandenen Wettbewerbstyp verwenden"
 
-#: .\apps\transfer\importers.py:75
-msgid "Use the existing type and overwrite its settings from the file"
-msgstr ""
-"Vorhandenen Typ verwenden und dessen Einstellungen aus der Datei "
-"überschreiben"
-
-#: .\apps\transfer\importers.py:78
+#: .\apps\transfer\importers.py:95
 msgid "Register a separate competition type"
 msgstr "Eigenen Wettbewerbstyp anlegen"
 
-#: .\apps\transfer\importers.py:86
+#: .\apps\transfer\importers.py:103
 msgid "The export does not say what it contains."
 msgstr "Der Export gibt nicht an, was er enthält."
 
-#: .\apps\transfer\importers.py:91
+#: .\apps\transfer\importers.py:108
 msgid "The export has no competition type."
 msgstr "Der Export enthält keinen Wettbewerbstyp."
 
-#: .\apps\transfer\importers.py:93
+#: .\apps\transfer\importers.py:110
 msgid "The export claims to be an event but holds no competition."
 msgstr ""
 "Der Export gibt sich als Veranstaltung aus, enthält aber keinen Wettbewerb."
 
-#: .\apps\transfer\importers.py:162
+#: .\apps\transfer\importers.py:203
 #, python-format
 msgid ""
 "The export holds data this system can’t store together (%(detail)s). Nothing "
@@ -1201,12 +1195,12 @@ msgstr ""
 "Die Exportdatei enthält Daten, die dieses System nicht zusammen speichern "
 "kann (%(detail)s). Es wurde nichts importiert."
 
-#: .\apps\transfer\importers.py:191
+#: .\apps\transfer\importers.py:238
 #, python-format
 msgid "%(name)s (imported)"
 msgstr "%(name)s (importiert)"
 
-#: .\apps\transfer\importers.py:279
+#: .\apps\transfer\importers.py:326
 #, python-format
 msgid ""
 "%(name)s appears twice in the file (bib %(bib)s was merged into bib "
@@ -1326,15 +1320,15 @@ msgstr ""
 msgid "Participants imported."
 msgstr "Teilnehmer importiert."
 
-#: .\apps\transfer\views.py:310
+#: .\apps\transfer\views.py:319
 msgid "Import finished."
 msgstr "Import abgeschlossen."
 
-#: .\apps\transfer\views.py:330
+#: .\apps\transfer\views.py:339
 msgid "Import cancelled — nothing was changed."
 msgstr "Import abgebrochen – es wurde nichts geändert."
 
-#: .\apps\transfer\views.py:343
+#: .\apps\transfer\views.py:352
 msgid "The upload has expired. Please choose the file again."
 msgstr "Der Upload ist abgelaufen. Bitte wähle die Datei erneut aus."
 
@@ -1666,7 +1660,7 @@ msgstr "Export"
 
 #: .\templates\base.html:90 .\templates\transfer\import.html:3
 #: .\templates\transfer\import.html:4 .\templates\transfer\import.html:6
-#: .\templates\transfer\import_review.html:151
+#: .\templates\transfer\import_review.html:186
 msgid "Import"
 msgstr "Import"
 
@@ -1709,7 +1703,7 @@ msgstr "auswählen"
 #: .\templates\competitions\competition_classes.html:84
 #: .\templates\competitions\competition_confirm_delete.html:55
 #: .\templates\competitions\competition_confirm_switch.html:33
-#: .\templates\competitions\competition_duplicate.html:105
+#: .\templates\competitions\competition_duplicate.html:82
 #: .\templates\competitions\competition_duplicate_review.html:103
 #: .\templates\competitions\competition_general.html:55
 #: .\templates\competitions\competition_penalties.html:90
@@ -1797,7 +1791,7 @@ msgid "Manage competition types"
 msgstr "Wettbewerbstypen verwalten"
 
 #: .\templates\competitions\_competition_tiles.html:27
-#: .\templates\competitions\competition_duplicate.html:68
+#: .\templates\competitions\_rule_diff.html:21
 #: .\templates\transfer\export.html:19
 msgid "Current"
 msgstr "Aktuell"
@@ -1826,7 +1820,7 @@ msgid "Set as current"
 msgstr "Als aktuell festlegen"
 
 #: .\templates\competitions\_competition_tiles.html:68
-#: .\templates\competitions\competition_duplicate.html:104
+#: .\templates\competitions\competition_duplicate.html:81
 #: .\templates\competitions\competition_duplicate_review.html:102
 msgid "Duplicate"
 msgstr "Duplizieren"
@@ -1865,6 +1859,11 @@ msgstr "Erstellen Sie Ihren ersten."
 #: .\templates\competitions\_competition_tiles.html:91
 msgid "No competitions match your search."
 msgstr "Keine Wettbewerbe entsprechen Ihrer Suche."
+
+#: .\templates\competitions\_rule_diff.html:19
+#: .\templates\competitions\competition_archived_rules.html:38
+msgid "Setting"
+msgstr "Einstellung"
 
 #: .\templates\competitions\competition_add.html:3
 #: .\templates\competitions\competition_add.html:4
@@ -1935,13 +1934,8 @@ msgstr ""
 "diesen Werten ausgewertet und nicht mehr nach „%(type)s“, wie auch immer das "
 "künftig geändert wird."
 
-#: .\templates\competitions\competition_archived_rules.html:38
-#: .\templates\competitions\competition_duplicate.html:66
-msgid "Setting"
-msgstr "Einstellung"
-
 #: .\templates\competitions\competition_archived_rules.html:39
-#: .\templates\competitions\competition_duplicate.html:67
+#: .\templates\competitions\competition_duplicate.html:66
 msgid "As archived"
 msgstr "Wie archiviert"
 
@@ -1968,9 +1962,9 @@ msgid_plural ""
 "unaffected, but a new competition of the discipline would use the right-hand "
 "column."
 msgstr[0] ""
-"%(count)s davon hat sich seitdem in „%(type)s“ geändert — diese Veranstaltung "
-"bleibt davon unberührt, ein neuer Wettbewerb dieser Art würde aber die rechte "
-"Spalte verwenden."
+"%(count)s davon hat sich seitdem in „%(type)s“ geändert — diese "
+"Veranstaltung bleibt davon unberührt, ein neuer Wettbewerb dieser Art würde "
+"aber die rechte Spalte verwenden."
 msgstr[1] ""
 "%(count)s davon haben sich seitdem in „%(type)s“ geändert — diese "
 "Veranstaltung bleibt davon unberührt, ein neuer Wettbewerb dieser Art würde "
@@ -2258,7 +2252,8 @@ msgstr ""
 "aktiver Wettbewerb folgt seiner Wettbewerbsart — wählen Sie daher, welchen "
 "Wert jede Einstellung haben soll."
 
-#: .\templates\competitions\competition_duplicate.html:93
+#: .\templates\competitions\competition_duplicate.html:70
+#: .\templates\transfer\import_review.html:80
 #, python-format
 msgid ""
 "What you keep is saved to “%(type)s”, which %(others)s other competition "
@@ -2311,7 +2306,7 @@ msgstr[0] "%(counter)s neu anzulegen"
 msgstr[1] "%(counter)s neu anzulegen"
 
 #: .\templates\competitions\competition_duplicate_review.html:33
-#: .\templates\transfer\import_review.html:84
+#: .\templates\transfer\import_review.html:119
 #, python-format
 msgid "%(counter)s to review"
 msgid_plural "%(counter)s to review"
@@ -2319,14 +2314,14 @@ msgstr[0] "%(counter)s zu prüfen"
 msgstr[1] "%(counter)s zu prüfen"
 
 #: .\templates\competitions\competition_duplicate_review.html:60
-#: .\templates\transfer\import_review.html:108
+#: .\templates\transfer\import_review.html:143
 #, python-format
 msgid "Same person as <strong>%(name)s</strong>"
 msgstr "Dieselbe Person wie <strong>%(name)s</strong>"
 
 #: .\templates\competitions\competition_duplicate_review.html:67
 #: .\templates\transfer\import.html:87
-#: .\templates\transfer\import_review.html:115
+#: .\templates\transfer\import_review.html:150
 msgid "Detail"
 msgstr "Angabe"
 
@@ -4035,7 +4030,7 @@ msgstr[0] "%(counter)s zusammengeführt"
 msgstr[1] "%(counter)s zusammengeführt"
 
 #: .\templates\transfer\import_done.html:22
-#: .\templates\transfer\import_review.html:82
+#: .\templates\transfer\import_review.html:117
 #, python-format
 msgid "%(counter)s already registered"
 msgid_plural "%(counter)s already registered"
@@ -4101,11 +4096,35 @@ msgstr ""
 "Der Wettbewerbstyp <strong>%(name)s</strong> wird mit den in der Datei "
 "gespeicherten Regeln angelegt."
 
-#: .\templates\transfer\import_review.html:60
+#: .\templates\transfer\import_review.html:63
+msgid "Settings that differ"
+msgstr "Abweichende Einstellungen"
+
+#: .\templates\transfer\import_review.html:66
+#, python-format
+msgid ""
+"The file was run under a different value for %(counter)s setting. Choose "
+"which one “%(name)s” should have from now on."
+msgid_plural ""
+"The file was run under different values for %(counter)s settings. Choose "
+"which one “%(name)s” should have from now on."
+msgstr[0] ""
+"Bei %(counter)s Einstellung lief die Datei mit einem anderen Wert. Wählen Sie, "
+"welchen Wert „%(name)s“ ab jetzt haben soll."
+msgstr[1] ""
+"Bei %(counter)s Einstellungen lief die Datei mit anderen Werten. Wählen Sie, "
+"welche Werte „%(name)s“ ab jetzt haben soll."
+
+#: .\templates\transfer\import_review.html:72
+#: .\templates\transfer\import_review.html:152
+msgid "In the file"
+msgstr "In der Datei"
+
+#: .\templates\transfer\import_review.html:95
 msgid "Make the imported event the current one"
 msgstr "Importierte Veranstaltung als aktuelle setzen"
 
-#: .\templates\transfer\import_review.html:68
+#: .\templates\transfer\import_review.html:103
 #, python-format
 msgid ""
 "That replaces <strong>%(name)s</strong> on every screen, including these "
@@ -4114,7 +4133,7 @@ msgstr ""
 "Das ersetzt <strong>%(name)s</strong> auf jedem Bildschirm, auch auf denen "
 "dieser Personen:"
 
-#: .\templates\transfer\import_review.html:70
+#: .\templates\transfer\import_review.html:105
 msgid ""
 "Every timing screen, results table and marshal post follows it, including "
 "these people’s:"
@@ -4122,14 +4141,14 @@ msgstr ""
 "Jede Zeitmessungsansicht, jede Ergebnistabelle und jeder Streckenposten "
 "folgt ihm, auch die dieser Personen:"
 
-#: .\templates\transfer\import_review.html:81
+#: .\templates\transfer\import_review.html:116
 #, python-format
 msgid "%(counter)s new"
 msgid_plural "%(counter)s new"
 msgstr[0] "%(counter)s neu"
 msgstr[1] "%(counter)s neu"
 
-#: .\templates\transfer\import_review.html:88
+#: .\templates\transfer\import_review.html:123
 msgid ""
 "New participants are registered. Ones that match an existing record exactly "
 "are reused, so nobody is duplicated."
@@ -4137,11 +4156,11 @@ msgstr ""
 "Neue Teilnehmer werden erfasst. Wer genau einem vorhandenen Eintrag "
 "entspricht, wird wiederverwendet – so entstehen keine Dubletten."
 
-#: .\templates\transfer\import_review.html:93
+#: .\templates\transfer\import_review.html:128
 msgid "Participants to review"
 msgstr "Zu prüfende Teilnehmer"
 
-#: .\templates\transfer\import_review.html:94
+#: .\templates\transfer\import_review.html:129
 msgid ""
 "These look like people this system already knows, but the records disagree. "
 "Decide for each whether they are the same person, and which details to keep."
@@ -4150,18 +4169,14 @@ msgstr ""
 "voneinander ab. Entscheide jeweils, ob es dieselbe Person ist und welche "
 "Angaben behalten werden."
 
-#: .\templates\transfer\import_review.html:116
+#: .\templates\transfer\import_review.html:151
 msgid "Already registered"
 msgstr "Bereits erfasst"
 
-#: .\templates\transfer\import_review.html:117
-msgid "In the file"
-msgstr "In der Datei"
-
-#: .\templates\transfer\import_review.html:144
+#: .\templates\transfer\import_review.html:179
 msgid "A different person — register separately"
 msgstr "Eine andere Person – separat erfassen"
 
-#: .\templates\transfer\import_review.html:157
+#: .\templates\transfer\import_review.html:192
 msgid "Cancel import"
 msgstr "Import abbrechen"

@@ -58,34 +58,10 @@
                 setting should have.
               {% endblocktrans %}
             </p>
-            <table class="dup-diff">
-              <thead>
-                <tr>
-                  <th>{% trans "Setting" %}</th>
-                  <th>{% trans "As archived" %}</th>
-                  <th>{% trans "Current" %}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in differences %}
-                  <tr>
-                    <th scope="row">{{ row.label }}</th>
-                    <td>
-                      <label class="dup-diff-option">
-                        <input type="radio" name="setting-{{ row.field }}" value="archived" checked>
-                        <span>{{ row.archived_display }}</span>
-                      </label>
-                    </td>
-                    <td>
-                      <label class="dup-diff-option">
-                        <input type="radio" name="setting-{{ row.field }}" value="current">
-                        <span>{{ row.current_display }}</span>
-                      </label>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+            {% comment %}Defaults to the archived value: the point of copying a
+            signed-off event is to work on it as it was run.{% endcomment %}
+            {% trans "As archived" as incoming_label %}
+            {% include "competitions/_rule_diff.html" with incoming_label=incoming_label incoming_default=True %}
             {% if shared_with %}
               <p class="dup-warning">
                 {% blocktrans count others=shared_with with type=object.competition_type.name trimmed %}

@@ -31,8 +31,15 @@ from . import merge, schema
 from .schema import SCOPE_EVENT, SCOPE_TYPE, TransferError, load
 
 # What to do when the file's competition type already exists here by name.
-TYPE_REUSE = "reuse"      # keep this system's settings, just add to it
-TYPE_UPDATE = "update"    # overwrite this system's settings from the file
+#
+# There used to be a third: "reuse" (keep this system's settings) beside
+# "update" (take the file's, all of them). Both were the whole row at once,
+# which is the wrong grain — a file usually agrees about fourteen settings and
+# disagrees about one, and neither answer was right for that. TYPE_MERGE covers
+# both and everything between: the settings that differ are listed and answered
+# one at a time (see Plan.type_settings), so "keep mine" and "take theirs" are
+# now the two ends of the same control rather than the only two options.
+TYPE_MERGE = "merge"      # use the existing type, per-setting (see type_settings)
 TYPE_CREATE = "create"    # register a separate type under a free name
 
 
@@ -46,6 +53,12 @@ class Plan:
     existing_type: CompetitionType = None
     matches: list = field(default_factory=list)
     counts: dict = field(default_factory=dict)
+    # The competition-type settings the file and this system's type disagree
+    # about, in the shape the shared dialog renders (see
+    # apps/competitions/archiving.setting_differences). Empty when the type is
+    # new here, or when the two agree about everything — which is the ordinary
+    # case and asks the operator nothing.
+    type_settings: list = field(default_factory=list)
 
     @property
     def is_event(self):
@@ -64,19 +77,23 @@ class Plan:
         return merge.summarize(self.matches)
 
     def default_type_action(self):
-        return TYPE_REUSE if self.existing_type is not None else TYPE_CREATE
+        return TYPE_MERGE if self.existing_type is not None else TYPE_CREATE
 
     def type_actions(self):
-        """The choices the review step offers for the competition type."""
-        if self.existing_type is None:
+        """The choices the review step offers for the competition type.
+
+        None at all when the type is new here, and none when an *event* lands on
+        a type this system already has: the event has to be evaluated by some
+        type, and registering a second one under a made-up name to hold one
+        club's spelling of the same discipline is not a choice anybody wants.
+        What is still asked in that case is the settings — see ``type_settings``.
+        """
+        if self.existing_type is None or self.scope != SCOPE_TYPE:
             return []
-        choices = [
-            (TYPE_REUSE, _("Use the existing type and keep its current settings")),
-            (TYPE_UPDATE, _("Use the existing type and overwrite its settings from the file")),
+        return [
+            (TYPE_MERGE, _("Use the existing competition type")),
+            (TYPE_CREATE, _("Register a separate competition type")),
         ]
-        if self.scope == SCOPE_TYPE:
-            choices.append((TYPE_CREATE, _("Register a separate competition type")))
-        return choices
 
 
 def plan(document):
@@ -104,7 +121,28 @@ def plan(document):
             _participant_rows(participants), existing_type
         ),
         counts=_counts(document),
+        type_settings=_type_settings(type_row, existing_type),
     )
+
+
+def _type_settings(type_row, existing_type):
+    """What the file's competition type and this system's disagree about.
+
+    Compared on *decoded* values, not on the raw JSON: ``schema.load`` puts each
+    one back through its own field's ``to_python``, so a setting written by
+    another system is compared the way this one would store it rather than the
+    way JSON happened to spell it. It is also the check that stops a damaged
+    document here, at the door, instead of at commit time behind a screen the
+    operator has already worked through.
+
+    ``name`` is excluded — see archiving.setting_differences.
+    """
+    if existing_type is None:
+        return []
+    from apps.competitions import archiving
+
+    values = load(CompetitionType, type_row, schema.COMPETITION_TYPE_FIELDS)
+    return archiving.setting_differences(values, existing_type, skip=("name",))
 
 
 def _counts(document):
@@ -136,10 +174,12 @@ class Result:
 
 
 @transaction.atomic
-def commit(plan, resolutions, type_action=None, media=None, activate=False):
+def commit(plan, resolutions, type_action=None, type_settings=None, media=None,
+           activate=False):
     """Write the planned import. ``resolutions`` maps a participant ref to the
-    operator's decision (see merge.apply); anything missing falls back to that
-    match's default.
+    operator's decision (see merge.apply) and ``type_settings`` a competition-type
+    setting to the side they kept (see _resolve_type); anything missing falls back
+    to that match's default, and — for a setting — to this system's value.
 
     Every way a document can be wrong comes back as a TransferError, because the
     operator is holding a file somebody else's system wrote and a traceback tells
@@ -154,7 +194,7 @@ def commit(plan, resolutions, type_action=None, media=None, activate=False):
 
     try:
         result.competition_type = _resolve_type(
-            plan, type_action or plan.default_type_action())
+            plan, type_action or plan.default_type_action(), type_settings)
         participants = _resolve_participants(plan, resolutions, result)
 
         if plan.is_event:
@@ -168,18 +208,24 @@ def commit(plan, resolutions, type_action=None, media=None, activate=False):
     return result
 
 
-def _resolve_type(plan, action):
+def _resolve_type(plan, action, settings):
+    """The competition type this import lands in, reconciled with the file's.
+
+    ``settings`` is ``{field: "incoming" | "current"}`` — the operator's answer
+    per disagreeing setting. Anything they were not asked about, or did not
+    answer, keeps this system's value: the type is shared by every competition
+    of the discipline, so an import quietly moving a penalty amount would
+    re-rank results of events that have nothing to do with this file.
+    """
+    from apps.competitions import archiving
+
     row = plan.document.get("competition_type") or {}
     values = load(CompetitionType, row, schema.COMPETITION_TYPE_FIELDS)
 
     if plan.existing_type is not None and action != TYPE_CREATE:
-        if action == TYPE_UPDATE:
-            # `name` is what matched in the first place; leave it as this system
-            # spells it rather than reformatting an in-use type.
-            values.pop("name", None)
-            for name, value in values.items():
-                setattr(plan.existing_type, name, value)
-            plan.existing_type.save()
+        archiving.adopt_settings(
+            plan.existing_type, plan.type_settings, settings or {}
+        )
         return plan.existing_type
 
     values["name"] = _free_type_name(values.get("name") or plan.type_name)

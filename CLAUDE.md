@@ -337,8 +337,13 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          settings its type may have moved on from, and a live copy must run
                          under a *live* type. archiving.rule_differences() lists what disagrees
                          and the dialog asks per setting; what the operator keeps is written to
-                         the shared type, which is why the dialog also names how many other
-                         competitions that moves.
+                         the shared type (archiving.adopt_settings), which is why the dialog also
+                         names how many other competitions that moves. Neither half lives here:
+                         the *import* asks the identical question of the competition type inside
+                         a file, so the comparison, the write-back and the table
+                         (templates/competitions/_rule_diff.html) are shared — which is also why
+                         the radio value is `incoming`/`current` rather than named after either
+                         screen. See importers.py.
   assignment.py          Pluggable class-assignment strategies (Manual, Based-on-age) chosen per
                          competition via Competition.assignment_method; add a method in code only
                          (subclass AssignmentMethod + register). Competition.classes_for_participant()
@@ -1031,7 +1036,22 @@ apps/transfer/          Getting the data out: the **automatic backup** (the sect
                          text and are remapped explicitly — the Auto timing order's slot keys and a
                          ManualTieResolution's scope/members — since a stale pk there silently
                          misorders an imported event instead of failing. A type that already exists
-                         by name can be reused / overwritten from the file / registered separately.
+                         by name is **reconciled setting by setting** (issue #10): the export has
+                         always carried every CompetitionType parameter, so plan() compares them
+                         against the live row (archiving.setting_differences, `skip=("name",)` —
+                         the name is what matched the two, not a rule) and the review screen asks
+                         per disagreeing setting, with the same table the archived-duplicate dialog
+                         uses. It replaces an all-or-nothing reuse/overwrite pair that was the wrong
+                         grain: a file typically agrees about fourteen settings and differs on one,
+                         and neither answer was right for that one. The default throughout is *this
+                         system's* value — the type is shared by every competition of the
+                         discipline, so an import silently moving a penalty amount would re-rank
+                         finished events that have nothing to do with the file. Only the fields the
+                         plan says differ are read back, so a stale page cannot move a setting
+                         nobody was asked about. TYPE_CREATE (register separately) survives, and is
+                         offered for a *type* export only: an event has to be evaluated by some
+                         type, and a second one under a made-up name to hold another club's
+                         spelling of the same discipline is nobody's intent.
                          The results-PDF header/footer is the one field a document carries as
                          *markup*, and the settings page renders it into an editor — so
                          _import_results runs it through pdfmarkup.sanitize_header/footer, the same
@@ -1127,7 +1147,10 @@ apps/transfer/          Getting the data out: the **automatic backup** (the sect
                          `field-<ref>-<pk>-<name>` per differing field, keyed by candidate so
                          switching candidate can't inherit the other's choices. Anything absent
                          keeps that match's default, so an untouched review screen does the
-                         obvious thing.
+                         obvious thing. The competition type's settings are read the same way
+                         and out of the same input names as the archived duplicate dialog
+                         (`setting-<field>` = "incoming" / "current"), which is what lets the two
+                         screens share one table and one write-back.
 templates/transfer/      export.html (event + type tiles with what each file would contain),
                          import.html — both file pickers on one page: the export archive, then
                          the participant list, which doubles as the CSV specification (a folded
@@ -1135,9 +1158,11 @@ templates/transfer/      export.html (event + type tiles with what each file wou
                          — for the active competition's type, opened automatically when a file
                          was refused, plus the sample download and, after a POST, either the
                          result or the per-line list of what was wrong) —, import_review.html
-                         (counts, the competition-type choice, and one block per participant to
-                         review: candidate radios plus a field-by-field existing/imported diff
-                         table) and import_done.html.
+                         (counts, the competition-type choice, the competition-type settings that
+                         differ — competitions/_rule_diff.html, the same table the archived
+                         duplicate dialog uses — and one block per participant to review:
+                         candidate radios plus a field-by-field existing/imported diff table) and
+                         import_done.html.
 ```
 
 ### Timing UI (under the sidebar "Timing" menu)
