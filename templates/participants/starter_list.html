@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Starter list" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Starter list" %}{% endblock %}
+
+{% block topbar_actions %}
+  <button type="button" class="topbar-help" data-help-open aria-label="{% trans 'About this page' %}">?</button>
+{% endblock %}
+
+{% comment %}The whole overlay, not just its contents — base.html's block is
+empty, and supplying only the inner markup renders the help onto the page.{% endcomment %}
+{% block help_modal %}
+  <div class="modal-overlay help-modal" id="help-modal" hidden data-help-modal>
+    <div class="modal help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <button type="button" class="modal-close" data-help-close aria-label="{% trans 'Close' %}">×</button>
+      <h2 class="modal-title" id="help-title">{% trans "Starter list" %}</h2>
+      <div class="modal-body">
+        <p>{% trans "Who is starting, class by class, in bib order. Everybody here holds a bib: a competitor who has only drawn a number is registered and is not yet part of the field." %}</p>
+        <p>{% trans "A class marked Closed has had its bibs handed out and its list is final — anybody added to it afterwards needs a bib entered by hand. A class with no mark is still being registered, so its list is what has been handed out so far." %}</p>
+        <p>{% trans "This page only reads. Bibs are changed on the participants list, and handed out on the Bib assignment page." %}</p>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <h1 class="page-heading">{% trans "Starter list" %}</h1>
+
+  {% if not competition %}
+    <div class="notice">
+      <p>{% url 'competitions:list' as list_url %}{% blocktrans %}No competition is selected, so there is no field to show. <a href="{{ list_url }}">Pick a competition</a> first.{% endblocktrans %}</p>
+    </div>
+  {% elif classes %}
+    <p class="hint">{{ competition.rules.name }} · {{ competition.name }}</p>
+
+    <div class="bib-classes">
+      {% for row in classes %}
+        <div class="bib-class{% if row.competition_class.registration_closed %} bib-class--closed{% endif %}">
+          <div class="tile-head">
+            <h2 class="tile-name">{{ row.competition_class.display_name }}</h2>
+            {% comment %}The only label a class carries here. Absent means the
+            draw has not been run, which is a real state and not a missing
+            one — so nothing is shown rather than "open", which would read as a
+            second status somebody has to interpret.{% endcomment %}
+            {% if row.competition_class.registration_closed %}
+              <span class="status-pill status-pill--done">{% trans "Closed" %}</span>
+            {% endif %}
+          </div>
+          <div class="tile-classes">
+            {% comment %}Counted from this event's own entries, so unlike the
+            head count that used to sit on the Bib assignment cards this one is
+            true: a starter is somebody holding a bib here, not everybody ever
+            registered under the discipline.{% endcomment %}
+            <span class="status-pill">{% blocktrans count counter=row.starters|length %}{{ counter }} starter{% plural %}{{ counter }} starters{% endblocktrans %}</span>
+          </div>
+
+          {% if row.starters %}
+            <table class="starter-table">
+              <thead>
+                <tr>
+                  <th class="col-bib">{% trans "Bib" %}</th>
+                  <th class="col-name">{% trans "Name" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for starter in row.starters %}
+                  <tr>
+                    <th scope="row" class="col-bib">{{ starter.bib }}</th>
+                    <td class="col-name">{{ starter.name }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="hint">{% trans "Nobody in this class holds a bib yet." %}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>{% trans "No classes are running" %}</h2>
+      <p>{% trans "A starter list is per class, so a class has to be set to running before anybody can appear in one." %}</p>
+      <a class="button" href="{% url 'competitions:classes' %}">{% trans "Set up classes" %}</a>
+    </div>
+  {% endif %}
+{% endblock %}

@@ -1444,6 +1444,8 @@ class TestTheSidebarMarksOnePage:
         ('participants:list', {'participants', 'participants.list'}),
         ('participants:bib-assignment',
          {'participants', 'participants.bib_assignment'}),
+        ('participants:starter-list',
+         {'participants', 'participants.starter_list'}),
         ('timing:manual', {'timing', 'timing.manual'}),
         ('timing:auto', {'timing', 'timing.auto'}),
         ('timing:settings', {'timing', 'timing.settings'}),

@@ -1780,3 +1780,117 @@ def test_the_list_lifts_bibs_then_drawn_numbers_above_the_register(client):
     order = [p.first_name for p in response.context["participants"]]
 
     assert order == ["Yara", "Zoe", "Wilma", "Xena", "Alice", "Bob"]
+
+
+# --- the starter list --------------------------------------------------------
+
+
+def _starters(response, class_name):
+    """The (bib, name) rows the page shows for one class."""
+    for row in response.context["classes"]:
+        if row["competition_class"].name == class_name:
+            return [(s.bib, s.name) for s in row["starters"]]
+    raise AssertionError(f"class {class_name} is not on the page")
+
+
+def test_the_starter_list_shows_each_running_class_in_bib_order(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Zoe", bib=7, cclass=cclass)
+    _entered(comp, ctype, "Ada", bib=2, cclass=cclass)
+
+    response = client.get(reverse("participants:starter-list"))
+
+    assert response.status_code == 200
+    assert [bib for bib, _name in _starters(response, "1")] == [2, 7]
+
+
+def test_a_competitor_holding_only_a_drawn_number_is_not_a_starter(client):
+    """The invariant the page rests on, and the reason it needs no filter of its
+    own: an entry *is* a bib, so somebody still waiting for one has no entry."""
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", bib=1, cclass=cclass)
+    _entered(comp, ctype, "Bea", draw_number=4, cclass=cclass)
+
+    response = client.get(reverse("participants:starter-list"))
+
+    names = [name for _bib, name in _starters(response, "1")]
+    assert any("Ada" in name for name in names)
+    assert not any("Bea" in name for name in names)
+
+
+def test_a_class_is_marked_closed_only_once_its_bibs_are_drawn(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+
+    before = client.get(reverse("participants:starter-list")).content.decode()
+    assert "status-pill--done" not in before
+
+    from . import draw as draw_mod
+    draw_mod.commit(comp, cclass, draw_mod.plan(comp, cclass))
+
+    after = client.get(reverse("participants:starter-list")).content.decode()
+    assert "status-pill--done" in after
+
+
+def test_a_class_that_is_not_running_is_not_on_the_starter_list(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)          # only class 1 runs
+    idle = comp.classes.get(name="2")
+    _entered(comp, ctype, "Ada", bib=1, cclass=idle)
+
+    response = client.get(reverse("participants:starter-list"))
+
+    shown = [row["competition_class"].name for row in response.context["classes"]]
+    assert shown == ["1"]
+
+
+def test_the_starter_list_is_offered_without_drawn_numbers(client):
+    """It is a read of the field, not part of the draw — an event that hands out
+    bibs at the desk has a starter list like any other."""
+    ctype = make_type()
+    comp = make_competition(ctype)               # uses_draw_numbers stays False
+    comp.classes.filter(name="1").update(is_running=True)
+    _entered(comp, ctype, "Ada", bib=3, cclass=comp.classes.get(name="1"))
+
+    response = client.get(reverse("participants:starter-list"))
+
+    assert response.status_code == 200
+    assert [bib for bib, _name in _starters(response, "1")] == [3]
+    sidebar = response.content.decode()
+    assert reverse("participants:starter-list") in sidebar
+    assert reverse("participants:bib-assignment") not in sidebar
+
+
+def test_the_starter_list_says_so_when_no_competition_is_selected(client):
+    make_type()
+    response = client.get(reverse("participants:starter-list"))
+
+    assert response.status_code == 200
+    assert response.context["competition"] is None
+
+
+def test_an_archived_event_shows_the_field_it_froze(client):
+    """The archiving rule, asked of the newest reader of the field: a read goes
+    through entry_rows(), so editing a competitor afterwards must not rewrite
+    what a finished event started with."""
+    from apps.competitions import archiving
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    person = _entered(comp, ctype, "Ada", bib=1, cclass=cclass)
+    archiving.archive(comp)
+
+    person.last_name = "Changed-Afterwards"
+    person.save()
+
+    response = client.get(reverse("participants:starter-list"))
+
+    names = [name for _bib, name in _starters(response, "1")]
+    assert not any("Changed-Afterwards" in name for name in names)

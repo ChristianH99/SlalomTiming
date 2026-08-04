@@ -898,6 +898,35 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
 }
 /* Green, matching its pill: a card cannot state one status in two colours. */
 .bib-class--closed { border-left-color: var(--success-border); }
+
+/* The starter list's per-class table. Bib in a fixed, tabular column so the
+   numbers line up down the card and the name takes what is left. */
+.starter-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-5);
+}
+.starter-table th,
+.starter-table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--border-light);
+}
+.starter-table thead th {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-light);
+}
+.starter-table tbody th.col-bib {
+  width: 5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+.starter-table tbody tr:last-child th,
+.starter-table tbody tr:last-child td { border-bottom: 0; }
 .assign-form {
   display: flex;
   flex-wrap: wrap;

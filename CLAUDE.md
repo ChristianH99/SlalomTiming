@@ -512,6 +512,20 @@ apps/participants/
                          first in dispatch, because both end in the same redirect and only one
                          of them says why (and it is what config/archived_tests.py asks every
                          write door). See draw.py.
+                         **StarterListView** (`participants/starter-list/`, the other
+                         Participants sub-page) is the field as it stands: every running class,
+                         its starters in bib order, and the same green Closed pill — or no pill,
+                         because "not drawn yet" is a real state rather than a missing one and
+                         an "Open" label would be a second status to interpret. Offered whether
+                         or not the event draws numbers: it is a *read* of the field, not part
+                         of the draw. It applies no filter of its own — an EventEntry **is** a
+                         bib, so somebody holding only a drawn number simply has no entry and
+                         is not in the field — and everything comes from one
+                         `starters_by_class(running=…)`, which also means it reads an archived
+                         event through `entry_rows()` rather than the live table. Its starter
+                         count *is* trustworthy, unlike the class head count that came off the
+                         Bib assignment cards: a starter is somebody holding a bib here, not
+                         everybody ever registered under the discipline.
 apps/timing/            The current timing path is TimingSignal -> arrangement -> TimedRun,
                         surfaced on the live Manual timing view (`timing/manual/`, name `manual`) and the
                         Auto timing view — which share the same runs (see the sync below). The old

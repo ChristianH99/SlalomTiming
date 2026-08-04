@@ -53,6 +53,10 @@ ITEMS = {
     # rides on the Participants key for access control rather than being a page
     # every role would have to be granted separately (accounts/pages.py).
     "participants.bib_assignment": {("participants", "bib-assignment")},
+    # Who is actually starting, class by class — a read of the same field the
+    # bib assignment page hands out, offered whether or not the event draws
+    # numbers.
+    "participants.starter_list": {("participants", "starter-list")},
 
     "timing.manual": {("timing", "manual")},
     "timing.auto": {("timing", "auto")},
@@ -82,7 +86,8 @@ PARENTS = {
     # The Participants entry is the parent *and* links to the list, the way
     # Timing links to Manual timing. Its one child appears only while the event
     # draws numbers, so with the setting off the sidebar reads exactly as it did.
-    "participants": ("participants.list", "participants.bib_assignment"),
+    "participants": ("participants.list", "participants.bib_assignment",
+                     "participants.starter_list"),
     "timing": ("timing.manual", "timing.auto", "timing.settings"),
     "results": ("results.index", "results.overall", "results.class"),
     "backup": ("backup.backup", "backup.export", "backup.import"),
@@ -120,7 +125,7 @@ EVENT_SCOPED = frozenset({
     "dashboard",
     "setup.general", "setup.classes", "setup.runorder", "setup.penalties",
     "setup.results",
-    "participants.list", "participants.bib_assignment",
+    "participants.list", "participants.bib_assignment", "participants.starter_list",
     "timing.manual", "timing.auto",
     "marshal_posts",
     "results.index", "results.overall", "results.class",

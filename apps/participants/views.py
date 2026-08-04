@@ -567,6 +567,50 @@ class BibAssignmentView(View):
         return row
 
 
+class StarterListView(View):
+    """The field as it stands: every running class and who is in it.
+
+    A pure read, and the answer to "who is actually starting?" — which the
+    participants list cannot give, because that list is the *discipline's*
+    register and holds years of people who are not at this event.
+
+    Every starter here has a bib, and that is not a filter this view applies:
+    an ``EventEntry`` **is** a bib (the column is not nullable and clearing a
+    bib deletes the row), so somebody who has only drawn a number simply has no
+    entry yet and is not in the field. Which is the same reason the class's
+    "Closed" pill matters here — until the draw has run, the list is what has
+    been handed out so far rather than what the class will start with.
+
+    Everything comes from ``starters_by_class``: one read for the whole page, an
+    age-assigned event resolved the same as a manual one, and — the rule the
+    archive rests on — the *frozen* field for a signed-off event rather than the
+    live table, so this page shows what the event started with rather than who
+    has edited their record since.
+    """
+
+    template_name = "participants/starter_list.html"
+
+    def get(self, request):
+        competition = Competition.get_current()
+        if competition is None:
+            return render(request, self.template_name, {"competition": None})
+        running = competition._running_classes_ordered()
+        by_class = competition.starters_by_class(running=running)
+        return render(request, self.template_name, {
+            "competition": competition,
+            "classes": [
+                {
+                    "competition_class": cc,
+                    # Already in bib order, and one row per entry-in-a-class, so
+                    # somebody entered twice appears twice — which is what a
+                    # start list has to show.
+                    "starters": by_class.get(cc.pk, []),
+                }
+                for cc in running
+            ],
+        })
+
+
 class ParticipantDeleteView(RefuseWhenArchived, DeleteView):
     model = Participant
     template_name = "participants/participant_confirm_delete.html"

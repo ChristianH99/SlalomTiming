@@ -63,7 +63,7 @@ PAGE_URLS = {
     "participants": {
         ("participants", name)
         for name in ("list", "check", "set-bib", "set-draw", "set-dsq", "add",
-                     "edit", "delete", "bib-assignment")
+                     "edit", "delete", "bib-assignment", "starter-list")
     },
     "timing": {
         ("timing", name)
