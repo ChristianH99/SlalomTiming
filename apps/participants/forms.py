@@ -4,10 +4,21 @@ from django.utils.translation import gettext_lazy as _
 from apps.common import DateInput
 from apps.competitions.models import Competition, CompetitionType
 
-from .models import EventEntry, Participant
+from . import draw
+from .models import DrawNumber, EventEntry, Participant
 
 
 class ParticipantForm(forms.ModelForm):
+    # The number drawn at the registration desk. Sits beside the bib rather than
+    # replacing it: a drawn number decides what bib you get, a bib typed here is
+    # the operator overriding that, and both screens show the two together.
+    draw_number = forms.IntegerField(
+        required=False, min_value=1, max_value=draw.MAX_DRAW_NUMBER,
+        label=_("Draw number"),
+        help_text=_("The number this participant drew at registration. Bibs are handed "
+                    "out from it per class on the Bib assignment page."),
+    )
+
     # Class-assignment state prepared by setup_classes() and consumed by the
     # template and the view. "classes" itself is not a Django field — a manual
     # multi-entry selection is a repeatable list of pks, which a set-based field
@@ -122,10 +133,89 @@ class ParticipantForm(forms.ModelForm):
             chosen.append(cc)
         self.selected_classes = chosen
 
+    # --- drawn numbers (issue #11) -------------------------------------------
+    #
+    # The field is on the base form so both the add and the edit screen get it
+    # in the same place, and is *removed* rather than hidden when the
+    # competition does not draw numbers: a field nobody can see but the POST
+    # still accepts is a field that can still be set.
+
+    uses_draw_numbers = False
+
+    def setup_draw_number(self, competition):
+        """Show the drawn-number field, or take it off the form entirely."""
+        self.uses_draw_numbers = bool(competition and competition.uses_draw_numbers)
+        if not self.uses_draw_numbers:
+            self.fields.pop("draw_number", None)
+            return
+        if self.instance.pk:
+            existing = DrawNumber.objects.filter(
+                competition=competition, participant=self.instance
+            ).first()
+            if existing:
+                self.fields["draw_number"].initial = existing.number
+
+    def _clean_draw_number(self, cleaned):
+        number = cleaned.get("draw_number")
+        if not self.uses_draw_numbers or number is None or self.competition is None:
+            return
+        holder = draw.draw_number_taken_by(
+            self.competition, number,
+            exclude_participant=self.instance if self.instance.pk else None,
+        )
+        if holder is not None:
+            self.add_error("draw_number", _(
+                "Draw number %(number)s already belongs to %(name)s."
+            ) % {"number": number, "name": holder})
+
+    def _clean_closed_classes(self, cleaned):
+        """Once a class's bibs have been drawn there is no draw left to join, so
+        somebody added to it afterwards has to be given a bib by hand.
+
+        Only classes they are being *added* to are checked. A class they were
+        already in was part of the draw, and refusing to save a corrected phone
+        number because of it would make the whole screen unusable for the rest
+        of the event.
+        """
+        if self.competition is None or not self.competition.uses_draw_numbers:
+            return
+        if cleaned.get("bib_number"):
+            return
+        closed = draw.closed_classes(self.competition)
+        if not closed:
+            return
+        if self.class_mode == "manual":
+            chosen = self.selected_classes or []
+            # setup_classes only fills these for manual assignment.
+            already = {cc.pk for cc in self.initial_classes}
+        else:
+            # Age assignment keeps no assignment rows, so "were they already in
+            # it?" is asked of the class their *stored* date of birth resolves
+            # to. `self.instance` still holds the database values here — a
+            # ModelForm does not write the posted ones onto it until
+            # `_post_clean`, which runs after this.
+            born = cleaned.get("date_of_birth") or self.instance.date_of_birth
+            cc = (self.competition.class_for_birth_year(born.year) if born else None)
+            chosen = [cc] if cc else []
+            was = (
+                self.competition.class_for_birth_year(
+                    self.instance.date_of_birth.year)
+                if self.instance.pk and self.instance.date_of_birth else None
+            )
+            already = {was.pk} if was else set()
+        blocked = [cc for cc in chosen if cc.pk in closed and cc.pk not in already]
+        for cc in dict.fromkeys(blocked):
+            self.add_error("bib_number", _(
+                "Bibs for %(name)s have already been drawn, so a bib has to be "
+                "entered here by hand."
+            ) % {"name": cc.display_name()})
+
     def clean(self):
         cleaned = super().clean()
         self._clear_uncollected_fields(cleaned)
         self._resolve_class_selection(cleaned)
+        self._clean_draw_number(cleaned)
+        self._clean_closed_classes(cleaned)
         return cleaned
 
     class Meta:
@@ -181,10 +271,18 @@ class ParticipantCreateForm(ParticipantForm):
             self.instance.competition_type = self.competition.competition_type
         self.setup_type_fields()
         self.setup_classes(self.competition)
+        self.setup_draw_number(self.competition)
         if self.competition is None:
             self.fields["bib_number"].disabled = True
             self.fields["bib_number"].help_text = (
                 _("No competition is currently selected, so a bib can't be assigned yet.")
+            )
+        elif self.uses_draw_numbers:
+            # With a draw running, typing a bib here is the exception rather
+            # than the routine — say so where the operator is looking.
+            self.fields["bib_number"].help_text = _(
+                "Optional — leave empty to let the draw decide, or set a bib here to "
+                "keep this participant out of the automatic assignment."
             )
 
     def clean(self):
@@ -206,6 +304,7 @@ class ParticipantUpdateForm(ParticipantForm):
         self.entry = None
         self.setup_type_fields()
         self.setup_classes(competition)
+        self.setup_draw_number(competition)
 
         if competition is None:
             self._disable_bib_field(_("No competition is currently selected, so a bib can't be assigned."))
@@ -225,6 +324,11 @@ class ParticipantUpdateForm(ParticipantForm):
     def _disable_bib_field(self, reason):
         self.fields["bib_number"].disabled = True
         self.fields["bib_number"].help_text = reason
+        # Whatever stops a bib being assigned stops a number being drawn for the
+        # same reason — both belong to the competition this participant is not
+        # (or not yet) part of.
+        if "draw_number" in self.fields:
+            self.fields["draw_number"].disabled = True
 
     def clean(self):
         cleaned_data = super().clean()

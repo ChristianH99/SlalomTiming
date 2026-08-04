@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% load static i18n %}
+{% block title %}{% trans "Bib assignment" %} – Slalom Timing{% endblock %}
+{% block topbar_title %}{% trans "Bib assignment" %}{% endblock %}
+
+{% block topbar_actions %}
+  <button type="button" class="topbar-help" data-help-open aria-label="{% trans 'About this page' %}">?</button>
+{% endblock %}
+
+{% comment %}The block is empty in base.html — a page supplies the whole
+overlay, not just its contents. Supplying only the inner markup put the help
+text on the page itself, unstyled, under a stray heading.{% endcomment %}
+{% block help_modal %}
+  <div class="modal-overlay help-modal" id="help-modal" hidden data-help-modal>
+    <div class="modal help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <button type="button" class="modal-close" data-help-close aria-label="{% trans 'Close' %}">×</button>
+      <h2 class="modal-title" id="help-title">{% trans "Bib assignment" %}</h2>
+      <div class="modal-body">
+        <p>{% trans "The registration desk gives each participant the number they drew. This page turns those numbers into bibs, one class at a time." %}</p>
+        <p>{% trans "Closing a class hands out its bibs and ends its draw: somebody who registers for it afterwards has to be given a bib by hand on their own page. Bibs already typed in by hand are left exactly as they are, and the numbers around them are skipped." %}</p>
+        <p>{% trans "There is no way back from here. A bib assigned by mistake is an ordinary bib and can be corrected one at a time from the participants list." %}</p>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <h1 class="page-heading">{% trans "Bib assignment" %}</h1>
+
+  {% if plan %}
+    {% comment %}The preview, rendered by the server already open — the same shape
+    the type-change and penalty-loss confirmations use, so shell.js's
+    modalController takes it from here (focus in, Tab wrapped, Escape handled).
+    The class list stays behind it, so dismissing the question leaves the operator
+    where they pressed the button.{% endcomment %}
+    <div class="modal-overlay" data-modal-open>
+      <form class="modal modal--wide" method="post" role="dialog" aria-modal="true"
+            aria-labelledby="assign-title">
+        {% csrf_token %}
+        <input type="hidden" name="competition_class" value="{{ plan.competition_class.pk }}">
+        <input type="hidden" name="order" value="{{ chosen_order }}">
+        <input type="hidden" name="start" value="{{ chosen_start|default:'' }}">
+        {% if reassigning %}<input type="hidden" name="reassign" value="1">{% endif %}
+        <h2 class="modal-title" id="assign-title">
+          {% if reassigning %}
+            {% blocktrans with name=plan.competition_class.display_name %}Assign bibs for {{ name }} again?{% endblocktrans %}
+          {% else %}
+            {% blocktrans with name=plan.competition_class.display_name %}Assign bibs for {{ name }}?{% endblocktrans %}
+          {% endif %}
+        </h2>
+        <div class="modal-body">
+          {% if reassigning %}
+            {% comment %}Said before the table, because it is the reason to read
+            the table. Two separate consequences: numbers move, and — the one
+            that is easy not to think of — the times already recorded under them
+            do not move with their owners.{% endcomment %}
+            <p class="dup-warning">
+              {% blocktrans count n=released_count trimmed %}
+                This takes the bib back from {{ n }} competitor in this class who drew a number and hands it out again, so their number may change.
+              {% plural %}
+                This takes the bibs back from {{ n }} competitors in this class who drew a number and hands them out again, so their numbers may change.
+              {% endblocktrans %}
+              {% trans "A competitor with no drawn number keeps the bib that was typed in for them." %}
+            </p>
+            {% if released_times %}
+              <p class="dup-warning">
+                {% blocktrans count n=released_times trimmed %}
+                  <strong>{{ n }} recorded time</strong> is attached to those bibs. A time belongs to the number rather than to the person, so it will count for whoever wears that number afterwards.
+                {% plural %}
+                  <strong>{{ n }} recorded times</strong> are attached to those bibs. A time belongs to the number rather than to the person, so they will count for whoever wears those numbers afterwards.
+                {% endblocktrans %}
+              </p>
+            {% endif %}
+          {% endif %}
+          {% comment %}Just the table: who gets which number. There used to be a
+          count of the competitors this would pass over, but a class's members
+          are resolved from everybody registered under the discipline — years of
+          them — so that number described the archive, not the event.{% endcomment %}
+          {% if plan.assignments %}
+            <table class="dup-diff">
+              <thead>
+                <tr>
+                  <th>{% trans "Bib" %}</th>
+                  <th>{% trans "Draw" %}</th>
+                  <th>{% trans "Name" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in plan.assignments %}
+                  <tr>
+                    <th scope="row">{{ row.bib_number }}</th>
+                    <td>{{ row.draw_number|default:"–" }}</td>
+                    <td>
+                      {{ row.participant }}
+                      {% if row.kept %}<span class="hint">({% trans "already had this bib" %})</span>{% endif %}
+                      {% comment %}Which numbers actually move — the question a
+                      re-draw is really being asked.{% endcomment %}
+                      {% if row.previous_bib and row.previous_bib != row.bib_number %}
+                        <span class="hint">({% blocktrans with old=row.previous_bib %}was {{ old }}{% endblocktrans %})</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p>{% trans "Nobody in this class is waiting for a bib." %}</p>
+          {% endif %}
+
+          <p class="dup-warning">
+            {% if reassigning %}
+              {% trans "The class stays closed, and the numbers it is wearing now cannot be brought back except by drawing again." %}
+            {% else %}
+              {% trans "This cannot be undone from here: the class is closed and anybody registering for it afterwards has to be given a bib by hand." %}
+            {% endif %}
+          </p>
+        </div>
+        <div class="modal-actions">
+          <button type="submit" name="confirm" value="1" class="button">{% if reassigning %}{% trans "Assign again" %}{% else %}{% trans "Assign and close" %}{% endif %}</button>
+          <a class="button button--secondary" href="{% url 'participants:bib-assignment' %}">{% trans "Cancel" %}</a>
+        </div>
+      </form>
+    </div>
+  {% endif %}
+
+  {% if classes %}
+    <div class="bib-classes">
+      {% for row in classes %}
+        <div class="bib-class{% if row.competition_class.registration_closed %} bib-class--closed{% endif %}">
+          <div class="tile-head">
+            <h2 class="tile-name">{{ row.competition_class.display_name }}</h2>
+            {% if row.competition_class.registration_closed %}
+              <span class="status-pill status-pill--done">{% trans "Closed" %}</span>
+            {% endif %}
+          </div>
+          {% comment %}Drawn and with-a-bib only. Both are counted against *this*
+          competition's own rows, so both are true; a head count of the class was
+          not, because its members come from every participant ever registered
+          under the discipline.{% endcomment %}
+          <div class="tile-classes">
+            <span class="status-pill">{% blocktrans count counter=row.drawn %}{{ counter }} drawn{% plural %}{{ counter }} drawn{% endblocktrans %}</span>
+            <span class="status-pill">{% blocktrans count counter=row.with_bib %}{{ counter }} with a bib{% plural %}{{ counter }} with a bib{% endblocktrans %}</span>
+          </div>
+
+          {% if row.competition_class.registration_closed %}
+            <p class="hint">
+              {% blocktrans with when=row.competition_class.registration_closed_at|date:"d.m.Y H:i" %}Bibs were assigned on {{ when }}. New participants need a bib entered by hand.{% endblocktrans %}
+            </p>
+            {% comment %}Drawing again. The same two controls as the first draw,
+            because it is the same operation — the difference is that everybody
+            holding a drawn number gives their bib back first, which the
+            confirmation states before anything is written.{% endcomment %}
+            <form method="post" class="assign-form">
+              {% csrf_token %}
+              <input type="hidden" name="competition_class" value="{{ row.competition_class.pk }}">
+              <input type="hidden" name="reassign" value="1">
+              <p>
+                <label for="reorder-{{ row.competition_class.pk }}">{% trans "Order" %}</label>
+                <select id="reorder-{{ row.competition_class.pk }}" name="order">
+                  {% for value, label in order_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </p>
+              <p>
+                {% comment %}The lowest number the class already wears, so a
+                re-draw keeps its own block instead of moving the whole class to
+                the end of the field.{% endcomment %}
+                <label for="restart-{{ row.competition_class.pk }}">{% trans "First bib" %}</label>
+                <input type="number" min="1" id="restart-{{ row.competition_class.pk }}"
+                       name="start" value="{{ row.redraw_start|default:next_bib }}" inputmode="numeric">
+              </p>
+              <div class="actions">
+                <button class="button button--secondary" type="submit">{% trans "Assign bibs again…" %}</button>
+              </div>
+            </form>
+          {% else %}
+            <form method="post" class="assign-form">
+              {% csrf_token %}
+              <input type="hidden" name="competition_class" value="{{ row.competition_class.pk }}">
+              <p>
+                <label for="order-{{ row.competition_class.pk }}">{% trans "Order" %}</label>
+                <select id="order-{{ row.competition_class.pk }}" name="order">
+                  {% for value, label in order_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </p>
+              <p>
+                {% comment %}Prefilled with the next free bib, which is the answer
+                almost every time — drawing class after class simply continues the
+                numbering. Typed over when a class starts at 100.{% endcomment %}
+                <label for="start-{{ row.competition_class.pk }}">{% trans "First bib" %}</label>
+                <input type="number" min="1" id="start-{{ row.competition_class.pk }}"
+                       name="start" value="{{ next_bib }}" inputmode="numeric">
+              </p>
+              <div class="actions">
+                <button class="button" type="submit">{% trans "Assign bibs…" %}</button>
+              </div>
+            </form>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>{% trans "No classes are running" %}</h2>
+      <p>{% trans "Bibs are handed out per class, so a class has to be set to running before it can be drawn." %}</p>
+      <a class="button" href="{% url 'competitions:classes' %}">{% trans "Set up classes" %}</a>
+    </div>
+  {% endif %}
+{% endblock %}

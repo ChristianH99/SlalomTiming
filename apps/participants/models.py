@@ -121,6 +121,54 @@ class ClassAssignment(models.Model):
         return f"{self.participant} → {self.competition_class}"
 
 
+class DrawNumber(models.Model):
+    """The number a participant drew at the registration desk, before anybody
+    knows what bib they will wear.
+
+    Deliberately **not** a field on ``EventEntry``. An entry *is* a bib — the
+    column is not nullable and clearing a bib deletes the row — and the whole
+    app reads it that way: the start lists, the results, the timing views and
+    ``archiving.starter_snapshot`` all take "has an entry" to mean "has a number
+    on the day". Making the bib nullable so a drawn-but-unassigned competitor
+    could live in the same table would put a ``None`` bib into every one of
+    those readers, for a state that lasts until the draw closes.
+
+    So a drawn number is its own row, and it says exactly what it is: this
+    person is registered for this event and is waiting for a bib. They become a
+    starter at the moment ``apps/participants/draw.py`` gives them one — which
+    is the same moment they would have become one by being typed a bib by hand.
+
+    Both numbers are unique within the competition. The drawn one because two
+    people holding ticket 14 is the argument the draw exists to prevent; the bib
+    because it always was (``unique_bib_per_competition``).
+    """
+
+    participant = models.ForeignKey(
+        Participant, on_delete=models.CASCADE, related_name="draw_numbers"
+    )
+    competition = models.ForeignKey(
+        Competition, on_delete=models.CASCADE, related_name="draw_numbers"
+    )
+    number = models.PositiveIntegerField(_("Draw number"))
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["competition", "number"], name="unique_draw_number_per_competition"
+            ),
+            models.UniqueConstraint(
+                fields=["competition", "participant"],
+                name="unique_draw_participant_per_competition",
+            ),
+        ]
+
+    def __str__(self):
+        return f"draw {self.number} – {self.participant} @ {self.competition}"
+
+
 class EventEntry(models.Model):
     class Status(models.TextChoices):
         REGISTERED = "registered", _("Registered")

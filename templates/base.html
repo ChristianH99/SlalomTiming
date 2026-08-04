@@ -44,6 +44,17 @@
         {% endif %}
         {% if 'participants' in nav_pages %}
         <a class="shell-nav-item{% if 'participants' in nav_current %} active{% endif %}" href="{% url 'participants:list' %}">{% trans "Participants" %}</a>
+        {% comment %}The rest of registration, under Participants. Bib
+        assignment only while the event actually draws numbers — with the
+        setting off there is no draw to close and the page redirects, so
+        offering it would be a link to nowhere (issue #11). The starter list is
+        a read of the field and is offered either way.{% endcomment %}
+        <div class="shell-nav-sub">
+          {% if active_competition.uses_draw_numbers %}
+          <a class="shell-nav-subitem{% if 'participants.bib_assignment' in nav_current %} active{% endif %}" href="{% url 'participants:bib-assignment' %}">{% trans "Bib assignment" %}</a>
+          {% endif %}
+          <a class="shell-nav-subitem{% if 'participants.starter_list' in nav_current %} active{% endif %}" href="{% url 'participants:starter-list' %}">{% trans "Starter list" %}</a>
+        </div>
         {% endif %}
         {% comment %}Timing sub-pages will grow; Settings is kept last (future
         pages go above it).{% endcomment %}

@@ -208,6 +208,15 @@ class Competition(models.Model):
         help_text=_("Marshal posts enter penalties for their own area, instead of the "
         "timekeeper entering every penalty."),
     )
+    # Per *competition*, not per type, and deliberately: a club runs its club
+    # championship on drawn numbers and its training day on whoever walks up, out
+    # of the same discipline. A CompetitionType setting would make that one
+    # choice for both.
+    uses_draw_numbers = models.BooleanField(
+        default=False,
+        help_text=_("The registration desk gives each participant a drawn number, and "
+        "bibs are handed out from it per class (see Bib assignment)."),
+    )
     start_pattern = models.JSONField(
         default=list,
         blank=True,
@@ -662,10 +671,26 @@ class CompetitionClass(models.Model):
         help_text=_("The run this class belongs to. Classes sharing a run_position start "
         "together; runs execute in ascending order. Null when not placed."),
     )
+    # Set when the Bib assignment page hands this class its bibs. It is what
+    # makes drawing a number stop meaning anything for the class: the draw has
+    # happened, so somebody arriving afterwards can only be given a bib by hand.
+    # A timestamp rather than a flag, because "when was this drawn?" is the
+    # question asked of a bib order somebody disputes.
+    registration_closed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this class's registration was closed and its bibs assigned "
+        "from the drawn numbers. Null while it is still open (or when the "
+        "competition does not use drawn numbers at all).",
+    )
 
     class Meta:
         ordering = ["position", "name"]
         unique_together = ("competition", "name")
+
+    @property
+    def registration_closed(self):
+        return self.registration_closed_at is not None
 
     def __str__(self):
         return f"{self.competition} – {self.name}"

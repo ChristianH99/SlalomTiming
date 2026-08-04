@@ -2,6 +2,7 @@ import datetime
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.competitions.models import Competition, CompetitionType
 
@@ -1087,3 +1088,809 @@ def test_a_german_edit_screen_can_save_the_date_it_was_given(client, settings):
     assert response.status_code == 302, getattr(response, "context_data", {}).get("form")
     participant.refresh_from_db()
     assert participant.date_of_birth == datetime.date(2011, 7, 16)
+
+
+# --- drawn numbers and automatic bib assignment (issue #11) ------------------
+#
+# The registration desk stops deciding what number somebody wears. It hands out
+# a drawn number instead, and the bibs come from it later, per class. Three
+# things carry the whole feature and each has its own trap:
+#
+#   * a drawn number is *not* an EventEntry (an entry is a bib — see
+#     participants/models.DrawNumber for why that invariant is worth keeping),
+#   * a bib somebody already has is never moved by the draw,
+#   * closing a class ends its draw, and after that a bib has to be typed.
+
+
+def _drawing_competition(ctype=None):
+    """An event that draws numbers, with class 1 running."""
+    ctype = ctype or make_type()
+    comp = make_competition(ctype)
+    comp.uses_draw_numbers = True
+    comp.save(update_fields=["uses_draw_numbers"])
+    comp.classes.filter(name="1").update(is_running=True)
+    return comp
+
+
+def _entered(comp, ctype, first, draw_number=None, bib=None, cclass=None):
+    from .models import ClassAssignment, DrawNumber
+
+    person = Participant.objects.create(
+        competition_type=ctype, first_name=first, last_name="Racer",
+        date_of_birth=datetime.date(2010, 6, 15),
+    )
+    if cclass is not None:
+        ClassAssignment.objects.create(participant=person, competition_class=cclass)
+    if draw_number is not None:
+        DrawNumber.objects.create(
+            competition=comp, participant=person, number=draw_number)
+    if bib is not None:
+        EventEntry.objects.create(competition=comp, participant=person, bib_number=bib)
+    return person
+
+
+def test_a_drawn_number_is_not_a_starter():
+    """The invariant the whole design rests on: somebody who has drawn a number
+    but has no bib is registered and is *not* yet in the event."""
+    from .models import DrawNumber
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=3, cclass=cclass)
+
+    assert DrawNumber.objects.filter(competition=comp).count() == 1
+    assert EventEntry.objects.filter(competition=comp).count() == 0
+
+
+def test_bibs_are_handed_out_in_draw_order():
+    from . import draw
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=9, cclass=cclass)
+    _entered(comp, ctype, "Bea", draw_number=2, cclass=cclass)
+    _entered(comp, ctype, "Cy", draw_number=5, cclass=cclass)
+
+    plan = draw.plan(comp, cclass)
+    assert [(row.draw_number, row.bib_number) for row in plan.assignments] == [
+        (2, 1), (5, 2), (9, 3)
+    ]
+
+
+def test_the_order_can_be_reversed():
+    from . import draw
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=9, cclass=cclass)
+    _entered(comp, ctype, "Bea", draw_number=2, cclass=cclass)
+
+    plan = draw.plan(comp, cclass, order=draw.DESCENDING)
+    assert [(row.draw_number, row.bib_number) for row in plan.assignments] == [
+        (9, 1), (2, 2)
+    ]
+
+
+def test_assignment_can_start_at_a_chosen_bib():
+    from . import draw
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+    _entered(comp, ctype, "Bea", draw_number=2, cclass=cclass)
+
+    plan = draw.plan(comp, cclass, start=100)
+    assert [row.bib_number for row in plan.assignments] == [100, 101]
+
+
+def test_a_hand_typed_bib_is_kept_and_its_number_skipped():
+    """The rule that makes the manual bib field still mean something: a bib
+    somebody typed is a decision, so the draw allocates *around* it."""
+    from . import draw
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Champ", bib=2, cclass=cclass)
+    _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+    _entered(comp, ctype, "Bea", draw_number=2, cclass=cclass)
+
+    plan = draw.plan(comp, cclass, start=1)
+    assert [(row.participant.first_name, row.bib_number, row.kept)
+            for row in plan.assignments] == [
+        ("Ada", 1, False), ("Champ", 2, True), ("Bea", 3, False),
+    ]
+
+
+def test_a_bib_taken_by_another_class_is_stepped_over():
+    """A bib is unique to the *event*, so drawing a second class continues past
+    the first one's numbers rather than colliding with them."""
+    from . import draw
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    comp.classes.filter(name="2").update(is_running=True)
+    one, two = comp.classes.get(name="1"), comp.classes.get(name="2")
+    _entered(comp, ctype, "Ada", bib=1, cclass=one)
+    _entered(comp, ctype, "Bea", draw_number=4, cclass=two)
+
+    plan = draw.plan(comp, two)
+    assert [row.bib_number for row in plan.assignments] == [2]
+
+
+def test_somebody_with_neither_number_is_passed_over():
+    """Registered under the discipline but not part of this event: no drawn
+    number, no bib, so nothing to hand out. They are skipped rather than given
+    a number — and deliberately not counted anywhere either, because the class's
+    membership includes every participant of every past season."""
+    from . import draw
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    ada = _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+    forgotten = _entered(comp, ctype, "Nobody", cclass=cclass)
+
+    plan = draw.plan(comp, cclass)
+
+    assigned = [row.participant.pk for row in plan.assignments]
+    assert assigned == [ada.pk]
+    assert forgotten.pk not in assigned
+
+
+def test_committing_writes_the_bibs_and_closes_the_class():
+    from . import draw
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=2, cclass=cclass)
+    _entered(comp, ctype, "Bea", draw_number=1, cclass=cclass)
+
+    created = draw.commit(comp, cclass, draw.plan(comp, cclass))
+    cclass.refresh_from_db()
+
+    assert created == 2
+    assert cclass.registration_closed
+    assert sorted(
+        EventEntry.objects.filter(competition=comp)
+        .values_list("bib_number", flat=True)
+    ) == [1, 2]
+
+
+def test_age_based_assignment_is_drawn_too():
+    """The draw asks the *competition* which class somebody is in, so an event
+    that resolves classes by age is drawn like any other."""
+    from . import draw
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    comp.assignment_method = "age"
+    comp.save(update_fields=["assignment_method"])
+    cclass = comp.classes.get(name="1")
+    cclass.age_from, cclass.age_to = 10, 20
+    cclass.save()
+    _entered(comp, ctype, "Ada", draw_number=1)
+
+    plan = draw.plan(comp, cclass)
+    assert [row.bib_number for row in plan.assignments] == [1]
+
+
+# --- the page ----------------------------------------------------------------
+
+
+def test_the_page_is_hidden_when_the_event_does_not_draw_numbers(client):
+    ctype = make_type()
+    comp = make_competition(ctype)  # uses_draw_numbers is off by default
+
+    assert comp.uses_draw_numbers is False
+    assert client.get(reverse("participants:bib-assignment")).status_code == 302
+    assert reverse("participants:bib-assignment") not in \
+        client.get(reverse("participants:list")).content.decode()
+
+
+def test_the_page_is_offered_when_the_event_draws_numbers(client):
+    _drawing_competition()
+
+    assert client.get(reverse("participants:bib-assignment")).status_code == 200
+    assert reverse("participants:bib-assignment") in \
+        client.get(reverse("participants:list")).content.decode()
+
+
+def test_the_page_previews_before_it_writes(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+
+    page = client.post(reverse("participants:bib-assignment"), {
+        "competition_class": cclass.pk, "order": "asc", "start": "1",
+    })
+
+    assert page.status_code == 200
+    assert "Ada" in page.content.decode()
+    # Nothing written until the second post carries `confirm`.
+    assert EventEntry.objects.filter(competition=comp).count() == 0
+    cclass.refresh_from_db()
+    assert not cclass.registration_closed
+
+
+def test_the_page_writes_when_confirmed(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    person = _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+
+    client.post(reverse("participants:bib-assignment"), {
+        "competition_class": cclass.pk, "order": "asc", "start": "1", "confirm": "1",
+    })
+
+    cclass.refresh_from_db()
+    assert cclass.registration_closed
+    assert EventEntry.objects.get(competition=comp, participant=person).bib_number == 1
+
+
+def test_a_closed_class_is_not_drawn_twice(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+    client.post(reverse("participants:bib-assignment"), {
+        "competition_class": cclass.pk, "confirm": "1"})
+    _entered(comp, ctype, "Late", draw_number=2, cclass=cclass)
+
+    client.post(reverse("participants:bib-assignment"), {
+        "competition_class": cclass.pk, "confirm": "1"})
+
+    assert EventEntry.objects.filter(competition=comp).count() == 1
+
+
+# --- the participant form ----------------------------------------------------
+
+
+def test_the_draw_field_is_absent_when_the_event_does_not_draw_numbers():
+    ctype = make_type()
+    make_competition(ctype)
+    assert "draw_number" not in ParticipantCreateForm().fields
+
+
+def test_the_draw_field_is_offered_and_saved(client):
+    from .models import DrawNumber
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    assert "draw_number" in ParticipantCreateForm().fields
+
+    client.post(reverse("participants:add"),
+                participant_data(ctype, draw_number=7))
+
+    person = Participant.objects.get(license_number="LIC-001")
+    assert DrawNumber.objects.get(competition=comp, participant=person).number == 7
+    # A drawn number alone does not make them a starter.
+    assert not EventEntry.objects.filter(competition=comp, participant=person).exists()
+
+
+def test_two_people_cannot_hold_one_drawn_number():
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    _entered(comp, ctype, "Ada", draw_number=7)
+
+    form = ParticipantCreateForm(data=participant_data(ctype, draw_number=7))
+    assert not form.is_valid()
+    assert "draw_number" in form.errors
+
+
+def test_joining_a_closed_class_needs_a_bib_by_hand(client):
+    """Posted through the client rather than built by hand: the class selection
+    is read with ``getlist``, so a plain dict silently selects no class at all
+    and the rule under test never gets a class to look at."""
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    cclass.registration_closed_at = timezone.now()
+    cclass.save(update_fields=["registration_closed_at"])
+
+    data = participant_data(ctype, classes=[cclass.pk], draw_number=9)
+    refused = client.post(reverse("participants:add"), data)
+    assert refused.status_code == 200          # re-rendered, not saved
+    assert "bib_number" in refused.context_data["form"].errors
+    assert not Participant.objects.filter(license_number="LIC-001").exists()
+
+    data["bib_number"] = 50
+    accepted = client.post(reverse("participants:add"), data)
+    assert accepted.status_code == 302, accepted.context_data["form"].errors
+    person = Participant.objects.get(license_number="LIC-001")
+    assert EventEntry.objects.get(competition=comp, participant=person).bib_number == 50
+
+
+def test_editing_somebody_already_in_a_closed_class_is_not_blocked(client):
+    """The rule is about *joining* a closed class. Refusing to save a corrected
+    phone number for somebody who was in the draw would make the participant
+    screen unusable for the rest of the event."""
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    person = _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+    cclass.registration_closed_at = timezone.now()
+    cclass.save(update_fields=["registration_closed_at"])
+
+    response = client.post(
+        reverse("participants:edit", args=[person.pk]),
+        participant_data(ctype, first_name="Ada", last_name="Racer",
+                         classes=[cclass.pk], phone_number="0123"),
+    )
+
+    assert response.status_code == 302, response.context_data["form"].errors
+    person.refresh_from_db()
+    assert person.phone_number == "0123"
+
+
+def _age_drawing_competition(ctype=None):
+    """A drawing event that resolves classes by age, with class 1 covering
+    10-to-20-year-olds and its registration closed."""
+    ctype = ctype or make_type()
+    comp = _drawing_competition(ctype)
+    comp.assignment_method = "age"
+    comp.save(update_fields=["assignment_method"])
+    cclass = comp.classes.get(name="1")
+    cclass.age_from, cclass.age_to = 10, 20
+    cclass.registration_closed_at = timezone.now()
+    cclass.save()
+    return comp, cclass
+
+
+def test_age_assignment_also_needs_a_bib_for_a_closed_class(client):
+    ctype = make_type()
+    _age_drawing_competition(ctype)
+
+    refused = client.post(reverse("participants:add"), participant_data(ctype))
+    assert refused.status_code == 200
+    assert "bib_number" in refused.context_data["form"].errors
+
+
+def test_age_assignment_does_not_block_editing_an_existing_competitor(client):
+    """The mirror of the manual case, and the one that is easy to get wrong:
+    age assignment keeps no assignment rows, so "were they already in this
+    class?" has to be asked of their stored date of birth rather than of an
+    `initial_classes` list that is only ever filled for manual assignment."""
+    ctype = make_type()
+    comp, _cclass = _age_drawing_competition(ctype)
+    person = _entered(comp, ctype, "Ada", draw_number=1)
+
+    response = client.post(
+        reverse("participants:edit", args=[person.pk]),
+        participant_data(ctype, first_name="Ada", last_name="Racer",
+                         date_of_birth="2010-06-15", phone_number="0456"),
+    )
+
+    assert response.status_code == 302, response.context_data["form"].errors
+    person.refresh_from_db()
+    assert person.phone_number == "0456"
+
+
+# --- the drawn number, typed straight into the participant list --------------
+#
+# The desk's actual job. It used to need the full edit form per competitor,
+# which is the slow path on the one screen that is busy exactly when a queue is
+# forming in front of it.
+
+
+def _set_draw(client, participant, value):
+    return client.post(
+        reverse("participants:set-draw"),
+        data={"participant": participant.pk, "draw": value},
+        content_type="application/json",
+    ).json()
+
+
+def test_a_drawn_number_can_be_entered_from_the_list(client):
+    from .models import DrawNumber
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    person = _entered(comp, ctype, "Ada", cclass=comp.classes.get(name="1"))
+
+    assert _set_draw(client, person, "14") == {"ok": True, "draw": 14}
+    assert DrawNumber.objects.get(competition=comp, participant=person).number == 14
+
+
+def test_entering_a_drawn_number_creates_no_starter(client):
+    """The invariant, asked of the new door: a drawn number is not a bib, so
+    typing one must not quietly enter somebody in the event."""
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    person = _entered(comp, ctype, "Ada", cclass=comp.classes.get(name="1"))
+
+    _set_draw(client, person, "14")
+
+    assert not EventEntry.objects.filter(competition=comp, participant=person).exists()
+
+
+def test_a_drawn_number_can_be_changed_and_cleared(client):
+    from .models import DrawNumber
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    person = _entered(comp, ctype, "Ada", draw_number=3)
+
+    assert _set_draw(client, person, "9")["draw"] == 9
+    assert DrawNumber.objects.get(competition=comp, participant=person).number == 9
+
+    assert _set_draw(client, person, "") == {"ok": True, "draw": None}
+    assert not DrawNumber.objects.filter(competition=comp, participant=person).exists()
+
+
+def test_a_drawn_number_somebody_else_holds_is_refused_by_name(client):
+    """Two people on one ticket is the argument the draw exists to prevent, so
+    the answer names who has it — the desk can then go and ask them."""
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    _entered(comp, ctype, "Ada", draw_number=14)
+    bea = _entered(comp, ctype, "Bea")
+
+    result = _set_draw(client, bea, "14")
+
+    assert result["ok"] is False
+    assert "Ada" in result["error"]
+
+
+def test_keeping_your_own_drawn_number_is_not_a_clash(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    ada = _entered(comp, ctype, "Ada", draw_number=14)
+
+    assert _set_draw(client, ada, "14")["ok"] is True
+
+
+@pytest.mark.parametrize("value", ["0", "-3", "abc", "1e5", "10000"])
+def test_a_drawn_number_the_column_cannot_hold_is_refused(client, value):
+    """SQLite stores an out-of-range integer rather than refusing it, so the
+    bound is here — the same reason the timing views bound theirs."""
+    from .models import DrawNumber
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    person = _entered(comp, ctype, "Ada")
+
+    assert _set_draw(client, person, value)["ok"] is False
+    assert not DrawNumber.objects.filter(competition=comp, participant=person).exists()
+
+
+def test_the_endpoint_refuses_when_the_event_does_not_draw_numbers(client):
+    """Hiding the field is not the same as closing the door."""
+    from .models import DrawNumber
+
+    ctype = make_type()
+    comp = make_competition(ctype)          # uses_draw_numbers stays False
+    person = _entered(comp, ctype, "Ada")
+
+    response = client.post(
+        reverse("participants:set-draw"),
+        data={"participant": person.pk, "draw": "5"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert not DrawNumber.objects.filter(competition=comp).exists()
+
+
+def test_the_list_offers_a_draw_field_only_while_drawing(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    _entered(comp, ctype, "Ada", cclass=comp.classes.get(name="1"))
+
+    drawing = client.get(reverse("participants:list")).content.decode()
+    assert "data-draw-input" in drawing
+
+    comp.uses_draw_numbers = False
+    comp.save(update_fields=["uses_draw_numbers"])
+
+    plain = client.get(reverse("participants:list")).content.decode()
+    assert "data-draw-input" not in plain
+
+
+# --- drawing a class again ---------------------------------------------------
+
+
+def _closed_class_with_draws(ctype=None):
+    """A class already drawn once: Ada drew 1 and wears bib 1, Bea drew 2 and
+    wears bib 2, and Cid was typed bib 50 by hand without drawing."""
+    from . import draw as draw_mod
+
+    ctype = ctype or make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+    _entered(comp, ctype, "Bea", draw_number=2, cclass=cclass)
+    _entered(comp, ctype, "Cid", bib=50, cclass=cclass)
+    draw_mod.commit(comp, cclass, draw_mod.plan(comp, cclass))
+    cclass.refresh_from_db()
+    return comp, ctype, cclass
+
+
+def test_a_class_is_drawn_once_and_then_closed():
+    comp, _ctype, cclass = _closed_class_with_draws()
+
+    assert cclass.registration_closed
+    assert dict(
+        EventEntry.objects.filter(competition=comp)
+        .values_list("participant__first_name", "bib_number")
+    ) == {"Ada": 1, "Bea": 2, "Cid": 50}
+
+
+def test_redrawing_reverses_the_order_of_the_drawn_competitors():
+    """The point of the button: the same people, drawn the other way round."""
+    from . import draw as draw_mod
+
+    comp, _ctype, cclass = _closed_class_with_draws()
+
+    plan = draw_mod.plan(comp, cclass, order=draw_mod.DESCENDING, start=1,
+                         reassign=True)
+    draw_mod.commit(comp, cclass, plan)
+
+    assert dict(
+        EventEntry.objects.filter(competition=comp)
+        .values_list("participant__first_name", "bib_number")
+    ) == {"Bea": 1, "Ada": 2, "Cid": 50}
+
+
+def test_a_redraw_never_moves_a_bib_typed_in_by_hand():
+    """Cid never drew a number, so his 50 is a decision rather than an
+    allocation — the re-draw allocates around it exactly as the first one did."""
+    from . import draw as draw_mod
+
+    comp, _ctype, cclass = _closed_class_with_draws()
+
+    plan = draw_mod.plan(comp, cclass, order=draw_mod.DESCENDING, start=1,
+                         reassign=True)
+
+    kept = [row for row in plan.assignments if row.kept]
+    assert [(row.participant.first_name, row.bib_number) for row in kept] == [("Cid", 50)]
+    assert [person.first_name for person, _bib in plan.released] == ["Ada", "Bea"]
+
+
+def test_a_redraw_can_reuse_the_numbers_it_hands_back():
+    """The bibs being released are freed *before* the allocation, so a class
+    re-drawn into its own block keeps that block instead of being pushed past
+    it — which is what would happen if they still counted as taken."""
+    from . import draw as draw_mod
+
+    comp, _ctype, cclass = _closed_class_with_draws()
+
+    plan = draw_mod.plan(comp, cclass, order=draw_mod.DESCENDING, start=1,
+                         reassign=True)
+
+    assert sorted(row.bib_number for row in plan.assignments) == [1, 2, 50]
+
+
+def test_a_redraw_says_which_numbers_move():
+    from . import draw as draw_mod
+
+    comp, _ctype, cclass = _closed_class_with_draws()
+
+    plan = draw_mod.plan(comp, cclass, order=draw_mod.DESCENDING, start=1,
+                         reassign=True)
+
+    moved = {
+        row.participant.first_name: (row.previous_bib, row.bib_number)
+        for row in plan.assignments if row.previous_bib
+    }
+    assert moved == {"Ada": (1, 2), "Bea": (2, 1)}
+
+
+def test_a_redraw_keeps_a_whole_event_disqualification():
+    """The entry row is deleted and remade, but a DSQ is about the competitor,
+    not about the number they were wearing."""
+    from . import draw as draw_mod
+
+    comp, _ctype, cclass = _closed_class_with_draws()
+    EventEntry.objects.filter(
+        competition=comp, participant__first_name="Ada"
+    ).update(status=EventEntry.Status.DSQ)
+
+    draw_mod.commit(comp, cclass, draw_mod.plan(
+        comp, cclass, order=draw_mod.DESCENDING, start=1, reassign=True))
+
+    ada = EventEntry.objects.get(competition=comp, participant__first_name="Ada")
+    assert ada.status == EventEntry.Status.DSQ
+    assert ada.bib_number == 2
+
+
+def test_a_plain_draw_of_a_closed_class_is_still_refused(client):
+    """Only the re-draw door opens a closed class; the ordinary one stays shut."""
+    comp, _ctype, cclass = _closed_class_with_draws()
+
+    response = client.post(reverse("participants:bib-assignment"), {
+        "competition_class": cclass.pk, "order": "asc", "confirm": "1",
+    })
+
+    assert response.status_code == 302
+    assert EventEntry.objects.get(
+        competition=comp, participant__first_name="Ada").bib_number == 1
+
+
+def test_the_page_offers_a_redraw_only_once_a_class_is_closed(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+
+    open_page = client.get(reverse("participants:bib-assignment")).content.decode()
+    assert 'name="reassign"' not in open_page
+
+    from . import draw as draw_mod
+    draw_mod.commit(comp, cclass, draw_mod.plan(comp, cclass))
+
+    closed_page = client.get(reverse("participants:bib-assignment")).content.decode()
+    assert 'name="reassign"' in closed_page
+
+
+def test_the_redraw_confirmation_counts_the_times_it_would_move(client):
+    """The consequence that is easy to miss: a time is recorded against the
+    number, so re-drawing a class that has already run re-attaches its times."""
+    comp, _ctype, cclass = _closed_class_with_draws()
+    _record_a_run(comp, bib=1)
+    _record_a_run(comp, bib=2)
+
+    response = client.post(reverse("participants:bib-assignment"), {
+        "competition_class": cclass.pk, "order": "desc", "start": "1",
+        "reassign": "1",
+    })
+
+    assert response.status_code == 200
+    assert response.context["released_count"] == 2
+    assert response.context["released_times"] == 2
+
+
+def test_redrawing_through_the_page_writes_the_new_numbers(client):
+    comp, _ctype, cclass = _closed_class_with_draws()
+
+    response = client.post(reverse("participants:bib-assignment"), {
+        "competition_class": cclass.pk, "order": "desc", "start": "1",
+        "reassign": "1", "confirm": "1",
+    })
+
+    assert response.status_code == 302
+    assert EventEntry.objects.get(
+        competition=comp, participant__first_name="Bea").bib_number == 1
+
+
+# --- the list puts the event's own competitors first --------------------------
+
+
+def test_the_list_lifts_bibs_then_drawn_numbers_above_the_register(client):
+    """A busy desk wants the people who are actually here at the top: bibs in
+    bib order, then whoever has drawn and is waiting, then the rest of the
+    discipline's register by name."""
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Zoe", bib=2, cclass=cclass)
+    _entered(comp, ctype, "Yara", bib=1, cclass=cclass)
+    _entered(comp, ctype, "Xena", draw_number=9, cclass=cclass)
+    _entered(comp, ctype, "Wilma", draw_number=4, cclass=cclass)
+    _entered(comp, ctype, "Alice", cclass=cclass)      # neither
+    _entered(comp, ctype, "Bob", cclass=cclass)        # neither
+
+    response = client.get(reverse("participants:list"))
+    order = [p.first_name for p in response.context["participants"]]
+
+    assert order == ["Yara", "Zoe", "Wilma", "Xena", "Alice", "Bob"]
+
+
+# --- the starter list --------------------------------------------------------
+
+
+def _starters(response, class_name):
+    """The (bib, name) rows the page shows for one class."""
+    for row in response.context["classes"]:
+        if row["competition_class"].name == class_name:
+            return [(s.bib, s.name) for s in row["starters"]]
+    raise AssertionError(f"class {class_name} is not on the page")
+
+
+def test_the_starter_list_shows_each_running_class_in_bib_order(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Zoe", bib=7, cclass=cclass)
+    _entered(comp, ctype, "Ada", bib=2, cclass=cclass)
+
+    response = client.get(reverse("participants:starter-list"))
+
+    assert response.status_code == 200
+    assert [bib for bib, _name in _starters(response, "1")] == [2, 7]
+
+
+def test_a_competitor_holding_only_a_drawn_number_is_not_a_starter(client):
+    """The invariant the page rests on, and the reason it needs no filter of its
+    own: an entry *is* a bib, so somebody still waiting for one has no entry."""
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", bib=1, cclass=cclass)
+    _entered(comp, ctype, "Bea", draw_number=4, cclass=cclass)
+
+    response = client.get(reverse("participants:starter-list"))
+
+    names = [name for _bib, name in _starters(response, "1")]
+    assert any("Ada" in name for name in names)
+    assert not any("Bea" in name for name in names)
+
+
+def test_a_class_is_marked_closed_only_once_its_bibs_are_drawn(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    _entered(comp, ctype, "Ada", draw_number=1, cclass=cclass)
+
+    before = client.get(reverse("participants:starter-list")).content.decode()
+    assert "status-pill--done" not in before
+
+    from . import draw as draw_mod
+    draw_mod.commit(comp, cclass, draw_mod.plan(comp, cclass))
+
+    after = client.get(reverse("participants:starter-list")).content.decode()
+    assert "status-pill--done" in after
+
+
+def test_a_class_that_is_not_running_is_not_on_the_starter_list(client):
+    ctype = make_type()
+    comp = _drawing_competition(ctype)          # only class 1 runs
+    idle = comp.classes.get(name="2")
+    _entered(comp, ctype, "Ada", bib=1, cclass=idle)
+
+    response = client.get(reverse("participants:starter-list"))
+
+    shown = [row["competition_class"].name for row in response.context["classes"]]
+    assert shown == ["1"]
+
+
+def test_the_starter_list_is_offered_without_drawn_numbers(client):
+    """It is a read of the field, not part of the draw — an event that hands out
+    bibs at the desk has a starter list like any other."""
+    ctype = make_type()
+    comp = make_competition(ctype)               # uses_draw_numbers stays False
+    comp.classes.filter(name="1").update(is_running=True)
+    _entered(comp, ctype, "Ada", bib=3, cclass=comp.classes.get(name="1"))
+
+    response = client.get(reverse("participants:starter-list"))
+
+    assert response.status_code == 200
+    assert [bib for bib, _name in _starters(response, "1")] == [3]
+    sidebar = response.content.decode()
+    assert reverse("participants:starter-list") in sidebar
+    assert reverse("participants:bib-assignment") not in sidebar
+
+
+def test_the_starter_list_says_so_when_no_competition_is_selected(client):
+    make_type()
+    response = client.get(reverse("participants:starter-list"))
+
+    assert response.status_code == 200
+    assert response.context["competition"] is None
+
+
+def test_an_archived_event_shows_the_field_it_froze(client):
+    """The archiving rule, asked of the newest reader of the field: a read goes
+    through entry_rows(), so editing a competitor afterwards must not rewrite
+    what a finished event started with."""
+    from apps.competitions import archiving
+
+    ctype = make_type()
+    comp = _drawing_competition(ctype)
+    cclass = comp.classes.get(name="1")
+    person = _entered(comp, ctype, "Ada", bib=1, cclass=cclass)
+    archiving.archive(comp)
+
+    person.last_name = "Changed-Afterwards"
+    person.save()
+
+    response = client.get(reverse("participants:starter-list"))
+
+    names = [name for _bib, name in _starters(response, "1")]
+    assert not any("Changed-Afterwards" in name for name in names)

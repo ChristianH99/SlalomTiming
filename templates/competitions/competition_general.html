@@ -29,6 +29,17 @@
       {{ form.date }}
       {{ form.date.errors }}
     </p>
+    {% comment %}Whether the registration desk hands out drawn numbers instead of
+    bibs. Per event rather than per competition type — see the model.{% endcomment %}
+    <div class="settings-section">
+      <label class="switch">
+        {{ form.uses_draw_numbers }}
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+        <span class="switch-text">{{ form.uses_draw_numbers.label }}</span>
+      </label>
+      <p class="hint">{{ form.uses_draw_numbers.help_text }}</p>
+      {{ form.uses_draw_numbers.errors }}
+    </div>
     <div class="actions">
       <button class="button" type="submit">{% trans "Save" %}</button>
     </div>

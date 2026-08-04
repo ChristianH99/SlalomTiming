@@ -92,12 +92,13 @@ def copy(original, *, with_data, name=None, competitor_plan=None, resolutions=No
         competitor_plan = plan(original)
     with transaction.atomic():
         copy_ = _competition(original, name)
-        classes = _classes(original, copy_)
+        classes = _classes(original, copy_, keep_draw_state=with_data)
         _marshal_posts(original, copy_)
         if with_data:
             entries = _starters(
                 original, copy_, classes, competitor_plan, resolutions or {}
             )
+            _draw_numbers(original, copy_, entries)
             _timing(original, copy_, classes, entries)
             _results_config(original, copy_, classes, entries)
         else:
@@ -125,20 +126,65 @@ def _competition(original, name):
     )
 
 
-def _classes(original, copy_):
+def _classes(original, copy_, *, keep_draw_state):
     """``{original class pk: copied class}``. Keyed by pk, not by name: a class
     can be renamed to match another one, and a copy that merged two classes
     because they had ended up sharing a name would put their competitors and
-    times in one table with nothing to show for the loss."""
+    times in one table with nothing to show for the loss.
+
+    ``keep_draw_state`` is whether the copy inherits ``registration_closed_at``.
+    A full copy does — it is the same event, being corrected, and its bibs are
+    coming with it. A setup-only copy must not: that is *next year's* event, and
+    classes that arrived already closed would refuse every registration before
+    anybody had drawn a number.
+    """
     from .models import CompetitionClass
 
     copy_.classes.all().delete()  # drop the defaults Competition.save() seeded
     mapping = {}
     for source in original.classes.all():
+        values = _values(source, schema.CLASS_FIELDS)
+        if not keep_draw_state:
+            values["registration_closed_at"] = None
         mapping[source.pk] = CompetitionClass.objects.create(
-            competition=copy_, **_values(source, schema.CLASS_FIELDS)
+            competition=copy_, **values
         )
     return mapping
+
+
+def _draw_numbers(original, copy_, entries):
+    """The numbers this event's competitors drew at registration.
+
+    Only for a full copy, and only for competitors the copy actually took over.
+    Who those are has to be looked up rather than assumed: ``_starters`` resolves
+    each of the original's competitors against this system (they may have been
+    edited, deleted or re-registered since — see ``plan``), so the participant a
+    copied entry points at is often *not* the one the original drew for. The map
+    is therefore original-participant → copied-participant, keyed through the
+    entries, which are the only thing that names both sides.
+
+    Two of them merged onto one record keep the first number, as on the import
+    path: a merged person cannot have drawn twice.
+    """
+    from apps.participants.models import DrawNumber
+
+    source_participant = {
+        entry.pk: entry.participant_id for entry in original.entry_rows()
+    }
+    moved = {
+        source_participant[source_pk]: copied.participant_id
+        for source_pk, copied in entries.items()
+        if source_pk in source_participant
+    }
+    seen, rows = set(), []
+    for source in original.draw_numbers.all():
+        person = moved.get(source.participant_id)
+        if person is None or person in seen:
+            continue
+        seen.add(person)
+        rows.append(DrawNumber(
+            competition=copy_, participant_id=person, number=source.number))
+    DrawNumber.objects.bulk_create(rows)
 
 
 def _marshal_posts(original, copy_):

@@ -333,6 +333,10 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          Without that, duplicating old events would quietly keep every
                          competitor who ever raced alive against the retention sweep the field
                          exists for.
+                         The **drawn numbers** ride along with a full copy and the per-class
+                         closed flag with it; a *setup-only* copy clears that flag, because
+                         next year's event arriving with its classes already closed would
+                         refuse every registration before anybody had drawn a number.
                          The other half is the settings: an archived event was run under
                          settings its type may have moved on from, and a live copy must run
                          under a *live* type. archiving.rule_differences() lists what disagrees
@@ -373,7 +377,63 @@ apps/competitions/       Competition, CompetitionType, CompetitionClass; active-
                          can be checked before anyone is registered. Its controls are unnamed and
                          data-no-dirty, so they neither post nor trip the unsaved-changes guard.
 apps/participants/
-  models.py              Participant (personal/contact data) + EventEntry (bib +
+  draw.py                **Drawn numbers → bibs** (issue #11). The registration desk stops
+                         deciding what number somebody wears: it records the number they
+                         *drew*, and the bibs are handed out later, per class, in draw order
+                         (ascending or descending, starting at the next free bib or at one the
+                         operator types). Switched on per *competition*
+                         (Competition.uses_draw_numbers, on the General page — not on the
+                         type, because a club runs its championship on drawn numbers and its
+                         training day on whoever turns up, out of one discipline). Three rules
+                         carry it: a bib somebody already has is **never moved** (a hand-typed
+                         bib is a decision — a returning champion keeps number 1 — so the draw
+                         allocates *around* it and skips its number); a bib is unique to the
+                         **event**, so drawing the second class continues past the first's
+                         numbers; and closing a class (CompetitionClass.registration_closed_at)
+                         **ends its draw**, after which somebody registering for it has to be
+                         given a bib by hand (apps/participants/forms._clean_closed_classes,
+                         which checks only classes they are being *added* to — refusing to save
+                         a corrected phone number for somebody who was in the draw would make
+                         the screen unusable for the rest of the event). plan() writes nothing
+                         and commit() writes; the page shows the plan first, because closing is
+                         one-way and the table is the only place the numbers can be read before
+                         they are handed out. What a Plan deliberately does **not** carry is a
+                         count of the people it passes over: class membership is resolved from
+                         every participant registered under the *discipline*, which after a few
+                         seasons is mostly competitors who are not at this event at all. They
+                         have no drawn number and no bib here, so they are skipped correctly —
+                         but counting them said "14 will not get a bib" about a field of six.
+                         The draw was right and only the number was wrong, so the number is
+                         gone (the class cards keep `drawn` and `with_bib`, which are counted
+                         against this competition's own rows and are true).
+                         **Drawing again** (`plan(reassign=True)`) is how a closed class is
+                         corrected: everybody holding a *drawn* number gives their bib back and
+                         takes whatever the new order hands them, while a competitor with no
+                         drawn number keeps theirs — that number was typed by hand, which is a
+                         decision the draw has never been allowed to overwrite. The released
+                         bibs are freed from `taken` **before** the allocation, so a class
+                         re-drawn into its own block keeps that block instead of being pushed
+                         past it. It is modelled in `plan` rather than by clearing the bibs
+                         first because the page shows the plan before it writes, and a preview
+                         that had to delete rows to be accurate would not be a preview. Two
+                         things the confirmation must say, and does: whose number moves
+                         (`Assignment.previous_bib`), and how many recorded times ride on the
+                         numbers being handed back (`bibs.runs_recorded_under` — a time is
+                         recorded against the *number*, so re-drawing a class that has already
+                         run re-attaches its times to different people). `commit` deletes the
+                         released entries in the same transaction but carries their `status`
+                         across: a whole-event DSQ belongs to the competitor, not to the number
+                         they were wearing.
+                         Class membership is asked of the *competition*
+                         (classes_for_participant, with `running=` handed down once) so an
+                         age-assigned event draws like any other.
+  models.py              Participant (personal/contact data) + DrawNumber (the number drawn at
+                         registration, per competition — deliberately **not** a field on
+                         EventEntry, because an entry *is* a bib and the whole app reads it
+                         that way: start lists, results, timing and archiving all take "has an
+                         entry" to mean "had a number on the day". A nullable bib would put a
+                         None into every one of those readers for a state that lasts until the
+                         draw closes) + EventEntry (bib +
                          run status, unique per competition) + ClassAssignment (participant↔class
                          join for Manual assignment; explicit model, not a M2M, so duplicate
                          rows allow entering the same class multiple times).
@@ -399,6 +459,10 @@ apps/participants/
                          competition's) and renders only the groups that type collects; the
                          server blanks anything it doesn't. The required marker comes from
                          PARTICIPANT_INFO's static mandatory flag rather than field.required.
+                         The **drawn number** sits to the left of the bib on both screens (the
+                         order the desk fills them in) and is *removed* from the form, not
+                         hidden, when the event doesn't draw numbers — a field nobody can see
+                         that the POST still accepts is a field that can still be set.
   bibs.py                What a bib carries. TimedRun.bib_number is a loose integer, so a run
                          belongs to whoever wears the number: changing it hands every time
                          recorded under it to the next holder and takes on any time recorded
@@ -410,6 +474,15 @@ apps/participants/
                          is scoped to the active competition's type and only shows the columns
                          that type collects (club, licence); with no competition selected it
                          prompts to pick one and shows nothing, and adding is blocked.
+                         It is ordered so the people who are actually *at* this event rise to
+                         the top — bibs in bib order, then whoever has drawn a number and is
+                         waiting for one, then the rest of the discipline's register by name.
+                         Three bands out of `nulls_last` on each key in turn, with no CASE,
+                         because re-using the two subquery annotations inside one would
+                         evaluate them twice a row. static/js/participant_list.js `resort()`
+                         has to reproduce it exactly: the row re-sorts in place when a number
+                         is saved, so the comparison and the ORDER BY are one rule in two
+                         languages.
                          The list row's expandable detail also carries the **whole-event
                          disqualification** (participant_set_dsq -> EventEntry.status = DSQ,
                          scoped to the *active* competition, needing a bib): the wider of the
@@ -420,6 +493,39 @@ apps/participants/
                          ParticipantUpdateView re-renders its form with `confirm_bib_change`
                          (the modal) and participant_set_bib answers {"confirm": …} until the
                          caller sends `confirm` — see bibs.py.
+                         The same panel carries the **drawn number** (participant_set_draw),
+                         left of the bib, because entering it *is* the registration desk's job
+                         and opening a full edit form per competitor is the slow path on the one
+                         screen that is busy while a queue is forming at it. One saver in
+                         static/js/participant_list.js drives both fields (they differ in where
+                         they post, what the row shows and whether a change must be agreed to
+                         first — so those are a spec, not a second copy). The endpoint refuses
+                         outright when the event does not draw numbers: hiding the field is not
+                         the same as closing the door.
+                         **BibAssignmentView** (`participants/bib-assignment/`, a Participants
+                         *sub-page* in the sidebar — it is the second half of registration,
+                         which is also why it rides on the `participants` access key rather than
+                         being a page every role must be granted) is the draw's own screen: one
+                         card per running class with how far its registration has got, then
+                         preview → confirm. It redirects when the event doesn't draw numbers,
+                         and the sidebar only offers it then — but the *archived* refusal comes
+                         first in dispatch, because both end in the same redirect and only one
+                         of them says why (and it is what config/archived_tests.py asks every
+                         write door). See draw.py.
+                         **StarterListView** (`participants/starter-list/`, the other
+                         Participants sub-page) is the field as it stands: every running class,
+                         its starters in bib order, and the same green Closed pill — or no pill,
+                         because "not drawn yet" is a real state rather than a missing one and
+                         an "Open" label would be a second status to interpret. Offered whether
+                         or not the event draws numbers: it is a *read* of the field, not part
+                         of the draw. It applies no filter of its own — an EventEntry **is** a
+                         bib, so somebody holding only a drawn number simply has no entry and
+                         is not in the field — and everything comes from one
+                         `starters_by_class(running=…)`, which also means it reads an archived
+                         event through `entry_rows()` rather than the live table. Its starter
+                         count *is* trustworthy, unlike the class head count that came off the
+                         Bib assignment cards: a starter is somebody holding a bib here, not
+                         everybody ever registered under the discipline.
 apps/timing/            The current timing path is TimingSignal -> arrangement -> TimedRun,
                         surfaced on the live Manual timing view (`timing/manual/`, name `manual`) and the
                         Auto timing view — which share the same runs (see the sync below). The old
@@ -981,6 +1087,13 @@ apps/transfer/          Getting the data out: the **automatic backup** (the sect
                          validators, so a damaged document is refused as a TransferError instead
                          of writing a value SQLite accepts but every later read of the row chokes
                          on (the same trap the timing views' bounds close, from the other door).
+                         Carries the **draw** as well as the result of it (issue #11):
+                         Competition.uses_draw_numbers, CompetitionClass
+                         .registration_closed_at and a `draw_numbers` section. An event
+                         exported mid-registration has not handed its bibs out yet, so those
+                         rows are the *only* record of it — and a competitor holding a number
+                         with no bib is added to the participants the file carries explicitly,
+                         since an age-assigned event has no class-assignment row to imply them.
                          Deliberately not carried: auto timestamps,
                          MarshalPost.claim_token/claim_seen (which *device* holds a post) and
                          Competition.is_active (an import must never take over the running event).
@@ -1489,7 +1602,12 @@ each exist because breaking one is what made the app read as several products st
   shout theirs (`GERÄT`, `TRAININGSLÄUFE`) while every other page spoke normally — and all-caps is
   worst exactly where German puts its longest compounds. Likewise **page-level explanation lives
   behind the topbar "?"** (`topbar_actions` + `help_modal`, reusable by any page); only a hint
-  attached to a specific control stays in the body.
+  attached to a specific control stays in the body. `{% block help_modal %}` is **empty**
+  in base.html: a page supplies the *whole* overlay (`.modal-overlay.help-modal` +
+  `hidden` + `data-help-modal`, as in templates/timing/live.html), not just its contents.
+  Supplying only the inner markup does not fail — it renders the help text onto the page
+  under a stray heading, which is how the Bib assignment page shipped its explanation as
+  a paragraph nobody meant to write.
 - **Flame means "seconds added", and nothing else.** `--flame` is the penalty colour — the
   results table's `.rt-pen`, the penalty chips, `pdf._PEN` — so anything else wearing it
   reads as penalised. The Dashboard's *total time* did, which made a clean run look

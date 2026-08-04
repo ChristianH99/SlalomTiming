@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-01 23:12+0200\n"
+"POT-Creation-Date: 2026-08-04 21:08+0200\n"
 "PO-Revision-Date: 2026-07-23\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -497,21 +497,21 @@ msgstr ""
 msgid "Remove"
 msgstr "Entfernen"
 
-#: .\static\js\participant_list.js:59 .\static\js\participant_list.js:87
-#: .\static\js\participant_list.js:188 .\static\js\results_tie.js:132
+#: .\static\js\participant_list.js:73
+msgid "Change the bib?"
+msgstr "Startnummer ändern?"
+
+#: .\static\js\participant_list.js:74
+msgid "Change the bib"
+msgstr "Startnummer ändern"
+
+#: .\static\js\participant_list.js:108 .\static\js\participant_list.js:136
+#: .\static\js\participant_list.js:256 .\static\js\results_tie.js:132
 #: .\static\js\results_tie.js:135
 msgid "Could not save."
 msgstr "Konnte nicht gespeichert werden."
 
-#: .\static\js\participant_list.js:65
-msgid "Change the bib?"
-msgstr "Startnummer ändern?"
-
-#: .\static\js\participant_list.js:67
-msgid "Change the bib"
-msgstr "Startnummer ändern"
-
-#: .\static\js\participant_list.js:76 .\static\js\participant_list.js:184
+#: .\static\js\participant_list.js:125 .\static\js\participant_list.js:252
 msgid "Saved"
 msgstr "Gespeichert"
 

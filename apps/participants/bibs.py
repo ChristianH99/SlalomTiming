@@ -16,6 +16,16 @@ ask first, and this is what they count.
 from django.db.models import Q
 
 
+# What makes a run a *real* time rather than a placeholder the operator
+# pre-entered. One definition, because the single-bib and the many-bib question
+# below have to agree about what would be moved.
+HAS_A_TIME = (
+    Q(start_signal__isnull=False)
+    | Q(finish_signal__isnull=False)
+    | Q(manual_run_time__isnull=False)
+)
+
+
 def runs_recorded_for(competition, bib_number):
     """Runs in this competition that carry a real time under this bib.
 
@@ -28,11 +38,23 @@ def runs_recorded_for(competition, bib_number):
         return TimedRun.objects.none()
     return TimedRun.objects.filter(
         competition=competition, bib_number=bib_number
-    ).filter(
-        Q(start_signal__isnull=False)
-        | Q(finish_signal__isnull=False)
-        | Q(manual_run_time__isnull=False)
-    )
+    ).filter(HAS_A_TIME)
+
+
+def runs_recorded_under(competition, bib_numbers):
+    """The same question asked of a whole set of bibs, in one query.
+
+    A re-draw moves a class's numbers all at once, and asking per bib would be a
+    query per competitor on a confirmation screen.
+    """
+    from apps.timing.models import TimedRun
+
+    numbers = [bib for bib in bib_numbers if bib is not None]
+    if competition is None or not numbers:
+        return 0
+    return TimedRun.objects.filter(
+        competition=competition, bib_number__in=numbers
+    ).filter(HAS_A_TIME).count()
 
 
 def bib_change_effect(competition, old_bib, new_bib):
