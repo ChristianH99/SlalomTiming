@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.db import IntegrityError
+from django.db import models
 from django.db.models import F, OuterRef, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import redirect
@@ -14,7 +15,7 @@ from apps.common import json_body, safe_next
 from apps.competitions import archiving
 from apps.competitions.models import Competition, CompetitionClass, CompetitionType
 
-from . import draw
+from . import bibs, draw
 from .bibs import bib_change_effect
 from .forms import ParticipantCreateForm, ParticipantUpdateForm
 from .models import ClassAssignment, DrawNumber, EventEntry, Participant
@@ -213,8 +214,19 @@ class ParticipantListView(ListView):
         )
         if self.active_only:
             qs = qs.filter(entries__competition=self.competition)
-        # Bib order first (unassigned last), then last name as the tiebreaker.
-        qs = qs.order_by(F("current_bib").asc(nulls_last=True), "last_name", "first_name")
+        # Everybody who is part of this event rises to the top, which on a busy
+        # desk is the whole point of the screen: bibs first in bib order, then
+        # the competitors who have drawn a number and are waiting for one, in
+        # draw order, then the rest of the discipline's register alphabetically.
+        #
+        # No CASE needed — `nulls_last` on each key in turn produces exactly
+        # those three bands, and re-using the two subquery annotations inside a
+        # CASE would evaluate them twice per row.
+        qs = qs.order_by(
+            F("current_bib").asc(nulls_last=True),
+            F("current_draw").asc(nulls_last=True),
+            "last_name", "first_name",
+        )
 
         if self.query:
             qs = qs.filter(
@@ -309,6 +321,7 @@ class ParticipantListView(ListView):
         context["page_config"] = {
             "urls": {
                 "setBib": reverse("participants:set-bib"),
+                "setDraw": reverse("participants:set-draw"),
                 "setDsq": reverse("participants:set-dsq"),
             },
         }
@@ -453,35 +466,48 @@ class BibAssignmentView(View):
         if competition_class is None:
             messages.error(request, gettext("Choose a class to assign bibs for."))
             return redirect("participants:bib-assignment")
-        if competition_class.registration_closed:
+        # A re-draw is the *only* thing a closed class accepts, and only a
+        # closed class has anything to re-draw — so the two are one question.
+        reassign = bool(request.POST.get("reassign"))
+        if competition_class.registration_closed and not reassign:
             messages.error(request, gettext(
                 "%(name)s has already been assigned its bibs.")
                 % {"name": competition_class.display_name()})
             return redirect("participants:bib-assignment")
+        reassign = reassign and competition_class.registration_closed
 
         order = (request.POST.get("order") or draw.ASCENDING)
         if order not in dict(draw.ORDER_CHOICES):
             order = draw.ASCENDING
         start = _as_pk(request.POST.get("start")) if request.POST.get("start") else None
-        plan = draw.plan(self.competition, competition_class, order=order, start=start)
+        plan = draw.plan(self.competition, competition_class, order=order,
+                         start=start, reassign=reassign)
 
         if not request.POST.get("confirm"):
             return render(request, self.template_name,
-                          self._context(plan=plan, order=order, start=start))
+                          self._context(plan=plan, order=order, start=start,
+                                        reassign=reassign))
 
         created = draw.commit(self.competition, competition_class, plan)
-        messages.success(request, ngettext(
-            "%(count)s bib was assigned and %(name)s is closed.",
-            "%(count)s bibs were assigned and %(name)s is closed.",
-            created,
-        ) % {"count": created, "name": competition_class.display_name()})
+        if reassign:
+            messages.success(request, ngettext(
+                "%(count)s bib was assigned again in %(name)s.",
+                "%(count)s bibs were assigned again in %(name)s.",
+                created,
+            ) % {"count": created, "name": competition_class.display_name()})
+        else:
+            messages.success(request, ngettext(
+                "%(count)s bib was assigned and %(name)s is closed.",
+                "%(count)s bibs were assigned and %(name)s is closed.",
+                created,
+            ) % {"count": created, "name": competition_class.display_name()})
         return redirect("participants:bib-assignment")
 
-    def _context(self, plan=None, order=None, start=None):
+    def _context(self, plan=None, order=None, start=None, reassign=False):
         competition = self.competition
         running = competition._running_classes_ordered()
         taken = draw.taken_bibs(competition)
-        return {
+        context = {
             "competition": competition,
             "classes": [
                 self._class_row(competition, cc, running) for cc in running
@@ -493,26 +519,52 @@ class BibAssignmentView(View):
             "plan": plan,
             "chosen_order": order,
             "chosen_start": start,
+            "reassigning": reassign,
         }
+        if plan is not None and plan.released:
+            # What the operator is actually being asked to accept. The second
+            # number is the one that matters and is the easiest to not think of:
+            # a time is recorded against the *number*, so re-drawing a class
+            # that has already run hands its times to different people.
+            context["released_count"] = len(plan.released)
+            context["released_times"] = bibs.runs_recorded_under(
+                competition, [bib for _person, bib in plan.released]
+            )
+        return context
 
     @staticmethod
     def _class_row(competition, competition_class, running):
         """One class's card: how far its registration has got.
 
-        The three counts are what somebody deciding whether to close it is
-        actually asking — is everybody in, has everybody drawn, and how many
-        already hold a bib somebody typed in by hand.
+        Two counts, both asked of *this competition's* own rows: how many have
+        drawn a number, and how many already hold a bib. A head count of the
+        class used to sit beside them and could never be right — membership is
+        resolved from every participant registered under the discipline, so a
+        club's third season showed a class of 90 for an event with 12 starters.
         """
         people = draw._class_participants(competition, competition_class, running=running)
         pks = [person.pk for person in people]
-        return {
+        drawn_pks = list(
+            DrawNumber.objects.filter(
+                competition=competition, participant_id__in=pks
+            ).values_list("participant_id", flat=True)
+        )
+        row = {
             "competition_class": competition_class,
-            "total": len(people),
-            "drawn": DrawNumber.objects.filter(
-                competition=competition, participant_id__in=pks).count(),
+            "drawn": len(drawn_pks),
             "with_bib": EventEntry.objects.filter(
                 competition=competition, participant_id__in=pks).count(),
         }
+        if competition_class.registration_closed:
+            # A re-draw starts from the lowest number the class is already
+            # wearing, not from the next free bib in the event: the class keeps
+            # its own block instead of being pushed to the end of the field
+            # every time somebody corrects it.
+            lowest = EventEntry.objects.filter(
+                competition=competition, participant_id__in=drawn_pks
+            ).aggregate(models.Min("bib_number"))["bib_number__min"]
+            row["redraw_start"] = lowest
+        return row
 
 
 class ParticipantDeleteView(RefuseWhenArchived, DeleteView):
@@ -614,6 +666,79 @@ def participant_set_bib(request):
              % {"bib": bib}}
         )
     return JsonResponse({"ok": True, "bib": bib})
+
+
+@require_POST
+def participant_set_draw(request):
+    """Record / change / clear the number a participant drew at registration,
+    from the participant list's expandable detail.
+
+    The same door the bib uses, and beside it on the same screen, because the
+    desk fills the two in together: the drawn number when somebody registers,
+    the bib only if they are being given one by hand. Sending them through one
+    panel is what stops the drawn number being the one field that needs the full
+    edit form (issue #11).
+    """
+    competition = Competition.get_current()
+    if competition is None:
+        return JsonResponse({"ok": False, "error": gettext("No competition is selected.")}, status=400)
+    # The archived refusal comes first, before the draw-numbers check: "that
+    # event is signed off" is the true answer whichever other reason this
+    # endpoint would have turned the caller away for, and it is what
+    # config/archived_tests.py asks of every write door in the app.
+    refusal = archiving.refuse_json(competition)
+    if refusal is not None:
+        return refusal
+    # Not merely hidden: with the draw switched off this endpoint is not part of
+    # the app, and a POST to it is not a request the UI can make.
+    if not competition.uses_draw_numbers:
+        return JsonResponse(
+            {"ok": False, "error": gettext("This competition does not draw numbers.")},
+            status=400,
+        )
+    payload = json_body(request)
+    if not payload:
+        return JsonResponse({"ok": False, "error": gettext("Malformed request.")}, status=400)
+
+    participant = Participant.objects.filter(
+        pk=_as_pk(payload.get("participant")),
+        competition_type=competition.competition_type,
+    ).first()
+    if participant is None:
+        return JsonResponse({"ok": False, "error": gettext("Unknown participant.")}, status=404)
+
+    raw = str(payload.get("draw", "")).strip()
+    if raw == "":
+        # Clearing costs nothing and takes nothing with it — unlike a bib, a
+        # drawn number owns no times. It simply puts them back in the draw.
+        draw.set_draw_number(competition, participant, None)
+        return JsonResponse({"ok": True, "draw": None})
+
+    if not (raw.isascii() and raw.isdigit()) or int(raw) < 1:
+        return JsonResponse(
+            {"ok": False, "error": gettext("Draw number must be a positive number.")})
+    number = int(raw)
+    if number > draw.MAX_DRAW_NUMBER:
+        return JsonResponse({"ok": False, "error": gettext(
+            "Draw number must be %(max)s or less.") % {"max": draw.MAX_DRAW_NUMBER}})
+
+    holder = draw.draw_number_taken_by(
+        competition, number, exclude_participant=participant)
+    if holder is not None:
+        return JsonResponse({"ok": False, "error": gettext(
+            "Draw number %(number)s already belongs to %(name)s.")
+            % {"number": number, "name": holder}})
+
+    # Two desks can pass the check above at the same moment; the unique
+    # constraint decides, and without this that is a 500 rather than the same
+    # sentence the other path gives.
+    try:
+        draw.set_draw_number(competition, participant, number)
+    except IntegrityError:
+        return JsonResponse({"ok": False, "error": gettext(
+            "Draw number %(number)s was just taken by somebody else.")
+            % {"number": number}})
+    return JsonResponse({"ok": True, "draw": number})
 
 
 @require_POST

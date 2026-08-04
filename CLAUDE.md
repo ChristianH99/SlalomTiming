@@ -395,10 +395,36 @@ apps/participants/
                          which checks only classes they are being *added* to — refusing to save
                          a corrected phone number for somebody who was in the draw would make
                          the screen unusable for the rest of the event). plan() writes nothing
-                         and commit() writes; the page shows the plan first, because it is the
-                         only screen that can name the competitors the draw would **miss**
-                         (registered, no drawn number, no bib) before they are simply absent
-                         from a start list. Class membership is asked of the *competition*
+                         and commit() writes; the page shows the plan first, because closing is
+                         one-way and the table is the only place the numbers can be read before
+                         they are handed out. What a Plan deliberately does **not** carry is a
+                         count of the people it passes over: class membership is resolved from
+                         every participant registered under the *discipline*, which after a few
+                         seasons is mostly competitors who are not at this event at all. They
+                         have no drawn number and no bib here, so they are skipped correctly —
+                         but counting them said "14 will not get a bib" about a field of six.
+                         The draw was right and only the number was wrong, so the number is
+                         gone (the class cards keep `drawn` and `with_bib`, which are counted
+                         against this competition's own rows and are true).
+                         **Drawing again** (`plan(reassign=True)`) is how a closed class is
+                         corrected: everybody holding a *drawn* number gives their bib back and
+                         takes whatever the new order hands them, while a competitor with no
+                         drawn number keeps theirs — that number was typed by hand, which is a
+                         decision the draw has never been allowed to overwrite. The released
+                         bibs are freed from `taken` **before** the allocation, so a class
+                         re-drawn into its own block keeps that block instead of being pushed
+                         past it. It is modelled in `plan` rather than by clearing the bibs
+                         first because the page shows the plan before it writes, and a preview
+                         that had to delete rows to be accurate would not be a preview. Two
+                         things the confirmation must say, and does: whose number moves
+                         (`Assignment.previous_bib`), and how many recorded times ride on the
+                         numbers being handed back (`bibs.runs_recorded_under` — a time is
+                         recorded against the *number*, so re-drawing a class that has already
+                         run re-attaches its times to different people). `commit` deletes the
+                         released entries in the same transaction but carries their `status`
+                         across: a whole-event DSQ belongs to the competitor, not to the number
+                         they were wearing.
+                         Class membership is asked of the *competition*
                          (classes_for_participant, with `running=` handed down once) so an
                          age-assigned event draws like any other.
   models.py              Participant (personal/contact data) + DrawNumber (the number drawn at
@@ -448,6 +474,15 @@ apps/participants/
                          is scoped to the active competition's type and only shows the columns
                          that type collects (club, licence); with no competition selected it
                          prompts to pick one and shows nothing, and adding is blocked.
+                         It is ordered so the people who are actually *at* this event rise to
+                         the top — bibs in bib order, then whoever has drawn a number and is
+                         waiting for one, then the rest of the discipline's register by name.
+                         Three bands out of `nulls_last` on each key in turn, with no CASE,
+                         because re-using the two subquery annotations inside one would
+                         evaluate them twice a row. static/js/participant_list.js `resort()`
+                         has to reproduce it exactly: the row re-sorts in place when a number
+                         is saved, so the comparison and the ORDER BY are one rule in two
+                         languages.
                          The list row's expandable detail also carries the **whole-event
                          disqualification** (participant_set_dsq -> EventEntry.status = DSQ,
                          scoped to the *active* competition, needing a bib): the wider of the
@@ -458,9 +493,20 @@ apps/participants/
                          ParticipantUpdateView re-renders its form with `confirm_bib_change`
                          (the modal) and participant_set_bib answers {"confirm": …} until the
                          caller sends `confirm` — see bibs.py.
-                         **BibAssignmentView** (`participants/bib-assignment/`, sidebar "Bib
-                         assignment", below Participants) is the draw's own screen: one card
-                         per running class with how far its registration has got, then
+                         The same panel carries the **drawn number** (participant_set_draw),
+                         left of the bib, because entering it *is* the registration desk's job
+                         and opening a full edit form per competitor is the slow path on the one
+                         screen that is busy while a queue is forming at it. One saver in
+                         static/js/participant_list.js drives both fields (they differ in where
+                         they post, what the row shows and whether a change must be agreed to
+                         first — so those are a spec, not a second copy). The endpoint refuses
+                         outright when the event does not draw numbers: hiding the field is not
+                         the same as closing the door.
+                         **BibAssignmentView** (`participants/bib-assignment/`, a Participants
+                         *sub-page* in the sidebar — it is the second half of registration,
+                         which is also why it rides on the `participants` access key rather than
+                         being a page every role must be granted) is the draw's own screen: one
+                         card per running class with how far its registration has got, then
                          preview → confirm. It redirects when the event doesn't draw numbers,
                          and the sidebar only offers it then — but the *archived* refusal comes
                          first in dispatch, because both end in the same redirect and only one
@@ -1542,7 +1588,12 @@ each exist because breaking one is what made the app read as several products st
   shout theirs (`GERÄT`, `TRAININGSLÄUFE`) while every other page spoke normally — and all-caps is
   worst exactly where German puts its longest compounds. Likewise **page-level explanation lives
   behind the topbar "?"** (`topbar_actions` + `help_modal`, reusable by any page); only a hint
-  attached to a specific control stays in the body.
+  attached to a specific control stays in the body. `{% block help_modal %}` is **empty**
+  in base.html: a page supplies the *whole* overlay (`.modal-overlay.help-modal` +
+  `hidden` + `data-help-modal`, as in templates/timing/live.html), not just its contents.
+  Supplying only the inner markup does not fail — it renders the help text onto the page
+  under a stray heading, which is how the Bib assignment page shipped its explanation as
+  a paragraph nobody meant to write.
 - **Flame means "seconds added", and nothing else.** `--flame` is the penalty colour — the
   results table's `.rt-pen`, the penalty chips, `pdf._PEN` — so anything else wearing it
   reads as penalised. The Dashboard's *total time* did, which made a clean run look

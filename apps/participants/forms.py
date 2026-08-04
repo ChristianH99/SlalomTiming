@@ -13,7 +13,8 @@ class ParticipantForm(forms.ModelForm):
     # replacing it: a drawn number decides what bib you get, a bib typed here is
     # the operator overriding that, and both screens show the two together.
     draw_number = forms.IntegerField(
-        required=False, min_value=1, label=_("Draw number"),
+        required=False, min_value=1, max_value=draw.MAX_DRAW_NUMBER,
+        label=_("Draw number"),
         help_text=_("The number this participant drew at registration. Bibs are handed "
                     "out from it per class on the Bib assignment page."),
     )

@@ -1441,7 +1441,9 @@ class TestTheSidebarMarksOnePage:
         # The page this was all about: a Competition Setup page served by the
         # results app.
         ('results:settings', {'setup', 'setup.results'}),
-        ('participants:list', {'participants'}),
+        ('participants:list', {'participants', 'participants.list'}),
+        ('participants:bib-assignment',
+         {'participants', 'participants.bib_assignment'}),
         ('timing:manual', {'timing', 'timing.manual'}),
         ('timing:auto', {'timing', 'timing.auto'}),
         ('timing:settings', {'timing', 'timing.settings'}),

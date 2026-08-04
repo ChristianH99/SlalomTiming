@@ -46,6 +46,12 @@ from .models import DrawNumber, EventEntry
 # far below the column's limit: the point is that a typo cannot spin.
 MAX_BIB = 9999
 
+# The drawn number is typed at the desk and stored in a PositiveIntegerField,
+# which SQLite will hold whatever the size of. Bounded at the door for the same
+# reason the timing views bound theirs: an absurd value is accepted on the way
+# in and then raises on every later read of the row.
+MAX_DRAW_NUMBER = 9999
+
 ASCENDING = "asc"
 DESCENDING = "desc"
 
@@ -65,21 +71,32 @@ class Assignment:
     # True when they already had this bib before the draw ran — typed in by
     # hand at the desk. Shown as such, and left alone.
     kept: bool = False
+    # Re-draws only: the bib they were wearing before. The preview shows it
+    # beside the new one, because "which numbers actually move" is the question
+    # somebody re-drawing a class is really asking.
+    previous_bib: int = None
 
 
 @dataclass
 class Plan:
     """What closing this class would do, before anything is written.
 
-    ``missing`` is the competitors of the class who have neither a drawn number
-    nor a bib. They are the reason this is a plan and not a button: an operator
-    who has not finished entering the draw would otherwise close the class and
-    find out afterwards, from a start list with people absent from it.
+    Only ``assignments`` — the competitors who would come out of this holding a
+    bib. It deliberately does not count the ones it passes over: a class's
+    membership is resolved from every participant registered under the
+    *discipline*, which after a few seasons is mostly people who are not at this
+    event at all. They have no drawn number and no bib here, so they are skipped
+    correctly and counting them said "14 competitors will not get a bib" about a
+    field of six. The draw is right; the number was the only thing that was
+    wrong, so the number is gone.
     """
 
     competition_class: object
     assignments: list = field(default_factory=list)
-    missing: list = field(default_factory=list)
+    # Re-draws only: ``(participant, bib)`` for everybody whose current bib is
+    # being handed back before the allocation runs. What the confirmation counts,
+    # and what commit() deletes.
+    released: list = field(default_factory=list)
 
 
 def taken_bibs(competition):
@@ -133,12 +150,25 @@ def _class_participants(competition, competition_class, running=None):
     ]
 
 
-def plan(competition, competition_class, *, order=ASCENDING, start=None):
+def plan(competition, competition_class, *, order=ASCENDING, start=None,
+         reassign=False):
     """What assigning this class's bibs would do. Writes nothing.
 
     ``start`` is the first bib to hand out; ``None`` means the next free one.
     Numbers already taken anywhere in the competition are stepped over, so a
     class drawn second never collides with the one drawn first.
+
+    ``reassign`` re-draws a class that has already been drawn. Everybody holding
+    a *drawn* number gives their bib back and takes whatever the new order hands
+    them; the bibs they were holding are freed first, so the class can be
+    re-drawn into its own block of numbers rather than pushed to the end of the
+    field. A competitor with **no** drawn number keeps their bib either way —
+    that number was typed in by hand, which is a decision, and the draw has
+    never been allowed to overwrite one.
+
+    Modelling it here rather than by clearing the bibs first is what lets the
+    page show the plan before anything is written: a preview that had to delete
+    rows to be accurate would not be a preview.
     """
     taken = taken_bibs(competition)
     people = _class_participants(competition, competition_class)
@@ -159,7 +189,15 @@ def plan(competition, competition_class, *, order=ASCENDING, start=None):
     for person in people:
         bib = entries.get(person.pk)
         draw = draws.get(person.pk)
-        if bib is not None:
+        if reassign and draw is not None:
+            # Back into the draw with whatever they are wearing now. Their old
+            # number is freed before anything is allocated, so it is available
+            # to this same re-draw instead of being stepped over as "taken".
+            if bib is not None:
+                result.released.append((person, bib))
+                taken.discard(bib)
+            waiting.append((draw, person))
+        elif bib is not None:
             # Already wearing a number — a hand-typed decision, kept as it is,
             # and its bib stays out of the allocation below.
             result.assignments.append(
@@ -168,12 +206,13 @@ def plan(competition, competition_class, *, order=ASCENDING, start=None):
             )
         elif draw is not None:
             waiting.append((draw, person))
-        else:
-            result.missing.append(person)
+        # Neither number: registered under the discipline but not part of this
+        # event (or not yet drawn). Nothing to hand out, so they are passed over.
 
     waiting.sort(key=lambda row: row[0], reverse=(order == DESCENDING))
 
     bib = next_free_bib(competition, taken) if start is None else max(int(start), 1)
+    previous = {person.pk: old for person, old in result.released}
     for draw, person in waiting:
         while bib in taken and bib <= MAX_BIB:
             bib += 1
@@ -181,7 +220,8 @@ def plan(competition, competition_class, *, order=ASCENDING, start=None):
             break
         taken.add(bib)
         result.assignments.append(
-            Assignment(participant=person, draw_number=draw, bib_number=bib)
+            Assignment(participant=person, draw_number=draw, bib_number=bib,
+                       previous_bib=previous.get(person.pk))
         )
         bib += 1
 
@@ -198,15 +238,34 @@ def commit(competition, competition_class, plan_):
     The class is closed even when the plan handed out nothing — closing is the
     operator saying the field is final, and a class whose competitors all had
     bibs typed in by hand is exactly as final as one that was drawn.
+
+    A re-draw hands the released bibs back first, in the same transaction, so
+    the numbers are free by the time the new ones are written. What is *not*
+    given back is the entry's ``status``: a whole-event disqualification belongs
+    to the competitor, not to the number they happened to be wearing, so it is
+    carried across rather than quietly cleared by the delete.
     """
+    statuses = {}
+    if plan_.released:
+        released_pks = [person.pk for person, _bib in plan_.released]
+        old = EventEntry.objects.filter(
+            competition=competition, participant_id__in=released_pks
+        )
+        statuses = dict(old.values_list("participant_id", "status"))
+        old.delete()
+
     created = 0
     for row in plan_.assignments:
         if row.kept:
             continue
+        fields = {}
+        if row.participant.pk in statuses:
+            fields["status"] = statuses[row.participant.pk]
         EventEntry.objects.create(
             participant=row.participant,
             competition=competition,
             bib_number=row.bib_number,
+            **fields,
         )
         created += 1
     competition_class.registration_closed_at = timezone.now()

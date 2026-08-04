@@ -74,7 +74,7 @@
           in the table. The row stays a row; the control that opens it is the
           real <button> in the last cell, which is what carries aria-expanded.
           Clicking anywhere on the row still works, for the mouse.{% endcomment %}
-          {% if show_draw_numbers %}<td class="col-draw">{{ participant.current_draw|default:"–" }}</td>{% endif %}
+          {% if show_draw_numbers %}<td class="col-draw"><span data-draw-display>{{ participant.current_draw|default:"–" }}</span></td>{% endif %}
           <td class="col-bib"><span data-bib-display>{{ participant.current_bib|default:"–" }}</span></td>
           <td class="col-name" title="{{ participant.first_name }} {{ participant.last_name }}">{{ participant.first_name }} {{ participant.last_name }}{% comment %}Out of the whole event: worth seeing without opening the row.{% endcomment %}<span class="status-pill status-pill--dsq" data-dsq-pill {% if participant.current_status != "dsq" %}hidden{% endif %}>{% trans "DSQ" %}</span></td>
           <td class="col-dob">{{ participant.date_of_birth|date:"d.m.Y"|default:"–" }}</td>
@@ -106,6 +106,18 @@
           <td colspan="{{ column_count }}">
             <div class="pd">
               <div class="pd-bib">
+                {% comment %}Left of the bib, the order the desk fills them in
+                — and here rather than only on the edit form, because entering
+                the drawn number *is* the registration desk's job and opening a
+                whole form per competitor to do it is the slow path (issue #11).{% endcomment %}
+                {% if show_draw_numbers %}
+                  <label for="draw-{{ participant.pk }}">{% trans "Draw number" %}</label>
+                  <input type="text" inputmode="numeric" id="draw-{{ participant.pk }}"
+                         class="pd-draw-input" data-draw-input
+                         value="{{ participant.current_draw|default:'' }}"
+                         autocomplete="off" placeholder="—">
+                  <span class="pd-bib-msg" data-draw-msg aria-live="polite"></span>
+                {% endif %}
                 <label for="bib-{{ participant.pk }}">{% trans "Bib number" %}</label>
                 <input type="text" inputmode="numeric" id="bib-{{ participant.pk }}"
                        class="pd-bib-input" value="{{ participant.current_bib|default:'' }}"

@@ -738,6 +738,14 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   flex: 0 0 auto;
 }
 
+/* A class whose draw is finished. Success rather than frost: closing a class
+   is the thing this page is *for*, and the pill is what confirms it worked. */
+.status-pill--done {
+  background: var(--success-bg);
+  color: var(--success-strong);
+  flex: 0 0 auto;
+}
+
 /* A signed-off event. Same frost family as the banner it goes with. */
 .status-pill--archived {
   background: var(--frost-bg);
@@ -888,7 +896,8 @@ tbody tr:hover td { background: rgba(22,35,63,0.015); }
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
 }
-.bib-class--closed { border-left-color: var(--glacier); }
+/* Green, matching its pill: a card cannot state one status in two colours. */
+.bib-class--closed { border-left-color: var(--success-border); }
 .assign-form {
   display: flex;
   flex-wrap: wrap;
@@ -1440,7 +1449,11 @@ body.modal-open { overflow: hidden; }
   font-weight: 600;
   color: var(--text-dark);
 }
-.pd-bib-input {
+/* The drawn number sits beside the bib in the same panel and is the same kind
+   of control, so it is the same control — one rule, not a second copy that
+   drifts a pixel at a time. */
+.pd-bib-input,
+.pd-draw-input {
   width: 5.5rem;
   padding: var(--space-4) var(--space-4);
   font-size: var(--text-md);
@@ -1450,12 +1463,15 @@ body.modal-open { overflow: hidden; }
   background: var(--white);
   color: var(--text-dark);
 }
-.pd-bib-input:focus {
+.pd-bib-input:focus,
+.pd-draw-input:focus {
   border-color: var(--glacier);
   box-shadow: 0 0 0 3px rgba(62,142,222,0.15);
 }
-.pd-bib-input:focus:not(:focus-visible) { outline: none; }
-.pd-bib-input--error {
+.pd-bib-input:focus:not(:focus-visible),
+.pd-draw-input:focus:not(:focus-visible) { outline: none; }
+.pd-bib-input--error,
+.pd-draw-input--error {
   border-color: var(--flame);
   box-shadow: 0 0 0 3px rgba(232,73,29,0.12);
 }

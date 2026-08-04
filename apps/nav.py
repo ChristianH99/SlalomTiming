@@ -43,15 +43,16 @@ ITEMS = {
     # — and this is the pair that used to be mistaken for timing:settings.
     "setup.results": {("results", "settings")},
 
-    "participants": {
+    "participants.list": {
         ("participants", name)
-        for name in ("list", "add", "edit", "delete", "check", "set-bib", "set-dsq")
+        for name in ("list", "add", "edit", "delete", "check", "set-bib",
+                     "set-draw", "set-dsq")
     },
-    # Its own entry rather than a Participants sub-page: it only exists while the
-    # competition draws numbers (Competition.uses_draw_numbers), and a parent
-    # that grows and loses a child depending on a setting reads as a broken
-    # sidebar rather than as a feature being off.
-    "bib_assignment": {("participants", "bib-assignment")},
+    # A Participants sub-page, not a top-level entry: it is the second half of
+    # registration — the same desk and the same people — which is also why it
+    # rides on the Participants key for access control rather than being a page
+    # every role would have to be granted separately (accounts/pages.py).
+    "participants.bib_assignment": {("participants", "bib-assignment")},
 
     "timing.manual": {("timing", "manual")},
     "timing.auto": {("timing", "auto")},
@@ -78,6 +79,10 @@ ITEMS = {
 PARENTS = {
     "setup": ("setup.manage", "setup.general", "setup.classes",
               "setup.runorder", "setup.penalties", "setup.results"),
+    # The Participants entry is the parent *and* links to the list, the way
+    # Timing links to Manual timing. Its one child appears only while the event
+    # draws numbers, so with the setting off the sidebar reads exactly as it did.
+    "participants": ("participants.list", "participants.bib_assignment"),
     "timing": ("timing.manual", "timing.auto", "timing.settings"),
     "results": ("results.index", "results.overall", "results.class"),
     "backup": ("backup.backup", "backup.export", "backup.import"),
@@ -115,7 +120,7 @@ EVENT_SCOPED = frozenset({
     "dashboard",
     "setup.general", "setup.classes", "setup.runorder", "setup.penalties",
     "setup.results",
-    "participants", "bib_assignment",
+    "participants.list", "participants.bib_assignment",
     "timing.manual", "timing.auto",
     "marshal_posts",
     "results.index", "results.overall", "results.class",

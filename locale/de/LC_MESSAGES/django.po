@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Slalom Timing\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-04 20:23+0200\n"
+"POT-Creation-Date: 2026-08-04 21:08+0200\n"
 "PO-Revision-Date: 2026-07-23 09:20+0200\n"
 "Last-Translator: \n"
 "Language-Team: German\n"
@@ -38,12 +38,12 @@ msgstr "Wettbewerb einrichten"
 msgid "Participants"
 msgstr "Teilnehmer"
 
-#: .\apps\accounts\pages.py:21 .\templates\base.html:62
+#: .\apps\accounts\pages.py:21 .\templates\base.html:65
 #: .\templates\timing\settings.html:6
 msgid "Timing"
 msgstr "Zeitmessung"
 
-#: .\apps\accounts\pages.py:22 .\templates\base.html:70
+#: .\apps\accounts\pages.py:22 .\templates\base.html:73
 #: .\templates\competitions\marshal_posts.html:3
 #: .\templates\competitions\marshal_posts.html:4
 #: .\templates\competitions\marshal_posts.html:7
@@ -51,14 +51,14 @@ msgid "Marshal Posts"
 msgstr "Streckenposten"
 
 #: .\apps\accounts\pages.py:23 .\apps\results\pdf.py:632
-#: .\templates\base.html:45 .\templates\base.html:73
+#: .\templates\base.html:45 .\templates\base.html:76
 #: .\templates\results\index.html:3 .\templates\results\index.html:4
 #: .\templates\results\index.html:7
 #: .\templates\results\results_settings.html:6
 msgid "Results"
 msgstr "Ergebnisse"
 
-#: .\apps\accounts\pages.py:24 .\templates\base.html:93
+#: .\apps\accounts\pages.py:24 .\templates\base.html:96
 msgid "Backup"
 msgstr "Sicherung"
 
@@ -241,7 +241,7 @@ msgstr "1/1000 s"
 
 #: .\apps\competitions\models.py:67
 #: .\templates\competitions\competitiontype_list.html:18
-#: .\templates\participants\bib_assignment.html:64
+#: .\templates\participants\bib_assignment.html:89
 #: .\templates\participants\participant_list.html:62
 msgid "Name"
 msgstr "Name"
@@ -291,19 +291,19 @@ msgid "Resolution of the timing device."
 msgstr "Auflösung des Zeitmessgeräts."
 
 #: .\apps\competitions\models.py:105 .\apps\competitions\models.py:118
-#: .\apps\participants\views.py:134 .\apps\results\models.py:13
+#: .\apps\participants\views.py:135 .\apps\results\models.py:13
 msgid "Co-driver"
 msgstr "Beifahrer"
 
 #: .\apps\competitions\models.py:106 .\apps\competitions\models.py:120
-#: .\apps\participants\models.py:65 .\apps\participants\views.py:136
+#: .\apps\participants\models.py:65 .\apps\participants\views.py:137
 #: .\apps\results\models.py:19 .\apps\results\pdf.py:293
 #: .\apps\transfer\merge.py:40 .\templates\results\_results_head.html:7
 msgid "Vehicle"
 msgstr "Fahrzeug"
 
 #: .\apps\competitions\models.py:107 .\apps\competitions\models.py:122
-#: .\apps\participants\views.py:137
+#: .\apps\participants\views.py:138
 #: .\templates\participants\participant_form.html:103
 msgid "Address"
 msgstr "Adresse"
@@ -322,14 +322,14 @@ msgid "Licence number"
 msgstr "Lizenznummer"
 
 #: .\apps\competitions\models.py:110 .\apps\competitions\models.py:126
-#: .\apps\participants\forms.py:254 .\apps\participants\models.py:70
-#: .\apps\participants\views.py:138 .\apps\results\models.py:15
+#: .\apps\participants\forms.py:255 .\apps\participants\models.py:70
+#: .\apps\participants\views.py:139 .\apps\results\models.py:15
 #: .\apps\transfer\merge.py:45
 msgid "E-Mail"
 msgstr "E-Mail"
 
 #: .\apps\competitions\models.py:111 .\apps\competitions\models.py:127
-#: .\apps\participants\views.py:139 .\apps\results\models.py:16
+#: .\apps\participants\views.py:140 .\apps\results\models.py:16
 #: .\apps\transfer\merge.py:46
 msgid "Phone"
 msgstr "Telefon"
@@ -557,20 +557,21 @@ msgstr "Einstellungen für „%(name)s“ gespeichert."
 msgid "That type is still in use and can't be deleted."
 msgstr "Dieser Typ wird noch verwendet und kann nicht gelöscht werden."
 
-#: .\apps\participants\draw.py:53
+#: .\apps\participants\draw.py:59
 msgid "Lowest draw number first"
 msgstr "Niedrigste Losnummer zuerst"
 
-#: .\apps\participants\draw.py:54
+#: .\apps\participants\draw.py:60
 msgid "Highest draw number first"
 msgstr "Höchste Losnummer zuerst"
 
-#: .\apps\participants\forms.py:16 .\apps\participants\models.py:152
+#: .\apps\participants\forms.py:17 .\apps\participants\models.py:152
 #: .\templates\participants\participant_form.html:26
+#: .\templates\participants\participant_list.html:122
 msgid "Draw number"
 msgstr "Losnummer"
 
-#: .\apps\participants\forms.py:17
+#: .\apps\participants\forms.py:18
 msgid ""
 "The number this participant drew at registration. Bibs are handed out from "
 "it per class on the Bib assignment page."
@@ -579,21 +580,21 @@ msgstr ""
 "werden die Startnummern pro Klasse auf der Seite Startnummernvergabe "
 "vergeben."
 
-#: .\apps\participants\forms.py:126
+#: .\apps\participants\forms.py:127
 #, python-format
 msgid "“%(name)s” can’t be added more than once."
 msgstr "„%(name)s“ kann nicht mehr als einmal hinzugefügt werden."
 
-#: .\apps\participants\forms.py:129
+#: .\apps\participants\forms.py:130
 msgid "Only one class can be assigned to this participant."
 msgstr "Diesem Teilnehmer kann nur eine Klasse zugewiesen werden."
 
-#: .\apps\participants\forms.py:167
+#: .\apps\participants\forms.py:168 .\apps\participants\views.py:729
 #, python-format
 msgid "Draw number %(number)s already belongs to %(name)s."
 msgstr "Losnummer %(number)s gehört bereits %(name)s."
 
-#: .\apps\participants\forms.py:208
+#: .\apps\participants\forms.py:209
 #, python-format
 msgid ""
 "Bibs for %(name)s have already been drawn, so a bib has to be entered here "
@@ -602,37 +603,37 @@ msgstr ""
 "Die Startnummern für %(name)s wurden bereits vergeben – hier muss daher eine "
 "Startnummer von Hand eingetragen werden."
 
-#: .\apps\participants\forms.py:249 .\apps\participants\models.py:61
+#: .\apps\participants\forms.py:250 .\apps\participants\models.py:61
 #: .\apps\transfer\merge.py:38
 msgid "Co-driver first name"
 msgstr "Vorname Beifahrer"
 
-#: .\apps\participants\forms.py:250 .\apps\participants\models.py:63
+#: .\apps\participants\forms.py:251 .\apps\participants\models.py:63
 #: .\apps\transfer\merge.py:39
 msgid "Co-driver last name"
 msgstr "Nachname Beifahrer"
 
-#: .\apps\participants\forms.py:251 .\apps\participants\models.py:66
+#: .\apps\participants\forms.py:252 .\apps\participants\models.py:66
 #: .\apps\transfer\merge.py:41
 msgid "Street address"
 msgstr "Straße"
 
-#: .\apps\participants\forms.py:252 .\apps\transfer\merge.py:42
+#: .\apps\participants\forms.py:253 .\apps\transfer\merge.py:42
 msgid "ZIP code"
 msgstr "PLZ"
 
-#: .\apps\participants\forms.py:253 .\apps\participants\models.py:68
+#: .\apps\participants\forms.py:254 .\apps\participants\models.py:68
 #: .\apps\results\models.py:18 .\apps\transfer\merge.py:43
 msgid "City"
 msgstr "Ort"
 
-#: .\apps\participants\forms.py:260 .\apps\participants\forms.py:298
+#: .\apps\participants\forms.py:261 .\apps\participants\forms.py:299
 #: .\apps\transfer\csvimport.py:126
-#: .\templates\participants\participant_list.html:116
+#: .\templates\participants\participant_list.html:129
 msgid "Bib number"
 msgstr "Startnummer"
 
-#: .\apps\participants\forms.py:261
+#: .\apps\participants\forms.py:262
 msgid ""
 "Optional — assigns this participant a bib for the current competition right "
 "away."
@@ -640,13 +641,13 @@ msgstr ""
 "Optional — weist diesem Teilnehmer sofort eine Startnummer für den aktuellen "
 "Wettbewerb zu."
 
-#: .\apps\participants\forms.py:277
+#: .\apps\participants\forms.py:278
 msgid "No competition is currently selected, so a bib can't be assigned yet."
 msgstr ""
 "Derzeit ist kein Wettbewerb ausgewählt, daher kann noch keine Startnummer "
 "zugewiesen werden."
 
-#: .\apps\participants\forms.py:283
+#: .\apps\participants\forms.py:284
 msgid ""
 "Optional — leave empty to let the draw decide, or set a bib here to keep "
 "this participant out of the automatic assignment."
@@ -655,17 +656,17 @@ msgstr ""
 "eine Startnummer setzen, um diesen Teilnehmer von der automatischen Vergabe "
 "auszunehmen."
 
-#: .\apps\participants\forms.py:293 .\apps\participants\forms.py:340
+#: .\apps\participants\forms.py:294 .\apps\participants\forms.py:341
 msgid "This bib number is already taken in the current competition."
 msgstr "Diese Startnummer ist im aktuellen Wettbewerb bereits vergeben."
 
-#: .\apps\participants\forms.py:309
+#: .\apps\participants\forms.py:310
 msgid "No competition is currently selected, so a bib can't be assigned."
 msgstr ""
 "Derzeit ist kein Wettbewerb ausgewählt, daher kann keine Startnummer "
 "zugewiesen werden."
 
-#: .\apps\participants\forms.py:320
+#: .\apps\participants\forms.py:321
 msgid ""
 "This participant's type doesn't match the current competition, so a bib "
 "can't be assigned."
@@ -731,59 +732,85 @@ msgstr "Disqualifiziert"
 msgid "Finished"
 msgstr "Beendet"
 
-#: .\apps\participants\views.py:343 .\apps\participants\views.py:356
+#: .\apps\participants\views.py:356 .\apps\participants\views.py:369
 msgid "This bib number was just taken by somebody else."
 msgstr "Diese Startnummer wurde gerade von jemand anderem vergeben."
 
-#: .\apps\participants\views.py:454
+#: .\apps\participants\views.py:467
 msgid "Choose a class to assign bibs for."
 msgstr "Wähle eine Klasse aus, für die Startnummern vergeben werden sollen."
 
-#: .\apps\participants\views.py:458
+#: .\apps\participants\views.py:474
 #, python-format
 msgid "%(name)s has already been assigned its bibs."
 msgstr "Für %(name)s wurden die Startnummern bereits vergeben."
 
-#: .\apps\participants\views.py:474
+#: .\apps\participants\views.py:494
+#, python-format
+msgid "%(count)s bib was assigned again in %(name)s."
+msgid_plural "%(count)s bibs were assigned again in %(name)s."
+msgstr[0] "%(count)s Startnummer wurde in %(name)s neu vergeben."
+msgstr[1] "%(count)s Startnummern wurden in %(name)s neu vergeben."
+
+#: .\apps\participants\views.py:500
 #, python-format
 msgid "%(count)s bib was assigned and %(name)s is closed."
 msgid_plural "%(count)s bibs were assigned and %(name)s is closed."
 msgstr[0] "%(count)s Startnummer wurde vergeben, %(name)s ist abgeschlossen."
 msgstr[1] "%(count)s Startnummern wurden vergeben, %(name)s ist abgeschlossen."
 
-#: .\apps\participants\views.py:555 .\apps\participants\views.py:633
+#: .\apps\participants\views.py:607 .\apps\participants\views.py:684
+#: .\apps\participants\views.py:758
 msgid "No competition is selected."
 msgstr "Es ist kein Wettbewerb ausgewählt."
 
-#: .\apps\participants\views.py:561 .\apps\participants\views.py:639
-#: .\apps\results\views.py:676
+#: .\apps\participants\views.py:613 .\apps\participants\views.py:701
+#: .\apps\participants\views.py:764 .\apps\results\views.py:676
 msgid "Malformed request."
 msgstr "Fehlerhafte Anfrage."
 
-#: .\apps\participants\views.py:568
+#: .\apps\participants\views.py:620 .\apps\participants\views.py:708
 msgid "Unknown participant."
 msgstr "Unbekannter Teilnehmer."
 
-#: .\apps\participants\views.py:587
+#: .\apps\participants\views.py:639
 msgid "Bib must be a positive number."
 msgstr "Die Startnummer muss eine positive Zahl sein."
 
-#: .\apps\participants\views.py:594
+#: .\apps\participants\views.py:646
 #, python-format
 msgid "Bib %(bib)s is already taken."
 msgstr "Startnummer %(bib)s ist bereits vergeben."
 
-#: .\apps\participants\views.py:613
+#: .\apps\participants\views.py:665
 #, python-format
 msgid "Bib %(bib)s was just taken by somebody else."
 msgstr "Startnummer %(bib)s wurde gerade von jemand anderem vergeben."
 
-#: .\apps\participants\views.py:650
-#: .\templates\participants\participant_list.html:151
+#: .\apps\participants\views.py:696
+msgid "This competition does not draw numbers."
+msgstr "Bei diesem Wettbewerb werden keine Losnummern gezogen."
+
+#: .\apps\participants\views.py:719
+msgid "Draw number must be a positive number."
+msgstr "Die Losnummer muss eine positive Zahl sein."
+
+#: .\apps\participants\views.py:723
+#, python-format
+msgid "Draw number must be %(max)s or less."
+msgstr "Die Losnummer darf höchstens %(max)s sein."
+
+#: .\apps\participants\views.py:739
+#, python-format
+msgid "Draw number %(number)s was just taken by somebody else."
+msgstr "Losnummer %(number)s wurde gerade von jemand anderem vergeben."
+
+#: .\apps\participants\views.py:775
+#: .\templates\participants\participant_list.html:164
 msgid "Give this participant a bib first."
 msgstr "Vergeben Sie diesem Teilnehmer zuerst eine Startnummer."
 
-#: .\apps\participants\views.py:670
+#: .\apps\participants\views.py:795
 #, python-format
 msgid ""
 "%(count)s recorded run stays with bib %(bib)s and stops being this "
@@ -798,7 +825,7 @@ msgstr[1] ""
 "%(count)s erfasste Läufe bleiben bei Startnummer %(bib)s und gehören dann "
 "nicht mehr zu diesem Teilnehmer."
 
-#: .\apps\participants\views.py:676
+#: .\apps\participants\views.py:801
 #, python-format
 msgid ""
 "%(count)s run already recorded under bib %(bib)s becomes this participant's."
@@ -811,19 +838,19 @@ msgstr[1] ""
 "%(count)s bereits unter Startnummer %(bib)s erfasste Läufe gehören dann zu "
 "diesem Teilnehmer."
 
-#: .\apps\participants\views.py:683
+#: .\apps\participants\views.py:808
 msgid "This moves recorded times."
 msgstr "Dadurch werden erfasste Zeiten verschoben."
 
-#: .\apps\participants\views.py:716
+#: .\apps\participants\views.py:841
 msgid "licence number"
 msgstr "Lizenznummer"
 
-#: .\apps\participants\views.py:720
+#: .\apps\participants\views.py:845
 msgid "name and licence number"
 msgstr "Name und Lizenznummer"
 
-#: .\apps\participants\views.py:722
+#: .\apps\participants\views.py:847
 msgid "name"
 msgstr "Name"
 
@@ -873,7 +900,7 @@ msgstr "Automatisch (an Tabelle anpassen)"
 msgid "Rank"
 msgstr "Platz"
 
-#: .\apps\results\pdf.py:285 .\templates\participants\bib_assignment.html:62
+#: .\apps\results\pdf.py:285 .\templates\participants\bib_assignment.html:87
 #: .\templates\participants\participant_form.html:33
 #: .\templates\participants\participant_list.html:61
 #: .\templates\results\_results_head.html:3 .\templates\timing\live.html:48
@@ -978,7 +1005,7 @@ msgstr "Gesamt"
 msgid "Overall"
 msgstr "Gesamt"
 
-#: .\apps\results\views.py:316 .\templates\base.html:79
+#: .\apps\results\views.py:316 .\templates\base.html:82
 #, python-format
 msgid "Overall · %(label)s · %(runs)s Runs"
 msgstr "Gesamt · %(label)s · %(runs)s Läufe"
@@ -1476,7 +1503,7 @@ msgstr "Passwort anzeigen (halten)"
 
 #: .\templates\accounts\user_access.html:3
 #: .\templates\accounts\user_access.html:4
-#: .\templates\accounts\user_access.html:6 .\templates\base.html:103
+#: .\templates\accounts\user_access.html:6 .\templates\base.html:106
 msgid "User Access"
 msgstr "Benutzerzugriff"
 
@@ -1519,7 +1546,7 @@ msgstr ""
 #: .\templates\competitions\_competition_tiles.html:85
 #: .\templates\competitions\competitiontype_list.html:41
 #: .\templates\competitions\competitiontype_list.html:45
-#: .\templates\participants\participant_list.html:159
+#: .\templates\participants\participant_list.html:172
 msgid "Delete"
 msgstr "Löschen"
 
@@ -1662,7 +1689,7 @@ msgstr "Protokoll herunterladen"
 msgid "Nothing recorded yet."
 msgstr "Noch nichts aufgezeichnet."
 
-#: .\templates\base.html:6 .\templates\base.html:128
+#: .\templates\base.html:6 .\templates\base.html:131
 msgid "Slalom Timing"
 msgstr "Slalom Timing"
 
@@ -1701,60 +1728,60 @@ msgstr "Klassen"
 msgid "Run order"
 msgstr "Laufreihenfolge"
 
-#: .\templates\base.html:55 .\templates\participants\bib_assignment.html:3
+#: .\templates\base.html:57 .\templates\participants\bib_assignment.html:3
 #: .\templates\participants\bib_assignment.html:4
-#: .\templates\participants\bib_assignment.html:11
-#: .\templates\participants\bib_assignment.html:20
+#: .\templates\participants\bib_assignment.html:18
+#: .\templates\participants\bib_assignment.html:29
 msgid "Bib assignment"
 msgstr "Startnummernvergabe"
 
-#: .\templates\base.html:64 .\templates\timing\live.html:3
+#: .\templates\base.html:67 .\templates\timing\live.html:3
 #: .\templates\timing\live.html:4 .\templates\timing\live.html:12
 #: .\templates\timing\live.html:31
 msgid "Manual timing"
 msgstr "Manuelle Zeitmessung"
 
-#: .\templates\base.html:65 .\templates\timing\auto.html:3
+#: .\templates\base.html:68 .\templates\timing\auto.html:3
 #: .\templates\timing\auto.html:4 .\templates\timing\auto.html:12
 #: .\templates\timing\auto.html:32 .\templates\timing\auto.html:42
 msgid "Auto timing"
 msgstr "Automatische Zeitmessung"
 
-#: .\templates\base.html:66
+#: .\templates\base.html:69
 #: .\templates\competitions\competitiontype_list.html:38
 msgid "Settings"
 msgstr "Einstellungen"
 
-#: .\templates\base.html:88
+#: .\templates\base.html:91
 msgid "No running classes"
 msgstr "Keine laufenden Klassen"
 
-#: .\templates\base.html:95 .\templates\transfer\backup.html:3
+#: .\templates\base.html:98 .\templates\transfer\backup.html:3
 #: .\templates\transfer\backup.html:4 .\templates\transfer\backup.html:6
 msgid "Automatic backup"
 msgstr "Automatische Sicherung"
 
-#: .\templates\base.html:96 .\templates\transfer\export.html:3
+#: .\templates\base.html:99 .\templates\transfer\export.html:3
 #: .\templates\transfer\export.html:4 .\templates\transfer\export.html:6
 msgctxt "transfer"
 msgid "Export"
 msgstr "Export"
 
-#: .\templates\base.html:97 .\templates\transfer\import.html:3
+#: .\templates\base.html:100 .\templates\transfer\import.html:3
 #: .\templates\transfer\import.html:4 .\templates\transfer\import.html:6
 #: .\templates\transfer\import_review.html:186
 msgid "Import"
 msgstr "Import"
 
-#: .\templates\base.html:110
+#: .\templates\base.html:113
 msgid "Log out"
 msgstr "Abmelden"
 
-#: .\templates\base.html:124
+#: .\templates\base.html:127
 msgid "Toggle navigation"
 msgstr "Navigation umschalten"
 
-#: .\templates\base.html:140
+#: .\templates\base.html:143
 #, python-format
 msgid ""
 "Archived on %(when)s. Everything here is read-only: this event keeps the "
@@ -1768,19 +1795,19 @@ msgstr ""
 "Duplizieren Sie sie unter „Wettbewerb einrichten“, wenn Sie eine "
 "bearbeitbare Kopie brauchen."
 
-#: .\templates\base.html:140
+#: .\templates\base.html:143
 msgid "Archived · read-only"
 msgstr "Archiviert · schreibgeschützt"
 
-#: .\templates\base.html:143
+#: .\templates\base.html:146
 msgid "No event selected"
 msgstr "Keine Veranstaltung ausgewählt"
 
-#: .\templates\base.html:143
+#: .\templates\base.html:146
 msgid "choose one"
 msgstr "auswählen"
 
-#: .\templates\base.html:186 .\templates\base.html:198
+#: .\templates\base.html:189 .\templates\base.html:201
 #: .\templates\competitions\competition_add.html:52
 #: .\templates\competitions\competition_classes.html:84
 #: .\templates\competitions\competition_confirm_delete.html:55
@@ -1791,7 +1818,7 @@ msgstr "auswählen"
 #: .\templates\competitions\competition_penalties.html:90
 #: .\templates\competitions\competitiontype_form.html:11
 #: .\templates\competitions\competitiontype_settings.html:97
-#: .\templates\participants\bib_assignment.html:90
+#: .\templates\participants\bib_assignment.html:125
 #: .\templates\participants\participant_confirm_delete.html:29
 #: .\templates\participants\participant_form.html:147
 #: .\templates\participants\participant_form.html:173
@@ -1800,11 +1827,11 @@ msgstr "auswählen"
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: .\templates\base.html:193
+#: .\templates\base.html:196
 msgid "Unsaved changes"
 msgstr "Nicht gespeicherte Änderungen"
 
-#: .\templates\base.html:194
+#: .\templates\base.html:197
 msgid ""
 "You have unsaved changes on this page. Do you want to save them before "
 "leaving?"
@@ -1812,11 +1839,11 @@ msgstr ""
 "Sie haben nicht gespeicherte Änderungen auf dieser Seite. Möchten Sie sie "
 "vor dem Verlassen speichern?"
 
-#: .\templates\base.html:196
+#: .\templates\base.html:199
 msgid "Save changes"
 msgstr "Änderungen speichern"
 
-#: .\templates\base.html:197
+#: .\templates\base.html:200
 msgid "Discard"
 msgstr "Verwerfen"
 
@@ -2065,6 +2092,7 @@ msgstr ""
 #: .\templates\competitions\competition_archived_rules.html:85
 #: .\templates\competitions\competition_classes.html:11
 #: .\templates\competitions\competition_runorder.html:15
+#: .\templates\participants\bib_assignment.html:17
 #: .\templates\timing\auto.html:11 .\templates\timing\live.html:11
 #: .\templates\transfer\backup.html:105
 msgid "Close"
@@ -2796,7 +2824,7 @@ msgstr "Erforderlich"
 msgid "About this page"
 msgstr "Über diese Seite"
 
-#: .\templates\participants\bib_assignment.html:13
+#: .\templates\participants\bib_assignment.html:20
 msgid ""
 "The registration desk gives each participant the number they drew. This page "
 "turns those numbers into bibs, one class at a time."
@@ -2804,7 +2832,7 @@ msgstr ""
 "Die Anmeldung trägt für jeden Teilnehmer die gezogene Losnummer ein. Diese "
 "Seite macht daraus Startnummern – Klasse für Klasse."
 
-#: .\templates\participants\bib_assignment.html:14
+#: .\templates\participants\bib_assignment.html:21
 msgid ""
 "Closing a class hands out its bibs and ends its draw: somebody who registers "
 "for it afterwards has to be given a bib by hand on their own page. Bibs "
@@ -2816,7 +2844,7 @@ msgstr ""
 "der eigenen Seite. Bereits von Hand eingetragene Startnummern bleiben "
 "unverändert, und die Vergabe überspringt sie."
 
-#: .\templates\participants\bib_assignment.html:15
+#: .\templates\participants\bib_assignment.html:22
 msgid ""
 "There is no way back from here. A bib assigned by mistake is an ordinary bib "
 "and can be corrected one at a time from the participants list."
@@ -2825,49 +2853,70 @@ msgstr ""
 "eine ganz normale Startnummer und kann einzeln über die Teilnehmerliste "
 "korrigiert werden."
 
-#: .\templates\participants\bib_assignment.html:22
+#: .\templates\participants\bib_assignment.html:48
 #, python-format
-msgid ""
-"Hand out bibs for <strong>%(name)s</strong> from the numbers drawn at "
-"registration."
-msgstr ""
-"Startnummern für <strong>%(name)s</strong> aus den bei der Anmeldung "
-"gezogenen Losnummern vergeben."
+msgid "Assign bibs for %(name)s again?"
+msgstr "Startnummern für %(name)s neu vergeben?"
 
-#: .\templates\participants\bib_assignment.html:40
+#: .\templates\participants\bib_assignment.html:50
 #, python-format
 msgid "Assign bibs for %(name)s?"
 msgstr "Startnummern für %(name)s vergeben?"
 
-#: .\templates\participants\bib_assignment.html:49
+#: .\templates\participants\bib_assignment.html:61
 #, python-format
 msgid ""
-"%(n)s participant in this class has neither a drawn number nor a bib and "
-"will not get one:"
+"This takes the bib back from %(n)s competitor in this class who drew a "
+"number and hands it out again, so their number may change."
 msgid_plural ""
-"%(n)s participants in this class have neither a drawn number nor a bib and "
-"will not get one:"
-msgstr[0] ""
-"%(n)s Teilnehmer in dieser Klasse hat weder eine Losnummer noch eine "
-"Startnummer und bekommt keine:"
-msgstr[1] ""
-"%(n)s Teilnehmer in dieser Klasse haben weder eine Losnummer noch eine "
-"Startnummer und bekommen keine:"
+"This takes the bibs back from %(n)s competitors in this class who drew a "
+"number and hands them out again, so their numbers may change."
+msgstr[0] "Damit wird %(n)s Teilnehmer dieser Klasse mit einer Losnummer die Startnummer entzogen und neu vergeben – die Nummer kann sich ändern."
+msgstr[1] "Damit wird %(n)s Teilnehmern dieser Klasse mit einer Losnummer die Startnummer entzogen und neu vergeben – die Nummern können sich ändern."
 
-#: .\templates\participants\bib_assignment.html:63
+#: .\templates\participants\bib_assignment.html:66
+msgid ""
+"A competitor with no drawn number keeps the bib that was typed in for them."
+msgstr "Teilnehmer ohne Losnummer behalten die von Hand eingetragene Startnummer."
+
+#: .\templates\participants\bib_assignment.html:70
+#, python-format
+msgid ""
+"<strong>%(n)s recorded time</strong> is attached to those bibs. A time "
+"belongs to the number rather than to the person, so it will count for "
+"whoever wears that number afterwards."
+msgid_plural ""
+"<strong>%(n)s recorded times</strong> are attached to those bibs. A time "
+"belongs to the number rather than to the person, so they will count for "
+"whoever wears those numbers afterwards."
+msgstr[0] "<strong>%(n)s erfasste Zeit</strong> hängt an diesen Startnummern. Eine Zeit gehört zur Nummer und nicht zur Person und zählt danach für den, der diese Nummer trägt."
+msgstr[1] "<strong>%(n)s erfasste Zeiten</strong> hängen an diesen Startnummern. Eine Zeit gehört zur Nummer und nicht zur Person und zählt danach für den, der diese Nummer trägt."
+
+#: .\templates\participants\bib_assignment.html:88
 #: .\templates\participants\participant_list.html:60
 msgid "Draw"
 msgstr "Los"
 
-#: .\templates\participants\bib_assignment.html:74
+#: .\templates\participants\bib_assignment.html:99
 msgid "already had this bib"
 msgstr "hatte diese Startnummer bereits"
 
-#: .\templates\participants\bib_assignment.html:81
+#: .\templates\participants\bib_assignment.html:104
+#, python-format
+msgid "was %(old)s"
+msgstr "vorher %(old)s"
+
+#: .\templates\participants\bib_assignment.html:112
 msgid "Nobody in this class is waiting for a bib."
 msgstr "In dieser Klasse wartet niemand auf eine Startnummer."
 
-#: .\templates\participants\bib_assignment.html:85
+#: .\templates\participants\bib_assignment.html:117
+msgid ""
+"The class stays closed, and the numbers it is wearing now cannot be brought "
+"back except by drawing again."
+msgstr "Die Klasse bleibt abgeschlossen, und die aktuellen Nummern lassen sich nur durch eine erneute Vergabe wiederherstellen."
+
+#: .\templates\participants\bib_assignment.html:119
 msgid ""
 "This cannot be undone from here: the class is closed and anybody registering "
 "for it afterwards has to be given a bib by hand."
@@ -2875,38 +2924,33 @@ msgstr ""
 "Das lässt sich hier nicht rückgängig machen: Die Klasse wird abgeschlossen, "
 "und wer sich danach anmeldet, bekommt seine Startnummer von Hand."
 
-#: .\templates\participants\bib_assignment.html:89
+#: .\templates\participants\bib_assignment.html:124
+msgid "Assign again"
+msgstr "Neu vergeben"
+
+#: .\templates\participants\bib_assignment.html:124
 msgid "Assign and close"
 msgstr "Vergeben und abschließen"
 
-#: .\templates\participants\bib_assignment.html:103
+#: .\templates\participants\bib_assignment.html:138
 msgid "Closed"
 msgstr "Abgeschlossen"
 
-#: .\templates\participants\bib_assignment.html:107
-#: .\templates\transfer\export.html:66
-#: .\templates\transfer\import_review.html:20
-#, python-format
-msgid "%(counter)s participant"
-msgid_plural "%(counter)s participants"
-msgstr[0] "%(counter)s Teilnehmer"
-msgstr[1] "%(counter)s Teilnehmer"
-
-#: .\templates\participants\bib_assignment.html:108
+#: .\templates\participants\bib_assignment.html:147
 #, python-format
 msgid "%(counter)s drawn"
 msgid_plural "%(counter)s drawn"
 msgstr[0] "%(counter)s ausgelost"
 msgstr[1] "%(counter)s ausgelost"
 
-#: .\templates\participants\bib_assignment.html:109
+#: .\templates\participants\bib_assignment.html:148
 #, python-format
 msgid "%(counter)s with a bib"
 msgid_plural "%(counter)s with a bib"
 msgstr[0] "%(counter)s mit Startnummer"
 msgstr[1] "%(counter)s mit Startnummer"
 
-#: .\templates\participants\bib_assignment.html:114
+#: .\templates\participants\bib_assignment.html:153
 #, python-format
 msgid ""
 "Bibs were assigned on %(when)s. New participants need a bib entered by hand."
@@ -2914,23 +2958,29 @@ msgstr ""
 "Startnummern wurden am %(when)s vergeben. Neue Teilnehmer brauchen eine von "
 "Hand eingetragene Startnummer."
 
-#: .\templates\participants\bib_assignment.html:121
+#: .\templates\participants\bib_assignment.html:165
+#: .\templates\participants\bib_assignment.html:190
 msgid "Order"
 msgstr "Reihenfolge"
 
-#: .\templates\participants\bib_assignment.html:133
+#: .\templates\participants\bib_assignment.html:177
+#: .\templates\participants\bib_assignment.html:202
 msgid "First bib"
 msgstr "Erste Startnummer"
 
-#: .\templates\participants\bib_assignment.html:138
+#: .\templates\participants\bib_assignment.html:182
+msgid "Assign bibs again…"
+msgstr "Startnummern neu vergeben …"
+
+#: .\templates\participants\bib_assignment.html:207
 msgid "Assign bibs…"
 msgstr "Startnummern vergeben…"
 
-#: .\templates\participants\bib_assignment.html:147
+#: .\templates\participants\bib_assignment.html:216
 msgid "No classes are running"
 msgstr "Keine Klasse ist aktiv"
 
-#: .\templates\participants\bib_assignment.html:148
+#: .\templates\participants\bib_assignment.html:217
 msgid ""
 "Bibs are handed out per class, so a class has to be set to running before it "
 "can be drawn."
@@ -2938,7 +2988,7 @@ msgstr ""
 "Startnummern werden pro Klasse vergeben – eine Klasse muss also aktiv sein, "
 "bevor für sie ausgelost werden kann."
 
-#: .\templates\participants\bib_assignment.html:149
+#: .\templates\participants\bib_assignment.html:218
 msgid "Set up classes"
 msgstr "Klassen einrichten"
 
@@ -3147,15 +3197,15 @@ msgstr "DSQ"
 msgid "Details for %(first)s %(last)s"
 msgstr "Details zu %(first)s %(last)s"
 
-#: .\templates\participants\participant_list.html:126
+#: .\templates\participants\participant_list.html:139
 msgid "No further details recorded."
 msgstr "Keine weiteren Angaben erfasst."
 
-#: .\templates\participants\participant_list.html:143
+#: .\templates\participants\participant_list.html:156
 msgid "Edit full details"
 msgstr "Alle Details bearbeiten"
 
-#: .\templates\participants\participant_list.html:151
+#: .\templates\participants\participant_list.html:164
 msgid ""
 "Removes them from every class result of this competition. A single run is "
 "disqualified on the timing views instead."
@@ -3163,15 +3213,15 @@ msgstr ""
 "Entfernt den Teilnehmer aus jedem Klassenergebnis dieser Veranstaltung. Ein "
 "einzelner Lauf wird stattdessen in den Zeitnahme-Ansichten disqualifiziert."
 
-#: .\templates\participants\participant_list.html:155
+#: .\templates\participants\participant_list.html:168
 msgid "Disqualified from this event"
 msgstr "Von dieser Veranstaltung disqualifiziert"
 
-#: .\templates\participants\participant_list.html:166
+#: .\templates\participants\participant_list.html:179
 msgid "No participants found."
 msgstr "Keine Teilnehmer gefunden."
 
-#: .\templates\participants\participant_list.html:168
+#: .\templates\participants\participant_list.html:181
 msgid "No participants match your search."
 msgstr "Keine Teilnehmer entsprechen Ihrer Suche."
 
@@ -4051,6 +4101,14 @@ msgid ""
 msgstr ""
 "Eine Disziplin mit ihren Regeln sowie alle darunter erfassten Teilnehmer – "
 "ohne Veranstaltung und Startnummern."
+
+#: .\templates\transfer\export.html:66
+#: .\templates\transfer\import_review.html:20
+#, python-format
+msgid "%(counter)s participant"
+msgid_plural "%(counter)s participants"
+msgstr[0] "%(counter)s Teilnehmer"
+msgstr[1] "%(counter)s Teilnehmer"
 
 #: .\templates\transfer\export.html:67
 #, python-format

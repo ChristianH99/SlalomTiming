@@ -62,8 +62,8 @@ PAGE_URLS = {
     # that every role would have to be granted separately.
     "participants": {
         ("participants", name)
-        for name in ("list", "check", "set-bib", "set-dsq", "add", "edit", "delete",
-                     "bib-assignment")
+        for name in ("list", "check", "set-bib", "set-draw", "set-dsq", "add",
+                     "edit", "delete", "bib-assignment")
     },
     "timing": {
         ("timing", name)
